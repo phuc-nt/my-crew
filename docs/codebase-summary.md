@@ -1,7 +1,7 @@
 # Codebase Summary — my-project-manager
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-06-21 — Phase 0 xong. Phase 1 Slice-1 code done (114 UT pass, ruff clean).** CLI `report` command → Jira+GitHub read via MCP/CLI → risk_analyzer → LLM compose → Slack post via Action Gateway. E2E deferred (needs MCP server dist + tokens).
+> Status: **2026-06-22 — Phase 0 + Phase 1 (MVP Reporting) HOÀN TẤT (136 UT, ruff clean, E2E thật).** `cli report --daily|--weekly` → đọc Jira (MCP) + GitHub (gh) + sprint → risk_analyzer → LLM compose → **Confluence detail page + Slack short+link** qua Action Gateway. Cron qua launchd (`deploy/launchd/`).
 
 ## Trạng thái hiện tại
 
@@ -28,22 +28,24 @@ src/
 
 | Cần tìm | Ở |
 |---|---|
-| Flow agent (graph) | `src/agent/report_graph.py` (perceive→analyze→compose_report→deliver, injectable ReportDeps); legacy hello-graph ở `src/agent/graph.py`. State: `src/agent/state.py`, checkpoint: `src/agent/checkpoint.py` |
-| Cách đọc Jira | `src/tools/jira_read.py` (get_open_issues, parse_issue); adapter MCP ở `src/adapters/mcp_adapter.py` (langchain-mcp-adapters 0.3.0, spawn stdio subprocess) |
-| Cách đọc GitHub | `src/tools/github_read.py` (get_open_prs, get_recent_ci, parse_pr, parse_ci staleness); adapter CLI ở `src/adapters/cli_adapter.py` (run_gh subprocess + JSON parse) |
-| Models (Issue/PR/Risk) | `src/tools/models.py` (dataclass Issue, PullRequest, CiRun, Risk) |
-| Risk phát hiện | `src/agent/risk_analyzer.py` (pure analyze: overdue/blocker/stale_pr/ci_failure) |
-| Config reporting | `src/config/reporting_config.py` (McpServerSpec, ReportingConfig: project/repo/channel + risk thresholds) |
-| Cách agent ghi/post | `src/actions/action_gateway.py` (mọi mutation qua đây) |
-| Post Slack | `src/actions/slack_write.py` (deliver_report via gateway) |
+| Flow agent (graph) | `src/agent/report_graph.py` (perceive→analyze→compose→deliver, `report_kind` daily/weekly, deliver 2 bước Confluence+Slack, injectable ReportDeps); hello-graph cũ ở `src/agent/graph.py`. State: `src/agent/state.py` (chỉ primitive), checkpoint: `src/agent/checkpoint.py` |
+| Cách đọc Jira | `src/tools/jira_read.py` (get_open_issues, parse_issue; + sprint: get_active_sprint/get_sprint_issues/parse_sprint); adapter MCP ở `src/adapters/mcp_adapter.py` (langchain-mcp-adapters 0.3.0, spawn stdio; `_coerce_result` bóc content-block) |
+| Cách đọc GitHub | `src/tools/github_read.py` (get_open_prs, get_recent_ci, staleness); adapter CLI `src/adapters/cli_adapter.py` (run_gh subprocess + JSON parse) |
+| Models | `src/tools/models.py` (Issue, PullRequest, CiRun, Risk, Sprint) |
+| Risk phát hiện | `src/agent/risk_analyzer.py` (pure: overdue/blocker/stale_pr/ci_failure) |
+| Config reporting | `src/config/reporting_config.py` (McpServerSpec jira/slack/confluence, project/repo/channel/space + thresholds) |
+| Cách agent ghi/post | `src/actions/action_gateway.py` (MỌI mutation qua đây; dedup_hint per kind+ngày) |
+| Post Slack | `src/actions/slack_write.py` (deliver_report + build_slack_short link) |
+| Tạo page Confluence | `src/actions/confluence_write.py` (create_report_page via gateway, parse page id/URL từ text-block) |
 | Guardrail allow/deny | `src/actions/hard_block.py` (allowlist + Lớp A hard-deny) |
-| Phát hiện/redact secret | `src/actions/secret_patterns.py` (shared: gateway + audit dùng chung) |
-| Report prompt | `src/llm/report_prompt.py` |
+| Phát hiện/redact secret | `src/actions/secret_patterns.py` (shared: gateway + audit) |
+| Report prompt | `src/llm/report_prompt.py` (build_detail_messages daily/weekly XHTML, build_slack_short mrkdwn) |
 | Budget cap LLM | `src/llm/budget_tracker.py` ($50/tháng, hard-stop) |
 | Gọi LLM (OpenRouter) | `src/llm/client.py` + `cost.py` |
 | Config/env | `src/config/settings.py` |
 | Audit log | `src/audit/audit_log.py` (JSONL append-only) |
-| Chạy thế nào | `src/entrypoints/cli.py` ("report" command) + `deployment-guide.md` |
+| Chạy thế nào | `src/entrypoints/cli.py` (`report --daily\|--weekly`), `cron.py` (launchd) + `deployment-guide.md §5` |
+| Cron / lịch chạy | `src/entrypoints/cron.py` + `deploy/launchd/` (2 plist + run-report.sh) |
 
 ## Mô hình guardrail (CHỐT 2026-06-21, sau 2 vòng review)
 
