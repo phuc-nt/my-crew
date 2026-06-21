@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# venv (uv-managed)
+.venv/
+
+# Secrets — never commit
+.env
+*.env
+!config.example.env
+
+# Runtime data: audit log, checkpoints, budget (see plan .data/ decision)
+.data/
+
+# Agent tooling / instructions — not part of the published project
+.claude/
+AGENTS.md
+CLAUDE.md
+
+# OS
+.DS_Store
