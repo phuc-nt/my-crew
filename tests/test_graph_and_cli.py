@@ -48,14 +48,19 @@ def test_cli_no_args_returns_usage_code():
     assert cli_main([]) == 2
 
 
-def test_cli_no_key_returns_one(monkeypatch):
-    # Ensure no key is visible regardless of the developer's real env.
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+def test_cli_no_key_returns_one(monkeypatch, tmp_path):
+    # Ensure no key is visible regardless of the developer's real .env.
+    # Point settings at an empty tmp dir so load_dotenv finds no .env to reload,
+    # and clear the env var + the settings cache.
     from src.config import settings as settings_mod
 
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr(settings_mod, "REPO_ROOT", tmp_path)
     settings_mod.get_settings.cache_clear()
-    assert cli_main(["hello"]) == 1
-    settings_mod.get_settings.cache_clear()
+    try:
+        assert cli_main(["hello"]) == 1
+    finally:
+        settings_mod.get_settings.cache_clear()
 
 
 def test_cron_stub_runs():

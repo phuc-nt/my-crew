@@ -63,6 +63,6 @@ def test_secret_in_freetext_field_redacted(tmp_path):
         )
     )
     raw = (tmp_path / "audit.jsonl").read_text()
-    assert "xoxb-12345678" not in raw
+    assert "xoxb-FAKE1234" not in raw
     assert "AKIAFFFFFFFFFFFFFFFF" not in raw
     assert "***REDACTED***" in raw
