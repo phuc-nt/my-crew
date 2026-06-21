@@ -1,20 +1,21 @@
 # Dev Journal — my-project-manager
 
-Dòng thời gian phát triển kiến trúc + tính năng (repo vừa-làm-vừa-học). Đọc bảng dưới để thấy cả hành trình; mở `phase-N.md` cho chi tiết.
+Dòng thời gian phát triển kiến trúc + tính năng (repo vừa-làm-vừa-học). Đọc bảng dưới để thấy cả hành trình; mở từng file cho chi tiết.
 
-**Quy ước:** 1 file / phase (`phase-N.md`), ghi/cập nhật **cuối mỗi phase**. Súc tích theo template — chỉ ghi cái verify được, không bịa, không kể lể.
+**Quy ước:** 1 file / mốc, **tiền tố ngày** `YYMMDD-<slug>.md` (vd `260622-phase-1-slice-2-confluence-report.md`) → sắp xếp theo thời gian, mỗi mốc tự ghi ngày. Súc tích theo template — chỉ ghi cái verify được, không bịa, không kể lể. Ghi ở mốc (phase/slice xong hoặc sự kiện đáng nhớ).
 
 ## Dòng thời gian
 
-| Phase | Ngày | Trạng thái | Mốc chính |
+| Ngày | Mốc | Trạng thái | Tóm tắt |
 |---|---|---|---|
-| [0](phase-0.md) | 2026-06-21 | ✅ Done | Scaffold + hello-agent (LangGraph) + guardrail core. Chốt: tool qua MCP+CLI; guardrail allowlist + Lớp A hard-deny (sau 2 vòng review). E2E OpenRouter thật OK. |
-| [1](phase-1.md) | 2026-06-21 | 🟡 Slice 1 | Reporting Jira+GitHub→Slack qua gateway. Chốt: agent SPAWN MCP server subprocess (stdio-only, không connect); gateway dedup theo (channel,ngày). 114 UT. E2E pending dist+token. |
+| 2026-06-21 | [Phase 0 — Scaffold](260621-phase-0-scaffold.md) | ✅ Done | Hello-agent (LangGraph) + guardrail core. Chốt: tool qua MCP+CLI; allowlist + Lớp A hard-deny (2 vòng review). E2E OpenRouter OK. |
+| 2026-06-21 | [Phase 1 Slice 1 — Reporting](260621-phase-1-slice-1-reporting.md) | ✅ Done | Jira+GitHub→Slack qua gateway. Agent SPAWN MCP subprocess (stdio-only). E2E post Slack thật. |
+| 2026-06-22 | [Phase 1 Slice 2 — Confluence](260622-phase-1-slice-2-confluence-report.md) | ✅ Done | Report detail→Confluence + short+link→Slack. E2E thật cả 2. State chỉ primitive (fix checkpoint). |
 
-## Template entry (`phase-N.md`)
+## Template entry (`YYMMDD-<slug>.md`)
 
 ```markdown
-# Phase N — <tên>
+# <Tiêu đề mốc>
 <ngày> · <trạng thái>
 
 ## Làm gì
@@ -26,7 +27,7 @@ Bảng: Quyết định | Vì sao | Đánh đổi. Chỉ mốc đáng nhớ.
 ## Vấp & học được
 2-4 gạch: sai gì → rút ra gì. Ngắn.
 
-## Mở / sang phase sau
+## Mở / sang sau
 1-3 gạch.
 ```
 

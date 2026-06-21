@@ -1,6 +1,6 @@
 # Phase 1 — MVP Reporting (Slice 1)
 
-2026-06-21 · 🟡 Slice 1 code done, E2E pending
+2026-06-21 · ✅ Done (E2E post Slack thật)
 
 ## Làm gì
 - Slice mỏng end-to-end: `cli report` → đọc Jira (MCP) + GitHub (`gh` CLI) → `risk_analyzer` → LLM compose report → **post Slack qua Action Gateway**.

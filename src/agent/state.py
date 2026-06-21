@@ -22,18 +22,16 @@ class AgentState(TypedDict):
 
 
 class ReportState(TypedDict, total=False):
-    """State for the Phase 1 reporting flow: perceive→analyze→compose→deliver.
+    """State for the reporting flow: perceive→analyze→compose→deliver.
 
-    `total=False` so each node fills its slice. `issues`/`prs`/`ci`/`risks` hold
-    normalized model objects; `report_text` is the composed report; `delivered`
-    + `audit_ref` capture the post outcome.
+    `total=False` so each node fills its slice. State holds ONLY serializable
+    primitives (the checkpointer persists this): `risks` as a list of plain dicts,
+    `report_text` the composed detail body, plus the delivery outcome. The heavy
+    fetched models (Issue/PR/CiRun) stay in the graph closure, not in state.
     """
 
-    issues: list[Any]  # list[Issue]
-    prs: list[Any]  # list[PullRequest]
-    ci: list[Any]  # list[CiRun]
-    risks: list[Any]  # list[Risk]
-    report_text: str
+    risks: list[dict[str, Any]]  # serialized Risk dicts
+    report_text: str  # Slice 2: the Confluence detail body (storage HTML)
     cost_usd: float | None
     delivered: bool
-    delivery_summary: str
+    delivery_summary: str  # e.g. "confluence=executed slack=executed url=..."

@@ -38,7 +38,7 @@ def _format_risks(risks: list[Risk]) -> str:
 
 
 def build_report_messages(risks: list[Risk], *, report_date: str) -> list[dict[str, str]]:
-    """Build the chat messages for the report-composing LLM call.
+    """Build the chat messages for the report-composing LLM call (Slack mrkdwn).
 
     `report_date` is the real date string (e.g. '2026-06-21'); it is embedded so
     the model uses it verbatim instead of inventing a placeholder.
@@ -54,3 +54,51 @@ def build_report_messages(risks: list[Risk], *, report_date: str) -> list[dict[s
         {"role": "system", "content": _SYSTEM},
         {"role": "user", "content": user},
     ]
+
+
+# --- Slice 2: detail report (Confluence storage format) + derived Slack short ---
+
+_DETAIL_SYSTEM = (
+    "Bạn là một PM/SM giỏi, viết báo cáo tiến độ đầy đủ bằng tiếng Việt cho trang Confluence. "
+    "Mở đầu bằng rủi ro quan trọng nhất, mỗi rủi ro nêu chi tiết + hành động (ai/cái gì). "
+    "Dựa hoàn toàn vào dữ liệu được cung cấp, không bịa số liệu.\n\n"
+    "ĐỊNH DẠNG: xuất ra Confluence storage format (XHTML đơn giản). CHỈ dùng các thẻ: "
+    "<h2>, <h3>, <p>, <ul>, <li>, <strong>, <em>. KHÔNG markdown, KHÔNG <html>/<body>, "
+    "KHÔNG thẻ khác. Không tự chèn placeholder ngày — dùng đúng ngày được cung cấp."
+)
+
+
+def build_detail_messages(risks: list[Risk], *, report_date: str) -> list[dict[str, str]]:
+    """Messages for the detail report that goes onto a Confluence page (XHTML)."""
+    user = (
+        f"Viết báo cáo tiến độ đầy đủ cho team ngày {report_date}, dựa trên các tín hiệu sau "
+        f"(đã sắp xếp theo mức độ):\n\n{_format_risks(risks)}\n\n"
+        "Bố cục: <h2> tiêu đề, <p> tóm tắt trạng thái, rồi phần rủi ro (mỗi rủi ro 1 <li> "
+        "trong <ul>, nêu chi tiết + <strong>hành động</strong>). Nếu không có rủi ro, nói rõ "
+        "tiến độ ổn. Chỉ dùng các thẻ cho phép."
+    )
+    return [
+        {"role": "system", "content": _DETAIL_SYSTEM},
+        {"role": "user", "content": user},
+    ]
+
+
+def build_slack_short(risks: list[Risk], *, report_date: str, detail_url: str | None) -> str:
+    """Build the short Slack message (mrkdwn) deterministically — no extra LLM call.
+
+    Summarizes status + risk count and links to the Confluence detail page.
+    """
+    high = sum(1 for r in risks if r.severity == "high")
+    if risks:
+        status = f"*⚠️ {len(risks)} rủi ro* ({high} cao) — cần chú ý"
+        top = risks[0]
+        headline = f"\n• Nổi bật: {top.subject} — {top.detail}"
+    else:
+        status = "*✅ Tiến độ ổn* — không phát hiện rủi ro"
+        headline = ""
+    link = (
+        f"\n📄 <{detail_url}|Xem báo cáo chi tiết trên Confluence>"
+        if detail_url
+        else "\n_(không tạo được link Confluence)_"
+    )
+    return f"*Báo cáo tiến độ — {report_date}*\n{status}{headline}{link}"

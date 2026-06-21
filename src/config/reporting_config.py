@@ -24,6 +24,9 @@ from src.config.settings import REPO_ROOT
 # Default dist paths for the local MCP server repos (overridable via env).
 _DEFAULT_JIRA_DIST = Path.home() / "workspace" / "jira-cloud-mcp-server" / "dist" / "index.js"
 _DEFAULT_SLACK_DIST = Path.home() / "workspace" / "slack-browser-mcp-server" / "dist" / "index.js"
+_DEFAULT_CONFLUENCE_DIST = (
+    Path.home() / "workspace" / "confluence-cloud-mcp-server" / "dist" / "index.js"
+)
 
 
 @dataclass(frozen=True)
@@ -61,12 +64,18 @@ class ReportingConfig:
     github_repo: str | None  # "owner/repo"
     slack_report_channel: str | None
 
+    # Confluence target for the detail report (Slice 2).
+    confluence_space_key: str | None
+    confluence_space_id: str | None
+    atlassian_site_name: str | None  # used to build a page URL fallback
+
     # Risk thresholds (defaults; tune later via env).
     pr_stale_days: int
     blocker_label_substring: str  # an issue label containing this => blocker
 
     jira_server: McpServerSpec
     slack_server: McpServerSpec
+    confluence_server: McpServerSpec
 
 
 def _server_dist(env_key: str, default: Path) -> Path:
@@ -99,13 +108,28 @@ def get_reporting_config() -> ReportingConfig:
         },
         required_env_keys=("SLACK_XOXC_TOKEN", "SLACK_XOXD_TOKEN", "SLACK_TEAM_DOMAIN"),
     )
+    # Confluence reuses the same Atlassian credential as Jira (same Cloud site).
+    confluence_server = McpServerSpec(
+        name="confluence",
+        dist_path=_server_dist("CONFLUENCE_MCP_DIST", _DEFAULT_CONFLUENCE_DIST),
+        env={
+            "CONFLUENCE_SITE_NAME": os.getenv("ATLASSIAN_SITE_NAME", ""),
+            "CONFLUENCE_EMAIL": os.getenv("ATLASSIAN_USER_EMAIL", ""),
+            "CONFLUENCE_API_TOKEN": os.getenv("ATLASSIAN_API_TOKEN", ""),
+        },
+        required_env_keys=("CONFLUENCE_SITE_NAME", "CONFLUENCE_EMAIL", "CONFLUENCE_API_TOKEN"),
+    )
 
     return ReportingConfig(
         jira_project_key=os.getenv("JIRA_PROJECT_KEY") or None,
         github_repo=os.getenv("GITHUB_REPO") or None,
         slack_report_channel=os.getenv("SLACK_REPORT_CHANNEL") or None,
+        confluence_space_key=os.getenv("CONFLUENCE_SPACE_KEY") or None,
+        confluence_space_id=os.getenv("CONFLUENCE_SPACE_ID") or None,
+        atlassian_site_name=os.getenv("ATLASSIAN_SITE_NAME") or None,
         pr_stale_days=int(os.getenv("PR_STALE_DAYS", "7")),
         blocker_label_substring=os.getenv("BLOCKER_LABEL_SUBSTRING", "block"),
         jira_server=jira_server,
         slack_server=slack_server,
+        confluence_server=confluence_server,
     )
