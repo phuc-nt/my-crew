@@ -81,6 +81,11 @@ class ReportingConfig:
     okr_confluence_page_id: str | None
     okr_behind_threshold: float
 
+    # Phase 4: resource + cost. Overload = open-count above team_mean × ratio.
+    # labor_cost_per_issue == 0 ⇒ labor estimate omitted from the report.
+    resource_overload_ratio: float
+    labor_cost_per_issue: float
+
     jira_server: McpServerSpec
     slack_server: McpServerSpec
     confluence_server: McpServerSpec
@@ -142,6 +147,8 @@ def get_reporting_config() -> ReportingConfig:
         blocker_label_substring=os.getenv("BLOCKER_LABEL_SUBSTRING", "block"),
         okr_confluence_page_id=os.getenv("OKR_CONFLUENCE_PAGE_ID") or None,
         okr_behind_threshold=float(os.getenv("OKR_BEHIND_THRESHOLD", "0.5")),
+        resource_overload_ratio=float(os.getenv("RESOURCE_OVERLOAD_RATIO", "1.5")),
+        labor_cost_per_issue=float(os.getenv("LABOR_COST_PER_ISSUE", "0")),
         jira_server=jira_server,
         slack_server=slack_server,
         confluence_server=confluence_server,

@@ -123,3 +123,48 @@ class OkrProblem:
 
     row: str  # short label of the offending row (e.g. "Objective | KR")
     reason: str
+
+
+# --- Phase 4: Resource (capacity) + Cost reporting ---
+# Capacity is computed from Jira issues grouped by assignee (the running Jira MCP
+# exposes no story points). "overloaded" is RELATIVE — open_count above the team
+# mean times a configurable ratio — so it self-adjusts to team size.
+
+
+@dataclass(frozen=True)
+class AssigneeLoad:
+    """One person's workload, counted from their open (not-done) Jira issues."""
+
+    assignee: str
+    open_count: int
+    overdue_count: int
+    blocker_count: int
+    overloaded: bool
+
+
+@dataclass(frozen=True)
+class ResourceReport:
+    """Team workload snapshot: per-assignee loads + the overloaded set."""
+
+    loads: tuple[AssigneeLoad, ...]
+    team_mean: float  # mean open_count across assignees with load (0.0 if none)
+    overloaded: tuple[str, ...]  # names flagged overloaded
+    unassigned_count: int  # open issues with no assignee (not a load)
+
+
+@dataclass(frozen=True)
+class CostSummary:
+    """Cost snapshot: real LLM budget + a labeled labor estimate.
+
+    `llm_*` come from the existing BudgetTracker (read at the call site).
+    `labor_estimate = open_issue_count × cost_per_issue` is a rough estimate;
+    `cost_per_issue == 0` means it is not configured (the render omits it).
+    """
+
+    llm_spent: float
+    llm_cap: float
+    llm_ratio: float
+    llm_status: str  # "ok" | "warn" | "over"
+    labor_estimate: float
+    open_issue_count: int
+    cost_per_issue: float

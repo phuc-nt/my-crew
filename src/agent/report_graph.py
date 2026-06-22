@@ -107,8 +107,10 @@ def default_report_deps(
         # Fault-isolated + deterministic numbers (see okr_report_graph).
         if report_kind == "weekly":
             from src.agent.okr_weekly_section import weekly_okr_section
+            from src.agent.resource_weekly_section import weekly_resource_section
 
             body += weekly_okr_section(today)
+            body += weekly_resource_section(today)
         return body, result.cost_usd
 
     def _deliver(risks: list[Risk], detail_body: str) -> tuple[bool, str]:
@@ -127,8 +129,10 @@ def default_report_deps(
         short = build_slack_short(risks, report_date=today, detail_url=detail_url)
         if report_kind == "weekly":
             from src.agent.okr_weekly_section import weekly_okr_slack_line
+            from src.agent.resource_weekly_section import weekly_resource_slack_line
 
             short += weekly_okr_slack_line()
+            short += weekly_resource_slack_line()
         slack_result = deliver_report(
             short,
             gateway=gw,

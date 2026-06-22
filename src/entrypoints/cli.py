@@ -42,7 +42,11 @@ def _run_hello(message: str) -> int:
 
 def _run_report(report_kind: str) -> int:
     # Imported here so the hello path (and tests) don't pull in MCP/report deps.
-    if report_kind == "okr":
+    if report_kind == "resource":
+        from src.agent.resource_report_graph import build_resource_graph
+
+        graph = build_resource_graph(get_checkpointer())
+    elif report_kind == "okr":
         from src.agent.okr_report_graph import build_okr_graph
 
         graph = build_okr_graph(get_checkpointer())
@@ -64,10 +68,12 @@ def _run_report(report_kind: str) -> int:
 
 
 def _parse_report_kind(args: list[str]) -> str:
-    """`report [--daily|--weekly|--okr]` → kind; default daily.
+    """`report [--daily|--weekly|--okr|--resource]` → kind; default daily.
 
-    Precedence when several flags are passed: okr > weekly > daily.
+    Precedence when several flags are passed: resource > okr > weekly > daily.
     """
+    if "--resource" in args:
+        return "resource"
     if "--okr" in args:
         return "okr"
     if "--weekly" in args:
@@ -162,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args:
         print(
             "usage: python -m src.entrypoints.cli "
-            '"your message" | report [--daily|--weekly|--okr] | audit [filters]',
+            '"your message" | report [--daily|--weekly|--okr|--resource] | audit [filters]',
             file=sys.stderr,
         )
         return 2

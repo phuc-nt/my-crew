@@ -1,7 +1,7 @@
 # Project Roadmap — my-project-manager
 
 > Lộ trình + milestone. Status sống, cập nhật khi phase đổi trạng thái.
-> Status hiện tại: **Phase 3 (OKR Tracking) HOÀN TẤT (2026-06-22) — OKR read + analyzer + report (CLI + weekly embed) + Slack delivery. Sẵn sàng Phase 4.**
+> Status hiện tại: **Phase 4 (Resource + Cost Reporting) HOÀN TẤT (2026-06-22) — Resource+cost read + analyzer + report (CLI + weekly embed) + Slack delivery + cron. Sẵn sàng Phase 5.**
 
 ## Trạng thái tổng
 
@@ -11,7 +11,7 @@
 | 1 | MVP Reporting + Monitoring | ✅ Done | Đọc Jira/GitHub → report (daily/weekly) → đăng Slack/Confluence + cron |
 | 2 | Guardrail hardening | ✅ Done | Dedup bền + audit query + Lớp B interrupt (queue+approve) |
 | 3 | OKR / objective | ✅ Done | Đặt + track OKR, map xuống Jira epic |
-| 4 | Resource + Cost | ⬜ Chưa | Capacity, allocation, budget alert |
+| 4 | Resource + Cost | ✅ Done | Capacity (load tương đối), cost tracking + budget band |
 | 5 | Stakeholder + scale | ⬜ Chưa | Report theo audience; lên service + Slack UI; multi-user |
 
 ## Phase 0 — Khởi tạo (gần xong — chỉ còn E2E thật)
@@ -84,6 +84,22 @@ Trọng tâm: ROI rõ, rủi ro thấp. Đọc nhiều, write chỉ là *post re
 **Exit Phase 3**: ✅ ĐẠT. Agent reads external OKR table (Confluence), maps to Jira epics, rolls up weighted progress, delivers via `cli report --okr` + weekly embed + Slack with NO new MCP write authority.
 
 > **Bug found + fixed (integration verification)**: Jira MCP `enhancedSearchIssues` omitted `duedate` field → overdue_task risk never fired (Phase-1 regression). Fixed in MCP server repo (commit 41a6a30): added `duedate` to defaultFields. After fix, daily report flags 6 overdue tasks. Reinforce: **verify integration early**.
+
+## Phase 4 — Resource + Cost Reporting (✅ DONE 2026-06-22, 236 UT, ruff clean, code-reviewed)
+
+- [x] `resource_analyzer.py` — pure `build_resource_report` (relative-to-mean overload, self-adjusting) + `build_cost_summary` (BudgetTracker status bands: ok/warn/over, no raise).
+- [x] `resource_report_prompt.py` — deterministic XHTML table (`render_resource_xhtml`, assignee names escaped) + Slack short (`build_resource_slack_short`, names sanitized via `_slack_safe`) + LLM prose (narrative, no number injection).
+- [x] `resource_report_graph.py` — standalone `build_resource_graph` + `ResourceReportDeps`.
+- [x] `resource_weekly_section.py` — fault-isolated `weekly_resource_section` + `weekly_resource_slack_line` (alongside OKR section).
+- [x] Models: `AssigneeLoad` (load = open_issues + overdue + blocker per assignee), `ResourceReport`, `CostSummary` dataclasses.
+- [x] Config: `resource_overload_ratio` (default 1.5, self-adjusting), `labor_cost_per_issue` (optional labor estimate).
+- [x] CLI: `cli report --resource` flag; precedence: resource>okr>weekly>daily.
+- [x] Cron: `--resource` Monday 09:00 (`deploy/launchd/com.mpm.report.resource.plist`).
+- [x] **E2E verified**: seeded dataset (SCRUM-19/20/21 → Phúc Nguyễn 3 open/3 overdue/1 blocker). Real write: Confluence page 589825 "Resource & Cost Status 2026-06-22" + Slack post.
+
+> **Security fix (C1 found + fixed in code review)**: assignee names reached Slack mrkdwn unescaped via fallback path. XHTML path already escaped. Added `_slack_safe` sanitizer to block Slack mrkdwn/mention/link injection + regression test. Reinforce: **multi-path sanitization**.
+
+**Exit Phase 4**: ✅ ĐẠT. Agent reads Jira workload (open/overdue/blocker per assignee) + LLM budget (BudgetTracker), computes relative load, delivers via `cli report --resource` + weekly embed + Slack with NO new write authority. Cron automated (Monday 09:00).
 
 ## Phase 4–5 — tóm tắt
 

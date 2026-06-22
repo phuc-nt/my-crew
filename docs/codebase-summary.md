@@ -1,7 +1,7 @@
 # Codebase Summary — my-project-manager
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-06-22 — Phase 0 + Phase 1 + Phase 3 (OKR Tracking) HOÀN TẤT (202 UT, ruff clean, E2E thật).** `cli report --daily|--weekly|--okr` → đọc Jira (MCP) + GitHub (gh) + Confluence OKR → risk_analyzer + okr_analyzer → LLM compose → **Confluence detail page + Slack short+link + weekly OKR section** qua Action Gateway. Cron qua launchd (`deploy/launchd/`).
+> Status: **2026-06-22 — Phase 0 + Phase 1 + Phase 3 (OKR) + Phase 4 (Resource+Cost) HOÀN TẤT (236 UT, ruff clean, E2E thật).** `cli report --daily|--weekly|--okr|--resource` → đọc Jira (MCP) + GitHub (gh) + Confluence OKR → risk_analyzer + okr_analyzer + resource_analyzer → LLM compose → **Confluence detail page + Slack short+link + weekly OKR+resource section** qua Action Gateway. Cron qua launchd (`deploy/launchd/`).
 
 ## Trạng thái hiện tại
 
@@ -49,12 +49,16 @@ src/
 | OKR report prompt | `src/llm/okr_report_prompt.py` (render_okr_table_xhtml, build_okr_slack_short, build_okr_narrative_messages) |
 | OKR standalone report | `src/agent/okr_report_graph.py` (build_okr_graph, OkrReportDeps) |
 | OKR weekly section | `src/agent/okr_weekly_section.py` (weekly_okr_section, weekly_okr_slack_line, fault-isolated) |
+| Resource analyzer | `src/agent/resource_analyzer.py` (build_resource_report, build_cost_summary, relative-to-mean overload) |
+| Resource report prompt | `src/llm/resource_report_prompt.py` (render_resource_xhtml, build_resource_slack_short, build_resource_narrative_messages, _slack_safe sanitizer) |
+| Resource standalone report | `src/agent/resource_report_graph.py` (build_resource_graph, ResourceReportDeps) |
+| Resource weekly section | `src/agent/resource_weekly_section.py` (weekly_resource_section, weekly_resource_slack_line, fault-isolated) |
 | Budget cap LLM | `src/llm/budget_tracker.py` ($50/tháng, hard-stop) |
 | Gọi LLM (OpenRouter) | `src/llm/client.py` + `cost.py` |
 | Config/env | `src/config/settings.py` |
 | Audit log | `src/audit/audit_log.py` (JSONL append-only) |
-| Chạy thế nào | `src/entrypoints/cli.py` (`report --daily\|--weekly\|--okr`), `cron.py` (launchd) + `deployment-guide.md §5` |
-| Cron / lịch chạy | `src/entrypoints/cron.py` + `deploy/launchd/` (2 plist + run-report.sh) |
+| Chạy thế nào | `src/entrypoints/cli.py` (`report --daily\|--weekly\|--okr\|--resource`), `cron.py` (launchd) + `deployment-guide.md §5` |
+| Cron / lịch chạy | `src/entrypoints/cron.py` + `deploy/launchd/` (3 plist: daily, weekly, resource + run-report.sh) |
 
 ## Mô hình guardrail (CHỐT 2026-06-21, sau 2 vòng review)
 

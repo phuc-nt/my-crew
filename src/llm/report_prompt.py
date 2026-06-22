@@ -112,6 +112,7 @@ REPORT_TITLES = {
     "daily": "Daily Standup",
     "weekly": "Sprint Review",
     "okr": "OKR Status",
+    "resource": "Resource & Cost Status",
 }
 
 

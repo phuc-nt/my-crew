@@ -1,7 +1,7 @@
 #!/bin/bash
 # Wrapper invoked by launchd to run a scheduled report.
 # launchd starts with a minimal environment, so set cwd + PATH (node, gh, uv)
-# and let the app load .env itself. Usage: run-report.sh --daily | --weekly
+# and let the app load .env itself. Usage: run-report.sh --daily|--weekly|--okr|--resource
 set -euo pipefail
 
 REPO_DIR="/Users/phucnt/workspace/my-project-manager"
