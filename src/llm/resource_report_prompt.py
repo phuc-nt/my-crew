@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from html import escape
 
+from src.llm.audience_external_prompts import RESOURCE_NARRATIVE_EXTERNAL_SYSTEM
 from src.tools.models import CostSummary, ResourceReport
 
 _STATUS_WORD = {"ok": "trong ngưỡng", "warn": "⚠️ gần ngưỡng", "over": "❌ vượt ngưỡng"}
@@ -88,10 +89,46 @@ def render_resource_xhtml(
     return "".join(parts)
 
 
-def build_resource_slack_short(
+def _capacity_word(resource: ResourceReport) -> str:
+    """A privacy-safe team-capacity word for external reports (no names)."""
+    return "đang căng tải" if resource.overloaded else "ổn định"
+
+
+def _resource_slack_short_external(
     resource: ResourceReport, cost: CostSummary, *, report_date: str, detail_url: str | None
 ) -> str:
-    """Deterministic Slack mrkdwn summary of the resource + cost status (no LLM)."""
+    """External resource short: NO assignee names, NO per-person numbers, NO labor cost."""
+    status = _STATUS_WORD.get(cost.llm_status, cost.llm_status)
+    head = (
+        f"*Tình hình nguồn lực — {report_date}*\n"
+        f"*Năng lực team: {_capacity_word(resource)}*"
+        f"\n• Ngân sách: {status}"
+    )
+    link = (
+        f"\n📄 <{detail_url}|Xem chi tiết trên Confluence>"
+        if detail_url
+        else "\n_(không tạo được link Confluence)_"
+    )
+    return head + link
+
+
+def build_resource_slack_short(
+    resource: ResourceReport,
+    cost: CostSummary,
+    *,
+    report_date: str,
+    detail_url: str | None,
+    audience: str = "internal",
+) -> str:
+    """Deterministic Slack mrkdwn summary of the resource + cost status (no LLM).
+
+    `audience="external"` is high-level only — no assignee names, no per-person
+    numbers, no labor cost (a stakeholder must not see internal workload detail).
+    """
+    if audience == "external":
+        return _resource_slack_short_external(
+            resource, cost, report_date=report_date, detail_url=detail_url
+        )
     open_total = sum(load.open_count for load in resource.loads)
     head = (
         f"*Resource & Cost — {report_date}*\n"
@@ -127,15 +164,29 @@ _NARRATIVE_SYSTEM = (
     "KHÔNG heading, KHÔNG markdown, KHÔNG bịa thông tin ngoài dữ liệu được cung cấp."
 )
 
-
 def build_resource_narrative_messages(
-    resource: ResourceReport, cost: CostSummary, *, report_date: str
+    resource: ResourceReport, cost: CostSummary, *, report_date: str, audience: str = "internal"
 ) -> list[dict[str, str]]:
     """Messages for the 1-paragraph LLM narrative placed above the tables.
 
-    Passes qualitative facts only (who is overloaded, budget status word), never
-    raw figures — the tables own the numbers.
+    Internal passes qualitative facts (who is overloaded, budget word). External
+    passes ONLY a capacity word + budget word — no assignee names, no counts.
     """
+    if audience == "external":
+        budget_word = _STATUS_WORD.get(cost.llm_status, cost.llm_status)
+        summary = (
+            f"Ngày {report_date}. Năng lực team: {_capacity_word(resource)}. "
+            f"Ngân sách: {budget_word}."
+        )
+        user = (
+            f"Dữ liệu tình hình nguồn lực (định tính, mức tổng quan):\n{summary}\n\n"
+            "Viết một đoạn <p> cập nhật ngắn cho stakeholder về năng lực team + ngân sách. "
+            "Nhớ: KHÔNG tên người, KHÔNG số cụ thể."
+        )
+        return [
+            {"role": "system", "content": RESOURCE_NARRATIVE_EXTERNAL_SYSTEM},
+            {"role": "user", "content": user},
+        ]
     overloaded = (
         ", ".join(_slack_safe(n) for n in resource.overloaded)
         if resource.overloaded
@@ -159,9 +210,20 @@ def build_resource_narrative_messages(
 
 
 def fallback_resource_narrative(
-    resource: ResourceReport, cost: CostSummary, *, report_date: str
+    resource: ResourceReport, cost: CostSummary, *, report_date: str, audience: str = "internal"
 ) -> str:
-    """Templated <p> summary used when no LLM is available (no key)."""
+    """Templated <p> summary used when no LLM is available (no key).
+
+    External omits assignee names — only a capacity word + budget band.
+    """
+    if audience == "external":
+        budget = ""
+        if cost.llm_status != "ok":
+            budget = f" Ngân sách {_STATUS_WORD.get(cost.llm_status, cost.llm_status)}."
+        return (
+            f"<p>Cập nhật nguồn lực ngày {escape(report_date)}: "
+            f"năng lực team {escape(_capacity_word(resource))}.{escape(budget)}</p>"
+        )
     if resource.overloaded:
         focus = "Cần cân bằng tải: " + ", ".join(resource.overloaded) + " đang quá tải."
     else:

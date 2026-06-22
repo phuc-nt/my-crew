@@ -45,10 +45,21 @@ def _today_utc() -> date:
     return datetime.now(UTC).date()
 
 
-def default_resource_deps(*, gateway: ActionGateway | None = None) -> ResourceReportDeps:
-    """Wire the real resource implementations. Lazy imports keep graph-build network-free."""
+def default_resource_deps(
+    *, audience: str = "internal", gateway: ActionGateway | None = None
+) -> ResourceReportDeps:
+    """Wire the real resource implementations. Lazy imports keep graph-build network-free.
+
+    `audience="external"` uses a names-free, labor-free business narrative + short and
+    posts to the stakeholder channel (Lớp B). The internal Confluence table is unchanged.
+    """
     from src.actions.confluence_write import create_report_page
     from src.actions.slack_write import deliver_report
+    from src.agent.audience_delivery import (
+        SLACK_OK_STATUSES,
+        delivery_summary,
+        resolve_audience_delivery,
+    )
     from src.llm.client import LlmClient
     from src.llm.report_prompt import REPORT_TITLES
     from src.llm.resource_report_prompt import (
@@ -76,33 +87,45 @@ def default_resource_deps(*, gateway: ActionGateway | None = None) -> ResourceRe
                 llm = LlmClient()
                 llm_box["llm"] = llm
             result = llm.complete(
-                build_resource_narrative_messages(resource, cost, report_date=report_date)
+                build_resource_narrative_messages(
+                    resource, cost, report_date=report_date, audience=audience
+                )
             )
             return result.content, result.cost_usd
         except Exception as exc:  # no key / LLM error → narrative is optional
             logger.warning("Resource narrative skipped (LLM unavailable): %s", exc)
-            return fallback_resource_narrative(resource, cost, report_date=report_date), None
+            return (
+                fallback_resource_narrative(
+                    resource, cost, report_date=report_date, audience=audience
+                ),
+                None,
+            )
 
     def _deliver(resource: ResourceReport, cost: CostSummary, body: str) -> tuple[bool, str]:
         today = _today_utc().isoformat()
+        channel, date_hint = resolve_audience_delivery(audience, "resource", today)
         title = f"{REPORT_TITLES['resource']} {today}"
         conf_result, page = create_report_page(
-            title, body, gateway=gw, report_date=f"resource-{today}",
-            rationale="scheduled resource & cost status report (detail)",
+            title, body, gateway=gw, report_date=date_hint,
+            rationale=f"scheduled resource & cost status report (detail, {audience})",
         )
         detail_url = page.url if page else None
+        # The resource Confluence page carries the per-assignee table (names, counts,
+        # labor cost). For an external audience we must NOT hand that link to the
+        # stakeholder — the short stays the high-level capacity summary only.
+        short_url = None if audience == "external" else detail_url
         short = build_resource_slack_short(
-            resource, cost, report_date=today, detail_url=detail_url
+            resource, cost, report_date=today, detail_url=short_url, audience=audience
         )
         slack_result = deliver_report(
-            short, gateway=gw, report_date=f"resource-{today}",
-            rationale="resource & cost status report (short + link)",
+            short, gateway=gw, channel=channel, report_date=date_hint,
+            rationale=f"resource & cost status report (short + link, {audience})",
         )
         ok = (
             conf_result.status in {"executed", "dry_run"}
-            and slack_result.status in {"executed", "dry_run", "deduplicated"}
+            and slack_result.status in SLACK_OK_STATUSES
         )
-        return ok, f"confluence={conf_result.status} slack={slack_result.status} url={detail_url}"
+        return ok, delivery_summary(conf_result.status, slack_result, detail_url)
 
     return ResourceReportDeps(
         fetch=build_resource_rollup, compose=_compose, deliver=_deliver
@@ -135,10 +158,13 @@ def _make_resource_nodes(deps: ResourceReportDeps):
 
 
 def build_resource_graph(
-    checkpointer: SqliteSaver | None = None, *, deps: ResourceReportDeps | None = None
+    checkpointer: SqliteSaver | None = None,
+    *,
+    deps: ResourceReportDeps | None = None,
+    audience: str = "internal",
 ) -> CompiledStateGraph:
     """Build + compile the resource + cost reporting graph. `deps` defaults to real wiring."""
-    resolved = deps or default_resource_deps()
+    resolved = deps or default_resource_deps(audience=audience)
     perceive, analyze_node, compose_report, deliver = _make_resource_nodes(resolved)
 
     builder = StateGraph(ReportState)

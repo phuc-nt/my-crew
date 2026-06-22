@@ -172,7 +172,9 @@ def test_cli_report_okr_dispatch(monkeypatch):
 
     monkeypatch.setattr(cli, "get_settings", lambda: type("S", (), {"openrouter_api_key": "k"})())
     monkeypatch.setattr(cli, "get_checkpointer", lambda: None)
-    monkeypatch.setattr(okr_graph_mod, "build_okr_graph", lambda cp: _FakeGraph())
+    monkeypatch.setattr(
+        okr_graph_mod, "build_okr_graph", lambda cp, audience="internal": _FakeGraph()
+    )
 
     rc = cli.main(["report", "--okr"])
     assert rc == 0

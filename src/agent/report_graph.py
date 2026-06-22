@@ -51,14 +51,16 @@ def _today_utc() -> date:
 def default_report_deps(
     *,
     report_kind: str = "daily",
+    audience: str = "internal",
     client: LlmClient | None = None,
     gateway: ActionGateway | None = None,
 ) -> ReportDeps:
     """Wire the real implementations for a report kind ("daily" | "weekly").
 
     Weekly pulls the active sprint's issues (instead of all open issues) and
-    passes sprint context to the detail prompt. Lazy imports keep graph-build
-    network-free.
+    passes sprint context to the detail prompt. `audience="external"` composes a
+    business-tone report and posts the Slack short to the stakeholder channel
+    (routes through Lớp B). Lazy imports keep graph-build network-free.
     """
     from src.actions.confluence_write import create_report_page
     from src.config.reporting_config import get_reporting_config
@@ -100,12 +102,13 @@ def default_report_deps(
             report_date=today,
             kind=report_kind,
             sprint_context=_sprint_context(),
+            audience=audience,
         )
         result = llm.complete(messages)
         body = result.content
-        # Weekly review also carries an OKR status section when OKR is configured.
-        # Fault-isolated + deterministic numbers (see okr_report_graph).
-        if report_kind == "weekly":
+        # Weekly review also carries OKR + resource sections (internal only — these
+        # are internal-detail noise an external stakeholder report should not embed).
+        if report_kind == "weekly" and audience == "internal":
             from src.agent.okr_weekly_section import weekly_okr_section
             from src.agent.resource_weekly_section import weekly_resource_section
 
@@ -114,20 +117,29 @@ def default_report_deps(
         return body, result.cost_usd
 
     def _deliver(risks: list[Risk], detail_body: str) -> tuple[bool, str]:
+        from src.agent.audience_delivery import (
+            SLACK_OK_STATUSES,
+            delivery_summary,
+            resolve_audience_delivery,
+        )
+
         today = _today_utc().isoformat()
+        channel, date_hint = resolve_audience_delivery(audience, report_kind, today)
         title = f"{REPORT_TITLES.get(report_kind, 'Báo cáo')} {today}"
-        # 1) Confluence detail page (through the gateway). dedup keyed per kind+date.
+        # 1) Confluence detail page (through the gateway). dedup keyed per kind+audience+date.
         conf_result, page = create_report_page(
             title,
             detail_body,
             gateway=gw,
-            report_date=f"{report_kind}-{today}",
-            rationale=f"scheduled {report_kind} progress report (detail)",
+            report_date=date_hint,
+            rationale=f"scheduled {report_kind} progress report (detail, {audience})",
         )
         detail_url = page.url if page else None
         # 2) Slack short message + link (through the gateway), derived from risks.
-        short = build_slack_short(risks, report_date=today, detail_url=detail_url)
-        if report_kind == "weekly":
+        short = build_slack_short(
+            risks, report_date=today, detail_url=detail_url, audience=audience
+        )
+        if report_kind == "weekly" and audience == "internal":
             from src.agent.okr_weekly_section import weekly_okr_slack_line
             from src.agent.resource_weekly_section import weekly_resource_slack_line
 
@@ -136,14 +148,15 @@ def default_report_deps(
         slack_result = deliver_report(
             short,
             gateway=gw,
-            report_date=f"{report_kind}-{today}",
-            rationale=f"{report_kind} progress report (short + link)",
+            channel=channel,
+            report_date=date_hint,
+            rationale=f"{report_kind} progress report (short + link, {audience})",
         )
         ok = (
             conf_result.status in {"executed", "dry_run"}
-            and slack_result.status in {"executed", "dry_run", "deduplicated"}
+            and slack_result.status in SLACK_OK_STATUSES
         )
-        return ok, f"confluence={conf_result.status} slack={slack_result.status} url={detail_url}"
+        return ok, delivery_summary(conf_result.status, slack_result, detail_url)
 
     return ReportDeps(
         fetch_issues=_fetch_issues,
@@ -199,13 +212,15 @@ def build_report_graph(
     *,
     deps: ReportDeps | None = None,
     report_kind: str = "daily",
+    audience: str = "internal",
 ) -> CompiledStateGraph:
     """Build + compile the reporting graph. `deps` defaults to real wiring.
 
-    `report_kind` ("daily" | "weekly") selects the data scope + prompt framing
+    `report_kind` ("daily" | "weekly") selects the data scope + prompt framing;
+    `audience` ("internal" | "external") selects the tone + delivery channel — both
     when `deps` is not explicitly provided.
     """
-    resolved = deps or default_report_deps(report_kind=report_kind)
+    resolved = deps or default_report_deps(report_kind=report_kind, audience=audience)
     perceive, analyze_node, compose_report, deliver = _make_nodes(resolved)
 
     builder = StateGraph(ReportState)

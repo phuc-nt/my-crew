@@ -40,27 +40,31 @@ def _run_hello(message: str) -> int:
     return 0
 
 
-def _run_report(report_kind: str) -> int:
+def _run_report(report_kind: str, audience: str = "internal") -> int:
     # Imported here so the hello path (and tests) don't pull in MCP/report deps.
     if report_kind == "resource":
         from src.agent.resource_report_graph import build_resource_graph
 
-        graph = build_resource_graph(get_checkpointer())
+        graph = build_resource_graph(get_checkpointer(), audience=audience)
     elif report_kind == "okr":
         from src.agent.okr_report_graph import build_okr_graph
 
-        graph = build_okr_graph(get_checkpointer())
+        graph = build_okr_graph(get_checkpointer(), audience=audience)
     else:
         from src.agent.report_graph import build_report_graph
 
-        graph = build_report_graph(get_checkpointer(), report_kind=report_kind)
-    result = graph.invoke({}, config={"configurable": {"thread_id": f"report-{report_kind}"}})
+        graph = build_report_graph(
+            get_checkpointer(), report_kind=report_kind, audience=audience
+        )
+    thread = f"report-{report_kind}-{audience}"
+    result = graph.invoke({}, config={"configurable": {"thread_id": thread}})
 
     print(result.get("report_text", "(no report)"))
     cost = result.get("cost_usd")
     delivered = result.get("delivered")
     print(
-        f"\n[{report_kind} · delivered: {delivered} · {result.get('delivery_summary', '')} · "
+        f"\n[{report_kind}/{audience} · delivered: {delivered} · "
+        f"{result.get('delivery_summary', '')} · "
         f"cost: {f'${cost:.6f}' if cost is not None else 'unknown'}]",
         file=sys.stderr,
     )
@@ -79,6 +83,15 @@ def _parse_report_kind(args: list[str]) -> str:
     if "--weekly" in args:
         return "weekly"
     return "daily"
+
+
+def _parse_audience(args: list[str]) -> str:
+    """`--audience internal|external` → audience; default internal.
+
+    `external` composes a business-tone report and posts to the stakeholder channel
+    (which routes through Lớp B human approval); anything else is internal.
+    """
+    return "external" if _flag_value(args, "--audience") == "external" else "internal"
 
 
 def _flag_value(args: list[str], flag: str) -> str | None:
@@ -113,20 +126,30 @@ def _run_approve(args: list[str]) -> int:
     from src.actions.action_gateway import ActionGateway
 
     gw = ActionGateway()
-    # No per-tool write handlers exist yet for arbitrary Lớp B actions, so the
-    # approved action is logged as authorized rather than dispatched to a live
-    # API. Real handlers land when a Lớp B action actually enters a flow.
-    def _approved_handler(action: dict) -> str:
-        label = action.get("tool") or action.get("argv")
-        return f"approved + authorized (no live handler yet): {label}"
-
     try:
-        result = gw.approve(approval_id, handler=_approved_handler)
+        result = gw.approve(approval_id, handler=_dispatch_approved_action)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(f"approved #{approval_id}: {result.summary}")
     return 0
+
+
+def _dispatch_approved_action(action: dict) -> str:
+    """Live handler for an approved Lớp B action — dispatch it to its real executor.
+
+    The queued action carries everything needed (`server`/`tool`/`args` for an MCP
+    tool). Currently the only Lớp B action that enters a real flow is the external
+    report's Slack post, so it routes to the Slack post handler; other server/tools
+    error explicitly rather than silently no-op (so a new Lớp B flow can't be
+    approved into nothing).
+    """
+    if action.get("type") == "mcp_tool" and action.get("server") == "slack":
+        from src.actions.slack_write import _slack_post_handler
+
+        return _slack_post_handler(action)
+    label = action.get("tool") or action.get("argv") or action.get("type")
+    raise RuntimeError(f"No live handler wired for approved action: {label!r}")
 
 
 def _run_reject(args: list[str]) -> int:
@@ -168,7 +191,8 @@ def main(argv: list[str] | None = None) -> int:
     if not args:
         print(
             "usage: python -m src.entrypoints.cli "
-            '"your message" | report [--daily|--weekly|--okr|--resource] | audit [filters]',
+            '"your message" | report [--daily|--weekly|--okr|--resource] '
+            "[--audience internal|external] | audit [filters]",
             file=sys.stderr,
         )
         return 2
@@ -187,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args[0] == "report":
-        return _run_report(_parse_report_kind(args[1:]))
+        return _run_report(_parse_report_kind(args[1:]), _parse_audience(args[1:]))
     return _run_hello(" ".join(args))
 
 

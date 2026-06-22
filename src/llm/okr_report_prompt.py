@@ -16,6 +16,7 @@ from __future__ import annotations
 from html import escape
 
 from src.agent.okr_analyzer import OkrRollup
+from src.llm.audience_external_prompts import OKR_NARRATIVE_EXTERNAL_SYSTEM
 
 
 def _fmt_pct(value: float | None) -> str:
@@ -84,8 +85,15 @@ def overall_pct(rollup: OkrRollup) -> float | None:
     return sum(vals) / len(vals) if vals else None
 
 
-def build_okr_slack_short(rollup: OkrRollup, *, report_date: str, detail_url: str | None) -> str:
-    """Deterministic Slack mrkdwn summary of the OKR status (no LLM)."""
+def build_okr_slack_short(
+    rollup: OkrRollup, *, report_date: str, detail_url: str | None, audience: str = "internal"
+) -> str:
+    """Deterministic Slack mrkdwn summary of the OKR status (no LLM).
+
+    Objective names are business-level (not issue keys), so the external variant
+    keeps the progress + at-risk objectives but drops the internal "OKR có vấn đề"
+    data-quality line (internal noise).
+    """
     n = len(rollup.objectives)
     overall = overall_pct(rollup)
     overall_txt = f"{overall:.0f}%" if overall is not None else "n/a"
@@ -94,7 +102,7 @@ def build_okr_slack_short(rollup: OkrRollup, *, report_date: str, detail_url: st
     if rollup.at_risk:
         risks = ", ".join(rollup.at_risk)
         head += f"\n• ⚠️ Cần chú ý: {risks}"
-    if rollup.problems:
+    if rollup.problems and audience != "external":
         head += f"\n• {len(rollup.problems)} dòng OKR có vấn đề"
 
     link = (
@@ -113,12 +121,15 @@ _NARRATIVE_SYSTEM = (
     "KHÔNG heading, KHÔNG markdown, KHÔNG bịa thông tin ngoài dữ liệu được cung cấp."
 )
 
-
-def build_okr_narrative_messages(rollup: OkrRollup, *, report_date: str) -> list[dict[str, str]]:
+def build_okr_narrative_messages(
+    rollup: OkrRollup, *, report_date: str, audience: str = "internal"
+) -> list[dict[str, str]]:
     """Messages for the 1-paragraph LLM narrative placed above the OKR table.
 
     The model is told the qualitative situation (counts + which objectives are at
     risk), NOT asked to compute or restate percentages — the table owns the numbers.
+    `audience="external"` swaps to a business-tone system prompt (objective names
+    are business-level, so they may appear).
     """
     at_risk = ", ".join(rollup.at_risk) if rollup.at_risk else "không có"
     problem_count = len(rollup.problems)
@@ -126,19 +137,26 @@ def build_okr_narrative_messages(rollup: OkrRollup, *, report_date: str) -> list
         f"Ngày {report_date}. Số objective: {len(rollup.objectives)}. "
         f"Objective cần chú ý: {at_risk}. Số dòng OKR có vấn đề: {problem_count}."
     )
+    system = OKR_NARRATIVE_EXTERNAL_SYSTEM if audience == "external" else _NARRATIVE_SYSTEM
     user = (
         f"Dữ liệu tình hình OKR (định tính):\n{summary}\n\n"
         "Viết một đoạn <p> tóm tắt ngắn gọn cho lãnh đạo: tổng quan tiến độ, nhấn vào "
         "objective cần chú ý nếu có, giọng thực dụng. Nhớ: KHÔNG nêu số phần trăm cụ thể."
     )
     return [
-        {"role": "system", "content": _NARRATIVE_SYSTEM},
+        {"role": "system", "content": system},
         {"role": "user", "content": user},
     ]
 
 
-def fallback_okr_narrative(rollup: OkrRollup, *, report_date: str) -> str:
-    """Templated <p> summary used when no LLM is available (no key)."""
+def fallback_okr_narrative(
+    rollup: OkrRollup, *, report_date: str, audience: str = "internal"
+) -> str:
+    """Templated <p> summary used when no LLM is available (no key).
+
+    `audience` does not change this template (it carries only objective names +
+    counts, all business-safe); the param keeps the call sites uniform.
+    """
     if rollup.at_risk:
         focus = "Cần chú ý: " + ", ".join(rollup.at_risk) + "."
     else:

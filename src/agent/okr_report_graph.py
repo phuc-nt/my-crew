@@ -43,10 +43,21 @@ def _today_utc() -> date:
     return datetime.now(UTC).date()
 
 
-def default_okr_deps(*, gateway: ActionGateway | None = None) -> OkrReportDeps:
-    """Wire the real OKR implementations. Lazy imports keep graph-build network-free."""
+def default_okr_deps(
+    *, audience: str = "internal", gateway: ActionGateway | None = None
+) -> OkrReportDeps:
+    """Wire the real OKR implementations. Lazy imports keep graph-build network-free.
+
+    `audience="external"` uses a business-tone narrative + posts to the stakeholder
+    channel (Lớp B). The deterministic OKR table is audience-neutral.
+    """
     from src.actions.confluence_write import create_report_page
     from src.actions.slack_write import deliver_report
+    from src.agent.audience_delivery import (
+        SLACK_OK_STATUSES,
+        delivery_summary,
+        resolve_audience_delivery,
+    )
     from src.llm.client import LlmClient
     from src.llm.okr_report_prompt import (
         build_okr_narrative_messages,
@@ -72,30 +83,35 @@ def default_okr_deps(*, gateway: ActionGateway | None = None) -> OkrReportDeps:
             if llm is None:
                 llm = LlmClient()
                 llm_box["llm"] = llm
-            result = llm.complete(build_okr_narrative_messages(rollup, report_date=report_date))
+            result = llm.complete(
+                build_okr_narrative_messages(rollup, report_date=report_date, audience=audience)
+            )
             return result.content, result.cost_usd
         except Exception as exc:  # no key / LLM error → narrative is optional
             logger.warning("OKR narrative skipped (LLM unavailable): %s", exc)
-            return fallback_okr_narrative(rollup, report_date=report_date), None
+            return fallback_okr_narrative(rollup, report_date=report_date, audience=audience), None
 
     def _deliver(rollup: OkrRollup, body: str) -> tuple[bool, str]:
         today = _today_utc().isoformat()
+        channel, date_hint = resolve_audience_delivery(audience, "okr", today)
         title = f"{REPORT_TITLES['okr']} {today}"
         conf_result, page = create_report_page(
-            title, body, gateway=gw, report_date=f"okr-{today}",
-            rationale="scheduled OKR status report (detail)",
+            title, body, gateway=gw, report_date=date_hint,
+            rationale=f"scheduled OKR status report (detail, {audience})",
         )
         detail_url = page.url if page else None
-        short = build_okr_slack_short(rollup, report_date=today, detail_url=detail_url)
+        short = build_okr_slack_short(
+            rollup, report_date=today, detail_url=detail_url, audience=audience
+        )
         slack_result = deliver_report(
-            short, gateway=gw, report_date=f"okr-{today}",
-            rationale="OKR status report (short + link)",
+            short, gateway=gw, channel=channel, report_date=date_hint,
+            rationale=f"OKR status report (short + link, {audience})",
         )
         ok = (
             conf_result.status in {"executed", "dry_run"}
-            and slack_result.status in {"executed", "dry_run", "deduplicated"}
+            and slack_result.status in SLACK_OK_STATUSES
         )
-        return ok, f"confluence={conf_result.status} slack={slack_result.status} url={detail_url}"
+        return ok, delivery_summary(conf_result.status, slack_result, detail_url)
 
     return OkrReportDeps(fetch_rollup=build_okr_rollup, compose=_compose, deliver=_deliver)
 
@@ -131,10 +147,13 @@ def _problems_to_dicts(rollup: OkrRollup | None) -> list[dict]:
 
 
 def build_okr_graph(
-    checkpointer: SqliteSaver | None = None, *, deps: OkrReportDeps | None = None
+    checkpointer: SqliteSaver | None = None,
+    *,
+    deps: OkrReportDeps | None = None,
+    audience: str = "internal",
 ) -> CompiledStateGraph:
     """Build + compile the OKR reporting graph. `deps` defaults to real wiring."""
-    resolved = deps or default_okr_deps()
+    resolved = deps or default_okr_deps(audience=audience)
     perceive, analyze_node, compose_report, deliver = _make_okr_nodes(resolved)
 
     builder = StateGraph(ReportState)

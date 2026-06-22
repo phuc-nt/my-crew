@@ -193,7 +193,9 @@ def test_cli_report_resource_dispatch(monkeypatch):
 
     monkeypatch.setattr(cli, "get_settings", lambda: type("S", (), {"openrouter_api_key": "k"})())
     monkeypatch.setattr(cli, "get_checkpointer", lambda: None)
-    monkeypatch.setattr(rc_graph_mod, "build_resource_graph", lambda cp: _FakeGraph())
+    monkeypatch.setattr(
+        rc_graph_mod, "build_resource_graph", lambda cp, audience="internal": _FakeGraph()
+    )
 
     rc = cli.main(["report", "--resource"])
     assert rc == 0 and called.get("invoked") is True

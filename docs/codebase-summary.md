@@ -1,7 +1,7 @@
 # Codebase Summary — my-project-manager
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-06-22 — Phase 0 + Phase 1 + Phase 3 (OKR) + Phase 4 (Resource+Cost) HOÀN TẤT (236 UT, ruff clean, E2E thật).** `cli report --daily|--weekly|--okr|--resource` → đọc Jira (MCP) + GitHub (gh) + Confluence OKR → risk_analyzer + okr_analyzer + resource_analyzer → LLM compose → **Confluence detail page + Slack short+link + weekly OKR+resource section** qua Action Gateway. Cron qua launchd (`deploy/launchd/`).
+> Status: **2026-06-23 — Phase 0–5 HOÀN TẤT (269 UT, ruff clean, E2E thật).** `cli report --daily|--weekly|--okr|--resource [--audience internal|external]` → đọc Jira (MCP) + GitHub (gh) + Confluence OKR → risk_analyzer + okr_analyzer + resource_analyzer → LLM compose (internal xài prompt cũ; external dùng business-tone external_prompts) → **Confluence detail page + Slack short+link + weekly OKR+resource section** qua Action Gateway. External → Lớp B queue → approve → stakeholder channel (SLACK_STAKEHOLDER_CHANNEL). Cron qua launchd (`deploy/launchd/`).
 
 ## Trạng thái hiện tại
 
@@ -53,6 +53,9 @@ src/
 | Resource report prompt | `src/llm/resource_report_prompt.py` (render_resource_xhtml, build_resource_slack_short, build_resource_narrative_messages, _slack_safe sanitizer) |
 | Resource standalone report | `src/agent/resource_report_graph.py` (build_resource_graph, ResourceReportDeps) |
 | Resource weekly section | `src/agent/resource_weekly_section.py` (weekly_resource_section, weekly_resource_slack_line, fault-isolated) |
+| Audience-split external prompts | `src/llm/audience_external_prompts.py` (4 external business-tone system prompts: daily/weekly/okr/resource; zero issue-key/PR#/assignee/cost) |
+| Audience delivery routing | `src/agent/audience_delivery.py` (resolve_audience_delivery: external → stakeholder channel + `{kind}-external-{today}` dedup; internal → None + `{kind}-{today}`; raises if external + no SLACK_STAKEHOLDER_CHANNEL; SLACK_OK_STATUSES incl pending_approval; delivery_summary) |
+| Approve-execute dispatch | `src/entrypoints/cli.py` (_dispatch_approved_action: routes approved Slack post to live handler; first Lớp B action fully executable) |
 | Budget cap LLM | `src/llm/budget_tracker.py` ($50/tháng, hard-stop) |
 | Gọi LLM (OpenRouter) | `src/llm/client.py` + `cost.py` |
 | Config/env | `src/config/settings.py` |
@@ -71,6 +74,7 @@ Lý do đổi từ denylist: denylist cho qua mọi thứ chưa liệt kê → k
 ## Ghi chú tích hợp (Integration Reality)
 
 - **Jira MCP `enhancedSearchIssues` omitted `duedate` field** (Phase-3 E2E discovered): caused `overdue_task` risk to never fire during Phase 1. Fixed in MCP server repo (commit 41a6a30): added `duedate` to defaultFields + mapper. After fix, daily report correctly flags overdue tasks. **Lesson**: verify integration early, don't assume tool output shape matches SDK docs.
+- **Phase 5 — Audience-split + config guardrail** (2026-06-23): All 4 report kinds now accept `--audience internal|external` (CLI + cron). Internal (default) = byte-identical P1-P4 behavior. External = business-tone short (no keys/names/cost), routes via Lớp B queue → SLACK_STAKEHOLDER_CHANNEL. **Config safety**: SLACK_STAKEHOLDER_CHANNEL MUST be in SLACK_EXTERNAL_CHANNELS or config raises on startup (prevents auto-post to stakeholder without approval). **Deployment note**: internal report channel + stakeholder channel MUST be DISTINCT (same channel = internal posts get queued too, breaking internal-only assumption). **E2E fixed**: `approve <id>` now dispatches approved Slack post (first Lớp B action fully executable).
 
 ## Quy ước đọc
 

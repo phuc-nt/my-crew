@@ -30,39 +30,52 @@ def _report_kind(args: list[str]) -> str:
     return "daily"
 
 
-def _build_graph(report_kind: str):
+def _audience(args: list[str]) -> str:
+    """`--audience external` → external; default internal (same as the CLI)."""
+    if "--audience" in args:
+        i = args.index("--audience")
+        if i + 1 < len(args) and args[i + 1] == "external":
+            return "external"
+    return "internal"
+
+
+def _build_graph(report_kind: str, audience: str = "internal"):
     """Build the graph for a report kind (mirrors the CLI dispatch)."""
     cp = get_checkpointer()
     if report_kind == "resource":
         from src.agent.resource_report_graph import build_resource_graph
 
-        return build_resource_graph(cp)
+        return build_resource_graph(cp, audience=audience)
     if report_kind == "okr":
         from src.agent.okr_report_graph import build_okr_graph
 
-        return build_okr_graph(cp)
+        return build_okr_graph(cp, audience=audience)
     from src.agent.report_graph import build_report_graph
 
-    return build_report_graph(cp, report_kind=report_kind)
+    return build_report_graph(cp, report_kind=report_kind, audience=audience)
 
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     args = argv if argv is not None else sys.argv[1:]
     report_kind = _report_kind(args)
+    audience = _audience(args)
 
     if not get_settings().openrouter_api_key:
         print("OPENROUTER_API_KEY is not set; cannot run scheduled report.", file=sys.stderr)
         return 1
 
-    graph = _build_graph(report_kind)
+    # An external cron → Lớp B → pending_approval → delivered=True (queued is success),
+    # but NOT posted until a human approves: the correct guardrail for stakeholder updates.
+    graph = _build_graph(report_kind, audience)
     result = graph.invoke(
-        {}, config={"configurable": {"thread_id": f"cron-{report_kind}"}}
+        {}, config={"configurable": {"thread_id": f"cron-{report_kind}-{audience}"}}
     )
     delivered = result.get("delivered", False)
     logging.getLogger(__name__).info(
-        "cron %s report: delivered=%s %s",
+        "cron %s/%s report: delivered=%s %s",
         report_kind,
+        audience,
         delivered,
         result.get("delivery_summary", ""),
     )

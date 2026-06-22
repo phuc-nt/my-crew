@@ -65,6 +65,9 @@ class ReportingConfig:
     slack_report_channel: str | None
     # Channels treated as external/stakeholder → posting needs human approval (Lớp B).
     slack_external_channels: frozenset[str]
+    # Phase 5: the single channel external/stakeholder reports post to. MUST be in
+    # slack_external_channels (validated at load) so it routes through Lớp B approval.
+    slack_stakeholder_channel: str | None
 
     # Confluence target for the detail report (Slice 2).
     confluence_space_key: str | None
@@ -133,13 +136,25 @@ def get_reporting_config() -> ReportingConfig:
         required_env_keys=("CONFLUENCE_SITE_NAME", "CONFLUENCE_EMAIL", "CONFLUENCE_API_TOKEN"),
     )
 
+    external_channels = frozenset(
+        c.strip() for c in os.getenv("SLACK_EXTERNAL_CHANNELS", "").split(",") if c.strip()
+    )
+    stakeholder_channel = os.getenv("SLACK_STAKEHOLDER_CHANNEL") or None
+    # Guardrail: the stakeholder channel MUST be in the external set, else an external
+    # report would auto-post to stakeholders without Lớp B approval.
+    if stakeholder_channel and stakeholder_channel not in external_channels:
+        raise RuntimeError(
+            f"SLACK_STAKEHOLDER_CHANNEL ({stakeholder_channel!r}) must also be listed in "
+            "SLACK_EXTERNAL_CHANNELS so external reports route through Lớp B approval. "
+            "Add it to SLACK_EXTERNAL_CHANNELS in .env."
+        )
+
     return ReportingConfig(
         jira_project_key=os.getenv("JIRA_PROJECT_KEY") or None,
         github_repo=os.getenv("GITHUB_REPO") or None,
         slack_report_channel=os.getenv("SLACK_REPORT_CHANNEL") or None,
-        slack_external_channels=frozenset(
-            c.strip() for c in os.getenv("SLACK_EXTERNAL_CHANNELS", "").split(",") if c.strip()
-        ),
+        slack_external_channels=external_channels,
+        slack_stakeholder_channel=stakeholder_channel,
         confluence_space_key=os.getenv("CONFLUENCE_SPACE_KEY") or None,
         confluence_space_id=os.getenv("CONFLUENCE_SPACE_ID") or None,
         atlassian_site_name=os.getenv("ATLASSIAN_SITE_NAME") or None,

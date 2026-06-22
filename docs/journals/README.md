@@ -15,6 +15,7 @@ Dòng thời gian phát triển kiến trúc + tính năng (repo vừa-làm-vừ
 | 2026-06-22 | [Phase 2 — Guardrail Hardening](260622-phase-2-guardrail-hardening.md) | ✅ Done | Dedup bền + audit query + Lớp B interrupt (queue/approve). Reviewed, red-line verified. |
 | 2026-06-22 | [Phase 3 — OKR Tracking](260622-phase-3-okr-tracking.md) | ✅ Done | OKR (Confluence table) → map epic → rollup có trọng số → report --okr + nhúng weekly. E2E + write thật. Fix bug duedate ở Jira MCP (overdue im lặng). |
 | 2026-06-22 | [Phase 4 — Resource + Cost](260622-phase-4-resource-cost.md) | ✅ Done | Workload theo assignee (overload tương đối mean) + cost (LLM budget thật + labor ước lượng) → report --resource + nhúng weekly + cron. Review fix C1 (tên assignee inject Slack mrkdwn). |
+| 2026-06-22 | [Phase 5 — Audience-split](260622-phase-5-audience-split.md) | ✅ Done | `--audience internal\|external` cả 4 report; external → giọng business + Lớp B duyệt. Review fix C1 (link Confluence rò PII). E2E lộ+vá gap Phase 2: approve giờ post thật. Service/bot/multi-user hoãn. |
 
 ## Template entry (`YYMMDD-<slug>.md`)
 

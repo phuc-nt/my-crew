@@ -11,6 +11,7 @@ passes the real report date so the model never invents a date placeholder.
 
 from __future__ import annotations
 
+from src.llm.audience_external_prompts import DETAIL_EXTERNAL_SYSTEM, REPORT_EXTERNAL_SYSTEM
 from src.tools.models import Risk
 
 _SYSTEM = (
@@ -37,12 +38,52 @@ def _format_risks(risks: list[Risk]) -> str:
     return "\n".join(lines)
 
 
-def build_report_messages(risks: list[Risk], *, report_date: str) -> list[dict[str, str]]:
+# --- Phase 5: external (stakeholder) audience — business tone, no internal detail ---
+# External system-prompt strings live in audience_external_prompts (shared, keeps
+# this module under the LOC limit).
+_EXTERNAL_SYSTEM = REPORT_EXTERNAL_SYSTEM
+_DETAIL_EXTERNAL_SYSTEM = DETAIL_EXTERNAL_SYSTEM
+
+
+def _summarize_risks(risks: list[Risk]) -> str:
+    """Audience-external risk view: counts by severity only — NEVER keys/details."""
+    if not risks:
+        return "Không có rủi ro đáng kể, tiến độ đang ổn định."
+    high = sum(1 for r in risks if r.severity == "high")
+    medium = sum(1 for r in risks if r.severity == "medium")
+    low = len(risks) - high - medium
+    parts = []
+    if high:
+        parts.append(f"{high} nghiêm trọng")
+    if medium:
+        parts.append(f"{medium} trung bình")
+    if low:
+        parts.append(f"{low} mức thấp")
+    return f"Tổng {len(risks)} hạng mục cần theo dõi ({', '.join(parts)})."
+
+
+def build_report_messages(
+    risks: list[Risk], *, report_date: str, audience: str = "internal"
+) -> list[dict[str, str]]:
     """Build the chat messages for the report-composing LLM call (Slack mrkdwn).
 
     `report_date` is the real date string (e.g. '2026-06-21'); it is embedded so
-    the model uses it verbatim instead of inventing a placeholder.
+    the model uses it verbatim instead of inventing a placeholder. `audience`
+    "internal" (default) is the full technical report; "external" is a business
+    summary for stakeholders (no issue keys / PR numbers).
     """
+    if audience == "external":
+        user = (
+            f"Viết bản cập nhật tiến độ cho stakeholder ngày {report_date}. "
+            f"Tình hình: {_summarize_risks(risks)}\n\n"
+            "Yêu cầu: ngắn gọn, giọng business, nêu trạng thái tổng quan + mốc quan trọng. "
+            "Tiêu đề in đậm bằng *một dấu sao*. Bullet bằng •. KHÔNG #, ##, ** hay '-'. "
+            "KHÔNG nêu mã issue, số PR, hay tên người cụ thể."
+        )
+        return [
+            {"role": "system", "content": _EXTERNAL_SYSTEM},
+            {"role": "user", "content": user},
+        ]
     user = (
         f"Viết báo cáo tiến độ cho team ngày {report_date}, dựa trên các tín hiệu rủi ro sau "
         f"(đã sắp xếp theo mức độ):\n\n{_format_risks(risks)}\n\n"
@@ -74,13 +115,27 @@ def build_detail_messages(
     report_date: str,
     kind: str = "daily",
     sprint_context: str | None = None,
+    audience: str = "internal",
 ) -> list[dict[str, str]]:
     """Messages for the detail report on a Confluence page (XHTML).
 
     `kind` is "daily" (standup digest — ngắn, hôm nay) or "weekly" (sprint review
     — đầy đủ, cả sprint). `sprint_context` (weekly only) is a short text block of
-    sprint name/dates/issue counts the model should summarize.
+    sprint name/dates/issue counts the model should summarize. `audience`
+    "external" produces a business-tone stakeholder page (no internal detail).
     """
+    if audience == "external":
+        sprint_block = f"\n\nThông tin sprint:\n{sprint_context}" if sprint_context else ""
+        user = (
+            f"Viết bản cập nhật tiến độ cho stakeholder, ngày {report_date}. "
+            f"Tình hình: {_summarize_risks(risks)}{sprint_block}\n\n"
+            "Bố cục: <h2> tiêu đề, <p> tóm tắt trạng thái tổng quan, <ul> các mốc/điểm "
+            "chính. Giọng business, KHÔNG mã issue / số PR / tên người. Chỉ dùng thẻ cho phép."
+        )
+        return [
+            {"role": "system", "content": _DETAIL_EXTERNAL_SYSTEM},
+            {"role": "user", "content": user},
+        ]
     if kind == "weekly":
         framing = (
             "Viết BÁO CÁO SPRINT REVIEW (tổng kết tuần) đầy đủ. Nhấn vào tiến độ cả sprint, "
@@ -116,16 +171,23 @@ REPORT_TITLES = {
 }
 
 
-def build_slack_short(risks: list[Risk], *, report_date: str, detail_url: str | None) -> str:
+def build_slack_short(
+    risks: list[Risk], *, report_date: str, detail_url: str | None, audience: str = "internal"
+) -> str:
     """Build the short Slack message (mrkdwn) deterministically — no extra LLM call.
 
-    Summarizes status + risk count and links to the Confluence detail page.
+    Summarizes status + risk count and links to the Confluence detail page. For
+    `audience="external"` the per-risk headline (which carries an issue key) is
+    dropped — stakeholders get status + counts only.
     """
     high = sum(1 for r in risks if r.severity == "high")
     if risks:
         status = f"*⚠️ {len(risks)} rủi ro* ({high} cao) — cần chú ý"
-        top = risks[0]
-        headline = f"\n• Nổi bật: {top.subject} — {top.detail}"
+        if audience == "external":
+            headline = ""  # no raw issue key in a stakeholder message
+        else:
+            top = risks[0]
+            headline = f"\n• Nổi bật: {top.subject} — {top.detail}"
     else:
         status = "*✅ Tiến độ ổn* — không phát hiện rủi ro"
         headline = ""

@@ -1,7 +1,7 @@
 # Project Roadmap — my-project-manager
 
 > Lộ trình + milestone. Status sống, cập nhật khi phase đổi trạng thái.
-> Status hiện tại: **Phase 4 (Resource + Cost Reporting) HOÀN TẤT (2026-06-22) — Resource+cost read + analyzer + report (CLI + weekly embed) + Slack delivery + cron. Sẵn sàng Phase 5.**
+> Status hiện tại: **Roadmap Phase 0–5 HOÀN TẤT (2026-06-23).** Phase 5 (Audience-split reporting) xong: `--audience internal|external` trên tất cả 4 report loại (daily/weekly/okr/resource); internal mặc định dùng đúng hành vi cũ, external gửi business-tone short qua Lớp B approval → Slack stakeholder channel. Service backend + Slack bot UI + multi-user deferred (MCP send-only, cần infra mới).
 
 ## Trạng thái tổng
 
@@ -12,7 +12,7 @@
 | 2 | Guardrail hardening | ✅ Done | Dedup bền + audit query + Lớp B interrupt (queue+approve) |
 | 3 | OKR / objective | ✅ Done | Đặt + track OKR, map xuống Jira epic |
 | 4 | Resource + Cost | ✅ Done | Capacity (load tương đối), cost tracking + budget band |
-| 5 | Stakeholder + scale | ⬜ Chưa | Report theo audience; lên service + Slack UI; multi-user |
+| 5 | Audience-split reporting | ✅ Done | Report internal vs external; Lớp B queue + approve; business-tone stakeholder channel |
 
 ## Phase 0 — Khởi tạo (gần xong — chỉ còn E2E thật)
 
@@ -101,10 +101,37 @@ Trọng tâm: ROI rõ, rủi ro thấp. Đọc nhiều, write chỉ là *post re
 
 **Exit Phase 4**: ✅ ĐẠT. Agent reads Jira workload (open/overdue/blocker per assignee) + LLM budget (BudgetTracker), computes relative load, delivers via `cli report --resource` + weekly embed + Slack with NO new write authority. Cron automated (Monday 09:00).
 
-## Phase 4–5 — tóm tắt
+## Phase 5 — Audience-split Reporting (✅ DONE 2026-06-23, 269 UT, ruff clean, code-reviewed)
 
-- **P4 Resource+Cost**: capacity/allocation; cost monitor + budget alert.
-- **P5 Stakeholder+Scale**: report tách audience (nội bộ vs stakeholder external); lên service backend + Slack bot UI; multi-user/multi-project.
+- [x] `src/llm/audience_external_prompts.py` — 4 external business-tone system prompts (daily/weekly/okr/resource, zero issue keys/PR#/assignee names/labor cost).
+- [x] `src/agent/audience_delivery.py` — `resolve_audience_delivery` (external → stakeholder channel + dedup key `{kind}-external-{today}`; internal → None + dedup key `{kind}-{today}` unchanged; raises if external + SLACK_STAKEHOLDER_CHANNEL missing). SLACK_OK_STATUSES includes pending_approval (Lớp B ready). `delivery_summary` metadata.
+- [x] Modified `src/llm/report_prompt.py` + `okr_report_prompt.py` + `resource_report_prompt.py` — audience param + external branches (resource external omits Confluence link + assignee names). 
+- [x] Modified `src/config/reporting_config.py` — SLACK_STAKEHOLDER_CHANNEL + validation must be in SLACK_EXTERNAL_CHANNELS (prevents auto-post to stakeholder without approval guardrail).
+- [x] Modified `src/agent/report_graph.py` + `okr_report_graph.py` + `resource_report_graph.py` — thread `audience` → compose + deliver nodes.
+- [x] Modified `src/entrypoints/cli.py` — `_parse_audience` (default "internal"), `_dispatch_approved_action` (routes approved Slack post to live handler; first Lớp B action to execute on approval). 
+- [x] Modified `src/entrypoints/cron.py` — `_audience` helper.
+- [x] Modified `config.example.env` — SLACK_STAKEHOLDER_CHANNEL + SLACK_EXTERNAL_CHANNELS docs.
+- [x] **Lớp B reuse**: external audience REUSES existing approval queue (no hard_block/allowlist change). Config guardrail: SLACK_STAKEHOLDER_CHANNEL MUST be in SLACK_EXTERNAL_CHANNELS or raises (prevents accidental auto-post).
+- [x] **C1 code-review fix**: external resource omits Confluence link (holds per-assignee PII); stakeholders see only high-level short.
+- [x] **E2E approve-execute wiring** (Phase-2 gap exposed): `approve <id>` now dispatches the approved Slack post to real handler. First Lớp B action fully executable. E2E verified: external weekly → Lớp B queue → approve → Slack post live (page 688129 created).
+- [x] **Deployment note**: internal report channel + stakeholder channel MUST be DISTINCT (shared channel routes internal posts to Lớp B too, breaking internal-only assumption).
+
+**Deferred to future** (roadmap now complete at Phase 5):
+- Service backend (REST + auth + multi-workspace).
+- Slack bot UI (modal/command handlers).
+- Multi-user (workspace RBAC).
+- *Reason*: MCP server Slack integration is send-only (no receive handlers for bot events); receive/commands need major new infrastructure (socket-mode or polling). Not blocking audience-split (browser-token + MCP send works). Plan separately.
+
+**Exit Phase 5**: ✅ ĐẠT. Agent composes reports in 2 audience tones (internal = byte-identical P1-P4; external = business-tone, no PII/cost/keys), routes external via Lớp B approval → stakeholder Slack channel. Approve-execute wiring live. **Roadmap Phase 0–5 fully complete.**
+
+## Phase 0–5 Complete — tóm tắt
+
+- **P0**: Guardrail (allowlist/Lớp A hard-deny), audit, budget, scaffold.
+- **P1**: Jira/GitHub → daily/weekly report → Slack+Confluence (E2E with real MCP/gh).
+- **P2**: Dedup, Lớp B approval queue, audit query. Lớp A red line hardened.
+- **P3**: OKR Confluence read → epic progress rollup → CLI `--okr` + weekly embed.
+- **P4**: Resource analyzer (relative load) + cost tracking (BudgetTracker bands) → CLI `--resource` + cron.
+- **P5**: Audience-split (internal/external) + business-tone external prompts → Lớp B queue → stakeholder Slack. Approve-execute wiring live. **Service backend / Slack bot / multi-user deferred.**
 
 ## Nguyên tắc xuyên suốt
 
