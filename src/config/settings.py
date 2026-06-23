@@ -11,7 +11,6 @@ LLM call is made), not at import time, so guardrail/unit code runs without a key
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
 
 # Repo root = three levels up from this file (src/config/settings.py).
@@ -25,7 +24,12 @@ DEFAULT_MODEL = "minimax/minimax-m2.7"
 
 @dataclass(frozen=True)
 class Settings:
-    """Resolved runtime configuration. Build via `get_settings()`."""
+    """Resolved runtime configuration.
+
+    Build via `build_settings_from_env()` (env-loaded) or `build_settings_from_dict()`
+    (pure) in `config_builders`, then inject it where needed — there is no module
+    singleton; collaborators receive `Settings` as a parameter.
+    """
 
     openrouter_api_key: str | None
     openrouter_model: str
@@ -52,16 +56,3 @@ class Settings:
                 "(copy from config.example.env)."
             )
         return self.openrouter_api_key
-
-
-@lru_cache(maxsize=1)
-def get_settings() -> Settings:
-    """Load .env once and return cached, typed settings.
-
-    DEPRECATED (v2 M1-P1): thin wrapper over `build_settings_from_env()` while the
-    config singletons are being phased out. Removed entirely in M1-P1 Slice D;
-    callers should receive `Settings` as an injected parameter.
-    """
-    from src.config.config_builders import build_settings_from_env
-
-    return build_settings_from_env()

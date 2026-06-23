@@ -110,7 +110,7 @@ def build_reporting_config_from_dict(d: dict[str, Any]) -> ReportingConfig:
 def build_reporting_config_from_env() -> ReportingConfig:
     """Load .env + read os.environ into a dict, then delegate to from_dict.
 
-    Byte-identical to the v1 `get_reporting_config()` singleton.
+    Reproduces the v1 env-loaded reporting config exactly (same keys, same coercion).
     """
     from src.config.settings import REPO_ROOT
 

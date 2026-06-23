@@ -49,17 +49,16 @@ def test_cli_no_args_returns_usage_code():
 
 def test_cli_no_key_returns_one(monkeypatch, tmp_path):
     # Ensure no key is visible regardless of the developer's real .env.
-    # Point settings at an empty tmp dir so load_dotenv finds no .env to reload,
-    # and clear the env var + the settings cache.
+    # Point settings at an empty tmp dir so load_dotenv finds no .env to reload.
     from src.config import settings as settings_mod
 
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    # Also clear stakeholder/external channel vars so a CI runner that exports a
+    # mismatched pair can't make the now-always-on config build error here.
+    monkeypatch.delenv("SLACK_STAKEHOLDER_CHANNEL", raising=False)
+    monkeypatch.delenv("SLACK_EXTERNAL_CHANNELS", raising=False)
     monkeypatch.setattr(settings_mod, "REPO_ROOT", tmp_path)
-    settings_mod.get_settings.cache_clear()
-    try:
-        assert cli_main(["hello"]) == 1
-    finally:
-        settings_mod.get_settings.cache_clear()
+    assert cli_main(["hello"]) == 1
 
 
 # cron is no longer a stub (Slice 3) — covered by test_sprint_and_report_kind.py

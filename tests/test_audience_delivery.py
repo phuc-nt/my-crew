@@ -246,7 +246,6 @@ def test_cron_audience():
 def test_approved_slack_action_dispatches_to_live_handler(monkeypatch):
     """approve <id> of an external report must POST (not just authorize)."""
     from src.actions import slack_write
-    from src.config import config_builders
     from src.entrypoints.cli import _dispatch_approved_action
 
     posted: dict = {}
@@ -254,9 +253,8 @@ def test_approved_slack_action_dispatches_to_live_handler(monkeypatch):
     class _SlackCfg:
         slack_server = None
 
-    # The dispatch builds config from env then a handler from its slack_server;
-    # stub both so no .env is read and the post is captured.
-    monkeypatch.setattr(config_builders, "build_reporting_config_from_env", lambda: _SlackCfg())
+    # The dispatch builds the post handler from the injected config's slack_server;
+    # stub the handler so the post is captured without a real MCP server.
     monkeypatch.setattr(
         slack_write, "make_slack_post_handler",
         lambda s: lambda a: posted.update(a) or "posted ts=1",
@@ -265,7 +263,7 @@ def test_approved_slack_action_dispatches_to_live_handler(monkeypatch):
         "type": "mcp_tool", "server": "slack", "tool": "post_message",
         "args": {"channel": "C_STAKE", "text": "stakeholder update"},
     }
-    out = _dispatch_approved_action(action)
+    out = _dispatch_approved_action(action, _SlackCfg())
     assert out == "posted ts=1"
     assert posted["args"]["channel"] == "C_STAKE"  # the real post handler ran
 
@@ -274,7 +272,7 @@ def test_approved_unknown_action_raises():
     from src.entrypoints.cli import _dispatch_approved_action
 
     with pytest.raises(RuntimeError, match="No live handler"):
-        _dispatch_approved_action({"type": "gh", "argv": ["pr", "merge"]})
+        _dispatch_approved_action({"type": "gh", "argv": ["pr", "merge"]}, object())
 
 
 # --- weekly external drops embedded okr/resource sub-sections ---

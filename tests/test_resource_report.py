@@ -183,7 +183,7 @@ def test_parse_report_kind_resource():
     assert _parse_report_kind(["--resource", "--okr", "--weekly"]) == "resource"
 
 
-def test_cli_report_resource_dispatch(monkeypatch):
+def test_cli_report_resource_dispatch(monkeypatch, tmp_path):
     """`report --resource` builds the resource graph."""
     import src.agent.resource_report_graph as rc_graph_mod
     from src.entrypoints import cli
@@ -196,22 +196,26 @@ def test_cli_report_resource_dispatch(monkeypatch):
             return {"report_text": "<p>ok</p>", "cost_usd": None,
                     "delivered": True, "delivery_summary": "s"}
 
-    monkeypatch.setattr(cli, "get_settings", lambda: type("S", (), {"openrouter_api_key": "k"})())
-    monkeypatch.setattr(cli, "_checkpointer", lambda: None)
+    fake_settings = type("S", (), {"openrouter_api_key": "k", "data_dir": tmp_path})()
+    monkeypatch.setattr(cli, "build_settings_from_env", lambda: fake_settings)
+    monkeypatch.setattr(cli, "build_reporting_config_from_env", lambda: object())
+    monkeypatch.setattr(cli, "_checkpointer", lambda settings: None)
     monkeypatch.setattr(
-        rc_graph_mod, "build_resource_graph", lambda cp, audience="internal": _FakeGraph()
+        rc_graph_mod, "build_resource_graph",
+        lambda cp, *, config=None, settings=None, audience="internal": _FakeGraph(),
     )
 
     rc = cli.main(["report", "--resource"])
     assert rc == 0 and called.get("invoked") is True
 
 
-def test_audit_still_keyless_after_resource(monkeypatch):
+def test_audit_still_keyless_after_resource(monkeypatch, tmp_path):
     """Regression: non-LLM commands stay keyless after the --resource change."""
     from src.entrypoints import cli
 
-    monkeypatch.setattr(cli, "get_settings",
-                        lambda: type("S", (), {"openrouter_api_key": None})())
+    fake_settings = type("S", (), {"openrouter_api_key": None, "data_dir": tmp_path})()
+    monkeypatch.setattr(cli, "build_settings_from_env", lambda: fake_settings)
+    monkeypatch.setattr(cli, "build_reporting_config_from_env", lambda: object())
     assert cli.main(["audit", "--limit", "1"]) == 0
 
 

@@ -15,23 +15,19 @@ import sys
 
 from src.agent.checkpoint import get_checkpointer
 from src.agent.graph import build_graph
-from src.config.settings import get_settings
+from src.config.config_builders import (
+    build_reporting_config_from_env,
+    build_settings_from_env,
+)
 
 
-def _checkpointer():
-    """Open the checkpointer at the env-configured data dir.
-
-    Entrypoint boundary: builds settings from env and derives the checkpoint path,
-    so `get_checkpointer` itself takes an explicit path (no config singleton).
-    """
-    from src.config.config_builders import build_settings_from_env
-
-    settings = build_settings_from_env()
+def _checkpointer(settings):
+    """Open the checkpointer at the injected settings' data dir."""
     return get_checkpointer(settings.data_dir / "checkpoints.db")
 
 
-def _require_key() -> bool:
-    if not get_settings().openrouter_api_key:
+def _require_key(settings) -> bool:
+    if not settings.openrouter_api_key:
         print(
             "OPENROUTER_API_KEY is not set. Copy config.example.env to .env and fill it in.",
             file=sys.stderr,
@@ -40,8 +36,8 @@ def _require_key() -> bool:
     return True
 
 
-def _run_hello(message: str) -> int:
-    graph = build_graph(_checkpointer())
+def _run_hello(message: str, settings) -> int:
+    graph = build_graph(_checkpointer(settings), settings=settings)
     result = graph.invoke(
         {"user_input": message, "llm_response": "", "cost_usd": None},
         config={"configurable": {"thread_id": "cli"}},
@@ -52,21 +48,22 @@ def _run_hello(message: str) -> int:
     return 0
 
 
-def _run_report(report_kind: str, audience: str = "internal") -> int:
+def _run_report(report_kind: str, audience: str, settings, config) -> int:
     # Imported here so the hello path (and tests) don't pull in MCP/report deps.
+    cp = _checkpointer(settings)
     if report_kind == "resource":
         from src.agent.resource_report_graph import build_resource_graph
 
-        graph = build_resource_graph(_checkpointer(), audience=audience)
+        graph = build_resource_graph(cp, config=config, settings=settings, audience=audience)
     elif report_kind == "okr":
         from src.agent.okr_report_graph import build_okr_graph
 
-        graph = build_okr_graph(_checkpointer(), audience=audience)
+        graph = build_okr_graph(cp, config=config, settings=settings, audience=audience)
     else:
         from src.agent.report_graph import build_report_graph
 
         graph = build_report_graph(
-            _checkpointer(), report_kind=report_kind, audience=audience
+            cp, config=config, settings=settings, report_kind=report_kind, audience=audience
         )
     thread = f"report-{report_kind}-{audience}"
     result = graph.invoke({}, config={"configurable": {"thread_id": thread}})
@@ -115,12 +112,20 @@ def _flag_value(args: list[str], flag: str) -> str | None:
     return None
 
 
-def _run_approvals() -> int:
-    """`approvals` — list Lớp B actions waiting for human approval."""
-    from src.actions.action_gateway import ActionGateway
-    from src.config.config_builders import build_settings_from_env
+def _gateway(settings, config):
+    """Build the Action Gateway for the management subcommands.
 
-    pending = ActionGateway(build_settings_from_env()).pending_approvals()
+    Injects the per-run external-channel set so a queued external Slack post stays
+    Lớp B even when re-checked here (the gateway no longer reads a config singleton).
+    """
+    from src.actions.action_gateway import ActionGateway
+
+    return ActionGateway(settings, external_channels=config.slack_external_channels)
+
+
+def _run_approvals(settings, config) -> int:
+    """`approvals` — list Lớp B actions waiting for human approval."""
+    pending = _gateway(settings, config).pending_approvals()
     if not pending:
         print("(no pending approvals)")
         return 0
@@ -130,18 +135,17 @@ def _run_approvals() -> int:
     return 0
 
 
-def _run_approve(args: list[str]) -> int:
+def _run_approve(args: list[str], settings, config) -> int:
     """`approve <id>` / `reject <id>` — act on a queued Lớp B action."""
     if not args or not args[0].isdigit():
         print("usage: approve <id> | reject <id>", file=sys.stderr)
         return 2
     approval_id = int(args[0])
-    from src.actions.action_gateway import ActionGateway
-    from src.config.config_builders import build_settings_from_env
-
-    gw = ActionGateway(build_settings_from_env())
+    gw = _gateway(settings, config)
     try:
-        result = gw.approve(approval_id, handler=_dispatch_approved_action)
+        result = gw.approve(
+            approval_id, handler=lambda action: _dispatch_approved_action(action, config)
+        )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -149,43 +153,36 @@ def _run_approve(args: list[str]) -> int:
     return 0
 
 
-def _dispatch_approved_action(action: dict) -> str:
+def _dispatch_approved_action(action: dict, config) -> str:
     """Live handler for an approved Lớp B action — dispatch it to its real executor.
 
     The queued action carries everything needed (`server`/`tool`/`args` for an MCP
     tool). Currently the only Lớp B action that enters a real flow is the external
     report's Slack post, so it routes to the Slack post handler; other server/tools
     error explicitly rather than silently no-op (so a new Lớp B flow can't be
-    approved into nothing).
+    approved into nothing). `config` is injected so the handler stays singleton-free.
     """
     if action.get("type") == "mcp_tool" and action.get("server") == "slack":
         from src.actions.slack_write import make_slack_post_handler
-        from src.config.config_builders import build_reporting_config_from_env
 
-        config = build_reporting_config_from_env()
         return make_slack_post_handler(config.slack_server)(action)
     label = action.get("tool") or action.get("argv") or action.get("type")
     raise RuntimeError(f"No live handler wired for approved action: {label!r}")
 
 
-def _run_reject(args: list[str]) -> int:
+def _run_reject(args: list[str], settings, config) -> int:
     if not args or not args[0].isdigit():
         print("usage: reject <id>", file=sys.stderr)
         return 2
-    from src.actions.action_gateway import ActionGateway
-    from src.config.config_builders import build_settings_from_env
-
-    ActionGateway(build_settings_from_env()).reject(int(args[0]))
+    _gateway(settings, config).reject(int(args[0]))
     print(f"rejected #{args[0]}")
     return 0
 
 
-def _run_audit(args: list[str]) -> int:
+def _run_audit(args: list[str], settings) -> int:
     """`audit [--tool X] [--verdict V] [--since ISO] [--limit N]` — print audit log."""
     from src.audit.audit_log import AuditLog
-    from src.config.config_builders import build_settings_from_env
 
-    settings = build_settings_from_env()
     limit_raw = _flag_value(args, "--limit")
     entries = AuditLog(settings.data_dir / "audit" / "audit.jsonl").query(
         tool=_flag_value(args, "--tool"),
@@ -216,22 +213,32 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    # Settings is needed by every path; build it once. Reporting config is built
+    # lazily (only on paths that touch Slack/Confluence) so a diagnostic command
+    # like `audit` keeps working even when reporting config is misconfigured.
+    settings = build_settings_from_env()
+
     # Commands that do NOT need an OpenRouter key (audit + approval management).
     if args[0] == "audit":
-        return _run_audit(args[1:])
+        return _run_audit(args[1:], settings)  # no reporting config needed
     if args[0] == "approvals":
-        return _run_approvals()
+        return _run_approvals(settings, build_reporting_config_from_env())
     if args[0] == "approve":
-        return _run_approve(args[1:])
+        return _run_approve(args[1:], settings, build_reporting_config_from_env())
     if args[0] == "reject":
-        return _run_reject(args[1:])
+        return _run_reject(args[1:], settings, build_reporting_config_from_env())
 
-    if not _require_key():
+    if not _require_key(settings):
         return 1
 
     if args[0] == "report":
-        return _run_report(_parse_report_kind(args[1:]), _parse_audience(args[1:]))
-    return _run_hello(" ".join(args))
+        return _run_report(
+            _parse_report_kind(args[1:]),
+            _parse_audience(args[1:]),
+            settings,
+            build_reporting_config_from_env(),
+        )
+    return _run_hello(" ".join(args), settings)  # hello: no reporting config needed
 
 
 if __name__ == "__main__":

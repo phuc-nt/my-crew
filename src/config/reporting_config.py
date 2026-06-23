@@ -13,7 +13,6 @@ actually spawned, so unit tests and unrelated flows run without credentials.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
 
 # Default dist paths for the local MCP server repos (overridable via env).
@@ -87,17 +86,3 @@ class ReportingConfig:
     jira_server: McpServerSpec
     slack_server: McpServerSpec
     confluence_server: McpServerSpec
-
-
-@lru_cache(maxsize=1)
-def get_reporting_config() -> ReportingConfig:
-    """Load .env once and return cached reporting config.
-
-    DEPRECATED (v2 M1-P1): thin wrapper over `build_reporting_config_from_env()`
-    while the config singletons are being phased out. The env→config logic + the
-    stakeholder-channel validation now live in `config_builders.from_dict`. Removed
-    entirely in M1-P1 Slice D; callers should receive `ReportingConfig` injected.
-    """
-    from src.config.config_builders import build_reporting_config_from_env
-
-    return build_reporting_config_from_env()

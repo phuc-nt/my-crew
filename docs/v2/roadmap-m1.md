@@ -6,7 +6,7 @@
 
 > Mục tiêu M1: chạy được **N agent / N project, isolated, qua CLI/worker** — giá trị thật trước khi có UI. Mỗi phase chạy được + có giá trị, không big-bang (nguyên tắc v1 giữ nguyên).
 
-### P1 — Config-injection refactor (kill singletons) **[BREAKING]**
+### P1 — Config-injection refactor (kill singletons) **[BREAKING]** ✅ DONE (2026-06-23)
 
 - **Goal**: bỏ 2 `@lru_cache` singleton; config trở thành object truyền vào làm parameter. Đây là nền cho mọi thứ sau.
 - **Key changes**:
@@ -19,8 +19,8 @@
     - **Budget / LLM (2 file)**: `budget_tracker.py:38` (đã nhận `settings`), `client.py:54` (đã nhận `settings`) — bỏ fallback `get_settings()`.
     - **Entrypoints (2 file)**: `cli.py` (:22/:35/:60), `cron.py` (:64/:72) — đọc profile, build config, truyền xuống.
 - **Files touched**: ~21 (6 graph/section, 4 tool, 3 action, 4 storage, 2 budget/llm, 2 entrypoint) + 2 config.
-- **Acceptance**:
-  - `grep -rn "get_reporting_config\|get_settings" src/` → **0 hit** (ngoài định nghĩa builder).
+- **Acceptance**: ✅ VERIFIED
+  - `grep -rn "get_reporting_config\|get_settings" src/` → **0 hit** (only builder definitions remain, no old singleton calls).
   - Toàn bộ 269 test pass sau khi đổi sang truyền config (test có thể cần update fixtures — chấp nhận, breaking allowed).
   - `ruff` clean.
 - **Risks**: lan rộng (21 file) nhưng **logic graph không đổi** — chỉ plumbing. Risk = bỏ sót call site → runtime `NameError`. Mitigation: grep-driven, acceptance = 0 hit.

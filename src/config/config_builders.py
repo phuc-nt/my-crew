@@ -64,7 +64,7 @@ def build_settings_from_dict(d: dict[str, Any]) -> Settings:
 def build_settings_from_env() -> Settings:
     """Load .env + read os.environ into a dict, then delegate to from_dict.
 
-    Byte-identical to the v1 `get_settings()` singleton.
+    Reproduces the v1 env-loaded settings exactly (same keys, same coercion).
     """
     from src.config.settings import REPO_ROOT
 

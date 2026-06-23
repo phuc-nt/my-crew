@@ -172,28 +172,26 @@ def test_resource_external_fallback_no_names():
 # --- config validation (the guardrail foot-gun) ---
 
 
-def _reload_config(monkeypatch, *, stakeholder, external):
-    import src.config.reporting_config as rc
+def _build_config(*, stakeholder, external):
+    """Build reporting config from a pure dict (no env, no cache) to exercise the
+    stakeholder-channel cross-validation guardrail."""
+    from src.config.config_builders import build_reporting_config_from_dict
 
-    monkeypatch.setenv("SLACK_STAKEHOLDER_CHANNEL", stakeholder)
-    monkeypatch.setenv("SLACK_EXTERNAL_CHANNELS", external)
-    rc.get_reporting_config.cache_clear()
-    try:
-        return rc.get_reporting_config()
-    finally:
-        rc.get_reporting_config.cache_clear()
+    return build_reporting_config_from_dict(
+        {"slack_stakeholder_channel": stakeholder, "slack_external_channels": external}
+    )
 
 
-def test_stakeholder_channel_in_external_set_ok(monkeypatch):
-    cfg = _reload_config(monkeypatch, stakeholder="C_EXT", external="C_EXT,C_OTHER")
+def test_stakeholder_channel_in_external_set_ok():
+    cfg = _build_config(stakeholder="C_EXT", external="C_EXT,C_OTHER")
     assert cfg.slack_stakeholder_channel == "C_EXT"
 
 
-def test_stakeholder_channel_not_in_external_raises(monkeypatch):
+def test_stakeholder_channel_not_in_external_raises():
     with pytest.raises(RuntimeError, match="SLACK_EXTERNAL_CHANNELS"):
-        _reload_config(monkeypatch, stakeholder="C_EXT", external="C_OTHER")
+        _build_config(stakeholder="C_EXT", external="C_OTHER")
 
 
-def test_stakeholder_channel_unset_is_none(monkeypatch):
-    cfg = _reload_config(monkeypatch, stakeholder="", external="")
+def test_stakeholder_channel_unset_is_none():
+    cfg = _build_config(stakeholder="", external="")
     assert cfg.slack_stakeholder_channel is None

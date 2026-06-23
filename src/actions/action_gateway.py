@@ -100,22 +100,6 @@ def _label(action: dict[str, Any]) -> str:
     return str(atype)
 
 
-def _load_external_channels() -> frozenset[str]:
-    """Read external Slack channels from reporting config; empty on any failure.
-
-    Last remaining singleton reader (only used when a gateway is built without an
-    explicit `external_channels`). Every gateway built from injected config passes
-    `external_channels` directly; this fallback is removed in M1-P1 Slice D once no
-    construction relies on it.
-    """
-    try:
-        from src.config.reporting_config import get_reporting_config
-
-        return get_reporting_config().slack_external_channels
-    except Exception:
-        return frozenset()
-
-
 class ActionGateway:
     """The one place mutations are authorized, executed, and audited."""
 
@@ -129,8 +113,11 @@ class ActionGateway:
     ) -> None:
         self._settings = settings
         self._recent_calls: deque[float] = deque()
+        # External/stakeholder channels route Slack posts through Lớp B approval.
+        # Injected by every real construction (from the per-flow config); defaults
+        # to empty — a gateway with no external channels classifies none via channel.
         self._external_channels = (
-            external_channels if external_channels is not None else _load_external_channels()
+            external_channels if external_channels is not None else frozenset()
         )
         # Stores: paths follow this gateway's settings data_dir (per-agent in v2) so
         # tests stay isolated to their tmp dir; dedup + approval survive restarts.

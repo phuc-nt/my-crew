@@ -16,7 +16,10 @@ import logging
 import sys
 
 from src.agent.checkpoint import get_checkpointer
-from src.config.settings import get_settings
+from src.config.config_builders import (
+    build_reporting_config_from_env,
+    build_settings_from_env,
+)
 
 
 def _report_kind(args: list[str]) -> str:
@@ -39,20 +42,22 @@ def _audience(args: list[str]) -> str:
     return "internal"
 
 
-def _build_graph(report_kind: str, audience: str = "internal"):
+def _build_graph(report_kind: str, audience: str, settings, config):
     """Build the graph for a report kind (mirrors the CLI dispatch)."""
-    cp = get_checkpointer(get_settings().data_dir / "checkpoints.db")
+    cp = get_checkpointer(settings.data_dir / "checkpoints.db")
     if report_kind == "resource":
         from src.agent.resource_report_graph import build_resource_graph
 
-        return build_resource_graph(cp, audience=audience)
+        return build_resource_graph(cp, config=config, settings=settings, audience=audience)
     if report_kind == "okr":
         from src.agent.okr_report_graph import build_okr_graph
 
-        return build_okr_graph(cp, audience=audience)
+        return build_okr_graph(cp, config=config, settings=settings, audience=audience)
     from src.agent.report_graph import build_report_graph
 
-    return build_report_graph(cp, report_kind=report_kind, audience=audience)
+    return build_report_graph(
+        cp, config=config, settings=settings, report_kind=report_kind, audience=audience
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -61,13 +66,16 @@ def main(argv: list[str] | None = None) -> int:
     report_kind = _report_kind(args)
     audience = _audience(args)
 
-    if not get_settings().openrouter_api_key:
+    settings = build_settings_from_env()
+    config = build_reporting_config_from_env()
+
+    if not settings.openrouter_api_key:
         print("OPENROUTER_API_KEY is not set; cannot run scheduled report.", file=sys.stderr)
         return 1
 
     # An external cron → Lớp B → pending_approval → delivered=True (queued is success),
     # but NOT posted until a human approves: the correct guardrail for stakeholder updates.
-    graph = _build_graph(report_kind, audience)
+    graph = _build_graph(report_kind, audience, settings, config)
     result = graph.invoke(
         {}, config={"configurable": {"thread_id": f"cron-{report_kind}-{audience}"}}
     )

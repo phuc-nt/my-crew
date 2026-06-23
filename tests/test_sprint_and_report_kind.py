@@ -130,10 +130,10 @@ def test_cron_no_key_returns_one(monkeypatch, tmp_path):
     from src.entrypoints.cron import main as cron_main
 
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    # Also clear stakeholder/external channel vars so a CI runner that exports a
+    # mismatched pair can't make the always-on config build error before the key gate.
+    monkeypatch.delenv("SLACK_STAKEHOLDER_CHANNEL", raising=False)
+    monkeypatch.delenv("SLACK_EXTERNAL_CHANNELS", raising=False)
     monkeypatch.setattr(settings_mod, "REPO_ROOT", tmp_path)  # empty dir -> no .env
-    settings_mod.get_settings.cache_clear()
-    try:
-        assert cron_main(["--weekly"]) == 1
-        assert cron_main(["--daily"]) == 1
-    finally:
-        settings_mod.get_settings.cache_clear()
+    assert cron_main(["--weekly"]) == 1
+    assert cron_main(["--daily"]) == 1
