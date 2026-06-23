@@ -12,7 +12,13 @@ passes the real report date so the model never invents a date placeholder.
 from __future__ import annotations
 
 from src.llm.audience_external_prompts import DETAIL_EXTERNAL_SYSTEM, REPORT_EXTERNAL_SYSTEM
+from src.llm.report_slack_short import REPORT_TITLES, build_slack_short
+from src.profile.context import build_context_block, prepend_persona
 from src.tools.models import Risk
+
+# `build_slack_short` + REPORT_TITLES (re-exported above) are deterministic (no
+# persona/LLM), so they live in `report_slack_short`; importers still use
+# `from src.llm.report_prompt import ...` — a stable public path.
 
 _SYSTEM = (
     "Bạn là một PM/SM giỏi, viết báo cáo tiến độ ngắn gọn, thực dụng, bằng tiếng Việt. "
@@ -63,14 +69,22 @@ def _summarize_risks(risks: list[Risk]) -> str:
 
 
 def build_report_messages(
-    risks: list[Risk], *, report_date: str, audience: str = "internal"
+    risks: list[Risk],
+    *,
+    report_date: str,
+    audience: str = "internal",
+    persona: str = "",
+    project: str = "",
+    memory: str = "",
 ) -> list[dict[str, str]]:
     """Build the chat messages for the report-composing LLM call (Slack mrkdwn).
 
     `report_date` is the real date string (e.g. '2026-06-21'); it is embedded so
     the model uses it verbatim instead of inventing a placeholder. `audience`
     "internal" (default) is the full technical report; "external" is a business
-    summary for stakeholders (no issue keys / PR numbers).
+    summary for stakeholders (no issue keys / PR numbers). `persona` prepends to the
+    system message; `project`/`memory` prepend to the INTERNAL user message only
+    (never external — they carry internal facts). All three default "" ⇒ v1 prompt.
     """
     if audience == "external":
         user = (
@@ -80,6 +94,10 @@ def build_report_messages(
             "Tiêu đề in đậm bằng *một dấu sao*. Bullet bằng •. KHÔNG #, ##, ** hay '-'. "
             "KHÔNG nêu mã issue, số PR, hay tên người cụ thể."
         )
+        # External path takes NOTHING from the profile: no persona (a hostile SOUL.md
+        # could otherwise sit above the "no keys/names" rule in the same system
+        # message), no project/memory (internal facts). The external system prompt is
+        # the sole authority for a stakeholder report. (Phase-5 PII guardrail.)
         return [
             {"role": "system", "content": _EXTERNAL_SYSTEM},
             {"role": "user", "content": user},
@@ -92,8 +110,8 @@ def build_report_messages(
         "Nhớ: KHÔNG dùng #, ##, ** hay '-'."
     )
     return [
-        {"role": "system", "content": _SYSTEM},
-        {"role": "user", "content": user},
+        {"role": "system", "content": prepend_persona(_SYSTEM, persona)},
+        {"role": "user", "content": build_context_block(project, memory) + user},
     ]
 
 
@@ -116,6 +134,9 @@ def build_detail_messages(
     kind: str = "daily",
     sprint_context: str | None = None,
     audience: str = "internal",
+    persona: str = "",
+    project: str = "",
+    memory: str = "",
 ) -> list[dict[str, str]]:
     """Messages for the detail report on a Confluence page (XHTML).
 
@@ -123,6 +144,8 @@ def build_detail_messages(
     — đầy đủ, cả sprint). `sprint_context` (weekly only) is a short text block of
     sprint name/dates/issue counts the model should summarize. `audience`
     "external" produces a business-tone stakeholder page (no internal detail).
+    `persona`/`project`/`memory` inject as in `build_report_messages` (project+memory
+    internal-only). All default "" ⇒ v1 prompt.
     """
     if audience == "external":
         sprint_block = f"\n\nThông tin sprint:\n{sprint_context}" if sprint_context else ""
@@ -132,6 +155,7 @@ def build_detail_messages(
             "Bố cục: <h2> tiêu đề, <p> tóm tắt trạng thái tổng quan, <ul> các mốc/điểm "
             "chính. Giọng business, KHÔNG mã issue / số PR / tên người. Chỉ dùng thẻ cho phép."
         )
+        # External path takes NOTHING from the profile (see build_report_messages).
         return [
             {"role": "system", "content": _DETAIL_EXTERNAL_SYSTEM},
             {"role": "user", "content": user},
@@ -157,43 +181,14 @@ def build_detail_messages(
         "tiến độ ổn. Chỉ dùng các thẻ cho phép."
     )
     return [
-        {"role": "system", "content": _DETAIL_SYSTEM},
-        {"role": "user", "content": user},
+        {"role": "system", "content": prepend_persona(_DETAIL_SYSTEM, persona)},
+        {"role": "user", "content": build_context_block(project, memory) + user},
     ]
 
 
-# Human-facing titles per report kind (used for the Confluence page title).
-REPORT_TITLES = {
-    "daily": "Daily Standup",
-    "weekly": "Sprint Review",
-    "okr": "OKR Status",
-    "resource": "Resource & Cost Status",
-}
-
-
-def build_slack_short(
-    risks: list[Risk], *, report_date: str, detail_url: str | None, audience: str = "internal"
-) -> str:
-    """Build the short Slack message (mrkdwn) deterministically — no extra LLM call.
-
-    Summarizes status + risk count and links to the Confluence detail page. For
-    `audience="external"` the per-risk headline (which carries an issue key) is
-    dropped — stakeholders get status + counts only.
-    """
-    high = sum(1 for r in risks if r.severity == "high")
-    if risks:
-        status = f"*⚠️ {len(risks)} rủi ro* ({high} cao) — cần chú ý"
-        if audience == "external":
-            headline = ""  # no raw issue key in a stakeholder message
-        else:
-            top = risks[0]
-            headline = f"\n• Nổi bật: {top.subject} — {top.detail}"
-    else:
-        status = "*✅ Tiến độ ổn* — không phát hiện rủi ro"
-        headline = ""
-    link = (
-        f"\n📄 <{detail_url}|Xem báo cáo chi tiết trên Confluence>"
-        if detail_url
-        else "\n_(không tạo được link Confluence)_"
-    )
-    return f"*Báo cáo tiến độ — {report_date}*\n{status}{headline}{link}"
+__all__ = [
+    "REPORT_TITLES",
+    "build_detail_messages",
+    "build_report_messages",
+    "build_slack_short",
+]

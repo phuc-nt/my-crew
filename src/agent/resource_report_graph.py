@@ -26,6 +26,7 @@ from langgraph.graph.state import CompiledStateGraph
 from src.actions.action_gateway import ActionGateway
 from src.agent.resource_weekly_section import build_resource_rollup
 from src.agent.state import ReportState
+from src.profile.context import EMPTY, ProfileContext
 from src.tools.models import CostSummary, ResourceReport
 
 if TYPE_CHECKING:
@@ -55,6 +56,7 @@ def default_resource_deps(
     config: ReportingConfig,
     settings: Settings,
     audience: str = "internal",
+    context: ProfileContext = EMPTY,
     gateway: ActionGateway | None = None,
 ) -> ResourceReportDeps:
     """Wire the real resource implementations. Lazy imports keep graph-build network-free.
@@ -100,7 +102,13 @@ def default_resource_deps(
                 llm_box["llm"] = llm
             result = llm.complete(
                 build_resource_narrative_messages(
-                    resource, cost, report_date=report_date, audience=audience
+                    resource,
+                    cost,
+                    report_date=report_date,
+                    audience=audience,
+                    persona=context.persona,
+                    project=context.project,
+                    memory=context.memory,
                 )
             )
             return result.content, result.cost_usd
@@ -176,20 +184,24 @@ def build_resource_graph(
     *,
     config: ReportingConfig | None = None,
     settings: Settings | None = None,
+    context: ProfileContext = EMPTY,
     deps: ResourceReportDeps | None = None,
     audience: str = "internal",
 ) -> CompiledStateGraph:
     """Build + compile the resource + cost reporting graph. `deps` defaults to real wiring.
 
     When `deps` is None, `config` + `settings` are required (they wire the real
-    collaborators); a caller that injects `deps` need not pass them.
+    collaborators); `context` carries the profile persona/project/memory (empty ⇒
+    v1). A caller that injects `deps` need not pass them.
     """
     if deps is None:
         if config is None or settings is None:
             raise ValueError(
                 "build_resource_graph needs config + settings when deps is not provided."
             )
-        deps = default_resource_deps(config=config, settings=settings, audience=audience)
+        deps = default_resource_deps(
+            config=config, settings=settings, context=context, audience=audience
+        )
     resolved = deps
     perceive, analyze_node, compose_report, deliver = _make_resource_nodes(resolved)
 

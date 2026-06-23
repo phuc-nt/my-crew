@@ -15,6 +15,7 @@ from __future__ import annotations
 from html import escape
 
 from src.llm.audience_external_prompts import RESOURCE_NARRATIVE_EXTERNAL_SYSTEM
+from src.profile.context import build_context_block, prepend_persona
 from src.tools.models import CostSummary, ResourceReport
 
 _STATUS_WORD = {"ok": "trong ngưỡng", "warn": "⚠️ gần ngưỡng", "over": "❌ vượt ngưỡng"}
@@ -165,12 +166,21 @@ _NARRATIVE_SYSTEM = (
 )
 
 def build_resource_narrative_messages(
-    resource: ResourceReport, cost: CostSummary, *, report_date: str, audience: str = "internal"
+    resource: ResourceReport,
+    cost: CostSummary,
+    *,
+    report_date: str,
+    audience: str = "internal",
+    persona: str = "",
+    project: str = "",
+    memory: str = "",
 ) -> list[dict[str, str]]:
     """Messages for the 1-paragraph LLM narrative placed above the tables.
 
     Internal passes qualitative facts (who is overloaded, budget word). External
     passes ONLY a capacity word + budget word — no assignee names, no counts.
+    `persona` prepends to system; `project`/`memory` prepend the INTERNAL user
+    message only; default "" ⇒ v1 prompt.
     """
     if audience == "external":
         budget_word = _STATUS_WORD.get(cost.llm_status, cost.llm_status)
@@ -183,6 +193,8 @@ def build_resource_narrative_messages(
             "Viết một đoạn <p> cập nhật ngắn cho stakeholder về năng lực team + ngân sách. "
             "Nhớ: KHÔNG tên người, KHÔNG số cụ thể."
         )
+        # External path takes NOTHING from the profile (Phase-5 PII guardrail): no
+        # persona, no project/memory — the external system prompt is the sole authority.
         return [
             {"role": "system", "content": RESOURCE_NARRATIVE_EXTERNAL_SYSTEM},
             {"role": "user", "content": user},
@@ -204,8 +216,8 @@ def build_resource_narrative_messages(
         "quá tải và tình trạng ngân sách nếu đáng chú ý. Nhớ: KHÔNG nêu số cụ thể."
     )
     return [
-        {"role": "system", "content": _NARRATIVE_SYSTEM},
-        {"role": "user", "content": user},
+        {"role": "system", "content": prepend_persona(_NARRATIVE_SYSTEM, persona)},
+        {"role": "user", "content": build_context_block(project, memory) + user},
     ]
 
 

@@ -17,6 +17,7 @@ from html import escape
 
 from src.agent.okr_analyzer import OkrRollup
 from src.llm.audience_external_prompts import OKR_NARRATIVE_EXTERNAL_SYSTEM
+from src.profile.context import build_context_block, prepend_persona
 
 
 def _fmt_pct(value: float | None) -> str:
@@ -122,14 +123,21 @@ _NARRATIVE_SYSTEM = (
 )
 
 def build_okr_narrative_messages(
-    rollup: OkrRollup, *, report_date: str, audience: str = "internal"
+    rollup: OkrRollup,
+    *,
+    report_date: str,
+    audience: str = "internal",
+    persona: str = "",
+    project: str = "",
+    memory: str = "",
 ) -> list[dict[str, str]]:
     """Messages for the 1-paragraph LLM narrative placed above the OKR table.
 
     The model is told the qualitative situation (counts + which objectives are at
     risk), NOT asked to compute or restate percentages — the table owns the numbers.
     `audience="external"` swaps to a business-tone system prompt (objective names
-    are business-level, so they may appear).
+    are business-level, so they may appear). `persona`/`project`/`memory` inject as
+    in `build_report_messages` (project+memory internal-only); default "" ⇒ v1.
     """
     at_risk = ", ".join(rollup.at_risk) if rollup.at_risk else "không có"
     problem_count = len(rollup.problems)
@@ -137,15 +145,21 @@ def build_okr_narrative_messages(
         f"Ngày {report_date}. Số objective: {len(rollup.objectives)}. "
         f"Objective cần chú ý: {at_risk}. Số dòng OKR có vấn đề: {problem_count}."
     )
-    system = OKR_NARRATIVE_EXTERNAL_SYSTEM if audience == "external" else _NARRATIVE_SYSTEM
     user = (
         f"Dữ liệu tình hình OKR (định tính):\n{summary}\n\n"
         "Viết một đoạn <p> tóm tắt ngắn gọn cho lãnh đạo: tổng quan tiến độ, nhấn vào "
         "objective cần chú ý nếu có, giọng thực dụng. Nhớ: KHÔNG nêu số phần trăm cụ thể."
     )
+    if audience == "external":
+        # External path takes NOTHING from the profile (Phase-5 PII guardrail): no
+        # persona, no project/memory — the external system prompt is the sole authority.
+        return [
+            {"role": "system", "content": OKR_NARRATIVE_EXTERNAL_SYSTEM},
+            {"role": "user", "content": user},
+        ]
     return [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user},
+        {"role": "system", "content": prepend_persona(_NARRATIVE_SYSTEM, persona)},
+        {"role": "user", "content": build_context_block(project, memory) + user},
     ]
 
 

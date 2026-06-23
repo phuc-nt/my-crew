@@ -23,6 +23,7 @@ from src.actions.slack_write import deliver_report
 from src.agent.risk_analyzer import analyze
 from src.agent.state import ReportState
 from src.llm.client import LlmClient
+from src.profile.context import EMPTY, ProfileContext
 from src.tools.models import CiRun, Issue, PullRequest, Risk
 
 if TYPE_CHECKING:
@@ -59,6 +60,7 @@ def default_report_deps(
     settings: Settings,
     report_kind: str = "daily",
     audience: str = "internal",
+    context: ProfileContext = EMPTY,
     client: LlmClient | None = None,
     gateway: ActionGateway | None = None,
 ) -> ReportDeps:
@@ -112,6 +114,9 @@ def default_report_deps(
             kind=report_kind,
             sprint_context=_sprint_context(),
             audience=audience,
+            persona=context.persona,
+            project=context.project,
+            memory=context.memory,
         )
         result = llm.complete(messages)
         body = result.content
@@ -223,6 +228,7 @@ def build_report_graph(
     *,
     config: ReportingConfig | None = None,
     settings: Settings | None = None,
+    context: ProfileContext = EMPTY,
     deps: ReportDeps | None = None,
     report_kind: str = "daily",
     audience: str = "internal",
@@ -231,9 +237,9 @@ def build_report_graph(
 
     `report_kind` ("daily" | "weekly") selects the data scope + prompt framing;
     `audience` ("internal" | "external") selects the tone + delivery channel — both
-    when `deps` is not explicitly provided. When `deps` is None, `config` + `settings`
-    are required (they wire the real collaborators); a caller that injects `deps`
-    need not pass them.
+    when `deps` is not explicitly provided. `context` carries the profile's
+    persona/project/memory (empty ⇒ v1 prompts). When `deps` is None, `config` +
+    `settings` are required; a caller that injects `deps` need not pass them.
     """
     if deps is None:
         if config is None or settings is None:
@@ -241,7 +247,11 @@ def build_report_graph(
                 "build_report_graph needs config + settings when deps is not provided."
             )
         deps = default_report_deps(
-            config=config, settings=settings, report_kind=report_kind, audience=audience
+            config=config,
+            settings=settings,
+            context=context,
+            report_kind=report_kind,
+            audience=audience,
         )
     resolved = deps
     perceive, analyze_node, compose_report, deliver = _make_nodes(resolved)
