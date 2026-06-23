@@ -23,7 +23,7 @@ from html.parser import HTMLParser
 from typing import Any
 
 from src.adapters.mcp_adapter import call_tool
-from src.config.reporting_config import McpServerSpec, get_reporting_config
+from src.config.reporting_config import McpServerSpec, ReportingConfig
 from src.tools.models import OkrProblem
 
 logger = logging.getLogger(__name__)
@@ -72,15 +72,16 @@ def _extract_body(blocks: list[str]) -> str:
     return blocks[-1] if blocks else ""
 
 
-def get_page_content(page_id: str, *, server: McpServerSpec | None = None) -> str:
+def get_page_content(
+    page_id: str, *, config: ReportingConfig, server: McpServerSpec | None = None
+) -> str:
     """Fetch a Confluence page's body (XHTML storage) via the MCP server.
 
     Returns the raw storage body string for `parse_okr_table`. This is the only
     place that knows the server's result shape, so a server change is a 1-function
     fix.
     """
-    cfg = get_reporting_config()
-    spec = server or cfg.confluence_server
+    spec = server or config.confluence_server
     result = call_tool(spec, "getPageContent", {"pageId": page_id})
     return _extract_body(_blocks_text_list(result))
 

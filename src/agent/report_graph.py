@@ -12,6 +12,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
@@ -23,6 +24,10 @@ from src.agent.risk_analyzer import analyze
 from src.agent.state import ReportState
 from src.llm.client import LlmClient
 from src.tools.models import CiRun, Issue, PullRequest, Risk
+
+if TYPE_CHECKING:
+    from src.config.reporting_config import ReportingConfig
+    from src.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +55,8 @@ def _today_utc() -> date:
 
 def default_report_deps(
     *,
+    config: ReportingConfig,
+    settings: Settings,
     report_kind: str = "daily",
     audience: str = "internal",
     client: LlmClient | None = None,
@@ -60,28 +67,28 @@ def default_report_deps(
     Weekly pulls the active sprint's issues (instead of all open issues) and
     passes sprint context to the detail prompt. `audience="external"` composes a
     business-tone report and posts the Slack short to the stakeholder channel
-    (routes through Lớp B). Lazy imports keep graph-build network-free.
+    (routes through Lớp B). `config`/`settings` are injected; collaborators
+    (gateway, LLM, fetchers, writers, section helpers) are built from them — no
+    config singleton is read here. Lazy imports keep graph-build network-free.
     """
     from src.actions.confluence_write import create_report_page
-    from src.config.config_builders import build_settings_from_env
-    from src.config.reporting_config import get_reporting_config
     from src.llm.report_prompt import REPORT_TITLES, build_detail_messages, build_slack_short
     from src.tools import github_read, jira_read
 
-    settings = build_settings_from_env()
-    cfg = get_reporting_config()
-    gw = gateway or ActionGateway(settings)
+    gw = gateway or ActionGateway(
+        settings, external_channels=config.slack_external_channels
+    )
     llm = client
     sprint_box: dict[str, object] = {}
 
     def _fetch_issues() -> list[Issue]:
         if report_kind == "weekly":
-            sprint = jira_read.get_active_sprint()
+            sprint = jira_read.get_active_sprint(config=config)
             sprint_box["sprint"] = sprint
             if sprint is not None:
-                return jira_read.get_sprint_issues(sprint.id)
-            return jira_read.get_open_issues()  # fallback: no active sprint
-        return jira_read.get_open_issues()
+                return jira_read.get_sprint_issues(sprint.id, config=config)
+            return jira_read.get_open_issues(config=config)  # fallback: no active sprint
+        return jira_read.get_open_issues(config=config)
 
     def _sprint_context() -> str | None:
         sprint = sprint_box.get("sprint")
@@ -114,8 +121,8 @@ def default_report_deps(
             from src.agent.okr_weekly_section import weekly_okr_section
             from src.agent.resource_weekly_section import weekly_resource_section
 
-            body += weekly_okr_section(today)
-            body += weekly_resource_section(today)
+            body += weekly_okr_section(today, config)
+            body += weekly_resource_section(today, config, settings)
         return body, result.cost_usd
 
     def _deliver(risks: list[Risk], detail_body: str) -> tuple[bool, str]:
@@ -126,14 +133,14 @@ def default_report_deps(
         )
 
         today = _today_utc().isoformat()
-        channel, date_hint = resolve_audience_delivery(audience, report_kind, today)
+        channel, date_hint = resolve_audience_delivery(audience, report_kind, today, config)
         title = f"{REPORT_TITLES.get(report_kind, 'Báo cáo')} {today}"
         # 1) Confluence detail page (through the gateway). dedup keyed per kind+audience+date.
         conf_result, page = create_report_page(
             title,
             detail_body,
             gateway=gw,
-            config=cfg,
+            config=config,
             report_date=date_hint,
             rationale=f"scheduled {report_kind} progress report (detail, {audience})",
         )
@@ -146,12 +153,12 @@ def default_report_deps(
             from src.agent.okr_weekly_section import weekly_okr_slack_line
             from src.agent.resource_weekly_section import weekly_resource_slack_line
 
-            short += weekly_okr_slack_line()
-            short += weekly_resource_slack_line()
+            short += weekly_okr_slack_line(config)
+            short += weekly_resource_slack_line(config, settings)
         slack_result = deliver_report(
             short,
             gateway=gw,
-            config=cfg,
+            config=config,
             channel=channel,
             report_date=date_hint,
             rationale=f"{report_kind} progress report (short + link, {audience})",
@@ -164,11 +171,11 @@ def default_report_deps(
 
     return ReportDeps(
         fetch_issues=_fetch_issues,
-        fetch_prs=lambda: github_read.get_open_prs(),
-        fetch_ci=lambda: github_read.get_recent_ci(),
+        fetch_prs=lambda: github_read.get_open_prs(config=config),
+        fetch_ci=lambda: github_read.get_recent_ci(config=config),
         analyze_risks=lambda issues, prs, ci: analyze(
             issues, prs, ci, today=_today_utc(),
-            blocker_label_substring=cfg.blocker_label_substring,
+            blocker_label_substring=config.blocker_label_substring,
         ),
         compose=_compose,
         deliver=_deliver,
@@ -214,6 +221,8 @@ def _risks_to_dicts(risks: list[Risk]) -> list[dict]:
 def build_report_graph(
     checkpointer: SqliteSaver | None = None,
     *,
+    config: ReportingConfig | None = None,
+    settings: Settings | None = None,
     deps: ReportDeps | None = None,
     report_kind: str = "daily",
     audience: str = "internal",
@@ -222,9 +231,19 @@ def build_report_graph(
 
     `report_kind` ("daily" | "weekly") selects the data scope + prompt framing;
     `audience` ("internal" | "external") selects the tone + delivery channel — both
-    when `deps` is not explicitly provided.
+    when `deps` is not explicitly provided. When `deps` is None, `config` + `settings`
+    are required (they wire the real collaborators); a caller that injects `deps`
+    need not pass them.
     """
-    resolved = deps or default_report_deps(report_kind=report_kind, audience=audience)
+    if deps is None:
+        if config is None or settings is None:
+            raise ValueError(
+                "build_report_graph needs config + settings when deps is not provided."
+            )
+        deps = default_report_deps(
+            config=config, settings=settings, report_kind=report_kind, audience=audience
+        )
+    resolved = deps
     perceive, analyze_node, compose_report, deliver = _make_nodes(resolved)
 
     builder = StateGraph(ReportState)

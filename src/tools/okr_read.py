@@ -15,7 +15,7 @@ import logging
 from collections.abc import Iterable
 
 from src.adapters.mcp_adapter import call_tool
-from src.config.reporting_config import McpServerSpec, get_reporting_config
+from src.config.reporting_config import McpServerSpec, ReportingConfig
 from src.tools.jira_read import is_done, parse_issue
 from src.tools.models import EpicProgress, Issue
 
@@ -62,7 +62,9 @@ def _query_children(jql: str, spec: McpServerSpec) -> list[Issue]:
     return [parse_issue(item) for item in issues_raw]
 
 
-def get_epic_progress(epic_key: str, *, server: McpServerSpec | None = None) -> EpicProgress:
+def get_epic_progress(
+    epic_key: str, *, config: ReportingConfig, server: McpServerSpec | None = None
+) -> EpicProgress:
     """Fetch an epic's children from Jira and compute its progress.
 
     Tries ``parent = <EPIC>`` first, then ``"Epic Link" = <EPIC>`` (Jira instances
@@ -70,8 +72,7 @@ def get_epic_progress(epic_key: str, *, server: McpServerSpec | None = None) -> 
     yields children — a problem row, never a raise. Adapter/transport errors from
     `call_tool` propagate (they are real failures, not "epic not found").
     """
-    cfg = get_reporting_config()
-    spec = server or cfg.jira_server
+    spec = server or config.jira_server
 
     children = _query_children(f"parent = {epic_key}", spec)
     if not children:
@@ -80,16 +81,17 @@ def get_epic_progress(epic_key: str, *, server: McpServerSpec | None = None) -> 
 
 
 def get_epic_progress_map(
-    epic_keys: Iterable[str], *, server: McpServerSpec | None = None
+    epic_keys: Iterable[str], *, config: ReportingConfig, server: McpServerSpec | None = None
 ) -> dict[str, EpicProgress]:
     """Fetch progress for each distinct epic key once (memoized within the call).
 
     Two KRs sharing an epic do not double-fetch. Returns key→EpicProgress; this is
-    the single Jira read the analyzer consumes.
+    the single Jira read the analyzer consumes. `config` is forwarded to each
+    per-epic fetch (this function reads no config of its own).
     """
     out: dict[str, EpicProgress] = {}
     for key in epic_keys:
         if key in out:
             continue
-        out[key] = get_epic_progress(key, server=server)
+        out[key] = get_epic_progress(key, config=config, server=server)
     return out

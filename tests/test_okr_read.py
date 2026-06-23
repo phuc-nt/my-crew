@@ -161,6 +161,13 @@ def test_compute_epic_progress_no_children_is_not_found():
 # --- epic progress fetch (monkeypatched call_tool) ---
 
 
+class _CFG:
+    """Minimal ReportingConfig stub: get_epic_progress only reads jira_server,
+    and call_tool is monkeypatched, so a None server is fine."""
+
+    jira_server = None
+
+
 def test_get_epic_progress_uses_parent_jql_first(monkeypatch):
     calls: list[str] = []
 
@@ -170,7 +177,7 @@ def test_get_epic_progress_uses_parent_jql_first(monkeypatch):
                            {"key": "C-2", "status": {"name": "To Do"}}]}
 
     monkeypatch.setattr(okr_read, "call_tool", fake_call_tool)
-    ep = okr_read.get_epic_progress("EP-1")
+    ep = okr_read.get_epic_progress("EP-1", config=_CFG)
     assert ep.found and ep.done_count == 1 and ep.total_count == 2
     assert calls == ["parent = EP-1"]  # second JQL not needed
 
@@ -185,25 +192,25 @@ def test_get_epic_progress_falls_back_to_epic_link(monkeypatch):
         return {"issues": [{"key": "C-1", "status": {"name": "Done"}}]}
 
     monkeypatch.setattr(okr_read, "call_tool", fake_call_tool)
-    ep = okr_read.get_epic_progress("EP-2")
+    ep = okr_read.get_epic_progress("EP-2", config=_CFG)
     assert ep.found and ep.total_count == 1
     assert calls == ["parent = EP-2", '"Epic Link" = EP-2']
 
 
 def test_get_epic_progress_not_found_when_no_children(monkeypatch):
     monkeypatch.setattr(okr_read, "call_tool", lambda spec, tool, args: {"issues": []})
-    ep = okr_read.get_epic_progress("EP-3")
+    ep = okr_read.get_epic_progress("EP-3", config=_CFG)
     assert ep.found is False
 
 
 def test_get_epic_progress_map_memoizes(monkeypatch):
     counter: dict[str, int] = {}
 
-    def fake_get(key, *, server=None):
+    def fake_get(key, *, config=None, server=None):
         counter[key] = counter.get(key, 0) + 1
         return EpicProgress(key, 50.0, 1, 2, True)
 
     monkeypatch.setattr(okr_read, "get_epic_progress", fake_get)
-    out = okr_read.get_epic_progress_map(["E-1", "E-2", "E-1"])
+    out = okr_read.get_epic_progress_map(["E-1", "E-2", "E-1"], config=_CFG)
     assert set(out) == {"E-1", "E-2"}
     assert counter["E-1"] == 1  # fetched once despite appearing twice

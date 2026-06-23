@@ -16,21 +16,26 @@ approval — no gateway/allowlist change needed.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.config.reporting_config import ReportingConfig
+
 # Slack statuses that count as a successful (or accepted) delivery. `pending_approval`
 # is success for external: the post is correctly queued for human approval, not failed.
 SLACK_OK_STATUSES = frozenset({"executed", "dry_run", "deduplicated", "pending_approval"})
 
 
-def resolve_audience_delivery(audience: str, kind: str, today: str) -> tuple[str | None, str]:
+def resolve_audience_delivery(
+    audience: str, kind: str, today: str, config: ReportingConfig
+) -> tuple[str | None, str]:
     """Return (slack_channel, dedup_date_hint) for the given audience.
 
     Raises RuntimeError if `audience="external"` but no stakeholder channel is
     configured — external must never fall back to the internal channel.
     """
     if audience == "external":
-        from src.config.reporting_config import get_reporting_config
-
-        channel = get_reporting_config().slack_stakeholder_channel
+        channel = config.slack_stakeholder_channel
         if not channel:
             raise RuntimeError(
                 "SLACK_STAKEHOLDER_CHANNEL is not set; required for --audience external "

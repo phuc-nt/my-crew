@@ -14,7 +14,7 @@ from datetime import date, datetime
 from typing import Any
 
 from src.adapters.mcp_adapter import call_tool
-from src.config.reporting_config import McpServerSpec, get_reporting_config
+from src.config.reporting_config import McpServerSpec, ReportingConfig
 from src.tools.models import Issue, Sprint
 
 logger = logging.getLogger(__name__)
@@ -88,19 +88,19 @@ def is_done(issue: Issue) -> bool:
 def get_open_issues(
     project_key: str | None = None,
     *,
+    config: ReportingConfig,
     server: McpServerSpec | None = None,
     max_results: int = 100,
 ) -> list[Issue]:
     """Fetch issues for a project from Jira and normalize them.
 
     Uses `enhancedSearchIssues` (full issue data). `project_key`/`server` default
-    to reporting config so callers can stay terse.
+    to the injected `config` so callers can stay terse.
     """
-    cfg = get_reporting_config()
-    project = project_key or cfg.jira_project_key
+    project = project_key or config.jira_project_key
     if not project:
         raise RuntimeError("JIRA_PROJECT_KEY is not set (in .env or passed explicitly).")
-    spec = server or cfg.jira_server
+    spec = server or config.jira_server
 
     result = call_tool(
         spec,
@@ -126,18 +126,20 @@ def parse_sprint(raw: dict[str, Any]) -> Sprint:
 
 
 def get_active_sprint(
-    *, board_id: int | str | None = None, server: McpServerSpec | None = None
+    *,
+    config: ReportingConfig,
+    board_id: int | str | None = None,
+    server: McpServerSpec | None = None,
 ) -> Sprint | None:
     """Return the active sprint for the project's board, or None if there isn't one.
 
     Resolves the board from the project key when `board_id` is not given.
     """
-    cfg = get_reporting_config()
-    spec = server or cfg.jira_server
+    spec = server or config.jira_server
 
     resolved_board = board_id
     if resolved_board is None:
-        project = cfg.jira_project_key
+        project = config.jira_project_key
         if not project:
             raise RuntimeError("JIRA_PROJECT_KEY is not set (in .env).")
         boards = call_tool(spec, "listBoards", {"projectKeyOrId": project, "maxResults": 5})
@@ -154,11 +156,14 @@ def get_active_sprint(
 
 
 def get_sprint_issues(
-    sprint_id: str | int, *, server: McpServerSpec | None = None, max_results: int = 100
+    sprint_id: str | int,
+    *,
+    config: ReportingConfig,
+    server: McpServerSpec | None = None,
+    max_results: int = 100,
 ) -> list[Issue]:
     """Fetch + normalize the issues in a sprint (same flat shape as open issues)."""
-    cfg = get_reporting_config()
-    spec = server or cfg.jira_server
+    spec = server or config.jira_server
     result = call_tool(
         spec, "getSprintIssues", {"sprintId": sprint_id, "maxResults": max_results}
     )

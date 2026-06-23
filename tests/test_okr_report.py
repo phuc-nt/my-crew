@@ -139,7 +139,12 @@ def test_okr_deliver_uses_okr_dedup_namespace(settings_factory, tmp_path, monkey
     monkeypatch.setattr(cw, "create_report_page", fake_create_page)
     monkeypatch.setattr(sw, "deliver_report", fake_deliver_report)
 
-    deps = okr_report_graph.default_okr_deps(gateway=gw)
+    class _Cfg:
+        slack_external_channels = frozenset()
+
+    deps = okr_report_graph.default_okr_deps(
+        config=_Cfg(), settings=settings_factory(), gateway=gw
+    )
     ok, summary = deps.deliver(_rollup(), "<p>body</p>")
     assert ok is True
     assert seen_dates == [f"okr-{today}", f"okr-{today}"]  # both writes namespaced per okr-date

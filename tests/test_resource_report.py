@@ -158,7 +158,12 @@ def test_resource_deliver_uses_resource_dedup_namespace(settings_factory, tmp_pa
     monkeypatch.setattr(cw, "create_report_page", fake_create_page)
     monkeypatch.setattr(sw, "deliver_report", fake_deliver_report)
 
-    deps = resource_report_graph.default_resource_deps(gateway=gw)
+    class _Cfg:
+        slack_external_channels = frozenset()
+
+    deps = resource_report_graph.default_resource_deps(
+        config=_Cfg(), settings=settings_factory(), gateway=gw
+    )
     ok, summary = deps.deliver(_resource(), _cost(), "<p>body</p>")
     assert ok is True
     assert seen_dates == [f"resource-{today}", f"resource-{today}"]

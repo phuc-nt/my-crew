@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from src.adapters.cli_adapter import run_gh
-from src.config.reporting_config import get_reporting_config
+from src.config.reporting_config import ReportingConfig
 from src.tools.models import CiRun, PullRequest
 
 logger = logging.getLogger(__name__)
@@ -91,15 +91,18 @@ def _today_utc() -> date:
 
 
 def get_open_prs(
-    repo: str | None = None, *, today: date | None = None, stale_days: int | None = None
+    repo: str | None = None,
+    *,
+    config: ReportingConfig,
+    today: date | None = None,
+    stale_days: int | None = None,
 ) -> list[PullRequest]:
     """Fetch open PRs for a repo and normalize them with staleness."""
-    cfg = get_reporting_config()
-    target = repo or cfg.github_repo
+    target = repo or config.github_repo
     if not target:
         raise RuntimeError("GITHUB_REPO is not set (in .env or passed explicitly).")
     ref_today = today or _today_utc()
-    days = stale_days if stale_days is not None else cfg.pr_stale_days
+    days = stale_days if stale_days is not None else config.pr_stale_days
 
     rows = run_gh(
         ["pr", "list", "--repo", target, "--state", "open", "--json", _PR_FIELDS, "--limit", "100"]
@@ -109,10 +112,11 @@ def get_open_prs(
     return [parse_pr(row, today=ref_today, stale_days=days) for row in rows]
 
 
-def get_recent_ci(repo: str | None = None, *, limit: int = 20) -> list[CiRun]:
+def get_recent_ci(
+    repo: str | None = None, *, config: ReportingConfig, limit: int = 20
+) -> list[CiRun]:
     """Fetch recent workflow runs for a repo and normalize them."""
-    cfg = get_reporting_config()
-    target = repo or cfg.github_repo
+    target = repo or config.github_repo
     if not target:
         raise RuntimeError("GITHUB_REPO is not set (in .env or passed explicitly).")
     rows = run_gh(

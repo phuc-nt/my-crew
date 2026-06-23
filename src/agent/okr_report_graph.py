@@ -17,6 +17,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
@@ -26,6 +27,10 @@ from src.actions.action_gateway import ActionGateway
 from src.agent.okr_analyzer import OkrRollup
 from src.agent.okr_weekly_section import build_okr_rollup
 from src.agent.state import ReportState
+
+if TYPE_CHECKING:
+    from src.config.reporting_config import ReportingConfig
+    from src.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +49,17 @@ def _today_utc() -> date:
 
 
 def default_okr_deps(
-    *, audience: str = "internal", gateway: ActionGateway | None = None
+    *,
+    config: ReportingConfig,
+    settings: Settings,
+    audience: str = "internal",
+    gateway: ActionGateway | None = None,
 ) -> OkrReportDeps:
     """Wire the real OKR implementations. Lazy imports keep graph-build network-free.
 
     `audience="external"` uses a business-tone narrative + posts to the stakeholder
-    channel (Lớp B). The deterministic OKR table is audience-neutral.
+    channel (Lớp B). The deterministic OKR table is audience-neutral. `config`/
+    `settings` are injected; no config singleton is read here.
     """
     from src.actions.confluence_write import create_report_page
     from src.actions.slack_write import deliver_report
@@ -58,8 +68,6 @@ def default_okr_deps(
         delivery_summary,
         resolve_audience_delivery,
     )
-    from src.config.config_builders import build_settings_from_env
-    from src.config.reporting_config import get_reporting_config
     from src.llm.client import LlmClient
     from src.llm.okr_report_prompt import (
         build_okr_narrative_messages,
@@ -69,9 +77,9 @@ def default_okr_deps(
     )
     from src.llm.report_prompt import REPORT_TITLES
 
-    settings = build_settings_from_env()
-    cfg = get_reporting_config()
-    gw = gateway or ActionGateway(settings)
+    gw = gateway or ActionGateway(
+        settings, external_channels=config.slack_external_channels
+    )
     llm_box: dict[str, object] = {}
 
     def _compose(rollup: OkrRollup) -> tuple[str, float | None]:
@@ -97,10 +105,10 @@ def default_okr_deps(
 
     def _deliver(rollup: OkrRollup, body: str) -> tuple[bool, str]:
         today = _today_utc().isoformat()
-        channel, date_hint = resolve_audience_delivery(audience, "okr", today)
+        channel, date_hint = resolve_audience_delivery(audience, "okr", today, config)
         title = f"{REPORT_TITLES['okr']} {today}"
         conf_result, page = create_report_page(
-            title, body, gateway=gw, config=cfg, report_date=date_hint,
+            title, body, gateway=gw, config=config, report_date=date_hint,
             rationale=f"scheduled OKR status report (detail, {audience})",
         )
         detail_url = page.url if page else None
@@ -108,7 +116,7 @@ def default_okr_deps(
             rollup, report_date=today, detail_url=detail_url, audience=audience
         )
         slack_result = deliver_report(
-            short, gateway=gw, config=cfg, channel=channel, report_date=date_hint,
+            short, gateway=gw, config=config, channel=channel, report_date=date_hint,
             rationale=f"OKR status report (short + link, {audience})",
         )
         ok = (
@@ -117,7 +125,11 @@ def default_okr_deps(
         )
         return ok, delivery_summary(conf_result.status, slack_result, detail_url)
 
-    return OkrReportDeps(fetch_rollup=build_okr_rollup, compose=_compose, deliver=_deliver)
+    return OkrReportDeps(
+        fetch_rollup=lambda: build_okr_rollup(config),
+        compose=_compose,
+        deliver=_deliver,
+    )
 
 
 def _make_okr_nodes(deps: OkrReportDeps):
@@ -153,11 +165,23 @@ def _problems_to_dicts(rollup: OkrRollup | None) -> list[dict]:
 def build_okr_graph(
     checkpointer: SqliteSaver | None = None,
     *,
+    config: ReportingConfig | None = None,
+    settings: Settings | None = None,
     deps: OkrReportDeps | None = None,
     audience: str = "internal",
 ) -> CompiledStateGraph:
-    """Build + compile the OKR reporting graph. `deps` defaults to real wiring."""
-    resolved = deps or default_okr_deps(audience=audience)
+    """Build + compile the OKR reporting graph. `deps` defaults to real wiring.
+
+    When `deps` is None, `config` + `settings` are required (they wire the real
+    collaborators); a caller that injects `deps` need not pass them.
+    """
+    if deps is None:
+        if config is None or settings is None:
+            raise ValueError(
+                "build_okr_graph needs config + settings when deps is not provided."
+            )
+        deps = default_okr_deps(config=config, settings=settings, audience=audience)
+    resolved = deps
     perceive, analyze_node, compose_report, deliver = _make_okr_nodes(resolved)
 
     builder = StateGraph(ReportState)

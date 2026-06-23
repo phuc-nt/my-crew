@@ -16,36 +16,33 @@ TODAY = "2026-06-22"
 
 
 class _Cfg:
+    """ReportingConfig stub for delivery tests. `slack_external_channels` is read
+    by the graph factories when they build the gateway; `slack_stakeholder_channel`
+    by `resolve_audience_delivery` on the external path."""
+
     def __init__(self, stakeholder):
         self.slack_stakeholder_channel = stakeholder
-
-
-def _patch_cfg(monkeypatch, stakeholder):
-    import src.config.reporting_config as rc
-
-    monkeypatch.setattr(rc, "get_reporting_config", lambda: _Cfg(stakeholder))
+        self.slack_external_channels = frozenset({stakeholder} if stakeholder else set())
 
 
 # --- resolve_audience_delivery: channel + dedup hint ---
 
 
 def test_internal_channel_none_and_dedup_unchanged():
-    channel, hint = resolve_audience_delivery("internal", "daily", TODAY)
+    channel, hint = resolve_audience_delivery("internal", "daily", TODAY, _Cfg(None))
     assert channel is None  # → default slack_report_channel (current behavior)
     assert hint == f"daily-{TODAY}"  # dedup hint UNCHANGED (backward-compat)
 
 
-def test_external_routes_to_stakeholder_channel(monkeypatch):
-    _patch_cfg(monkeypatch, "C_STAKE")
-    channel, hint = resolve_audience_delivery("external", "okr", TODAY)
+def test_external_routes_to_stakeholder_channel():
+    channel, hint = resolve_audience_delivery("external", "okr", TODAY, _Cfg("C_STAKE"))
     assert channel == "C_STAKE"
     assert hint == f"okr-external-{TODAY}"  # audience-suffixed dedup namespace
 
 
-def test_external_without_stakeholder_channel_raises(monkeypatch):
-    _patch_cfg(monkeypatch, None)
+def test_external_without_stakeholder_channel_raises():
     with pytest.raises(RuntimeError, match="SLACK_STAKEHOLDER_CHANNEL"):
-        resolve_audience_delivery("external", "daily", TODAY)
+        resolve_audience_delivery("external", "daily", TODAY, _Cfg(None))
 
 
 # --- pending_approval = success + summary ---
@@ -113,10 +110,11 @@ def test_okr_external_deliver_pending_is_ok(settings_factory, tmp_path, monkeypa
     from src.agent import okr_report_graph
     from src.agent.okr_analyzer import OkrRollup
 
-    _patch_cfg(monkeypatch, "C_STAKE")
     seen = _spy_writes(monkeypatch, "pending_approval", 9)
     gw = _gateway(settings_factory, tmp_path)
-    deps = okr_report_graph.default_okr_deps(audience="external", gateway=gw)
+    deps = okr_report_graph.default_okr_deps(
+        config=_Cfg("C_STAKE"), settings=settings_factory(), audience="external", gateway=gw
+    )
     today = datetime.now(UTC).date().isoformat()
     ok, summary = deps.deliver(OkrRollup((), (), ()), "<p>body</p>")
     assert ok is True  # pending_approval is success for external
@@ -129,10 +127,11 @@ def test_resource_external_deliver_pending_is_ok(settings_factory, tmp_path, mon
     from src.agent import resource_report_graph
     from src.tools.models import CostSummary, ResourceReport
 
-    _patch_cfg(monkeypatch, "C_STAKE")
     seen = _spy_writes(monkeypatch, "pending_approval", 3)
     gw = _gateway(settings_factory, tmp_path)
-    deps = resource_report_graph.default_resource_deps(audience="external", gateway=gw)
+    deps = resource_report_graph.default_resource_deps(
+        config=_Cfg("C_STAKE"), settings=settings_factory(), audience="external", gateway=gw
+    )
     resource = ResourceReport((), 0.0, (), 0)
     cost = CostSummary(0.0, 50.0, 0.0, "ok", 0.0, 0, 0.0)
     ok, summary = deps.deliver(resource, cost, "<p>body</p>")
@@ -148,7 +147,6 @@ def test_resource_external_short_omits_confluence_link(settings_factory, tmp_pat
     from src.agent import resource_report_graph
     from src.tools.models import AssigneeLoad, CostSummary, ResourceReport
 
-    _patch_cfg(monkeypatch, "C_STAKE")
     posted: dict = {}
 
     def fake_page(title, body, *, gateway, config, report_date, rationale=""):
@@ -163,7 +161,9 @@ def test_resource_external_short_omits_confluence_link(settings_factory, tmp_pat
     monkeypatch.setattr(cw, "create_report_page", fake_page)
     monkeypatch.setattr(sw, "deliver_report", fake_deliver)
     gw = _gateway(settings_factory, tmp_path)
-    deps = resource_report_graph.default_resource_deps(audience="external", gateway=gw)
+    deps = resource_report_graph.default_resource_deps(
+        config=_Cfg("C_STAKE"), settings=settings_factory(), audience="external", gateway=gw
+    )
     resource = ResourceReport(
         (AssigneeLoad("Alice", 6, 0, 0, overloaded=True),), 6.0, ("Alice",), 0
     )
@@ -180,7 +180,9 @@ def test_internal_deliver_keeps_channel_none(settings_factory, tmp_path, monkeyp
 
     seen = _spy_writes(monkeypatch, "executed", None)
     gw = _gateway(settings_factory, tmp_path)
-    deps = okr_report_graph.default_okr_deps(audience="internal", gateway=gw)
+    deps = okr_report_graph.default_okr_deps(
+        config=_Cfg(None), settings=settings_factory(), audience="internal", gateway=gw
+    )
     today = datetime.now(UTC).date().isoformat()
     ok, _ = deps.deliver(OkrRollup((), (), ()), "<p>body</p>")
     assert ok is True
@@ -278,13 +280,15 @@ def test_approved_unknown_action_raises():
 # --- weekly external drops embedded okr/resource sub-sections ---
 
 
-def test_weekly_external_omits_embedded_sections(monkeypatch):
+def test_weekly_external_omits_embedded_sections(settings_factory, monkeypatch):
     import src.agent.okr_weekly_section as okr_ws
     import src.agent.resource_weekly_section as res_ws
     from src.agent import report_graph
 
-    monkeypatch.setattr(okr_ws, "weekly_okr_section", lambda d: "<h2>OKR-MARKER</h2>")
-    monkeypatch.setattr(res_ws, "weekly_resource_section", lambda d: "<h2>RES-MARKER</h2>")
+    monkeypatch.setattr(okr_ws, "weekly_okr_section", lambda d, config: "<h2>OKR-MARKER</h2>")
+    monkeypatch.setattr(
+        res_ws, "weekly_resource_section", lambda d, config, settings: "<h2>RES-MARKER</h2>"
+    )
 
     class _FakeLlm:
         def complete(self, messages):
@@ -293,13 +297,15 @@ def test_weekly_external_omits_embedded_sections(monkeypatch):
                              prompt_tokens=0, completion_tokens=0, cost_usd=0.0)
 
     deps_ext = report_graph.default_report_deps(
-        report_kind="weekly", audience="external", client=_FakeLlm()
+        config=_Cfg(None), settings=settings_factory(),
+        report_kind="weekly", audience="external", client=_FakeLlm(),
     )
     body_ext, _ = deps_ext.compose([])
     assert "OKR-MARKER" not in body_ext and "RES-MARKER" not in body_ext  # dropped
 
     deps_int = report_graph.default_report_deps(
-        report_kind="weekly", audience="internal", client=_FakeLlm()
+        config=_Cfg(None), settings=settings_factory(),
+        report_kind="weekly", audience="internal", client=_FakeLlm(),
     )
     body_int, _ = deps_int.compose([])
     assert "OKR-MARKER" in body_int and "RES-MARKER" in body_int  # internal keeps them

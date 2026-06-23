@@ -64,7 +64,7 @@ def test_cli_parse_report_kind():
 # --- Slice D: OKR section embedded in the weekly report (fault-isolated) ---
 
 
-def _okr_rollup():
+def _okr_rollup(config):
     from src.agent.okr_analyzer import OkrRollup
     from src.tools.models import KeyResult, Objective
 
@@ -73,42 +73,37 @@ def _okr_rollup():
     return OkrRollup(objectives=(obj,), problems=(), at_risk=())
 
 
-def _set_okr_configured(monkeypatch, *, page_id):
-    """Monkeypatch the reporting config so the weekly OKR helpers see a page id."""
-    import src.config.reporting_config as rc
-    from src.agent import okr_weekly_section
+class _OkrCfg:
+    """ReportingConfig stub: only the fields the weekly OKR helpers read."""
 
-    class _Cfg:
-        okr_confluence_page_id = page_id
-        okr_behind_threshold = 0.5
-
-    # The helpers do `from src.config.reporting_config import get_reporting_config`
-    # at call time, so patch the source module (not okr_weekly_section).
-    monkeypatch.setattr(rc, "get_reporting_config", lambda: _Cfg())
-    return okr_weekly_section
+    def __init__(self, page_id):
+        self.okr_confluence_page_id = page_id
+        self.okr_behind_threshold = 0.5
 
 
-def test_weekly_okr_section_omitted_when_unconfigured(monkeypatch):
-    okr = _set_okr_configured(monkeypatch, page_id=None)
-    assert okr.weekly_okr_section("2026-06-22") == ""
+def test_weekly_okr_section_omitted_when_unconfigured():
+    from src.agent import okr_weekly_section as okr
+
+    assert okr.weekly_okr_section("2026-06-22", _OkrCfg(None)) == ""
 
 
 def test_weekly_okr_section_rendered_when_configured(monkeypatch):
-    okr = _set_okr_configured(monkeypatch, page_id="12345")
+    from src.agent import okr_weekly_section as okr
+
     monkeypatch.setattr(okr, "build_okr_rollup", _okr_rollup)
-    out = okr.weekly_okr_section("2026-06-22")
+    out = okr.weekly_okr_section("2026-06-22", _OkrCfg("12345"))
     assert "<h2>OKR Status" in out
     assert "60%" in out  # deterministic number from the rollup
 
 
 def test_weekly_okr_section_survives_fetch_failure(monkeypatch):
-    okr = _set_okr_configured(monkeypatch, page_id="12345")
+    from src.agent import okr_weekly_section as okr
 
-    def boom():
+    def boom(config):
         raise RuntimeError("confluence down")
 
     monkeypatch.setattr(okr, "build_okr_rollup", boom)
-    out = okr.weekly_okr_section("2026-06-22")
+    out = okr.weekly_okr_section("2026-06-22", _OkrCfg("12345"))
     assert "Không lấy được dữ liệu OKR" in out  # note, not a raise
     # Raw exception text must NOT leak into the page body (H1): generic note only.
     assert "confluence down" not in out
@@ -116,15 +111,17 @@ def test_weekly_okr_section_survives_fetch_failure(monkeypatch):
 
 
 def test_weekly_okr_slack_line(monkeypatch):
-    okr = _set_okr_configured(monkeypatch, page_id="12345")
+    from src.agent import okr_weekly_section as okr
+
     monkeypatch.setattr(okr, "build_okr_rollup", _okr_rollup)
-    line = okr.weekly_okr_slack_line()
+    line = okr.weekly_okr_slack_line(_OkrCfg("12345"))
     assert "OKR: 60%" in line and line.startswith("\n•")
 
 
-def test_weekly_okr_slack_line_empty_when_unconfigured(monkeypatch):
-    okr = _set_okr_configured(monkeypatch, page_id=None)
-    assert okr.weekly_okr_slack_line() == ""
+def test_weekly_okr_slack_line_empty_when_unconfigured():
+    from src.agent import okr_weekly_section as okr
+
+    assert okr.weekly_okr_slack_line(_OkrCfg(None)) == ""
 
 
 def test_cron_no_key_returns_one(monkeypatch, tmp_path):
