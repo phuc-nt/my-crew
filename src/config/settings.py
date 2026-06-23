@@ -10,12 +10,9 @@ LLM call is made), not at import time, so guardrail/unit code runs without a key
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-
-from dotenv import load_dotenv
 
 # Repo root = three levels up from this file (src/config/settings.py).
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -24,24 +21,6 @@ DATA_DIR = REPO_ROOT / ".data"
 # OpenRouter is OpenAI-compatible; base URL is fixed by the provider.
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "minimax/minimax-m2.7"
-
-
-def _env_bool(name: str, default: bool) -> bool:
-    """Parse a boolean env var. Accepts true/1/yes/on (case-insensitive)."""
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in {"true", "1", "yes", "on"}
-
-
-def _env_float(name: str, default: float) -> float:
-    raw = os.getenv(name)
-    if raw is None or raw.strip() == "":
-        return default
-    try:
-        return float(raw)
-    except ValueError as exc:
-        raise ValueError(f"Env var {name}={raw!r} is not a valid float") from exc
 
 
 @dataclass(frozen=True)
@@ -77,18 +56,12 @@ class Settings:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Load .env once and return cached, typed settings."""
-    load_dotenv(REPO_ROOT / ".env")
-    return Settings(
-        openrouter_api_key=os.getenv("OPENROUTER_API_KEY") or None,
-        openrouter_model=os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL),
-        openrouter_referer=os.getenv(
-            "OPENROUTER_REFERER", "https://github.com/local/my-project-manager"
-        ),
-        openrouter_title=os.getenv("OPENROUTER_TITLE", "my-project-manager"),
-        dry_run=_env_bool("DRY_RUN", default=True),
-        write_disabled=_env_bool("AGENT_WRITE_DISABLED", default=False),
-        monthly_budget_usd=_env_float("MONTHLY_BUDGET_USD", default=50.0),
-        budget_warn_ratio=_env_float("BUDGET_WARN_RATIO", default=0.8),
-        data_dir=DATA_DIR,
-    )
+    """Load .env once and return cached, typed settings.
+
+    DEPRECATED (v2 M1-P1): thin wrapper over `build_settings_from_env()` while the
+    config singletons are being phased out. Removed entirely in M1-P1 Slice D;
+    callers should receive `Settings` as an injected parameter.
+    """
+    from src.config.config_builders import build_settings_from_env
+
+    return build_settings_from_env()

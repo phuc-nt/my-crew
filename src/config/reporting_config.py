@@ -12,14 +12,9 @@ actually spawned, so unit tests and unrelated flows run without credentials.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-
-from dotenv import load_dotenv
-
-from src.config.settings import REPO_ROOT
 
 # Default dist paths for the local MCP server repos (overridable via env).
 _DEFAULT_JIRA_DIST = Path.home() / "workspace" / "jira-cloud-mcp-server" / "dist" / "index.js"
@@ -94,77 +89,15 @@ class ReportingConfig:
     confluence_server: McpServerSpec
 
 
-def _server_dist(env_key: str, default: Path) -> Path:
-    raw = os.getenv(env_key)
-    return Path(raw) if raw else default
-
-
 @lru_cache(maxsize=1)
 def get_reporting_config() -> ReportingConfig:
-    """Load .env once and return cached reporting config."""
-    load_dotenv(REPO_ROOT / ".env")
+    """Load .env once and return cached reporting config.
 
-    jira_server = McpServerSpec(
-        name="jira",
-        dist_path=_server_dist("JIRA_MCP_DIST", _DEFAULT_JIRA_DIST),
-        env={
-            "ATLASSIAN_SITE_NAME": os.getenv("ATLASSIAN_SITE_NAME", ""),
-            "ATLASSIAN_USER_EMAIL": os.getenv("ATLASSIAN_USER_EMAIL", ""),
-            "ATLASSIAN_API_TOKEN": os.getenv("ATLASSIAN_API_TOKEN", ""),
-        },
-        required_env_keys=("ATLASSIAN_SITE_NAME", "ATLASSIAN_USER_EMAIL", "ATLASSIAN_API_TOKEN"),
-    )
-    slack_server = McpServerSpec(
-        name="slack",
-        dist_path=_server_dist("SLACK_MCP_DIST", _DEFAULT_SLACK_DIST),
-        env={
-            "SLACK_XOXC_TOKEN": os.getenv("SLACK_XOXC_TOKEN", ""),
-            "SLACK_XOXD_TOKEN": os.getenv("SLACK_XOXD_TOKEN", ""),
-            "SLACK_TEAM_DOMAIN": os.getenv("SLACK_TEAM_DOMAIN", ""),
-        },
-        required_env_keys=("SLACK_XOXC_TOKEN", "SLACK_XOXD_TOKEN", "SLACK_TEAM_DOMAIN"),
-    )
-    # Confluence reuses the same Atlassian credential as Jira (same Cloud site).
-    confluence_server = McpServerSpec(
-        name="confluence",
-        dist_path=_server_dist("CONFLUENCE_MCP_DIST", _DEFAULT_CONFLUENCE_DIST),
-        env={
-            "CONFLUENCE_SITE_NAME": os.getenv("ATLASSIAN_SITE_NAME", ""),
-            "CONFLUENCE_EMAIL": os.getenv("ATLASSIAN_USER_EMAIL", ""),
-            "CONFLUENCE_API_TOKEN": os.getenv("ATLASSIAN_API_TOKEN", ""),
-        },
-        required_env_keys=("CONFLUENCE_SITE_NAME", "CONFLUENCE_EMAIL", "CONFLUENCE_API_TOKEN"),
-    )
+    DEPRECATED (v2 M1-P1): thin wrapper over `build_reporting_config_from_env()`
+    while the config singletons are being phased out. The env→config logic + the
+    stakeholder-channel validation now live in `config_builders.from_dict`. Removed
+    entirely in M1-P1 Slice D; callers should receive `ReportingConfig` injected.
+    """
+    from src.config.config_builders import build_reporting_config_from_env
 
-    external_channels = frozenset(
-        c.strip() for c in os.getenv("SLACK_EXTERNAL_CHANNELS", "").split(",") if c.strip()
-    )
-    stakeholder_channel = os.getenv("SLACK_STAKEHOLDER_CHANNEL") or None
-    # Guardrail: the stakeholder channel MUST be in the external set, else an external
-    # report would auto-post to stakeholders without Lớp B approval.
-    if stakeholder_channel and stakeholder_channel not in external_channels:
-        raise RuntimeError(
-            f"SLACK_STAKEHOLDER_CHANNEL ({stakeholder_channel!r}) must also be listed in "
-            "SLACK_EXTERNAL_CHANNELS so external reports route through Lớp B approval. "
-            "Add it to SLACK_EXTERNAL_CHANNELS in .env."
-        )
-
-    return ReportingConfig(
-        jira_project_key=os.getenv("JIRA_PROJECT_KEY") or None,
-        github_repo=os.getenv("GITHUB_REPO") or None,
-        slack_report_channel=os.getenv("SLACK_REPORT_CHANNEL") or None,
-        slack_external_channels=external_channels,
-        slack_stakeholder_channel=stakeholder_channel,
-        confluence_space_key=os.getenv("CONFLUENCE_SPACE_KEY") or None,
-        confluence_space_id=os.getenv("CONFLUENCE_SPACE_ID") or None,
-        atlassian_site_name=os.getenv("ATLASSIAN_SITE_NAME") or None,
-        pr_stale_days=int(os.getenv("PR_STALE_DAYS", "7")),
-        blocker_label_substring=os.getenv("BLOCKER_LABEL_SUBSTRING", "block"),
-        okr_confluence_page_id=os.getenv("OKR_CONFLUENCE_PAGE_ID") or None,
-        okr_behind_threshold=float(os.getenv("OKR_BEHIND_THRESHOLD", "0.5")),
-        resource_overload_ratio=float(os.getenv("RESOURCE_OVERLOAD_RATIO", "1.5")),
-        labor_cost_per_issue=float(os.getenv("LABOR_COST_PER_ISSUE", "0")),
-        jira_server=jira_server,
-        slack_server=slack_server,
-        confluence_server=confluence_server,
-    )
+    return build_reporting_config_from_env()
