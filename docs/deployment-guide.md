@@ -1,7 +1,6 @@
 # Deployment & Setup Guide — my-project-manager
 
-> Cách chạy + cấu hình. Status: **Initial 2026-06-21** (Phase 0, chưa có code chạy thật).
-> Cập nhật chi tiết khi scaffold xong.
+> Cách chạy + cấu hình. Status: **As-built (Phase 0–5 complete).** Mọi lệnh dưới đây chạy thật.
 
 ## 1. Yêu cầu
 
@@ -16,23 +15,50 @@
 
 > Tất cả instance là **THẬT** (Atlassian Cloud + Slack + GitHub thật). Build/test trực tiếp, không mock — cẩn trọng với write (xem kill switch §4 + dry-run trước khi chạy thật).
 
-## 2. Setup local (MVP)
+## 2. Setup local
 
 ```bash
-cd ~/workspace/my-project-manager
-# cài deps (sau khi có pyproject.toml)
-uv sync            # hoặc: pip install -e .
-cp config.example.env .env
-# điền token vào .env (KHÔNG commit .env)
+git clone git@github.com:phuc-nt/my-project-manager.git
+cd my-project-manager
+uv sync                       # cài deps (Python 3.12)
+uv run pytest                 # verify install — 269 tests, không cần network/secret
+cp config.example.env .env    # điền token vào .env (KHÔNG commit .env)
 ```
 
-Chạy (sau khi có entrypoint):
+### 2.1 Build 3 MCP server (external dependency)
+
+Agent đọc Jira/Confluence/Slack qua 3 MCP server (Node, stdio) mà nó spawn làm subprocess. Clone +
+build từng cái (mỗi repo có README riêng):
+
 ```bash
-# dry-run mặc định khi dev
-DRY_RUN=true python -m src.entrypoints.cli "tạo report tiến độ sprint hiện tại"
+cd ~/workspace
+for repo in jira-cloud-mcp-server confluence-cloud-mcp-server slack-browser-mcp-server; do
+  git clone git@github.com:phuc-nt/$repo.git
+  (cd $repo && npm install && npm run build)   # tạo dist/index.js
+done
+```
+
+- Jira → https://github.com/phuc-nt/jira-cloud-mcp-server
+- Confluence → https://github.com/phuc-nt/confluence-cloud-mcp-server
+- Slack (browser-token) → https://github.com/phuc-nt/slack-browser-mcp-server
+
+Mặc định agent tìm `dist/index.js` ở `~/workspace/{jira,confluence,slack-browser}-*-mcp-server`. Nếu
+để chỗ khác, set `JIRA_MCP_DIST` / `CONFLUENCE_MCP_DIST` / `SLACK_MCP_DIST` trong `.env`. GitHub không
+cần MCP server — chỉ cần `gh auth login` (§3).
+
+### 2.2 Chạy
+
+```bash
+# DRY_RUN=true (mặc định trong .env khi dev) → log "định làm gì", KHÔNG post thật
+uv run python -m src.entrypoints.cli report --daily
+uv run python -m src.entrypoints.cli report --weekly --audience external   # → Lớp B queue
+
 # chạy thật (write lên Slack/Confluence) — bật explicit
-DRY_RUN=false python -m src.entrypoints.cli "..."
+DRY_RUN=false uv run python -m src.entrypoints.cli report --daily
 ```
+
+Các lệnh khác: `report [--daily|--weekly|--okr|--resource] [--audience internal|external]`,
+`audit [filters]`, `approvals`, `approve <id>`, `reject <id>` (audit/approval không cần OpenRouter key).
 
 ## 3. Secrets & scoped tokens (BẮT BUỘC tối thiểu quyền)
 

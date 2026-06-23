@@ -1,7 +1,8 @@
 # Project Overview & PDR — my-project-manager
 
 > Product Definition / Requirements. Đọc file này TRƯỚC khi plan hay code.
-> Status: **Initial draft 2026-06-21** — chờ refine khi MVP chạy.
+> Status: **Vision + guardrail đã hiện thực hoá đầy đủ (Phase 0–5 complete).** Các "câu hỏi mở" ở §9
+> đã được trả lời trong quá trình build — xem ghi chú resolved cuối §9.
 
 ## 1. Problem
 
@@ -116,9 +117,13 @@ Dự án này nằm trong workspace cá nhân học + xây agent framework. Tham
 - **OpenRouter budget**: ✅ **$50/tháng**. Agent build PHẢI track cost cộng dồn + hard-stop khi chạm trần (xem §7.8). m2.7 rẻ nên $50 là dư cho MVP, nhưng autonomous loop lỗi có thể đốt nhanh → cap là bắt buộc.
 - **Ranh giới "autonomous"**: ✅ Đã định nghĩa rõ — xem §7.9 (danh sách hành động CẤM / PHẢI hỏi người).
 
-### Còn mở (cần trả lời khi vào Phase 1)
+### Đã trả lời trong quá trình build (resolved)
 
-1. **Ngưỡng "tiến độ tốt/xấu"**: task quá hạn bao lâu thì cảnh báo? PR treo bao lâu? burndown lệch %? Rule cụ thể hay agent tự suy luận?
-2. **Report format chuẩn**: team có template report sẵn không, hay agent tự định?
-3. **Audience report**: tách nội bộ team vs stakeholder ngay từ MVP không?
-4. **Single vs multi-project**: agent quản 1 dự án hay nhiều? (ảnh hưởng data model + state schema).
+1. **Ngưỡng "tiến độ tốt/xấu"** → ✅ Rule cụ thể, ngưỡng config được: overdue theo due-date, PR stale
+   `PR_STALE_DAYS` (default 7), blocker theo label, overload theo bội số trung bình team
+   `RESOURCE_OVERLOAD_RATIO` (default 1.5). Xem `risk_analyzer.py` + `resource_analyzer.py`.
+2. **Report format** → ✅ Agent tự sinh: số liệu render deterministic (không để LLM bịa), LLM chỉ viết
+   prose; Slack mrkdwn + Confluence XHTML storage. Xem `src/llm/*_report_prompt.py`.
+3. **Audience report** → ✅ Làm ở Phase 5: `--audience internal|external`; external qua Lớp B duyệt.
+4. **Single vs multi-project** → ⏸️ Vẫn **single-project** (1 `JIRA_PROJECT_KEY`/`GITHUB_REPO`).
+   Multi-project/multi-user là phần **defer** cùng service backend (xem roadmap "deferred").

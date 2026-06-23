@@ -5,13 +5,12 @@
 
 ## Trạng thái hiện tại
 
-- Code: **có** — `src/` đã scaffold theo `system-architecture.md §8`. Python venv 3.12 (uv).
-- Hello-agent: `python -m src.entrypoints.cli "hello"` chạy graph (perceive→respond) + checkpointer SQLite. Cần `OPENROUTER_API_KEY` để gọi LLM thật.
-- Guardrail core: Action Gateway (allowlist + Lớp A hard-deny), audit JSONL append-only + redaction secret, budget tracker $50/tháng, DRY_RUN + kill-switch.
-- Test: `uv run pytest` (74 UT, không cần network). `uv run ruff check src tests`.
-- Chưa có: tool READ thật (jira/github/...), MCP/CLI adapter, write handler thật — Phase 1.
+- **Phase 0–5 HOÀN TẤT** — đầy đủ READ (jira/github qua MCP/gh) + report (daily/weekly/okr/resource/audience-split) + write qua Action Gateway. Python 3.12 (uv).
+- Hello-agent: `python -m src.entrypoints.cli "hello"`; report: `cli report --daily|--weekly|--okr|--resource [--audience internal|external]`. Cần `OPENROUTER_API_KEY` cho LLM.
+- Guardrail core: Action Gateway (allowlist + Lớp A hard-deny + Lớp B approve), audit JSONL append-only + redaction secret, budget tracker $50/tháng, DRY_RUN + kill-switch, dedup bền. Xem `action-gateway-explainer.md`.
+- Test: `uv run pytest` (269 tests, không cần network). `uv run ruff check src tests`. Ruff clean.
 
-## Cây thư mục dự kiến (sẽ điền khi build)
+## Cây thư mục (đã build)
 
 ```
 src/
@@ -38,6 +37,7 @@ src/
 | Post Slack | `src/actions/slack_write.py` (deliver_report + build_slack_short link) |
 | Tạo page Confluence | `src/actions/confluence_write.py` (create_report_page via gateway, parse page id/URL từ text-block) |
 | Guardrail allow/deny | `src/actions/hard_block.py` (allowlist + Lớp A hard-deny + Lớp B `needs_interrupt`) |
+| **Guardrail giải thích (đọc để học)** | `docs/action-gateway-explainer.md` — explainer đứng riêng về toàn bộ safety model |
 | Lớp B duyệt người | `src/actions/approval_store.py` (queue SQLite) + gateway `approve/reject` + `cli approvals/approve/reject` |
 | Dedup bền (chống post trùng) | `src/actions/dedup_store.py` (SQLite, reserve-before-execute) |
 | Xem audit | `cli audit [--tool/--verdict/--since/--limit]` (`audit_log.query`) |
@@ -92,7 +92,7 @@ Lý do đổi từ denylist: denylist cho qua mọi thứ chưa liệt kê → k
 
 `~/workspace/deer-flow` — harness production **xây trên LangGraph**, đọc để học pattern, KHÔNG copy code (kiến trúc nặng hơn nhiều so với MVP này).
 
-- **Phân tích kiến trúc đã có sẵn**: `docs/reference-deerflow-2-architecture.md` (trong repo này) — đọc cái này TRƯỚC khi mò repo gốc, đỡ tốn token.
+- **Phân tích kiến trúc đã có sẵn**: `docs/research/deerflow-2-architecture-study.md` (external study notes) — đọc cái này TRƯỚC khi mò repo gốc, đỡ tốn token.
 - Path subsystem cụ thể trong `deer-flow/backend/packages/harness/deerflow/` (đã verify tồn tại 2026-06-21):
 
 | Cần học pattern | Path trong deer-flow |

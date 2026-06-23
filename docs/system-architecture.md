@@ -1,7 +1,8 @@
 # System Architecture — my-project-manager
 
-> Kiến trúc kỹ thuật. Status: **Initial draft 2026-06-21**, sẽ cập nhật khi codebase hình thành.
-> Đọc cùng `project-overview-pdr.md` (vì sao) + `code-standards.md` (viết thế nào).
+> Kiến trúc kỹ thuật. Status: **As-built (Phase 0–5).** Các đề xuất "agent build có thể tinh chỉnh"
+> bên dưới giờ KHỚP với code thật (spot-check verify). Phần "guardrail" có explainer riêng:
+> `action-gateway-explainer.md`. Đọc cùng `project-overview-pdr.md` (vì sao) + `code-standards.md`.
 
 ## 1. Nguyên tắc kiến trúc
 
