@@ -94,6 +94,7 @@ Architecture: [docs/system-architecture.md](docs/system-architecture.md) · Code
 | Find where any piece of code lives | [codebase-summary.md](docs/codebase-summary.md) |
 | Set up + run it | [deployment-guide.md](docs/deployment-guide.md) |
 | See how it compares to other agent harnesses | [architecture-comparison.md](docs/architecture-comparison.md) — vs DeerFlow 2.0, Hermes, OpenClaw/Pi.dev |
+| See where it's headed next | [v2-vision-roadmap.md](docs/v2-vision-roadmap.md) — multi-agent platform: profiles, registry/workers, web dashboard (draft) |
 | **Follow the build, decision by decision** | [journals/](docs/journals/) — a phase-by-phase narrative with *what we decided & why* and *what broke & what we learned* |
 
 The [journals](docs/journals/) are the best learning material here: each phase records the real decisions and the bugs adversarial review caught (denylist→allowlist, a JQL-injection surface, a privacy leak via a linked artifact). Build narratives like this are rare — that's the point of sharing this repo.
