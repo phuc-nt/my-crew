@@ -2,8 +2,8 @@
 
 > A standalone walkthrough of this project's core idea. If you read only one doc to learn
 > *how to let an LLM agent write to real systems without it being a loaded gun*, read this one.
-> Code: [`src/actions/action_gateway.py`](../src/actions/action_gateway.py),
-> [`src/actions/hard_block.py`](../src/actions/hard_block.py).
+> Code: [`src/actions/action_gateway.py`](../../src/actions/action_gateway.py),
+> [`src/actions/hard_block.py`](../../src/actions/hard_block.py).
 
 ## The problem
 
@@ -62,7 +62,7 @@ Hard-coded denials at the gateway. The agent **never** does these, even if the L
 - **Security incidents:** changing visibility (making a private repo/page public), granting
   permissions, inviting outsiders, disabling a security setting.
 
-`classify()` ([`hard_block.py`](../src/actions/hard_block.py)) inspects the **MCP tool name + args**
+`classify()` ([`hard_block.py`](../../src/actions/hard_block.py)) inspects the **MCP tool name + args**
 or the **`gh` command line** — not Python SDK calls — and returns a block with a category. A Lớp A
 block is final: it is never overridable, not even by human approval.
 
@@ -136,11 +136,11 @@ Each is written up in [the journals](../journals/) under "Vấp & học được
 
 ## How to read the code
 
-1. [`src/actions/action_gateway.py`](../src/actions/action_gateway.py) — `_execute()` *is* the chain
+1. [`src/actions/action_gateway.py`](../../src/actions/action_gateway.py) — `_execute()` *is* the chain
    above, top to bottom. Start here.
-2. [`src/actions/hard_block.py`](../src/actions/hard_block.py) — `classify()` (Lớp A + allowlist) and
+2. [`src/actions/hard_block.py`](../../src/actions/hard_block.py) — `classify()` (Lớp A + allowlist) and
    `needs_interrupt()` (Lớp B). The actual red-line logic.
-3. A real write that uses it: [`src/actions/slack_write.py`](../src/actions/slack_write.py) — note it
+3. A real write that uses it: [`src/actions/slack_write.py`](../../src/actions/slack_write.py) — note it
    never calls the Slack API directly; it hands the gateway an `action` + a `handler` and lets the
    chain run.
 
