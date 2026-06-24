@@ -77,3 +77,12 @@ def test_int_id_rejected(tmp_path):
     p = _write(tmp_path, "agents:\n  - id: 123\n")
     with pytest.raises(RuntimeError, match="non-empty string"):
         load_registry(p)
+
+
+@pytest.mark.parametrize("bad_id", ["../escape", "a/b", "Acme", "a b", "agent.1"])
+def test_path_unsafe_id_rejected(tmp_path, bad_id):
+    # The registry is the single validation boundary: a path-unsafe id can't reach a
+    # worker argv or a data dir (it raises here, before any spawn).
+    p = _write(tmp_path, f'agents:\n  - id: "{bad_id}"\n')
+    with pytest.raises(RuntimeError, match="Invalid agent id"):
+        load_registry(p)

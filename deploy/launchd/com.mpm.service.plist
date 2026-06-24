@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mpm.service</string>
+    <!-- The coordinating service: reads registry.yaml + each profile's schedule (cron),
+         spawns per-agent worker subprocesses when reports are due. Replaces the three
+         legacy per-report jobs (com.mpm.report.{daily,weekly,resource}.plist) — unload
+         those after loading this one (see LEGACY.md) to avoid double-scheduling. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/phucnt/workspace/my-project-manager/.venv/bin/python</string>
+        <string>-m</string>
+        <string>src.runtime.service</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/phucnt/workspace/my-project-manager</string>
+    <!-- Start at load and restart on crash: the service is meant to run continuously. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/phucnt/workspace/my-project-manager/.data/service.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/phucnt/workspace/my-project-manager/.data/service.err.log</string>
+</dict>
+</plist>

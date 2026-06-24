@@ -14,6 +14,7 @@ from pathlib import Path
 import yaml
 
 from src.config.settings import REPO_ROOT
+from src.runtime.agent_paths import _validate_agent_id
 
 _REGISTRY_PATH = REPO_ROOT / "registry.yaml"
 
@@ -57,6 +58,13 @@ def load_registry(path: Path | None = None) -> tuple[RegistryEntry, ...]:
                 "If it is a YAML reserved word (on/off/yes/no/true/false), quote it."
             )
         agent_id = raw_id.strip()
+        # Enforce the agent-id safety rule HERE so the id is validated once, at the
+        # registry boundary — every downstream use (data dir, thread id, worker argv)
+        # then trusts it. A bad id can't reach a Popen argv or a data path.
+        try:
+            _validate_agent_id(agent_id)
+        except ValueError as exc:
+            raise RuntimeError(f"{registry_path}: {exc}") from exc
         if agent_id in seen:
             raise RuntimeError(f"{registry_path}: duplicate agent id {agent_id!r}.")
         seen.add(agent_id)
