@@ -47,6 +47,15 @@ class CapReachedError(RuntimeError):
     """The global active-run cap is reached (→ 503)."""
 
 
+class StreamBusyError(RuntimeError):
+    """A live stream is already draining this still-running run (→ 409).
+
+    Single-drain (M2 single-operator): only one stream owns the queue while the run
+    is in flight, so a second concurrent attach can't block forever competing for the
+    one terminal. Attaching AFTER the run is terminal is always allowed (cache replay).
+    """
+
+
 @dataclass
 class RunHandle:
     """Live handle for one in-flight run. Mutable — it carries a running task."""
@@ -60,6 +69,10 @@ class RunHandle:
     status: str = "running"  # running | terminal
     terminal: Terminal | None = None  # cached for late watchers
     task: asyncio.Task | None = None
+    # Single-drain: one live stream owns the queue at a time (M2 single-operator). A
+    # second concurrent attach is refused so it cannot block forever competing for the
+    # one terminal sentinel. A late attach AFTER terminal still replays the cache.
+    attached: bool = False
 
 
 class RunManager:

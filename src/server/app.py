@@ -38,3 +38,21 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+def main() -> None:
+    """Run the service with uvicorn, bound to 127.0.0.1 ONLY (localhost sandbox).
+
+    Port from the `PORT` env var (default 8765). NEVER bind 0.0.0.0 here — this
+    service has no auth and can trigger real writes; exposing it needs auth first.
+    """
+    import os
+
+    import uvicorn
+
+    port = int(os.environ.get("PORT", "8765"))
+    uvicorn.run(app, host="127.0.0.1", port=port)
+
+
+if __name__ == "__main__":
+    main()

@@ -8,9 +8,11 @@ queue until the stream route drains them.
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
+from sse_starlette.sse import EventSourceResponse
 
 from src.server import agent_views
 from src.server.run_manager import CapReachedError, SameThreadRunningError
+from src.server.sse_stream import stream_run
 
 router = APIRouter(tags=["runs"])
 
@@ -51,6 +53,21 @@ async def trigger_run(agent_id: str, request: Request) -> dict:
     except CapReachedError:
         raise HTTPException(status_code=503, detail="server at run capacity") from None
     return {"run_id": handle.run_id, "thread_id": handle.thread_id}
+
+
+@router.get("/api/runs/{run_id}/stream")
+async def stream(run_id: str, request: Request) -> EventSourceResponse:
+    """SSE: stream a run's live node-progress + a terminal event.
+
+    404 unknown run_id; 409 if a live stream is already draining a still-running run
+    (single-drain — a late attach after the run finished is always allowed).
+    """
+    handle = _manager(request).get(run_id)
+    if handle is None:
+        raise HTTPException(status_code=404, detail=f"unknown run {run_id!r}")
+    if handle.attached and handle.status != "terminal":
+        raise HTTPException(status_code=409, detail="run already being streamed")
+    return EventSourceResponse(stream_run(handle))
 
 
 async def _read_params(request: Request) -> dict:
