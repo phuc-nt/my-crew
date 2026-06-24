@@ -105,7 +105,7 @@ The [journals](docs/journals/) are the best learning material here: each phase r
 
 **v2 Milestone 1 complete** (2026-06-24) — the **multi-agent core**: N agents / N projects, fully isolated, run via CLI/worker + scheduler with the guardrail applied per-agent. 414 tests, E2E-verified (two agents concurrent, real writes). See [docs/v2/roadmap-m1.md](docs/v2/roadmap-m1.md).
 
-**v2 Milestone 2: P5 complete** (2026-06-24) — **graph-native Lớp B interrupts** (checkpoint-serialized, resume via CLI). P5 adds `approval_gate` node + pause/resume workflow; existing approval queue path remains intact (augment, not replace). 443 tests, E2E-verified real Slack post. **P6–P8 in design** (streaming/FastAPI service, web dashboard, Postgres). See [docs/v2/roadmap-m2.md](docs/v2/roadmap-m2.md).
+**v2 Milestone 2: P5–P6 complete** (2026-06-25) — **graph-native Lớp B interrupts** + **FastAPI SSE streaming service**. P5 adds `approval_gate` node + pause/resume workflow (existing queue path intact, augment not replace); P6 adds localhost-only FastAPI backend (GET /api/agents, /status, POST /trigger, GET /stream SSE) with in-process graph runs, PII firewall, concurrency limits. 490 tests, E2E-verified real Slack post. **P7–P8 in design** (web dashboard, Postgres). See [docs/v2/roadmap-m2.md](docs/v2/roadmap-m2.md).
 
 ## License
 

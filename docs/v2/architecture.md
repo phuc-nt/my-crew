@@ -53,6 +53,8 @@
 
 Vị trí Postgres/Store: **M1 vẫn dùng SqliteSaver per-agent** (1 file / agent — đủ vì mỗi worker 1 process, không tranh chấp). **M2-P8** mới giới thiệu Postgres khi cần multi-machine hoặc cross-thread memory. Store sống cạnh checkpointer, namespace theo `agent_id`.
 
+**FastAPI service (M2-P6)** — thêm một localhost-only backend (`src/server/app.py`) phục vụ on-demand trigger + SSE streaming cho dashboard. Service này chạy graph in-process (không qua worker subprocess), stream live node events, và enforce PII firewall. Scheduled runs vẫn qua worker/scheduler (M1) — service là *augment*, không thay thế.
+
 
 ## 7. What's PRESERVED from v1
 

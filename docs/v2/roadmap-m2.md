@@ -21,15 +21,26 @@
   - **Coexist vs replace** (resolved): interrupt AUGMENTS queue arity P5 (both paths live), replace at P8 Postgres. Resume within-process via SqliteSaver; multi-machine cross-process resume depends P8 Postgres durability.
   - **Thread isolation**: threads not matching agent_id are refused.
 
-### P6 — Streaming + FastAPI service
+### P6 — Streaming + FastAPI service ✅ COMPLETE
 
-- **Goal**: FastAPI backend; stream token/event của agent đang chạy ra UI qua SSE.
-- **Key changes**:
-  - `src/server/app.py` (FastAPI): routes `/api/agents`, `/api/agents/{id}/status`, `/api/agents/{id}/trigger`, `/api/agents/{id}/stream` (SSE).
-  - LangGraph streaming (`graph.stream(...)` mode messages/events) → bridge sang SSE. Reference: DeerFlow `StreamBridge`/`thread_runs.py`.
-- **Files touched**: new `src/server/{app,stream}.py`; reuse worker + registry.
-- **Acceptance**: trigger report từ API → SSE phát event perceive→analyze→compose→deliver live; client thấy progress.
-- **Risks**: SSE + worker process boundary — service phải đọc stream từ worker đang chạy (queue/pubsub nội bộ). Mitigation M2: service chạy graph in-process cho on-demand trigger (không qua subprocess) để stream trực tiếp; scheduled run vẫn qua worker.
+**Status**: DONE (2026-06-25, committed 1aeb3f5 / 2c2aa4b / e69b76c / ac074ed, 490 tests, E2E-verified real Slack post).
+
+- **What shipped**:
+  - **FastAPI localhost service** (`src/server/app.py`): 4 routes:
+    - `GET /api/agents` — list enabled agents (registry)
+    - `GET /api/agents/{id}/status` — agent budget vs cap + pending-approval count
+    - `POST /api/agents/{id}/trigger` — in-process graph run, returns `{run_id, thread_id}`
+    - `GET /api/runs/{run_id}/stream` — SSE, live per-node progress (perceive→analyze→compose→deliver) + terminal event
+  - **In-process streaming**: trigger runs build graph in-process (not subprocess); sync graph.stream runs in thread, bridged to asyncio queue; SSE emits one event per node. External reports surface approval_gate pause as terminal "interrupted" event carrying thread_id (resume stays via P5 `mpm agent resume`; stream does not block).
+  - **PII firewall** (`summarize_node`): each node projects to non-PII fields only (risk_count, cost_usd, delivered bool + status) — persona/project/memory/per-assignee data never reach client.
+  - **Concurrency**: one RunManager per process; same (agent, thread) running → 409 Conflict; global cap 4 → 503 Service Unavailable; different agents concurrent OK; single-drain stream (2nd concurrent attach to running run → 409; late attach after finish replays cached terminal).
+  - **Security**: localhost-only (binds 127.0.0.1), NO auth (M2 single-operator sandbox; external exposure deferred to later phase). DRY_RUN default + per-agent guardrail (Lớp A/B + audit + budget + dedup) apply to every triggered run.
+  - **Runtime**: `uv run python -m src.server.app` (PORT env, default 8765).
+  - **Deps added**: fastapi, uvicorn, sse-starlette.
+  - **Bonus (P5 fix)**: graphs previously kept fetched models in closure box, not checkpointed → resume KeyError/degraded; now Slack short checkpointed at compose node.
+- **Files touched**: new `src/server/{app.py,stream.py}`, new `src/server/models/` (Pydantic schemas); reuse worker + registry.
+- **Acceptance**: trigger report via API → SSE streams live node events → approve_gate pause shows terminal event with thread_id → resume via P5 CLI → stream closes, Slack post live.
+- **Risks** (resolved): SSE + worker process boundary. Mitigation: service runs graph in-process on-demand (no subprocess, stream direct); scheduled runs stay via worker (§ architecture unchanged).
 
 ### P7 — Web dashboard (HTMX hoặc Streamlit)
 
