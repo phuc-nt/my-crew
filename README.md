@@ -103,9 +103,9 @@ The [journals](docs/journals/) are the best learning material here: each phase r
 
 **v1 — Phases 0–5 complete** (2026-06-22): reporting, guardrail hardening, OKR, resource/cost, and audience-split, all E2E-verified against real Jira/GitHub/Slack/Confluence. See [docs/v1/project-roadmap.md](docs/v1/project-roadmap.md).
 
-**v2 Milestone 1 complete** (2026-06-24) — the **multi-agent core**: N agents / N projects, fully isolated, run via CLI/worker + scheduler with the guardrail applied per-agent. Built in four phases: config-injection (kill the config singletons) → profile system (a 4-file `profiles/<id>/` per agent) → registry + per-agent worker subprocess + coordinating service (cron scheduler) → the `mpm agent list/register/run/approvals/...` CLI. Each agent owns its data dir (`.data/agents/<id>/`), so audit/budget/dedup/approvals never mix. 414 tests, ruff clean, E2E-verified (two agents running concurrently with real writes). See [docs/v2/roadmap-m1.md](docs/v2/roadmap-m1.md).
+**v2 Milestone 1 complete** (2026-06-24) — the **multi-agent core**: N agents / N projects, fully isolated, run via CLI/worker + scheduler with the guardrail applied per-agent. 414 tests, E2E-verified (two agents concurrent, real writes). See [docs/v2/roadmap-m1.md](docs/v2/roadmap-m1.md).
 
-**Next — v2 Milestone 2:** web dashboard (FastAPI + HTMX/Streamlit), LangGraph interrupts/streaming, and Postgres checkpointer/Store. See [docs/v2/roadmap-m2.md](docs/v2/roadmap-m2.md).
+**v2 Milestone 2: P5 complete** (2026-06-24) — **graph-native Lớp B interrupts** (checkpoint-serialized, resume via CLI). P5 adds `approval_gate` node + pause/resume workflow; existing approval queue path remains intact (augment, not replace). 443 tests, E2E-verified real Slack post. **P6–P8 in design** (streaming/FastAPI service, web dashboard, Postgres). See [docs/v2/roadmap-m2.md](docs/v2/roadmap-m2.md).
 
 ## License
 

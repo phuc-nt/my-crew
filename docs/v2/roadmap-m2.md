@@ -6,18 +6,20 @@
 
 > Mục tiêu M2: web dashboard quản lý + 3 nâng cấp LangGraph (interrupt / streaming / Postgres+Store). Xây trên M1 đã chạy.
 
-### P5 — Graph-native interrupts cho Lớp B (checkpoint-serialized)
+### P5 — Graph-native interrupts cho Lớp B (checkpoint-serialized) ✅ COMPLETE
 
-- **Goal**: chuyển Lớp B approval từ gateway-queue sang **LangGraph interrupt** — graph pause tại node, UI hỏi, resume deterministic nhờ checkpoint.
-- **Key changes**:
-  - Hiện tại Lớp B **KHÔNG** phải graph interrupt: `action_gateway.py:193` gọi `needs_interrupt`, trả `pending_approval` + `approval_store` + `cli approve` (verified — graph không có `interrupt()`). P5 thêm node interrupt thật trong graph (LangGraph `interrupt()` + resume bằng `Command`).
-  - Reference: DeerFlow `clarification_middleware.py` (interrupt qua `Command(goto=END)`) — adapt cho approve-to-execute.
-  - Lớp A **không đổi** — vẫn hard-deny ở gateway trước LLM. Chỉ Lớp B chuyển sang interrupt.
-- **Files touched**: graph builders (4) + gateway (Lớp B path) + một resume handler.
-- **Acceptance**: external report → graph pause tại interrupt → state checkpoint → approve qua API → graph resume → Slack post live. Reject → graph dừng sạch, audited.
+**Status**: DONE (2026-06-24, committed a82dad5 / 85025cf / a01395a, 443 tests, E2E-verified real Slack post).
+
+- **What shipped**: 
+  - **New `approval_gate` node** in `src/agent/approval_gate.py` between compose & deliver in all 3 report graphs (report/okr/resource). For `audience="external"` calls `interrupt()` — graph pauses, state checkpoint-serialized per-agent SqliteSaver, resumes via `Command(resume="approve"|"reject")`. Approve → posts LIVE; reject → routes to END (nothing posted, audited).
+  - **Approve path fix** via `ActionGateway.execute_approved()` — already-human-approved path skips re-queueing Lớp B, so post goes live immediately (Lớp A hard-deny + audit + dry-run + kill-switch + dedup ALL still apply).
+  - **Operator surface** — `worker --resume --thread <id> --decision approve|reject` re-attaches to paused thread, rebuilds matching graph from thread_id, resumes. CLI: `mpm agent resume <id> <thread> --decision approve|reject`. External run exits with status=interrupted, records run-event.
+  - **AUGMENT NOT REPLACE**: existing gateway queue path fully intact (pending_approval + ApprovalStore + cli/mpm approve) — one-shot worker subprocess & cli/cron unchanged. Interrupt path is the resume-capable addition. Replace happens at P8 (Postgres, cross-process durability).
+- **Files touched**: `src/agent/approval_gate.py` (new), `src/agent/worker_resume.py` (new), `src/entrypoints/mpm_resume_cmd.py` (new), `src/actions/gateway.py` (execute_approved method).
+- **Acceptance**: ✅ external report → graph pause at interrupt → state checkpoint → approve via CLI/UI → graph resume → Slack post live. Reject → graph stops clean, audited.
 - **Risks**:
-  - **Coexist vs replace** (open question §9): interrupt cần graph đang chạy để resume; approval async (người duyệt sau vài giờ) cần checkpoint bền + worker resume được. Mitigation: interrupt **augment** queue ở P5 (cả hai path tồn tại), quyết replace ở P8 khi Postgres checkpointer bền multi-process.
-  - Resume xuyên process: cần checkpoint shared → phụ thuộc P8 Postgres cho production multi-machine. M2 sandbox: cùng worker resume từ SqliteSaver.
+  - **Coexist vs replace** (resolved): interrupt AUGMENTS queue arity P5 (both paths live), replace at P8 Postgres. Resume within-process via SqliteSaver; multi-machine cross-process resume depends P8 Postgres durability.
+  - **Thread isolation**: threads not matching agent_id are refused.
 
 ### P6 — Streaming + FastAPI service
 
