@@ -24,6 +24,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from src.actions.action_gateway import ActionGateway
+from src.agent.approval_gate import add_approval_gate, external_summary
 from src.agent.okr_analyzer import OkrRollup
 from src.agent.okr_weekly_section import build_okr_rollup
 from src.agent.state import ReportState
@@ -42,7 +43,9 @@ class OkrReportDeps:
 
     fetch_rollup: Callable[[], OkrRollup]
     compose: Callable[[OkrRollup], tuple[str, float | None]]
-    deliver: Callable[[OkrRollup, str], tuple[bool, str]]
+    # `approved` (M2-P5): True when the graph resumed past the Lớp B interrupt with
+    # an approve decision — the writers then run the gateway's already-approved path.
+    deliver: Callable[..., tuple[bool, str]]
 
 
 def _today_utc() -> date:
@@ -112,13 +115,14 @@ def default_okr_deps(
             logger.warning("OKR narrative skipped (LLM unavailable): %s", exc)
             return fallback_okr_narrative(rollup, report_date=report_date, audience=audience), None
 
-    def _deliver(rollup: OkrRollup, body: str) -> tuple[bool, str]:
+    def _deliver(rollup: OkrRollup, body: str, approved: bool = False) -> tuple[bool, str]:
         today = _today_utc().isoformat()
         channel, date_hint = resolve_audience_delivery(audience, "okr", today, config)
         title = f"{REPORT_TITLES['okr']} {today}"
         conf_result, page = create_report_page(
             title, body, gateway=gw, config=config, report_date=date_hint,
             rationale=f"scheduled OKR status report (detail, {audience})",
+            approved=approved,
         )
         detail_url = page.url if page else None
         short = build_okr_slack_short(
@@ -127,6 +131,7 @@ def default_okr_deps(
         slack_result = deliver_report(
             short, gateway=gw, config=config, channel=channel, report_date=date_hint,
             rationale=f"OKR status report (short + link, {audience})",
+            approved=approved,
         )
         ok = (
             conf_result.status in {"executed", "dry_run"}
@@ -158,7 +163,10 @@ def _make_okr_nodes(deps: OkrReportDeps):
         return {"report_text": text, "cost_usd": cost}
 
     def deliver(state: ReportState) -> dict:
-        delivered, summary = deps.deliver(box["rollup"], state.get("report_text", ""))
+        # M2-P5: approve at the interrupt authorizes the live external post (see
+        # report_graph.deliver). Internal never sets the key ⇒ approved=False.
+        approved = state.get("approval_decision") == "approve"
+        delivered, summary = deps.deliver(box["rollup"], state.get("report_text", ""), approved)
         return {"delivered": delivered, "delivery_summary": summary}
 
     return perceive, analyze_node, compose_report, deliver
@@ -205,6 +213,9 @@ def build_okr_graph(
     builder.add_edge(START, "perceive")
     builder.add_edge("perceive", "analyze")
     builder.add_edge("analyze", "compose_report")
-    builder.add_edge("compose_report", "deliver")
+    # M2-P5: Lớp B graph-native interrupt for external audience (see report_graph).
+    add_approval_gate(
+        builder, audience=audience, summary=external_summary("okr", audience, config)
+    )
     builder.add_edge("deliver", END)
     return builder.compile(checkpointer=checkpointer)

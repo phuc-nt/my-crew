@@ -112,7 +112,8 @@ def _fake_deps(delivered=True):
     return ResourceReportDeps(
         fetch=lambda: (resource, cost),
         compose=lambda r, c: ("<p>tóm tắt</p><h2>RC</h2>", None),
-        deliver=lambda r, c, body: (delivered, "confluence=dry_run slack=dry_run url=None"),
+        deliver=lambda r, c, body, approved=False: (
+            delivered, "confluence=dry_run slack=dry_run url=None"),
     )
 
 
@@ -146,12 +147,14 @@ def test_resource_deliver_uses_resource_dedup_namespace(settings_factory, tmp_pa
     )
     seen_dates: list[str] = []
 
-    def fake_create_page(title, body, *, gateway, config, report_date, rationale=""):
+    def fake_create_page(title, body, *, gateway, config, report_date, rationale="",
+                         approved=False):
         seen_dates.append(report_date)
         return GatewayResult(status="dry_run", summary="", approval_id=None), \
             ConfluencePage(page_id=None, url=None)
 
-    def fake_deliver_report(text, *, gateway, config, report_date, rationale="", channel=None):
+    def fake_deliver_report(text, *, gateway, config, report_date, rationale="", channel=None,
+                            approved=False):
         seen_dates.append(report_date)
         return GatewayResult(status="dry_run", summary="", approval_id=None)
 

@@ -92,7 +92,8 @@ def _fake_deps(delivered: bool = True):
     return OkrReportDeps(
         fetch_rollup=lambda: rollup,
         compose=lambda r: ("<p>tóm tắt</p><h2>OKR</h2>", None),
-        deliver=lambda r, body: (delivered, "confluence=dry_run slack=dry_run url=None"),
+        deliver=lambda r, body, approved=False: (
+            delivered, "confluence=dry_run slack=dry_run url=None"),
     )
 
 
@@ -127,12 +128,14 @@ def test_okr_deliver_uses_okr_dedup_namespace(settings_factory, tmp_path, monkey
     seen_dates: list[str] = []
 
     # Spy on the two gateway wrappers to capture the report_date (dedup namespace).
-    def fake_create_page(title, body, *, gateway, config, report_date, rationale=""):
+    def fake_create_page(title, body, *, gateway, config, report_date, rationale="",
+                         approved=False):
         seen_dates.append(report_date)
         return GatewayResult(status="dry_run", summary="", approval_id=None), \
             ConfluencePage(page_id=None, url=None)
 
-    def fake_deliver_report(text, *, gateway, config, report_date, rationale="", channel=None):
+    def fake_deliver_report(text, *, gateway, config, report_date, rationale="", channel=None,
+                            approved=False):
         seen_dates.append(report_date)
         return GatewayResult(status="dry_run", summary="", approval_id=None)
 

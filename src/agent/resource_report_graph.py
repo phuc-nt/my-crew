@@ -24,6 +24,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from src.actions.action_gateway import ActionGateway
+from src.agent.approval_gate import add_approval_gate, external_summary
 from src.agent.resource_weekly_section import build_resource_rollup
 from src.agent.state import ReportState
 from src.profile.context import EMPTY, ProfileContext
@@ -44,7 +45,9 @@ class ResourceReportDeps:
 
     fetch: Callable[[], Snapshot]
     compose: Callable[[ResourceReport, CostSummary], tuple[str, float | None]]
-    deliver: Callable[[ResourceReport, CostSummary, str], tuple[bool, str]]
+    # `approved` (M2-P5): True when the graph resumed past the Lớp B interrupt with
+    # an approve decision — the writers then run the gateway's already-approved path.
+    deliver: Callable[..., tuple[bool, str]]
 
 
 def _today_utc() -> date:
@@ -121,13 +124,16 @@ def default_resource_deps(
                 None,
             )
 
-    def _deliver(resource: ResourceReport, cost: CostSummary, body: str) -> tuple[bool, str]:
+    def _deliver(
+        resource: ResourceReport, cost: CostSummary, body: str, approved: bool = False
+    ) -> tuple[bool, str]:
         today = _today_utc().isoformat()
         channel, date_hint = resolve_audience_delivery(audience, "resource", today, config)
         title = f"{REPORT_TITLES['resource']} {today}"
         conf_result, page = create_report_page(
             title, body, gateway=gw, config=config, report_date=date_hint,
             rationale=f"scheduled resource & cost status report (detail, {audience})",
+            approved=approved,
         )
         detail_url = page.url if page else None
         # The resource Confluence page carries the per-assignee table (names, counts,
@@ -140,6 +146,7 @@ def default_resource_deps(
         slack_result = deliver_report(
             short, gateway=gw, config=config, channel=channel, report_date=date_hint,
             rationale=f"resource & cost status report (short + link, {audience})",
+            approved=approved,
         )
         ok = (
             conf_result.status in {"executed", "dry_run"}
@@ -173,7 +180,11 @@ def _make_resource_nodes(deps: ResourceReportDeps):
 
     def deliver(state: ReportState) -> dict:
         resource, cost = box["snapshot"]
-        delivered, summary = deps.deliver(resource, cost, state.get("report_text", ""))
+        # M2-P5: approve at the interrupt authorizes the live external post.
+        approved = state.get("approval_decision") == "approve"
+        delivered, summary = deps.deliver(
+            resource, cost, state.get("report_text", ""), approved
+        )
         return {"delivered": delivered, "delivery_summary": summary}
 
     return perceive, analyze_node, compose_report, deliver
@@ -213,6 +224,9 @@ def build_resource_graph(
     builder.add_edge(START, "perceive")
     builder.add_edge("perceive", "analyze")
     builder.add_edge("analyze", "compose_report")
-    builder.add_edge("compose_report", "deliver")
+    # M2-P5: Lớp B graph-native interrupt for external audience (see report_graph).
+    add_approval_gate(
+        builder, audience=audience, summary=external_summary("resource", audience, config)
+    )
     builder.add_edge("deliver", END)
     return builder.compile(checkpointer=checkpointer)

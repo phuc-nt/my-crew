@@ -91,12 +91,13 @@ def _spy_writes(monkeypatch, slack_status, approval_id):
 
     seen: dict = {}
 
-    def fake_page(title, body, *, gateway, config, report_date, rationale=""):
+    def fake_page(title, body, *, gateway, config, report_date, rationale="", approved=False):
         seen["page_date"] = report_date
         return GatewayResult(status="dry_run", summary="", approval_id=None), \
             ConfluencePage(page_id=None, url=None)
 
-    def fake_deliver(text, *, gateway, config, report_date, rationale="", channel=None):
+    def fake_deliver(text, *, gateway, config, report_date, rationale="", channel=None,
+                     approved=False):
         seen["slack_date"] = report_date
         seen["channel"] = channel
         return GatewayResult(status=slack_status, summary="", approval_id=approval_id)
@@ -149,12 +150,13 @@ def test_resource_external_short_omits_confluence_link(settings_factory, tmp_pat
 
     posted: dict = {}
 
-    def fake_page(title, body, *, gateway, config, report_date, rationale=""):
+    def fake_page(title, body, *, gateway, config, report_date, rationale="", approved=False):
         # The page IS created with a real URL...
         return GatewayResult(status="dry_run", summary="", approval_id=None), \
             ConfluencePage(page_id="99", url="https://wiki/internal-page")
 
-    def fake_deliver(text, *, gateway, config, report_date, rationale="", channel=None):
+    def fake_deliver(text, *, gateway, config, report_date, rationale="", channel=None,
+                     approved=False):
         posted["text"] = text
         return GatewayResult(status="pending_approval", summary="", approval_id=1)
 
