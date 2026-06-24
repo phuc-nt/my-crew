@@ -1,9 +1,9 @@
 # Codebase Summary — my-project-manager
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-06-24 — v2 M1-P1 + P2 + P3 HOÀN TẤT.** Multi-agent core (config injection + profile-based load + registry + per-agent worker + isolated stores) + coordinating service. 383 UT, ruff clean.
+> Status: **2026-06-24 — v2 M1-P1 + P2 + P3 + P4 COMPLETE.** Multi-agent core (config injection + profile-based load + registry + per-agent worker + isolated stores) + multi-agent CLI (list/register/run/manage). 414 tests, ruff clean.
 
-## Trạng thái hiện tại (v2 M1-P3)
+## Trạng thái hiện tại (v2 M1-P4 COMPLETE)
 
 - **v2 M1-P1 DONE**: Config-injection refactor; 21 call sites parametrized, no more singletons.
 - **v2 M1-P2 DONE**: Profile system (`profiles/<id>/` → 4 files + config + persona/project/memory injection).
@@ -15,8 +15,14 @@
   - `python -m src.runtime.service` reads registry, spawns workers on schedule (croniter), supervises with 600s timeout + concurrency cap 4.
   - Per-agent stores (audit, budget, approvals, dedup, checkpoints) under `.data/agents/<id>/` — no cross-agent pollution.
   - `thread_id` now `<agent_id>:<kind>:<audience>` for cross-agent checkpoint isolation.
-  - 383 tests pass, ruff clean.
-- **Entry points**: `python -m src.entrypoints.cli` (P2 adds `--profile`); `python -m src.entrypoints.cron` (P2 adds `--profile`); `python -m src.runtime.worker` (P3); `python -m src.runtime.service` (P3).
+- **v2 M1-P4 DONE**: Multi-agent CLI (dispatch + registry mgmt + worker spawn + per-agent Lớp B management).
+  - `python -m src.entrypoints.mpm agent list` — list agents (id/name/enabled/last-run).
+  - `python -m src.entrypoints.mpm agent register <id>` — scaffold `profiles/<id>/` (4-file template).
+  - `python -m src.entrypoints.mpm agent run <id> --report <kind> [--audience] [--dry-run]` — spawn worker subprocess, wait, print exit code.
+  - `python -m src.entrypoints.mpm agent {approvals,approve,reject,audit} <id>` — per-agent Lớp B management (routes to agent's own approval_store).
+  - cli.py/cron.py kept as **legacy single-agent entrypoints** (backward-compat).
+  - 414 tests pass, ruff clean, E2E verified.
+- **Entry points (legacy)**: `python -m src.entrypoints.cli` / `cron` (single-agent, still work). **New (multi-agent)**: `python -m src.entrypoints.mpm`. **Runtime**: `python -m src.runtime.worker`, `python -m src.runtime.service`.
 
 ## Cây thư mục (v2 M1-P3 state)
 
@@ -40,7 +46,9 @@ src/
 │   ├── scheduler.py      # croniter due-check; fires internal audience only
 │   └── run_event.py      # B1 runs.jsonl per agent
 ├── audit/        # audit log (append-only)
-└── entrypoints/  # cli.py, cron.py (P2: accept --profile flag)
+└── entrypoints/  # cli.py, cron.py (legacy single-agent, P2: accept --profile flag)
+    │                    # mpm.py (P4: multi-agent dispatcher)
+    │                    # mpm_*.py (P4: registry/run/manage subcommands)
 
 profiles/         # Agent configs (gitignored except default/)
 ├── default/      # v1 migration template (empty SOUL/PROJECT/MEMORY; profile.yaml)
@@ -71,8 +79,12 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 | **[NEW P2] Load profile** | `src/profile/loader.py::load_profile()` — parse `profiles/<id>/profile.yaml` + SOUL/PROJECT/MEMORY |
 | **[NEW P2] Profile → config** | `src/profile/loader_mapping.py` — map profile.yaml fields to P1's Settings/ReportingConfig dicts |
 | **[NEW P2] Prompt injection** | `src/profile/context.py::ProfileContext` — persona (system msg), project+memory (user msg, internal only) |
-| **[P2 UPDATE] CLI entry** | `src/entrypoints/cli.py` — now accepts `--profile` (default `default`); calls `load_profile()` + passes config downstream |
-| **[P2 UPDATE] Cron entry** | `src/entrypoints/cron.py` — now accepts `--profile`; scheduler loads profile per agent-run |
+| **[P2 UPDATE] CLI entry (legacy)** | `src/entrypoints/cli.py` — now accepts `--profile` (default `default`); calls `load_profile()` + passes config downstream |
+| **[P2 UPDATE] Cron entry (legacy)** | `src/entrypoints/cron.py` — now accepts `--profile`; scheduler loads profile per agent-run |
+| **[NEW P4] Multi-agent CLI** | `src/entrypoints/mpm.py` — dispatcher for `mpm agent {list,register,run,approvals,approve,reject,audit}` |
+| **[NEW P4] Registry cmds** | `src/entrypoints/mpm_registry_cmds.py` — `run_list()`, `run_register()` |
+| **[NEW P4] Run cmd** | `src/entrypoints/mpm_run_cmd.py` — `run_agent()` spawns worker subprocess |
+| **[NEW P4] Manage cmds** | `src/entrypoints/mpm_manage_cmds.py` — `run_manage()` for approvals/approve/reject/audit per-agent |
 | **[NEW P3] Worker entry** | `src/runtime/worker.py::main()` — CLI: `python -m src.runtime.worker --agent-id <id> --report <kind> [--audience] [--dry-run]` |
 | **[NEW P3] Service entry** | `src/runtime/service.py::main()` — daemon: reads registry.yaml, spawns/supervises workers, respects schedule + timeout/cap |
 | **[NEW P3] Registry** | `registry.yaml` + `src/runtime/registry.py::load_registry()` — list agents (id, enabled) |
@@ -120,11 +132,10 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 
 ## Testing
 
-- **Unit tests**: `uv run pytest` — 383 tests pass (P1/P2/P3 coverage: config injection, profile loading, worker, service, registry).
+- **Unit tests**: `uv run pytest` — 414 tests pass (P1/P2/P3/P4 coverage: config injection, profile loading, registry, worker, service, mpm CLI).
 - **Linting**: `uv run ruff check src tests` — clean.
-- **E2E**: P3 verified: service spawned real worker for scheduled agent, ran isolated dry-run report, recorded run-event (slices e046f25, 932c537, 05b5ef1).
+- **E2E**: P4 verified: `mpm agent list` shows default; `mpm agent run default --dry-run` spawned real worker; `mpm agent approvals default` reads per-agent store (slices 94604b7, ed2ed02, 8be3e71).
 
-## Next Steps (P4+)
+## Next Steps (M2)
 
-- **P4**: Multi-agent CLI (`agent list`, `agent register`, `agent run` - replaces bare `cli report`).
 - **M2**: Web dashboard + Postgres + streaming + LangGraph interrupts.

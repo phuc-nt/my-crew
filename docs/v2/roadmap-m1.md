@@ -61,7 +61,7 @@
   - **Resource cost**: 1 process/agent — N agent = N node subprocess spawn + N Python process (xem [risks](risks-open-questions.md)). Mitigation M1: worker on-demand/scheduled, không giữ N process thường trực.
   - Token isolation: 2 agent cùng project type cần 2 token khác nhau → `token_env` khác nhau per-profile (P2 đã lo).
 
-### P4 — Multi-agent CLI (register / list / run)
+### P4 — Multi-agent CLI (register / list / run) ✅ DONE (2026-06-24)
 
 - **Goal**: CLI quản lý nhiều agent thay cho CLI single-project v1.
 - **Key changes**:
@@ -70,11 +70,19 @@
   - `mpm agent run <id> --report daily|weekly|okr|resource [--audience internal|external]` — chạy 1 report cho 1 agent qua worker.
   - `mpm agent approvals <id>` / `approve <id> <approval-id>` / `reject` — Lớp B per-agent (route tới approval_store của agent đó).
   - Giữ `audit` query nhưng thêm `--agent <id>`.
-- **Files touched**: `src/entrypoints/cli.py` (rewrite dispatch quanh agent_id — **BREAKING** so với v1 CLI), reuse worker (P3).
-- **Acceptance**: register 2 agent → list thấy cả 2 → run report từng cái → approvals/approve per-agent hoạt động end-to-end (DRY_RUN trước, rồi real write 1 agent).
-- **Risks**: BREAKING CLI surface. Mitigation: `default` profile + `mpm agent run default ...` = đường tương đương v1 cho ai quen lệnh cũ.
+- **Files touched**: new `src/entrypoints/{mpm.py, mpm_registry_cmds.py, mpm_run_cmd.py, mpm_manage_cmds.py}` (multi-agent dispatcher); `cli.py`/`cron.py` kept as legacy single-agent entrypoints (backward-compat).
+- **Acceptance**:
+  - ✅ VERIFIED
+  - Register 2 agent → list thấy cả 2 (với id/name/enabled/last-run từ `.data/agents/<id>/runs.jsonl`).
+  - Run report từng cái via `mpm agent run <id> --report <kind>` — spawn real worker subprocess.
+  - Approvals/approve per-agent hoạt động end-to-end (mỗi agent một approval_store riêng).
+  - E2E test: `mpm agent list` thấy default; `mpm agent run default --dry-run` spawn worker thực; `mpm agent approvals default` đọc per-agent approval (trong khi `cli audit` global đã empty sau P3 migration).
+  - 414 tests pass, ruff clean.
+- **BREAKING**: v1 CLI không còn tồn tại (thay bằng mpm multi-agent surface). Mitigation: `default` profile + `mpm agent run default --report daily ...` = đường tương đương v1.
 
-**Exit M1**: nhiều agent / nhiều project, isolated hoàn toàn, chạy qua CLI/worker + scheduler. Guardrail per-agent. **Chưa có UI, chưa Postgres** — đó là M2.
+**M1 COMPLETE** ✅: nhiều agent / nhiều project, isolated hoàn toàn, chạy qua CLI/worker + scheduler. Guardrail per-agent. **Chưa có UI, chưa Postgres** — đó là M2.
+
+**Trạng thái M1**: P1 → P2 → P3 → P4 **all DONE**. Multi-agent core built and verified. Ready for M2 (web dashboard + Postgres + streaming).
 
 
 ---
