@@ -57,8 +57,13 @@ def _read_md(profile_dir: Path, name: str) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
-def load_profile(profile_id: str, *, profiles_dir: Path | None = None) -> LoadedProfile:
+def load_profile(
+    profile_id: str, *, profiles_dir: Path | None = None, data_dir: Path | None = None
+) -> LoadedProfile:
     """Load `profiles/<profile_id>/` into a LoadedProfile.
+
+    `data_dir` (None ⇒ the global `DATA_DIR`, P2-identical) sets `settings.data_dir`,
+    which every store keys off — pass `.data/agents/<id>/` (M1-P3) to isolate the agent.
 
     Raises FileNotFoundError if `profile.yaml` is missing (a typo'd `--profile` should
     fail loudly — distinct from an absent OPTIONAL `.md`). Raises RuntimeError from the
@@ -85,7 +90,8 @@ def load_profile(profile_id: str, *, profiles_dir: Path | None = None) -> Loaded
             f"profile.yaml for {profile_id!r} must be a mapping, got {type(yaml_doc).__name__}."
         )
 
-    settings = build_settings_from_dict(build_settings_dict(yaml_doc, DATA_DIR))
+    resolved_data_dir = data_dir if data_dir is not None else DATA_DIR
+    settings = build_settings_from_dict(build_settings_dict(yaml_doc, resolved_data_dir))
     config = build_reporting_config_from_dict(build_reporting_dict(yaml_doc))
 
     schedule = yaml_doc.get("schedule") or {}

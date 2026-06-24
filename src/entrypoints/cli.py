@@ -17,6 +17,7 @@ from src.agent.checkpoint import get_checkpointer
 from src.agent.graph import build_graph
 from src.profile.context import ProfileContext
 from src.profile.loader import load_profile
+from src.runtime.agent_paths import agent_thread_id
 
 _DEFAULT_PROFILE = "default"
 
@@ -74,7 +75,7 @@ def _run_hello(message: str, settings) -> int:
     return 0
 
 
-def _run_report(report_kind: str, audience: str, settings, config, context) -> int:
+def _run_report(report_kind: str, audience: str, settings, config, context, profile_id: str) -> int:
     # Imported here so the hello path (and tests) don't pull in MCP/report deps.
     cp = _checkpointer(settings)
     if report_kind == "resource":
@@ -100,7 +101,7 @@ def _run_report(report_kind: str, audience: str, settings, config, context) -> i
             report_kind=report_kind,
             audience=audience,
         )
-    thread = f"report-{report_kind}-{audience}"
+    thread = agent_thread_id(profile_id, report_kind, audience)
     result = graph.invoke({}, config={"configurable": {"thread_id": thread}})
 
     print(result.get("report_text", "(no report)"))
@@ -276,6 +277,7 @@ def main(argv: list[str] | None = None) -> int:
             settings,
             config,
             _context_of(loaded),
+            loaded.profile_id,
         )
     return _run_hello(" ".join(args), settings)  # hello: no profile context
 

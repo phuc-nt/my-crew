@@ -188,7 +188,8 @@ def _fake_loaded(tmp_path, *, api_key):
     settings = type("S", (), {"openrouter_api_key": api_key, "data_dir": tmp_path})()
     return type(
         "LP", (),
-        {"settings": settings, "config": object(), "soul": "", "project": "", "memory": ""},
+        {"settings": settings, "config": object(), "soul": "", "project": "", "memory": "",
+         "profile_id": "default"},
     )()
 
 

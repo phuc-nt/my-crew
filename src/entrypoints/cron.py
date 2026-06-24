@@ -18,6 +18,7 @@ import sys
 from src.agent.checkpoint import get_checkpointer
 from src.profile.context import ProfileContext
 from src.profile.loader import load_profile
+from src.runtime.agent_paths import agent_thread_id
 
 
 def _profile_id(args: list[str]) -> str:
@@ -100,9 +101,8 @@ def main(argv: list[str] | None = None) -> int:
     # An external cron → Lớp B → pending_approval → delivered=True (queued is success),
     # but NOT posted until a human approves: the correct guardrail for stakeholder updates.
     graph = _build_graph(report_kind, audience, settings, config, context)
-    result = graph.invoke(
-        {}, config={"configurable": {"thread_id": f"cron-{report_kind}-{audience}"}}
-    )
+    thread_id = agent_thread_id(loaded.profile_id, report_kind, audience)
+    result = graph.invoke({}, config={"configurable": {"thread_id": thread_id}})
     delivered = result.get("delivered", False)
     logging.getLogger(__name__).info(
         "cron %s/%s report: delivered=%s %s",
