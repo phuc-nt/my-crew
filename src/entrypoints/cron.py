@@ -50,23 +50,27 @@ def _audience(args: list[str]) -> str:
     return "internal"
 
 
-def _build_graph(report_kind: str, audience: str, settings, config, context):
+def _build_graph(report_kind: str, audience: str, settings, config, context, profile_id=None):
     """Build the graph for a report kind (mirrors the CLI dispatch)."""
+    from src.agent.memory_node import build_remember_node
     from src.agent.store import get_store
 
     cp = get_checkpointer(settings)
     st = get_store(settings)  # cross-thread memory Store (InMemoryStore default)
+    rem = build_remember_node(profile_id, settings, audience) if profile_id else None
     if report_kind == "resource":
         from src.agent.resource_report_graph import build_resource_graph
 
         return build_resource_graph(
-            cp, config=config, settings=settings, context=context, audience=audience, store=st
+            cp, config=config, settings=settings, context=context, audience=audience,
+            store=st, remember=rem,
         )
     if report_kind == "okr":
         from src.agent.okr_report_graph import build_okr_graph
 
         return build_okr_graph(
-            cp, config=config, settings=settings, context=context, audience=audience, store=st
+            cp, config=config, settings=settings, context=context, audience=audience,
+            store=st, remember=rem,
         )
     from src.agent.report_graph import build_report_graph
 
@@ -78,6 +82,7 @@ def _build_graph(report_kind: str, audience: str, settings, config, context):
         report_kind=report_kind,
         audience=audience,
         store=st,
+        remember=rem,
     )
 
 
@@ -104,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # An external cron → Lớp B → pending_approval → delivered=True (queued is success),
     # but NOT posted until a human approves: the correct guardrail for stakeholder updates.
-    graph = _build_graph(report_kind, audience, settings, config, context)
+    graph = _build_graph(report_kind, audience, settings, config, context, loaded.profile_id)
     thread_id = agent_thread_id(loaded.profile_id, report_kind, audience)
     result = graph.invoke({}, config={"configurable": {"thread_id": thread_id}})
     delivered = result.get("delivered", False)

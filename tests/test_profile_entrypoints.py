@@ -56,7 +56,7 @@ def test_no_profile_flag_loads_default_and_config_reaches_graph(monkeypatch, tmp
                     "delivery_summary": "s"}
 
     def fake_build(cp, *, config=None, settings=None, context=None,
-                   report_kind="daily", audience="internal", store=None):
+                   report_kind="daily", audience="internal", store=None, remember=None):
         seen["config"] = config
         seen["context"] = context
         return _FakeGraph()

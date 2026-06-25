@@ -31,6 +31,12 @@ from src.profile.loader_mapping import build_reporting_dict, build_settings_dict
 _PROFILES_DIR = REPO_ROOT / "profiles"
 
 
+def profile_memory_path(profile_id: str, *, profiles_dir: Path | None = None) -> Path:
+    """The agent's MEMORY.md path (where the M2-P8 `remember` node mirrors facts)."""
+    base = profiles_dir if profiles_dir is not None else _PROFILES_DIR
+    return base / profile_id / "MEMORY.md"
+
+
 @dataclass(frozen=True)
 class LoadedProfile:
     """One agent's resolved config + context. `settings`/`config` are P1 objects.

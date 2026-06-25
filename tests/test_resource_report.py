@@ -216,7 +216,7 @@ def test_cli_report_resource_dispatch(monkeypatch, tmp_path):
     monkeypatch.setattr(
         rc_graph_mod, "build_resource_graph",
         lambda cp, *, config=None, settings=None, context=None, audience="internal",
-        store=None: _FakeGraph(),
+        store=None, remember=None: _FakeGraph(),
     )
 
     rc = cli.main(["report", "--resource"])

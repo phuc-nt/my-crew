@@ -206,6 +206,7 @@ def build_resource_graph(
     deps: ResourceReportDeps | None = None,
     audience: str = "internal",
     store: BaseStore | None = None,
+    remember=None,
 ) -> CompiledStateGraph:
     """Build + compile the resource + cost reporting graph. `deps` defaults to real wiring.
 
@@ -236,5 +237,11 @@ def build_resource_graph(
     add_approval_gate(
         builder, audience=audience, summary=external_summary("resource", audience, config)
     )
-    builder.add_edge("deliver", END)
+    # M2-P8: `remember` node after deliver (internal runs only; self-gates). See report_graph.
+    if remember is not None:
+        from src.agent.memory_node import add_remember_node
+
+        add_remember_node(builder, remember)
+    else:
+        builder.add_edge("deliver", END)
     return builder.compile(checkpointer=checkpointer, store=store)

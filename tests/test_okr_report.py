@@ -195,7 +195,7 @@ def test_cli_report_okr_dispatch(monkeypatch, tmp_path):
     monkeypatch.setattr(
         okr_graph_mod, "build_okr_graph",
         lambda cp, *, config=None, settings=None, context=None, audience="internal",
-        store=None: _FakeGraph(),
+        store=None, remember=None: _FakeGraph(),
     )
 
     rc = cli.main(["report", "--okr"])

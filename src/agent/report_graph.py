@@ -258,6 +258,7 @@ def build_report_graph(
     report_kind: str = "daily",
     audience: str = "internal",
     store: BaseStore | None = None,
+    remember=None,
 ) -> CompiledStateGraph:
     """Build + compile the reporting graph. `deps` defaults to real wiring.
 
@@ -298,5 +299,12 @@ def build_report_graph(
         audience=audience,
         summary=external_summary(report_kind, audience, config),
     )
-    builder.add_edge("deliver", END)
+    # M2-P8: a `remember` node after deliver extracts + persists agent memory (internal
+    # runs only — the node self-gates). When no remember node is injected, deliver → END.
+    if remember is not None:
+        from src.agent.memory_node import add_remember_node
+
+        add_remember_node(builder, remember)
+    else:
+        builder.add_edge("deliver", END)
     return builder.compile(checkpointer=checkpointer, store=store)

@@ -43,3 +43,6 @@ class ReportState(TypedDict, total=False):
     # deliver can post the CORRECT short on resume without the closure box (which is
     # empty after a graph rebuild). The detail link is injected in deliver. Primitive.
     slack_short: str
+    # M2-P8 Slice 3: count of memory facts the `remember` node persisted (0 when gated
+    # out — dry-run / not-delivered / external). Observability only.
+    memory_written: int

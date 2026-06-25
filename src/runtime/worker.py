@@ -59,30 +59,32 @@ def build_graph_for(loaded: LoadedProfile, settings: Any, kind: str, audience: s
     the interrupted checkpoint was created with.
     """
     from src.agent.checkpoint import get_checkpointer
+    from src.agent.memory_node import build_remember_node
     from src.agent.store import get_store
 
     context = ProfileContext(persona=loaded.soul, project=loaded.project, memory=loaded.memory)
     cp = get_checkpointer(settings)
     st = get_store(settings)  # cross-thread memory Store (InMemoryStore default)
+    remember = build_remember_node(loaded.profile_id, settings, audience)
     if kind == "resource":
         from src.agent.resource_report_graph import build_resource_graph
 
         return build_resource_graph(
             cp, config=loaded.config, settings=settings, context=context,
-            audience=audience, store=st,
+            audience=audience, store=st, remember=remember,
         )
     if kind == "okr":
         from src.agent.okr_report_graph import build_okr_graph
 
         return build_okr_graph(
             cp, config=loaded.config, settings=settings, context=context,
-            audience=audience, store=st,
+            audience=audience, store=st, remember=remember,
         )
     from src.agent.report_graph import build_report_graph
 
     return build_report_graph(
         cp, config=loaded.config, settings=settings, context=context,
-        report_kind=kind, audience=audience, store=st,
+        report_kind=kind, audience=audience, store=st, remember=remember,
     )
 
 
