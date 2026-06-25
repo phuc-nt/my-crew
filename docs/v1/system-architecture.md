@@ -128,6 +128,27 @@ audit log bất biến · `DRY_RUN` default khi dev · kill switch · scoped tok
 - **Audit log**: append-only (file JSONL hoặc bảng riêng). Mỗi entry: thời gian, tool, action, params, kết quả, lý do agent.
 - **Observability**: log structured; cân nhắc LangSmith/Langfuse khi cần trace LLM (DeerFlow dùng cả hai — tham khảo).
 
+### 6.1 Skill system (M3-P10) — instruction-only PM guidance
+
+Agent chứa 1 **candidate pool** những bundled PM kỹ năng (`.md` files ở `skills/`) — mỗi skill là frontmatter YAML (name/description/applies_to; `allowed-tools` được parse-nhưng-bỏ-qua) + markdown instruction body.
+
+**Data flow**:
+1. `profile.yaml` `skills: [flag-risk, prioritize-blockers, ...]` ⇒ danh sách tên ứng viên.
+2. `src/skills/skill_loader.py:load_skills()` quét `skills/*.md` → `Skill` objects (name, description, body, applies_to).
+3. `src/skills/skill_pool.py:build_skill_context()` lọc danh sách ứng viên ra `(pool, selector)`, với selector là injectable LLM picker.
+4. Graph-build entry points (worker/cron/cli ở `src/runtime/worker.py`, `src/entrypoints/cron.py`, `src/entrypoints/cli.py`) gọi `build_skill_context(loaded, settings)` → cặp `(skills, skill_selector)` vào `ProfileContext`.
+5. Ở compose node, mỗi report builder gọi `select_skill_text(context, audience, kind="report|okr|resource")` → LLM selector chọn kỹ năng phù hợp từ pool.
+6. Chosen skill bodies render vào `<pm_skills>` block, inject vào **INTERNAL-only** compose prompt (report/okr/resource).
+
+**Red line (critical)**: skills = INSTRUCTION-ONLY, INTERNAL-ONLY. Chúng:
+- **Không grant tool authority** — không MCP tool nào, không Action Gateway seam nào.
+- **Không reach external audience** — external report path return TRƯỚC khi reference `context.skills`; `select_skill_text()` trả "" khi `audience != "internal"`.
+- Phòng chống sâu: mỗi builder's external branch return trước access context.skills.
+
+**Backward-compat**: `profile.yaml` không declare `skills:` (hoặc dùng default profile) → empty pool → `build_skill_context()` return `((), None)` KHÔNG construct `LlmClient` (allocation-free, không cần key) → compose prompt byte-identical với v1.
+
+**Wiring**: tất cả graph-build sites (worker/cron/cli) → mọi `builder(context=...)` call mang skills; M2-P6 server run path kế thừa via worker helper.
+
 ## 7. Đường lên scale (đừng làm bây giờ, nhưng đừng chặn)
 
 | Khía cạnh | MVP local | Khi scale |

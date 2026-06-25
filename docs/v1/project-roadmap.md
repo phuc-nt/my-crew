@@ -139,6 +139,13 @@ Trọng tâm: ROI rõ, rủi ro thấp. Đọc nhiều, write chỉ là *post re
 - Không mở rộng write authority sang việc nhạy cảm khi guardrail (Phase 2) chưa vững.
 - Đo `% cost management cắt được` (PDR §3) ở mỗi phase — đó là North Star.
 
+## Phase 0–5 → v2 Milestone series (M1 core completed 2026-06-24, M2 completed 2026-06-26)
+
+Phase 0–5 là v1. v2 milestone series tiếp tục từ M1 (multi-agent core) → M2 (web UI + LangGraph upgrades). Xem `docs/v2/roadmap-m1.md` + `docs/v2/roadmap-m2.md`.
+
+**M3 đang xây dựng** — hình dung sẽ bao gồm:
+- **M3-P10** (HOÀN TẤT 2026-06-26): Skill system — bundled PM kỹ năng (`skills/*.md`), candidate pool / internal-only injection / LLM selector, allocated-only-when-used. Proof offline (fake selector + recording LLM) — chưa chạy live-key E2E.
+
 ## Unresolved (roadmap)
 
 1. Có deadline thật cho MVP không? (ảnh hưởng cắt scope Phase 1).

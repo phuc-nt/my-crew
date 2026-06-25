@@ -92,3 +92,24 @@
 - **A2 Auto-extraction memory** → P8 (LLM trích fact → `MEMORY.md` qua Store; write gated qua gateway).
 
 Phần lớn đề xuất còn lại (cross-agent memory, skill library, MCP gateway, workflow automation) → **M3**, xem [feature-proposals](feature-proposals.md).
+
+---
+
+## M3 — Skill system + advanced agent orchestration
+
+### P10 — Skill system (bundled PM guidance) ✅ COMPLETE
+
+**Status**: DONE (2026-06-26, committed S1 8e6de3d / S2 3413261 / S3 ab5c9b7, 592 tests).
+
+- **What shipped**:
+  - **Bundled skills** (`skills/*.md`): 5 instructional skill files (flag-risk, prioritize-blockers, estimate-effort, fetch-jira-epics, parse-github-labels) — each with YAML frontmatter (name, description, applies_to; `allowed-tools` parsed-and-ignored) + markdown PM guidance body.
+  - **Skill loader** (`src/skills/skill_loader.py`): scans `skills/` → `Skill` objects. Malformed files skipped (graceful).
+  - **Skill pool** (`src/skills/skill_pool.py`): `load_skill_pool(names)` filters declared names → matching Skill objects. `build_skill_context(loaded, settings)` returns `((), None)` when empty (no LlmClient allocation) or `(pool, selector)` when skills declared. No-skills path byte-identical to pre-P10.
+  - **Skill selector** (`src/skills/skill_selector.py`): injectable LLM picker `SkillSelector` — chooses relevant skills for a report kind (daily/weekly/okr/resource). Default impl via `make_llm_selector(LlmClient)` or injectable fake for tests. Failure graceful → [].
+  - **Selection + injection**: `select_skill_text(context, audience, kind=...)` runs selector, renders chosen skill bodies to `<pm_skills>` block. **RED LINE: internal-only** — returns "" for external audience + checked at compose node + each builder's external branch early-returns.
+  - **Wiring**: `profile.yaml` `skills: [flag-risk, ...]` → graph-build entry points (worker/cron/cli in `src/runtime/worker.py`, `src/entrypoints/cron.py`, `src/entrypoints/cli.py`) → `build_skill_context()` + inject into `ProfileContext` → compose nodes call `select_skill_text()`.
+- **Files**: new `src/skills/{models,skill_loader,skill_pool,skill_selector}.py` + new `skills/` dir (5 bundled .md files) + wire into all builders + all graph-build entry points.
+- **Acceptance**: ✅ profile declares `skills: [flag-risk]` → skill loaded + selected for report kind → instruction injected into INTERNAL compose prompt. External audience omits skills (tested). No skills declared → no LlmClient constructed (tested).
+- **Risks** (resolved): internal-only red line verified in depth (external path returns before skills accessed; each builder checks audience).
+
+**Exit M3-P10**: ✅ ĐẠT. Agent skill system (instruction-only, internal-only, allocated-on-demand) shipped — proof toàn bộ offline (fake selector + recording LLM); live-key E2E với profile có `skills:` chưa chạy. Foundation for M3 advanced orchestration features.
