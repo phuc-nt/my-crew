@@ -27,8 +27,11 @@
 </table>
 
 <p>
-  {# Approvals / Audit / Config / Trigger are wired in S2/S3 — placeholders for now. #}
-  <span class="muted">Surfaces: Approvals · Audit · Config · Trigger (coming in later slices)</span>
+  <button class="btn" hx-get="/dashboard/agents/{{ s.id }}/approvals"
+          hx-target="#approvals" hx-swap="outerHTML">Approvals</button>
+  {# Audit / Config / Trigger are wired in S3. #}
+  <span class="muted">· Audit · Config · Trigger (coming in S3)</span>
 </p>
+<div id="approvals"></div>
 {% endif %}
 {% endblock %}

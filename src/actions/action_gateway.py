@@ -273,6 +273,16 @@ class ActionGateway:
         """List Lớp B actions awaiting human approval."""
         return self._approvals.list_pending()
 
+    def close(self) -> None:
+        """Close the gateway's SQLite stores (approvals + dedup).
+
+        A per-request consumer (the M2-P7 web dashboard) builds a gateway per call;
+        closing avoids leaking file descriptors in the long-lived server process.
+        Idempotent-friendly: the stores' close() is safe to call once.
+        """
+        self._approvals.close()
+        self._dedup.close()
+
     def approve(self, approval_id: int, *, handler: Handler) -> GatewayResult:
         """Execute a previously-queued Lớp B action after human approval.
 

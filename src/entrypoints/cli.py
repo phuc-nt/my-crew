@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import sys
 
+from src.actions.approved_dispatch import dispatch_approved_action as _dispatch_approved_action
 from src.agent.checkpoint import get_checkpointer
 from src.agent.graph import build_graph
 from src.profile.context import ProfileContext
@@ -217,21 +218,6 @@ def _run_approve(args: list[str], settings, config) -> int:
     return 0
 
 
-def _dispatch_approved_action(action: dict, config) -> str:
-    """Live handler for an approved Lớp B action — dispatch it to its real executor.
-
-    The queued action carries everything needed (`server`/`tool`/`args` for an MCP
-    tool). Currently the only Lớp B action that enters a real flow is the external
-    report's Slack post, so it routes to the Slack post handler; other server/tools
-    error explicitly rather than silently no-op (so a new Lớp B flow can't be
-    approved into nothing). `config` is injected so the handler stays singleton-free.
-    """
-    if action.get("type") == "mcp_tool" and action.get("server") == "slack":
-        from src.actions.slack_write import make_slack_post_handler
-
-        return make_slack_post_handler(config.slack_server)(action)
-    label = action.get("tool") or action.get("argv") or action.get("type")
-    raise RuntimeError(f"No live handler wired for approved action: {label!r}")
 
 
 def _run_reject(args: list[str], settings, config) -> int:

@@ -19,7 +19,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from src.server import routes_agents, routes_dashboard, routes_runs
+from src.server import routes_agents, routes_approvals, routes_dashboard, routes_runs
 from src.server.run_manager import RunManager
 
 
@@ -40,6 +40,7 @@ def create_app() -> FastAPI:
     # M2-P7 dashboard: HTML pages + static assets (htmx). Paths resolve from this
     # file's dir (not cwd) so `python -m src.server.app` works from the repo root.
     app.include_router(routes_dashboard.router)
+    app.include_router(routes_approvals.router)
     app.mount(
         "/static",
         StaticFiles(directory=str(Path(__file__).parent / "static")),

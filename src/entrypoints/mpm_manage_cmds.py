@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import sys
 
+from src.actions.approved_dispatch import dispatch_approved_action as _dispatch_approved_action
 from src.entrypoints.mpm import _flag_value
 from src.runtime.agent_paths import agent_data_dir
 
@@ -32,16 +33,6 @@ def _gateway(loaded):
     from src.actions.action_gateway import ActionGateway
 
     return ActionGateway(loaded.settings, external_channels=loaded.config.slack_external_channels)
-
-
-def _dispatch_approved_action(action: dict, config) -> str:
-    """Live handler for an approved Lớp B action (only the external Slack post today)."""
-    if action.get("type") == "mcp_tool" and action.get("server") == "slack":
-        from src.actions.slack_write import make_slack_post_handler
-
-        return make_slack_post_handler(config.slack_server)(action)
-    label = action.get("tool") or action.get("argv") or action.get("type")
-    raise RuntimeError(f"No live handler wired for approved action: {label!r}")
 
 
 def run_manage(sub: str, args: list[str]) -> int:
