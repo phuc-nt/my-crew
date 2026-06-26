@@ -194,7 +194,7 @@ def _fake_loaded(tmp_path, *, api_key):
     return type(
         "LP", (),
         {"settings": settings, "config": object(), "soul": "", "project": "", "memory": "",
-         "profile_id": "default", "skills": ()},
+         "profile_id": "default", "skills": (), "project_group": None},
     )()
 
 

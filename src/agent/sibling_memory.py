@@ -97,8 +97,9 @@ def build_sibling_context(
     """Build the `(sibling_facts, selector)` pair for a `ProfileContext`.
 
     Returns `((), None)` — WITHOUT constructing an `LlmClient` — when the profile has no
-    `project_group`, no siblings resolve, or no sibling facts exist. The selector is wired
-    in S2 (`sibling_selector.make_llm_selector`); S1 ships facts + a `None` selector.
+    `project_group`, no siblings resolve, or no sibling facts exist. Otherwise pairs the
+    facts with the default LLM ranker (`make_llm_selector`), built only on this non-empty
+    path so the no-sibling case stays allocation-free and key-free.
     """
     if loaded.project_group is None:
         return (), None
@@ -111,4 +112,7 @@ def build_sibling_context(
     facts = read_sibling_facts(ids, store)
     if not facts:
         return (), None
-    return tuple(facts), None  # selector paired in S2
+    from src.agent.sibling_selector import make_llm_selector
+    from src.llm.client import LlmClient
+
+    return tuple(facts), make_llm_selector(LlmClient(settings))

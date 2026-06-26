@@ -140,9 +140,10 @@ def test_build_sibling_context_noop_lone_agent(tmp_path, monkeypatch):
     assert facts == () and selector is None
 
 
-def test_build_sibling_context_returns_facts_no_selector_in_s1(tmp_path, monkeypatch):
-    # S1: helper returns the sibling facts tuple + a None selector (selector wired in S2).
+def test_build_sibling_context_returns_facts_and_selector(tmp_path, monkeypatch):
+    # Non-empty path: helper returns the sibling facts tuple + the real LLM ranker.
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setattr("src.llm.client.LlmClient", lambda *_a, **_k: object())
     profiles = tmp_path / "profiles"
     _write_profile(profiles, "A", "name: A\nproject: acme\n")
     _write_profile(profiles, "B", "name: B\nproject: acme\n")
@@ -153,4 +154,4 @@ def test_build_sibling_context_returns_facts_no_selector_in_s1(tmp_path, monkeyp
         _Loaded("acme"), object(), store, registry, profiles_dir=profiles, data_dir=tmp_path / ".d"
     )
     assert facts == ("B shared a milestone fact",)
-    assert selector is None
+    assert selector is not None  # real ranker paired on the non-empty path

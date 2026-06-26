@@ -68,14 +68,22 @@ def _load_or_exit(args: list[str]):
         return None
 
 
-def _context_of(loaded, settings) -> ProfileContext:
-    """Build the prompt context (persona/project/memory/skills) from a loaded profile."""
+def _context_of(loaded, settings, store, registry) -> ProfileContext:
+    """Build the prompt context (persona/project/memory/skills/siblings) from a profile.
+
+    `store`/`registry` feed the sibling read (build_sibling_context) — the SAME store the
+    report run uses, so the sibling READ and the remember WRITE share one instance.
+    """
+    from src.agent.sibling_memory import build_sibling_context
     from src.skills.skill_pool import build_skill_context
 
     skills, selector = build_skill_context(loaded, settings)
+    sib_facts, sib_sel = build_sibling_context(loaded, settings, store, registry)
     return ProfileContext(
         persona=loaded.soul, project=loaded.project, memory=loaded.memory,
         skills=skills, skill_selector=selector,
+        sibling_facts=sib_facts, sibling_selector=sib_sel,
+        sibling_project=loaded.project_group,
     )
 
 
@@ -101,13 +109,17 @@ def _run_hello(message: str, settings) -> int:
     return 0
 
 
-def _run_report(report_kind: str, audience: str, settings, config, context, profile_id: str) -> int:
+def _run_report(
+    report_kind: str, audience: str, settings, config, context, profile_id: str, store=None
+) -> int:
     # Imported here so the hello path (and tests) don't pull in MCP/report deps.
     from src.agent.memory_node import build_remember_node
     from src.agent.store import get_store
 
     cp = _checkpointer(settings)
-    st = get_store(settings)  # cross-thread memory Store (parity with cron/worker)
+    # `store` (None ⇒ build one) is the same instance used for the sibling read in
+    # _context_of, so the sibling READ and the remember WRITE share one store.
+    st = store if store is not None else get_store(settings)
     rem = build_remember_node(profile_id, settings, audience)
     if report_kind == "resource":
         from src.agent.resource_report_graph import build_resource_graph
@@ -295,13 +307,18 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args[0] == "report":
+        from src.agent.store import get_store
+        from src.runtime.registry import load_registry
+
+        st = get_store(settings)  # one store: sibling read (_context_of) + remember write
         return _run_report(
             _parse_report_kind(args[1:]),
             _parse_audience(args[1:]),
             settings,
             config,
-            _context_of(loaded, settings),
+            _context_of(loaded, settings, st, load_registry()),
             loaded.profile_id,
+            store=st,
         )
     return _run_hello(" ".join(args), settings)  # hello: no profile context
 

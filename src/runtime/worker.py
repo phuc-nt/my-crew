@@ -60,16 +60,22 @@ def build_graph_for(loaded: LoadedProfile, settings: Any, kind: str, audience: s
     """
     from src.agent.checkpoint import get_checkpointer
     from src.agent.memory_node import build_remember_node
+    from src.agent.sibling_memory import build_sibling_context
     from src.agent.store import get_store
+    from src.runtime.registry import load_registry
     from src.skills.skill_pool import build_skill_context
 
+    cp = get_checkpointer(settings)
+    st = get_store(settings)  # cross-thread memory Store (InMemoryStore default)
+    # Same store instance serves the sibling READ here and the remember WRITE in the graph.
     skills, selector = build_skill_context(loaded, settings)
+    sib_facts, sib_sel = build_sibling_context(loaded, settings, st, load_registry())
     context = ProfileContext(
         persona=loaded.soul, project=loaded.project, memory=loaded.memory,
         skills=skills, skill_selector=selector,
+        sibling_facts=sib_facts, sibling_selector=sib_sel,
+        sibling_project=loaded.project_group,
     )
-    cp = get_checkpointer(settings)
-    st = get_store(settings)  # cross-thread memory Store (InMemoryStore default)
     remember = build_remember_node(loaded.profile_id, settings, audience)
     if kind == "resource":
         from src.agent.resource_report_graph import build_resource_graph

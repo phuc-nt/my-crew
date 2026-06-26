@@ -149,6 +149,26 @@ Agent chứa 1 **candidate pool** những bundled PM kỹ năng (`.md` files ở
 
 **Wiring**: tất cả graph-build sites (worker/cron/cli) → mọi `builder(context=...)` call mang skills; M2-P6 server run path kế thừa via worker helper.
 
+### 6.2 Cross-agent memory (M3-P9 A3) — sibling facts đọc-chéo, internal-only
+
+Hai agent khai cùng `project: <slug>` trong `profile.yaml` là **sibling**. Một agent ĐỌC fact đã nhớ của sibling (chính các fact mà node `remember` A2 ghi vào Store) — read-only; không bao giờ ghi namespace của sibling.
+
+Luồng:
+1. `profile.yaml` `project: acme` ⇒ `LoadedProfile.project_group`. Không khai ⇒ `None` ⇒ không sibling.
+2. Entry point gọi `src/agent/sibling_memory.py:build_sibling_context(loaded, settings, store, registry)`: liệt kê agent enabled cùng `project_group` trong registry (trừ self; sibling load lỗi → warn + skip, không crash), rồi đọc fact mỗi sibling từ Store namespace `(sibling_id, "memory")` qua `store.search` **namespace-scoped** (KHÔNG prefix wildcard — chạy được cả InMemoryStore lẫn PostgresStore), cap `MAX_SIBLING_FACTS`.
+3. Cặp `(sibling_facts, selector)` vào `ProfileContext` (3 field: `sibling_facts`/`sibling_selector`/`sibling_project`). Selector là injectable LLM ranker (`sibling_selector.make_llm_selector`), chỉ dựng khi có fact (no-op path allocation-free, không cần key).
+4. Compose node gọi `select_sibling_text(context, audience, kind, project_group)` → ranker giữ fact liên quan kind (lọc về đúng input set, chống bịa) → render block `--- Bộ nhớ agent khác (project: <slug>) ---` → inject vào **INTERNAL** compose prompt, sau `<pm_skills>`.
+
+**Red line (critical)**: sibling facts INTERNAL-ONLY — external report KHÔNG lấy gì (gate `select_sibling_text` trả "" cho external; mỗi builder fold sibling text SAU external early-return). KHÔNG qua Action Gateway (memory là internal state). Phòng thủ 2 lớp như skills.
+
+**WO-self / RO-sibling**: ghi memory chỉ vào `(self_id, "memory")` — `memory_node._assert_self_namespace` raise `PermissionError` nếu namespace khác (fail loud). Cross-agent là READ-only.
+
+**Threat-model widening (R6)**: A3 MỞ RỘNG phạm vi lộ — agent B giờ đọc fact thô của agent A; memory KHÔNG được secret-scan (`memory_extractor.py` accepted residual risk). Mitigation = ranh giới internal-only (không tạo bề mặt external mới). **Đừng route sibling facts ra external.**
+
+**Hiệu lực runtime**: đọc-chéo chỉ hiệu lực khi Store CHIA SẺ giữa process các sibling — tức `store: postgres`. Với `store: memory` (default), mỗi process có store riêng → B không thấy fact của A ở chạy multi-process thật; A3 khi đó degrade sạch về "no sibling facts" (đúng nhánh backward-compat). E2E offline chứng minh logic bằng một InMemoryStore chung (cùng process).
+
+**Backward-compat**: không `project:` (hoặc group 1 agent) → `build_sibling_context` return `((), None)` không dựng `LlmClient` → compose prompt byte-identical.
+
 ## 7. Đường lên scale (đừng làm bây giờ, nhưng đừng chặn)
 
 | Khía cạnh | MVP local | Khi scale |
