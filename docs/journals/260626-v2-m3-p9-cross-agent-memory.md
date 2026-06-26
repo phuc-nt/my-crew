@@ -24,7 +24,26 @@ Sibling facts INTERNAL-only. Phòng thủ 2 lớp: `select_sibling_text` trả `
 
 A3 MỞ RỘNG phạm vi lộ — B đọc fact thô của A; memory không secret-scan (accepted residual risk từ P8). Mitigation = ranh giới internal-only (không tạo bề mặt external mới). Ghi rõ trong architecture §6.2.
 
+## Live-key E2E đầy đủ (2026-06-26, Postgres shared)
+
+Chạy full real trên Postgres throwaway (Docker), key thật, qua đúng entry-point
+(`build_graph_for` + `load_registry` + `build_sibling_context`). 2 agent cùng
+`project: e2e-acme`, cả 2 `store: postgres` + `checkpointer: postgres`, dry_run (không post):
+- **B**: report thật (Jira SCRUM 21 issue + LLM compose, 1140 char) → extractor LLM thật
+  sinh **5 fact PM thật** (overdue/blocker/leo thang) → ghi Postgres ns `(e2e-agent-b,"memory")`.
+- **Cross-process proof**: đọc lại 5 fact qua một PostgresStore connection RIÊNG (≠ connection
+  của B) — InMemoryStore không làm được điều này → đúng lý do đọc-chéo thật cần Postgres.
+- **A internal**: report thật → `build_sibling_context` đọc 5 fact B từ Postgres → selector LLM
+  thật chọn → **5/5 fact + label `project: e2e-acme`** vào prompt INTERNAL của A.
+- **A external**: `--audience external` thật → **0 fact leak, label vắng** (red line live).
+
+Dọn sạch sau chạy: xóa 2 profile (chứa DSN), kill container, xóa data dir; DSN không vào
+file commit nào (`git grep` xác nhận).
+
 ## Còn lại / mở
 
-- **Hiệu lực runtime cần Postgres**: `store: memory` (default) mỗi process 1 store → B không thấy fact A khi chạy multi-process thật; A3 degrade sạch về "no siblings". Đọc-chéo thật chỉ khi `store: postgres` (shared). E2E chứng minh logic bằng InMemoryStore chung 1 process.
-- **Live-key E2E chưa chạy** — toàn bộ proof offline (fake selector + recording LLM). `_assert_self_namespace` hiện là scaffolding (call site duy nhất luôn self) — fail-loud cho invariant, sẽ load-bearing nếu sau này có path namespace từ caller.
+- **Hiệu lực runtime cần Postgres** (đã xác nhận live): `store: memory` (default) mỗi process
+  1 store → multi-process B không thấy fact A; A3 degrade sạch về "no siblings". Đọc-chéo thật
+  chỉ khi `store: postgres`.
+- `_assert_self_namespace` hiện là scaffolding (call site duy nhất luôn self) — fail-loud cho
+  invariant, sẽ load-bearing nếu sau này có path namespace từ caller.
