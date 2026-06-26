@@ -22,5 +22,15 @@ def dispatch_approved_action(action: dict, config) -> str:
         from src.actions.slack_write import make_slack_post_handler
 
         return make_slack_post_handler(config.slack_server)(action)
+    # M3-P11 (C3): an approved Linear comment routes to the Linear write handler. The
+    # server spec comes from the injected config (token-bearing env stays in the closure,
+    # never on the persisted action). Lazy import keeps the monkeypatch target stable.
+    if action.get("type") == "mcp_tool" and action.get("server") == "linear":
+        from src.actions.linear_write import make_linear_comment_handler
+
+        spec = (config.extra_servers or {}).get("linear")
+        if spec is None:
+            raise RuntimeError("linear MCP server not declared; cannot dispatch approved comment.")
+        return make_linear_comment_handler(spec)(action)
     label = action.get("tool") or action.get("argv") or action.get("type")
     raise RuntimeError(f"No live handler wired for approved action: {label!r}")

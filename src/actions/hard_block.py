@@ -57,6 +57,10 @@ _LOP_B_MCP_TOOL_MARKERS = (
     "transitionissue",  # moving an issue's status is a real workflow change
     "assignissue",
     "reassign",
+    # M3-P11 (C3): creating a comment on an external tracker (Linear) is a real,
+    # outward-visible write → human approval. Substring-matches linear_createComment;
+    # verified NOT to catch jira addComment or confluence createPage.
+    "createcomment",
 )
 _LOP_B_GH_PREFIXES: tuple[tuple[str, ...], ...] = (
     ("pr", "merge"),
@@ -121,6 +125,12 @@ _MCP_ALLOWLIST: dict[str, frozenset[str]] = {
     # updatepage is allowed but additionally requires a version (checked in hard-deny).
     "confluence": frozenset({"createpage", "updatepage"}),
     "jira": frozenset({"addcomment", "createissue"}),
+    # Linear (@tacticlaunch/mcp-linear). The allowlist is the enforced WRITE surface, so
+    # only the one write tool is listed — reads bypass the gateway and need no entry.
+    # createComment is additionally a Lớp B marker → queued for human approval. Name
+    # lowercased because _allowlisted_mcp matches case-insensitively. Destructive Linear
+    # tools (delete*/archive*) are NOT listed and hit the Lớp A red line regardless.
+    "linear": frozenset({"linear_createcomment"}),
 }
 
 # gh subcommands allowed, as argv prefixes (read-only + safe creates).

@@ -72,6 +72,17 @@ DENY_CASES = [
     ({"type": "mcp_tool", "server": "confluence", "tool": "addRestriction",
       "args": {"mode": "anonymous"}}, BlockCategory.SECURITY),
     ({"type": "gh_cli", "argv": ["repo", "edit", "--visibility=public"]}, BlockCategory.SECURITY),
+    # --- M3-P11: a NEW known server (linear) does not weaken the Lớp A red line ---
+    ({"type": "mcp_tool", "server": "linear", "tool": "linear_deleteIssue",
+      "args": {"id": "ISS-1"}}, BlockCategory.DATA_LOSS),
+    ({"type": "mcp_tool", "server": "linear", "tool": "linear_archiveProject",
+      "args": {"id": "P-1"}}, BlockCategory.DATA_LOSS),
+    ({"type": "mcp_tool", "server": "linear", "tool": "linear_createComment",
+      "args": {"issueId": "ISS-1", "body": "token ghp_abcdefghij1234567890XYZ"}},
+     BlockCategory.CREDENTIAL),
+    # an unlisted linear tool is still default-deny
+    ({"type": "mcp_tool", "server": "linear", "tool": "linear_makeAdmin", "args": {}},
+     BlockCategory.NOT_ALLOWLISTED),
     # --- not allowlisted (default deny) ---
     ({"type": "mcp_tool", "server": "jira", "tool": "someBrandNewTool", "args": {}},
      BlockCategory.NOT_ALLOWLISTED),
