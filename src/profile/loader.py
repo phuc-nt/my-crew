@@ -56,6 +56,7 @@ class LoadedProfile:
     schedule: dict[str, str]  # consumed in P3 (scheduler)
     reports: tuple[str, ...]  # consumed in P3 (kind gate)
     skills: tuple[str, ...] = ()  # M3-P10: per-agent skill candidate pool (names)
+    project_group: str | None = None  # M3-P9: sibling group slug (None ⇒ no siblings)
 
 
 def _read_md(profile_dir: Path, name: str) -> str:
@@ -104,6 +105,8 @@ def load_profile(
     schedule = yaml_doc.get("schedule") or {}
     reports = yaml_doc.get("reports") or []
     skills = yaml_doc.get("skills") or []
+    project_raw = yaml_doc.get("project")
+    project_group = str(project_raw).strip() or None if project_raw is not None else None
     schedule_map = (
         {str(k): str(v) for k, v in schedule.items()} if isinstance(schedule, dict) else {}
     )
@@ -119,4 +122,5 @@ def load_profile(
         schedule=schedule_map,
         reports=tuple(str(r) for r in reports) if isinstance(reports, list) else (),
         skills=tuple(str(s) for s in skills) if isinstance(skills, list) else (),
+        project_group=project_group,
     )
