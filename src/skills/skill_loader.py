@@ -25,17 +25,24 @@ BUNDLED_SKILLS_DIR = REPO_ROOT / "skills"
 def load_skills(skills_dir: Path | None = None) -> list[Skill]:
     """Scan `skills_dir` (default: the bundled `skills/`) → the Skills it holds.
 
-    Returns sorted by name (deterministic). Malformed files are skipped, never raised.
+    Returns sorted by name (deterministic), with names UNIQUE: if two files declare the
+    same `name`, the first by filename order wins and later duplicates are warned + dropped
+    (a duplicate name would otherwise inject the same skill twice). Malformed files are
+    skipped, never raised.
     """
     base = skills_dir if skills_dir is not None else BUNDLED_SKILLS_DIR
     if not base.exists():
         return []
-    out: list[Skill] = []
+    by_name: dict[str, Skill] = {}
     for path in sorted(base.glob("*.md")):
         skill = _load_one(path)
-        if skill is not None:
-            out.append(skill)
-    return sorted(out, key=lambda s: s.name)
+        if skill is None:
+            continue
+        if skill.name in by_name:
+            logger.warning("skill %s skipped: duplicate name %r", path.name, skill.name)
+            continue
+        by_name[skill.name] = skill
+    return sorted(by_name.values(), key=lambda s: s.name)
 
 
 def _load_one(path: Path) -> Skill | None:

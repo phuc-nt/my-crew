@@ -46,6 +46,15 @@ def test_missing_dir_returns_empty(tmp_path):
     assert load_skills(tmp_path / "nope") == []
 
 
+def test_duplicate_name_deduped_first_wins(tmp_path):
+    # Two files, same `name`: the first by filename order wins, the later one is dropped.
+    (tmp_path / "a.md").write_text("---\nname: dup\ndescription: d\n---\nFIRST", encoding="utf-8")
+    (tmp_path / "b.md").write_text("---\nname: dup\ndescription: d\n---\nSECOND", encoding="utf-8")
+    skills = load_skills(tmp_path)
+    assert [s.name for s in skills] == ["dup"]  # only one survives
+    assert skills[0].body == "FIRST"  # a.md (sorted first) wins
+
+
 def test_markdown_hr_in_body_not_corrupted(tmp_path):
     # A body containing a markdown horizontal rule (---) must not break parsing: only the
     # FIRST close fence ends the frontmatter; later --- lines stay in the body.
