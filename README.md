@@ -49,7 +49,7 @@ cd my-project-manager
 uv sync
 
 # 2. Verify the install (no network, no secrets needed)
-uv run pytest            # 269 tests should pass
+uv run pytest            # 776 tests should pass
 uv run ruff check src tests
 
 # 3. Configure (see docs/deployment-guide.md for each value)
@@ -103,9 +103,12 @@ The [journals](docs/journals/) are the best learning material here: each phase r
 
 **v1 — Phases 0–5 complete** (2026-06-22): reporting, guardrail hardening, OKR, resource/cost, and audience-split, all E2E-verified against real Jira/GitHub/Slack/Confluence. See [docs/v1/project-roadmap.md](docs/v1/project-roadmap.md).
 
-**v2 Milestone 1 complete** (2026-06-24) — the **multi-agent core**: N agents / N projects, fully isolated, run via CLI/worker + scheduler with the guardrail applied per-agent. 414 tests, E2E-verified (two agents concurrent, real writes). See [docs/v2/roadmap-m1.md](docs/v2/roadmap-m1.md).
+**v2 COMPLETE** (2026-06-27) — all 3 milestones shipped, verified by final live E2E:
+- **M1 multi-agent core** (2026-06-24): N agents / N projects, fully isolated, run via CLI/worker + scheduler with the guardrail applied per-agent. 414 tests.
+- **M2 platform** (2026-06-26): P5 graph-native Lớp B interrupts + P6 FastAPI SSE streaming + P7 web dashboard (HTMX+Jinja2, 6 ops surfaces) + P8 Postgres checkpointer/Store/cross-thread memory (opt-in). 545 tests. Full E2E against real Jira/GitHub/Slack/Confluence and throwaway Postgres.
+- **M3 extensibility** (2026-06-27): P10 skill system (5 bundled instruction-only skills, injectable LLM selector) + P9 cross-agent memory (sibling fact sharing via Store, internal-only) + P11 integrations/multi-channel (config-driven MCP servers + Linear read/gated-write + Email/SMTP delivery, Lớp B) + P12 automation/observability (opt-in LangSmith tracing, checkpoint-based replay with safe-replay guard, READ-only workflow automation via gateway). 776 tests. Final live E2E: Jira 21 issues, real Confluence page created, Slack post approved, 20 stored facts, B3 replay dedup+refuse-unsafe, D3 proposals Lớp B only.
 
-**v2 Milestone 2 COMPLETE** (2026-06-26) — **P5 graph-native Lớp B interrupts** + **P6 FastAPI SSE streaming service** + **P7 web dashboard (HTMX+Jinja2)** + **P8 Postgres checkpointer + Store + cross-thread memory (opt-in)**. P5 adds `approval_gate` node + pause/resume workflow; P6 adds localhost-only FastAPI backend (GET /api/agents, /status, POST /trigger, GET /stream SSE); P7 adds server-rendered dashboard (6 ops surfaces: agent list/cost, on-UI approve/reject, audit, config view/edit with validation, on-demand trigger+SSE); P8 adds optional Postgres checkpointer + LangGraph Store (SQLite default, Postgres opt-in via profile) + internal-only cross-thread agent memory (MEMORY.md-mirrored). 545 tests, plus a **full M2 E2E across every pattern against real Jira/GitHub/Slack/Confluence and a real (throwaway) Postgres** — pause→resume→live-post, SSE live streaming, dashboard on-UI approve (same real-post path as CLI), config edit with atomic replace, concurrency 409, cross-thread memory, and the live-PG checkpointer + Store all verified end-to-end. **M2 fully complete — all P5/P6/P7/P8 shipped.**  See [docs/v2/roadmap-m2.md](docs/v2/roadmap-m2.md).
+See [docs/v2/README.md](docs/v2/README.md) and the [journals](docs/journals/) for each phase's decisions, bugs caught, and lessons learned.
 
 ## License
 

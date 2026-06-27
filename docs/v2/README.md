@@ -1,7 +1,7 @@
 ---
 title: "v2 Vision + Roadmap — Multi-agent PM platform"
 description: "From a single-project PM agent to N profile-bound agents managed from a web dashboard, guardrail preserved per-agent."
-status: M1 complete · M2 COMPLETE (P5/P6/P7/P8 all shipped + E2E-verified)
+status: v2 COMPLETE (M1+M2+M3 all shipped, 776 tests, final live E2E verified 2026-06-27)
 created: 2026-06-23
 supersedes: extends ../v1/project-roadmap.md (picks up its deferred items: service backend, multi-user, Postgres scale-up)
 priority: P2
@@ -10,10 +10,13 @@ tags: [v2, vision, roadmap, multi-agent, langgraph, web-ui]
 
 # v2 Vision + Roadmap — my-project-manager
 
-> Status: **Milestone 1 COMPLETE** (2026-06-24, P1→P2→P3→P4 — multi-agent core: profiles,
-> registry/worker, scheduler, `mpm agent` CLI; 414 tests, E2E-verified). **Milestone 2 COMPLETE** (2026-06-26, P5 graph-native Lớp B interrupts + P6 FastAPI SSE streaming + **P7 web dashboard (HTMX+Jinja2, 6 ops surfaces: agent list, cost tracking, on-UI approve/reject, audit view, config edit, on-demand trigger+SSE)** + P8 Postgres checkpointer + Store + cross-thread memory; 545 tests; **full M2 E2E against real Jira/Slack/Confluence + a real throwaway Postgres** — every pattern verified incl. the live-PG checkpointer/Store, interrupt→resume→post, dashboard on-UI approve, config validate-then-atomic-replace; SQLite default, Postgres opt-in). **M2 FULLY DONE — no deferred pieces.**
+> Status: **v2 COMPLETE** (2026-06-27, M1+M2+M3 = 776 tests, final live E2E verified).
+> - **M1**: Multi-agent core (P1–P4, profiles + registry/worker + scheduler + CLI), 414 tests.
+> - **M2**: Platform (P5–P8, interrupts + FastAPI/SSE + dashboard + Postgres opt-in), 545 tests.
+> - **M3**: Extensibility (P10/P9/P11/P12, skills + cross-agent memory + integrations/multi-channel + automation/observability), 776 tests, live E2E: Jira 21 issue, real Confluence + Slack post, Postgres facts, replay+automate via gateway.
+>
 > Mở rộng [`../v1/project-roadmap.md`](../v1/project-roadmap.md) (v1 Phase 0–5 đã xong). v1 = single-agent, single-project.
-> v2 = **nhiều agent, mỗi agent một project, làm xong toàn bộ (multi-agent core + interrupts + streaming + optional Postgres + web dashboard), guardrail giữ nguyên per-agent.**
+> v2 = **nhiều agent, mỗi agent một project, XONG TOÀN BỘ (multi-agent core + interrupts + streaming + optional Postgres + web dashboard + skills + integrations + automation), guardrail giữ nguyên per-agent.**
 > Bilingual: prose tiếng Việt, code/identifier tiếng Anh.
 
 ## Bộ tài liệu v2 (chia nhỏ để dễ maintain)
@@ -53,6 +56,6 @@ Trên hết là một **web dashboard** (FastAPI + HTMX+Jinja2, server-rendered)
 
 > Guardrail **không** bị viết lại. Lớp A red-line, allowlist-default-deny, audit, budget cap, dedup reserve-before-execute — tất cả giữ. Thay đổi duy nhất: chúng được khởi tạo *per-agent* (path + config từ profile) thay vì từ singleton toàn cục. Chi tiết: [architecture.md §7](architecture.md).
 
-## Cook order
+## Timeline (v2 COMPLETE)
 
-M1 [P1→P2→P3→P4](roadmap-m1.md) (mỗi cái chạy được), rồi M2 [P5→P6→P7→P8](roadmap-m2.md), rồi cân nhắc [M3 features](feature-proposals.md) theo ưu tiên. **P1 BREAKING — cook trước hết.** `default` profile (P2) là lưới an toàn migrate v1.
+**M1** [P1→P2→P3→P4](roadmap-m1.md) → **M2** [P5→P6→P7→P8](roadmap-m2.md) → **M3** [P10/P9/P11/P12](feature-proposals.md) — tất cả shipped. Xem [journals/](../journals/) để chi tiết từng phase (decisions + bugs + lessons). Deferred: live-key integration E2E (Linear/SMTP/LangSmith real), advanced workflow (when conditions, schedule triggers), safe re-fetch in replay.

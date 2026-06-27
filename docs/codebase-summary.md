@@ -1,54 +1,47 @@
 # Codebase Summary — my-project-manager
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-06-24 — v2 M1-P1 + P2 + P3 + P4 COMPLETE.** Multi-agent core (config injection + profile-based load + registry + per-agent worker + isolated stores) + multi-agent CLI (list/register/run/manage). 414 tests, ruff clean.
+> Status: **2026-06-27 — v2 COMPLETE (M1+M2+M3).** 776 tests, ruff clean, final live E2E verified.
 
-## Trạng thái hiện tại (v2 M1-P4 COMPLETE)
+## Trạng thái hiện tại (v2 COMPLETE: M1+M2+M3)
 
-- **v2 M1-P1 DONE**: Config-injection refactor; 21 call sites parametrized, no more singletons.
-- **v2 M1-P2 DONE**: Profile system (`profiles/<id>/` → 4 files + config + persona/project/memory injection).
-  - `cli report --daily [--profile default]` loads config from profile, not `.env` directly.
-  - `profiles/default/` ships v1-equivalent behavior (empty SOUL/PROJECT/MEMORY, profile.yaml from config.example.env).
-- **v2 M1-P3 DONE**: Registry + per-agent worker + isolated stores + coordinating service.
-  - `registry.yaml` lists agents (id, enabled).
-  - `python -m src.runtime.worker --agent-id <id> --report <kind>` loads profile, builds isolated stores at `.data/agents/<id>/`, runs report.
-  - `python -m src.runtime.service` reads registry, spawns workers on schedule (croniter), supervises with 600s timeout + concurrency cap 4.
-  - Per-agent stores (audit, budget, approvals, dedup, checkpoints) under `.data/agents/<id>/` — no cross-agent pollution.
-  - `thread_id` now `<agent_id>:<kind>:<audience>` for cross-agent checkpoint isolation.
-- **v2 M1-P4 DONE**: Multi-agent CLI (dispatch + registry mgmt + worker spawn + per-agent Lớp B management).
-  - `python -m src.entrypoints.mpm agent list` — list agents (id/name/enabled/last-run).
-  - `python -m src.entrypoints.mpm agent register <id>` — scaffold `profiles/<id>/` (4-file template).
-  - `python -m src.entrypoints.mpm agent run <id> --report <kind> [--audience] [--dry-run]` — spawn worker subprocess, wait, print exit code.
-  - `python -m src.entrypoints.mpm agent {approvals,approve,reject,audit} <id>` — per-agent Lớp B management (routes to agent's own approval_store).
-  - cli.py/cron.py kept as **legacy single-agent entrypoints** (backward-compat).
-  - 414 tests pass, ruff clean, E2E verified.
-- **Entry points (legacy)**: `python -m src.entrypoints.cli` / `cron` (single-agent, still work). **New (multi-agent)**: `python -m src.entrypoints.mpm`. **Runtime**: `python -m src.runtime.worker`, `python -m src.runtime.service`.
+### M1: Multi-agent core (2026-06-24, 414 tests)
+- **P1**: Config-injection refactor; 21 call sites parametrized, no more singletons.
+- **P2**: Profile system (`profiles/<id>/` → 4 files + config + persona/project/memory injection).
+- **P3**: Registry + per-agent worker + isolated stores + coordinating service (`registry.yaml`, worker subprocess per-agent, service daemon with croniter scheduler).
+- **P4**: Multi-agent CLI (`mpm agent list/register/run/approvals/approve/reject/audit`); legacy `cli`/`cron` preserved.
 
-## Cây thư mục (v2 M1-P3 state)
+### M2: Platform (2026-06-26, 545 tests)
+- **P5**: LangGraph-native Lớp B interrupts (`approval_gate` node, pause/resume checkpoint flow).
+- **P6**: FastAPI SSE streaming (localhost 4 routes: list/status/trigger/stream; live node-progress + terminal interrupt).
+- **P7**: Web dashboard (HTMX+Jinja2, 6 surfaces: agent list/cost, on-UI approve/reject, audit, config view/edit with atomic replace, trigger+SSE).
+- **P8**: Postgres checkpointer + LangGraph Store + cross-thread agent memory (opt-in; SQLite default; MEMORY.md internal-only injection; Store namespace-scoped per-agent).
+
+### M3: Extensibility (2026-06-27, 776 tests)
+- **P10**: Skill system (5 bundled instruction-only skills, injectable LLM selector for internal-only prompt injection; red line: external gets no skills).
+- **P9**: Cross-agent memory (sibling discovery + fact sharing via Store namespace `(sibling_id,"memory")`, RO-sibling/WO-self; injectable ranker; internal-only; red line: external gets nothing).
+- **P11**: Integrations + multi-channel (config-driven extra MCP servers via `integrations:` block; Linear read + gated-write Lớp B; Email/SMTP delivery as new `email_send` action type, ALL email = Lớp B, internal-only; channel registry).
+- **P12**: Automation + observability (opt-in LangSmith tracing B4, off=byte-identical; checkpoint-based replay B3 with safe-replay guard; READ-only workflow automation D3 via gateway, PROPOSE only, no auto-execute).
+
+**Entry points**: Legacy `python -m src.entrypoints.cli`/`cron` (single-agent). Multi-agent: `python -m src.entrypoints.mpm agent {list,register,run,resume,replay,automate,approvals,approve,reject,audit}`. Runtime: `python -m src.runtime.worker`, `python -m src.runtime.service`.
+
+## Cây thư mục (v2 complete state)
 
 ```
 src/
-├── agent/        # LangGraph graph + nodes + state — LÕI
+├── agent/        # LangGraph graph + nodes + state — LÕI (M1)
 ├── tools/        # *_read.py: jira/github/slack/confluence (READ)
 ├── actions/      # action_gateway.py + *_write.py (WRITE, qua guardrail)
 ├── llm/          # provider config + prompts (P2: accepts persona/project/memory params)
 ├── config/       # Settings, ReportingConfig (P1: no singletons); config_builders
-├── profile/      # [NEW P2] Profile loader + context injection
-│   ├── loader.py         # Load profiles/<id>/ → LoadedProfile (yaml + 3 MD files)
-│   ├── loader_mapping.py # Map profile.yaml → P1 dicts (Settings, ReportingConfig)
-│   └── context.py        # ProfileContext (persona/project/memory) + prompt helpers
-├── runtime/      # [NEW P3] Worker + service + registry + scheduler
-│   ├── worker.py         # python -m src.runtime.worker --agent-id <id> --report <kind>
-│   ├── service.py        # Coordinating daemon: reads registry, spawns/supervises workers
-│   ├── registry.py       # Load registry.yaml, validate agents
-│   ├── agent_paths.py    # Per-agent data dir paths + thread_id generation
-│   ├── legacy_migration.py # Once-only move of v1 .data/ → .data/agents/default/
-│   ├── scheduler.py      # croniter due-check; fires internal audience only
-│   └── run_event.py      # B1 runs.jsonl per agent
+├── profile/      # [M1-P2] Profile loader + context injection
+├── runtime/      # [M1-P3] Worker + service + registry + scheduler
 ├── audit/        # audit log (append-only)
-└── entrypoints/  # cli.py, cron.py (legacy single-agent, P2: accept --profile flag)
-    │                    # mpm.py (P4: multi-agent dispatcher)
-    │                    # mpm_*.py (P4: registry/run/manage subcommands)
+├── server/       # [M2-P6] FastAPI + SSE + HTMX dashboard (P7)
+├── skills/       # [M3-P10] Bundled instruction-only skill library + loader
+├── automation/   # [M3-P12] Workflow automation engine + LangSmith tracing config
+└── entrypoints/  # cli.py, cron.py (legacy); mpm.py (M1-P4: multi-agent)
+                  # mpm_resume_cmd.py, mpm_replay_cmd.py, mpm_automate_cmd.py (M3)
 
 profiles/         # Agent configs (gitignored except default/)
 ├── default/      # v1 migration template (empty SOUL/PROJECT/MEMORY; profile.yaml)
@@ -114,7 +107,7 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 | OKR analyzer | `src/agent/okr_analyzer.py` |
 | Resource analyzer | `src/agent/resource_analyzer.py` |
 
-## Key M1-P3 Changes vs v1
+## Key v2 Changes vs v1
 
 | Aspek | v1 | v2 M1-P3 |
 |---|---|---|
@@ -132,10 +125,12 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 
 ## Testing
 
-- **Unit tests**: `uv run pytest` — 414 tests pass (P1/P2/P3/P4 coverage: config injection, profile loading, registry, worker, service, mpm CLI).
+- **Unit tests**: `uv run pytest` — 776 tests pass (M1-P1..P4 + M2-P5..P8 + M3-P10/P9/P11/P12 coverage).
 - **Linting**: `uv run ruff check src tests` — clean.
-- **E2E**: P4 verified: `mpm agent list` shows default; `mpm agent run default --dry-run` spawned real worker; `mpm agent approvals default` reads per-agent store (slices 94604b7, ed2ed02, 8be3e71).
+- **E2E**: Final live (2026-06-27): Jira 21 issues read, real Confluence page created (id 2064385), Slack post approved live (ts 1782532805), Postgres checkpointer+store verified, 20 facts stored, B3 replay (dedup, refuse unsafe), D3 automation proposals (Lớp B only). Red lines verified: Action Gateway on every write, external channel Lớp B, replay/automation via gateway, all memory internal-only.
 
-## Next Steps (M2)
+## Deferred (future phases)
 
-- **M2**: Web dashboard + Postgres + streaming + LangGraph interrupts.
+- **Live-key integration E2E:** Linear/SMTP/LangSmith with real credentials (skipped M3; scheduled separately).
+- **Advanced workflow:** Boolean `when` conditions, schedule-triggered automation (deferred D3 expansion).
+- **Replay re-fetch:** Safe re-fetch in replay (currently frozen-state safe-replay guard; future: selective re-fetch with audit).
