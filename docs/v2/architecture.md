@@ -128,3 +128,36 @@ Vị trí Postgres/Store: **M1 vẫn dùng SqliteSaver per-agent** (1 file / age
 - Không mở write authority mới khi guardrail chưa vững — v2 **không thêm** Lớp A/B action nào, chỉ per-agent hóa.
 - Đo cost management cắt được (North Star PDR §3) — giờ per-agent.
 - `default` profile = đường migrate an toàn từ v1.
+
+## 10. Harness conformance (đây là một harness đầy đủ, không chỉ skills + tools)
+
+"Harness" (dây cương) = toàn bộ môi trường quanh model giúp agent đi đúng hướng và làm
+việc giỏi hơn. Một harness thực sự bắt buộc có **security gate + guardrails + observability**,
+không chỉ gắn tools/skills. `my-project-manager` xây đủ cả tầng đó cho PM-agent của nó —
+mỗi node dưới đây là cơ chế có thật trong `src/`, đã verify live (E2E 2026-06-27):
+
+| Harness node | Cơ chế trong sản phẩm | File |
+|---|---|---|
+| **Scheduler** (cron / heartbeat) | service daemon đọc `schedule:` (croniter, cap 4, timeout 600s) + cron entrypoint | `runtime/scheduler.py`, `runtime/service.py`, `entrypoints/cron.py` |
+| **Memory** (working / internal / external / long-term) | extractor→Store + `MEMORY.md` mirror (internal) + cross-agent sibling + Postgres Store | `agent/memory_node.py`, `agent/memory_mirror.py`, `agent/sibling_memory.py`, `agent/store.py` |
+| **Provider / Model** | OpenRouter client + budget gating + cost accounting | `llm/client.py`, `llm/budget_tracker.py`, `llm/cost.py` |
+| **Tools** (built-in / MCP / CLI) | stdio MCP adapter + `gh` CLI adapter + read tools (Jira/GitHub/Confluence/Linear/OKR) | `adapters/mcp_adapter.py`, `adapters/cli_adapter.py`, `tools/*_read.py` |
+| **Skills** | 5 bundled instruction-only skills + injectable LLM selector (internal-only inject) | `skills/*.md`, `src/skills/skill_selector.py` |
+| **Hooks** | PII firewall (`summarize_node`) + `approval_gate` interrupt node trên graph | `server/sse_events.py`, `agent/approval_gate.py` |
+| **Security gate** | **Action Gateway** — cửa DUY NHẤT, BẮT BUỘC cho mọi mutation (no module writes directly) | `actions/action_gateway.py` |
+| **Guardrails → Blocks** | Lớp A hard-deny: `DATA_LOSS` / `CREDENTIAL` / `SECURITY` / `NOT_ALLOWLISTED` (default-DENY allowlist) | `actions/hard_block.py`, `actions/secret_patterns.py` |
+| **Guardrails → Filters** | Lớp B approve-interrupt + secret redaction + dedup (reserve-before-execute) + rate-limit (10/60s) + kill-switch + dry-run | `actions/action_gateway.py`, `actions/dedup_store.py`, `actions/approval_store.py` |
+| **Observability → Logs** | audit JSONL **immutable** (no-audit ⇒ no-write) + structured run-event log per run | `audit/audit_log.py`, `runtime/run_event.py` |
+| **Observability → Traces** | LangSmith tracing opt-in (B4) + run replay / time-travel (B3) | `runtime/run_config.py`, `runtime/replay.py` |
+| **Observability → Analytics** | budget/cost-token tracker + dashboard cost-vs-budget endpoint | `llm/budget_tracker.py`, `server/routes_agents.py` |
+
+**Điểm vượt mức tối thiểu:** guardrail không phải bolt-on mà là **bất biến kiến trúc** — mọi
+write authority (kể cả các action mới M3: Linear comment, email, workflow proposal) đều
+nằm sau cùng một Action Gateway; `classify()`/`needs_interrupt()` không đổi qua suốt v2.
+Verify live: external post bị chặn chờ duyệt, D3 workflow chỉ propose (không tự execute),
+secret bị Lớp A deny. Đây là "harness engineering" đúng nghĩa — model bị đeo cương để đi
+đúng hướng, autonomous về tốc độ nhưng không bao giờ về accountability.
+
+**Khác biệt backend so với sơ đồ harness phổ biến:** external/long-term memory dùng
+Confluence + `MEMORY.md` + Postgres Store (thay cho Notion/Obsidian) — cùng vai trò, khác
+backend. Không node nào của định nghĩa harness bị thiếu.

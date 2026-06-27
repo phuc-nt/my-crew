@@ -40,6 +40,10 @@ request → [Lớp A hard-deny] → [Lớp B interrupt? → queue for human appr
 
 Full walkthrough: **[docs/action-gateway-explainer.md](docs/v1/action-gateway-explainer.md)**. Code: [`src/actions/action_gateway.py`](src/actions/action_gateway.py) + [`src/actions/hard_block.py`](src/actions/hard_block.py).
 
+### A full harness, not just skills + tools
+
+A "harness" (the reins) is the whole environment around the model that keeps the agent on track — and a *real* harness requires a **security gate + guardrails + observability**, not just bolted-on tools and skills. This repo builds all of it: scheduler, memory (working / internal / cross-agent / long-term), provider+budget, tools (MCP + CLI), skills, hooks (PII firewall + approval-gate), the **Action Gateway** security gate, two-layer **guardrails** (Lớp A hard-deny *blocks* + Lớp B/dedup/rate-limit *filters*), and **observability** (immutable audit log + structured run-events + opt-in LangSmith tracing + run replay + cost metrics). The guardrail isn't an add-on — it's an architectural invariant every write must pass, verified live. See the node-by-node map in [docs/v2/architecture.md §10 — Harness conformance](docs/v2/architecture.md).
+
 ## Quickstart
 
 ```bash
