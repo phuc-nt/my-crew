@@ -14,8 +14,9 @@
 ### M2: Platform (2026-06-26, 545 tests)
 - **P5**: LangGraph-native Lớp B interrupts (`approval_gate` node, pause/resume checkpoint flow).
 - **P6**: FastAPI SSE streaming (localhost 4 routes: list/status/trigger/stream; live node-progress + terminal interrupt).
-- **P7**: Web dashboard (HTMX+Jinja2, 6 surfaces: agent list/cost, on-UI approve/reject, audit, config view/edit with atomic replace, trigger+SSE).
+- **P7**: Web dashboard JSON API layer (5 GET endpoints: /api/{runs,cost,memory,automation,audit}/{id} + non-PII allowlist projection).
 - **P8**: Postgres checkpointer + LangGraph Store + cross-thread agent memory (opt-in; SQLite default; MEMORY.md internal-only injection; Store namespace-scoped per-agent).
+- **M4 (2026-06-28)**: React SPA replacing P7 HTMX (Vite+TypeScript, static assets committed to `src/server/static/app/`, served at `/`; ops JSON routes unchanged).
 
 ### M3: Extensibility (2026-06-27, 776 tests)
 - **P10**: Skill system (5 bundled instruction-only skills, injectable LLM selector for internal-only prompt injection; red line: external gets no skills).
@@ -37,7 +38,7 @@ src/
 ├── profile/      # [M1-P2] Profile loader + context injection
 ├── runtime/      # [M1-P3] Worker + service + registry + scheduler
 ├── audit/        # audit log (append-only)
-├── server/       # [M2-P6] FastAPI + SSE + HTMX dashboard (P7)
+├── server/       # [M2-P6] FastAPI + SSE + JSON API; [M4] React SPA (static/app/)
 ├── skills/       # [M3-P10] Bundled instruction-only skill library + loader
 ├── automation/   # [M3-P12] Workflow automation engine + LangSmith tracing config
 └── entrypoints/  # cli.py, cron.py (legacy); mpm.py (M1-P4: multi-agent)

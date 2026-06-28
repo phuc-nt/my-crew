@@ -37,7 +37,7 @@ v1 chứng minh được một luận điểm: một LLM agent có thể **full 
 
 v2 biến nó thành một **multi-agent PM platform**. Mỗi agent = **một thư mục `profiles/<id>/`** (4 file: `profile.yaml` config + `SOUL.md` persona + `PROJECT.md` context + `MEMORY.md` agent tự ghi) bound vào **một project** (Jira/GitHub/Slack/Confluence bindings riêng). Một **registry** liệt kê tất cả agent; một **coordinating service** spawn mỗi agent thành một **worker process** chạy graph của nó (theo lịch + on-demand), với **data isolation hoàn toàn** per-agent (`checkpoints/audit/budget/approvals/dedup` riêng từng agent). Bạn chạy 5 agent cho 5 project, mỗi cái tone + threshold + schedule + budget riêng, không cái nào đụng cái nào.
 
-Trên hết là một **web dashboard** (FastAPI + HTMX+Jinja2, server-rendered): thấy danh sách agent + trạng thái (running/idle/error), cost vs budget từng agent, audit gần đây, **các Lớp B approval đang chờ (approve/reject ngay trên UI, same real-post path as CLI)**, xem/sửa config từng agent (validate-before-write, atomic replace, MEMORY.md read-only), **trigger một report on-demand với SSE live streaming**. Đồng thời v2 khai thác sâu LangGraph mà v1 MVP chưa dùng: **graph-native interrupts** cho human-in-the-loop, **streaming** để UI xem agent chạy live, **Postgres checkpointer + Store** cho state đa-process + cross-thread memory. Điều bất biến: **Action Gateway guardrail được GIỮ NGUYÊN, chỉ trở thành per-agent** — red line Lớp A vẫn hard-coded trước LLM, mọi write vẫn qua một cổng, giờ một cổng *cho mỗi agent*.
+Trên hết là một **web dashboard** (React SPA via Vite+TypeScript, M4): thấy danh sách agent + trạng thái (running/idle/error), cost vs budget từng agent, audit gần đây, **các Lớp B approval đang chờ (approve/reject ngay trên UI, same real-post path as CLI)**, xem/sửa config từng agent (validate-before-write, atomic replace, MEMORY.md read-only), **trigger một report on-demand với SSE live streaming**. Đồng thời v2 khai thác sâu LangGraph mà v1 MVP chưa dùng: **graph-native interrupts** cho human-in-the-loop, **streaming** để UI xem agent chạy live, **Postgres checkpointer + Store** cho state đa-process + cross-thread memory. Điều bất biến: **Action Gateway guardrail được GIỮ NGUYÊN, chỉ trở thành per-agent** — red line Lớp A vẫn hard-coded trước LLM, mọi write vẫn qua một cổng, giờ một cổng *cho mỗi agent*.
 
 ## 2. What changes vs v1
 
@@ -46,12 +46,12 @@ Trên hết là một **web dashboard** (FastAPI + HTMX+Jinja2, server-rendered)
 | Số agent / project | 1 agent, 1 project | **N agent, mỗi agent 1 project** |
 | Config | 2 `@lru_cache` singleton (`get_reporting_config`, `get_settings`) đọc `.env` toàn cục | **thư mục `profiles/<id>/` per-agent (4 file), inject làm parameter** vào graph/gateway/store/tool |
 | Persona / prompt | system prompt hardcode trong `src/llm/*` | **`SOUL.md` + `PROJECT.md` override/prepend** lớp prompt |
-| Kích hoạt | CLI + cron | CLI + **worker** + **web dashboard** (M2) |
+| Kích hoạt | CLI + cron | CLI + **worker** + **web dashboard** (M4 React SPA) |
 | Runtime | 1 process, chạy tay/launchd | **registry → coordinating service → N worker process** |
 | Data | shared `.data/` (1 checkpoints/audit/budget/approvals/dedup) | **`.data/agents/<id>/` riêng từng agent**; `thread_id` chứa `agent_id` |
 | Checkpointer | `SqliteSaver` (1 file) | **Postgres checkpointer** (multi-process) + **Store** (cross-thread memory) |
 | Lớp B approval | gateway-level queue (`pending_approval` + `approval_store` + `cli approve`) | **graph-native interrupt** (pause→UI hỏi→resume, checkpoint-serialized) — augment/replace queue |
-| Quan sát | đọc JSONL audit + `cli audit` | **web dashboard**: status, cost, audit, pending approvals, streaming live run |
+| Quan sát | đọc JSONL audit + `cli audit` | **web dashboard** (React SPA): status, cost, audit, pending approvals, streaming live run |
 | **Guardrail** | Action Gateway (Lớp A/B + audit + budget + dedup) | **GIỮ NGUYÊN — chỉ trở thành per-agent** (mỗi agent một gateway + một bộ store) |
 
 > Guardrail **không** bị viết lại. Lớp A red-line, allowlist-default-deny, audit, budget cap, dedup reserve-before-execute — tất cả giữ. Thay đổi duy nhất: chúng được khởi tạo *per-agent* (path + config từ profile) thay vì từ singleton toàn cục. Chi tiết: [architecture.md §7](architecture.md).

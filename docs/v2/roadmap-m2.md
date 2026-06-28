@@ -42,25 +42,23 @@
 - **Acceptance**: trigger report via API → SSE streams live node events → approve_gate pause shows terminal event with thread_id → resume via P5 CLI → stream closes, Slack post live.
 - **Risks** (resolved): SSE + worker process boundary. Mitigation: service runs graph in-process on-demand (no subprocess, stream direct); scheduled runs stay via worker (§ architecture unchanged).
 
-### P7 — Web dashboard (HTMX + Jinja2) ✅ COMPLETE
+### P7 — Web dashboard (HTMX + Jinja2) ✅ COMPLETE [SUPERSEDED BY M4]
 
-**Status**: DONE (2026-06-26, committed 15f881b / d86e1a5 / 89650f7 / 7883710, 545 tests, E2E-verified real Slack post).
+**Status**: DONE (2026-06-26, committed 15f881b / d86e1a5 / 89650f7 / 7883710, 545 tests, E2E-verified real Slack post). **REPLACED by M4 React SPA (2026-06-28).**
 
-- **What shipped**:
-  - **Server-rendered HTML dashboard** (`src/server/templates/` Jinja2 templates) on the existing P6 FastAPI app; vendored htmx 2.x for no-CDN sandbox.
-  - **6 ops surfaces**:
-    1. **Agent list + status** — reads registry, shows running/idle/error per-agent.
-    2. **Cost vs budget** — per-agent budget cap and current spend (read-only).
-    3. **On-UI Lớp B approve/reject** — lists pending approvals, two-step confirm (operator sees channel + message before POST), reject one-click. POST builds per-agent gateway + calls `gw.approve(id, handler=dispatch_approved_action)` = the SAME real-post path as CLI. Response handling: `HardBlockedError → 403`, bad id `→ 400`, post failure `→ 502` with approval reverted to pending.
-    4. **Recent per-agent audit** — reads `AuditLog.query(limit clamped)`, shows last N events per agent.
-    5. **Config view + EDIT (S3)** — render `profile.yaml` + `SOUL.md` / `PROJECT.md` editable; `MEMORY.md` READ-ONLY (agent self-writes, no save route). Edit path: VALIDATE config using existing `load_profile()` builders (raises on bad YAML/stakeholder-channel/threshold); if valid, atomic byte-replace; if invalid, return exact error and leave original byte-unchanged.
-    6. **Trigger on-demand + live SSE view** — form POSTs existing `/api/agents/{id}/trigger`, streams existing SSE live (same as P6 streaming).
-  - **Dispatcher refactored**: extracted `src/actions/approved_dispatch.py` (was duplicated in cli + mpm, now single source).
-  - **Security**: localhost-only (127.0.0.1), NO auth (single-operator sandbox), existing guardrail (Lớp A + audit + budget) applies.
-  - **Deps**: jinja2; existing fastapi, uvicorn, sse-starlette unchanged.
-- **Files touched**: new `src/server/templates/` (Jinja2), new `src/server/dashboard_routes.py` (dashboard POST/GET handlers), `src/actions/approved_dispatch.py` (extracted), `src/server/app.py` (mount dashboard routes).
-- **Acceptance**: ✅ list 2+ agents with costs, approve 1 pending Lớp B from UI → Slack post live, edit 1 threshold in profile.yaml → next run uses new value.
-- **Risks** (resolved): HTMX vs Streamlit (§9 open question) → **RESOLVED: HTMX+Jinja2 chosen** — lightweight, server-rendered, native SSE integration on FastAPI, no-CDN vendored htmx.
+- **P7 shipped (now historical)**:
+  - **Server-rendered HTML dashboard** (`src/server/templates/` Jinja2, `routes_dashboard.py` / `routes_approvals.py` / `routes_audit.py` / `routes_profile.py` HTML routers).
+  - **6 ops surfaces**: agent list + cost vs budget, on-UI Lớp B approve/reject, audit, config view/edit, trigger + SSE live streaming.
+  - **Deps**: jinja2, vendored htmx 2.x.
+  - All files **deleted in M4** (2026-06-28): `src/server/templates/`, 4 route files, 5 HTMX tests.
+
+- **M4 replaces P7** (React SPA, 2026-06-28):
+  - **Vite + TypeScript React SPA**: static assets committed to `src/server/static/app/`, served at `/` by FastAPI catch-all (zero Node.js at serve time).
+  - **New JSON API layer**: `src/server/routes_visualize.py` (5 GET endpoints: /api/{runs,cost,memory,automation,audit}/{id}), non-PII allowlist mirroring `summarize_node`. Memory internal-only (external → empty; `?audience` gated).
+  - **Ops JSON routes**: `src/server/routes_ops_json.py` (approve/reject/config) calling identical `gw.approve()` / `profile_editor` functions; extracted `ops_helpers.py`.
+  - **React surfaces**: Timeline, Cost (react-chartjs-2), Guardrail (verdict + audit), Memory (internal), Automation (internal). Read-only; approvals trigger via existing gateway-routed endpoint.
+  - **Invariant held**: M4 is UI-only observability; Action Gateway unchanged, per-agent guardrail untouched. External-audience memory → empty (red line preserved).
+  - **E2E verified**: 5 slices (JSON API, React shell, visual views, ops surfaces, wiring), 785 pytest green, vitest 11, ruff clean. Real browser → click Approve → real Slack post through unchanged gateway; external-audience memory → empty.
 
 ### P8 — Postgres checkpointer + Store + cross-thread agent memory ✅ COMPLETE
 
@@ -82,7 +80,7 @@
   - **Multi-process resume (P5 + P8)**: P5 resume within-process via SqliteSaver; multi-machine cross-process resume now possible with Postgres (P8 opt-in) — both paths work, user picks infra.
   - **Memory durability**: Store writes are deduped by content-hash; MEMORY.md mirror survives human edits (human content between markers preserved, agent section replaced).
 
-**Exit M2**: v2 multi-agent platform **FULLY COMPLETE** (M1 core + M2 P5/P6/P7/P8 all shipped). Backend (multi-agent + interrupts + streaming + optional Postgres) + **web dashboard (HTMX+Jinja2, 6 ops surfaces)** all in. Postgres + Store opt-in for scale; SQLite default for local dev. Cross-thread memory internal-only, audit guardrail preserved.
+**Exit M2**: v2 multi-agent platform **FULLY COMPLETE** (M1 core + M2 P5/P6/P7/P8 all shipped). Backend (multi-agent + interrupts + streaming + optional Postgres) + JSON API layer (P7) all in. Postgres + Store opt-in for scale; SQLite default for local dev. Cross-thread memory internal-only, audit guardrail preserved. **M4 React SPA (2026-06-28)** replaces P7's HTMX frontend; invariant untouched.
 
 ---
 
