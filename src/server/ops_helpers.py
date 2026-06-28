@@ -1,9 +1,9 @@
 """Shared ops helpers for the dashboard write surfaces (v2 M4-S4).
 
-`_require_agent` + `_gateway` were defined inline in `routes_approvals.py` (htmx). M4 adds
-JSON sibling routes that need the IDENTICAL per-request agent-load + gateway-build (so the
-React approve path is the same real path as the htmx one). Extracted here so both UIs share
-one definition; the htmx routes are deleted in S5 but this helper survives.
+`require_agent` + `build_gateway` are the per-request agent-load + gateway-build shared by
+the JSON ops routes (`routes_ops_json.py`). They were originally inline in the htmx approval
+routes (removed in M4-S5); extracting them here kept the React approve path identical to the
+old htmx one — the SAME real gateway path (Lớp A/B + audit + dedup), no bypass.
 """
 
 from __future__ import annotations

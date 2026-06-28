@@ -43,12 +43,12 @@
               └─────────────────────────────────────────────────────────────┘
 
    ┌──────────────────────────────────────────────────────────────────────┐
-   │  Web dashboard (FastAPI + HTMX+Jinja2, M2-P7)                           │
-   │  Server-rendered HTML; reads registry + per-agent .data/{audit,budget} │
-   │  - agent list + status   - cost vs budget   - recent audit            │
-   │  - pending Lớp B approvals (approve/reject on-UI, same real-post path) │
-   │  - config view/edit (validate-before-write, atomic replace, MEMORY RO) │
-   │  - trigger report on-demand  - streaming live run (SSE, M2-P6)         │
+   │  Web dashboard (React SPA, Vite+TS over JSON APIs, M4)                 │
+   │  Client-side rendering from committed Vite build; reads JSON API       │
+   │  - agent timeline/runs  - cost vs budget chart  - memory/automation   │
+   │  - guardrail verdict + audit table · pending Lớp B approvals UI       │
+   │  - approve/reject on-UI (same gateway-routed path as CLI)             │
+   │  - config view/edit · trigger on-demand · streaming live run (SSE)    │
    └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -149,7 +149,7 @@ mỗi node dưới đây là cơ chế có thật trong `src/`, đã verify live
 | **Guardrails → Filters** | Lớp B approve-interrupt + secret redaction + dedup (reserve-before-execute) + rate-limit (10/60s) + kill-switch + dry-run | `actions/action_gateway.py`, `actions/dedup_store.py`, `actions/approval_store.py` |
 | **Observability → Logs** | audit JSONL **immutable** (no-audit ⇒ no-write) + structured run-event log per run | `audit/audit_log.py`, `runtime/run_event.py` |
 | **Observability → Traces** | LangSmith tracing opt-in (B4) + run replay / time-travel (B3) | `runtime/run_config.py`, `runtime/replay.py` |
-| **Observability → Analytics** | budget/cost-token tracker + dashboard cost-vs-budget endpoint | `llm/budget_tracker.py`, `server/routes_agents.py` |
+| **Observability → Analytics** | budget/cost-token tracker + JSON API (reads) + React SPA views (M4) | `llm/budget_tracker.py`, `server/routes_visualize.py`, `web/` |
 
 **Điểm vượt mức tối thiểu:** guardrail không phải bolt-on mà là **bất biến kiến trúc** — mọi
 write authority (kể cả các action mới M3: Linear comment, email, workflow proposal) đều
@@ -161,3 +161,13 @@ secret bị Lớp A deny. Đây là "harness engineering" đúng nghĩa — mode
 **Khác biệt backend so với sơ đồ harness phổ biến:** external/long-term memory dùng
 Confluence + `MEMORY.md` + Postgres Store (thay cho Notion/Obsidian) — cùng vai trò, khác
 backend. Không node nào của định nghĩa harness bị thiếu.
+
+## 11. React Dashboard (M4) — UI-only observability layer
+
+**M4 ships a Vite + TypeScript React SPA** replacing the M2-P7 HTMX server-rendered dashboard. Built as static assets committed to `src/server/static/app/`, served at `/` by FastAPI's catch-all (zero extra process, zero Node.js at serve time). **The invariant holds**: M4 is a window only.
+
+- **New JSON API layer** (`src/server/routes_visualize.py`): 5 read-only endpoints (`/api/{runs,cost,memory,automation,audit}/{id}`) each projecting to a non-PII allowlist mirroring `summarize_node`. Memory internal-only (external → no facts; `?audience` gated). No guardrail change.
+- **Ops JSON routes** (`src/server/routes_ops_json.py`): approve/reject/config reads calling the identical `gw.approve(handler=dispatch_approved_action)` / `profile_editor` functions; shared `ops_helpers.py` extracted from CLI dispatcher.
+- **React surfaces**: Timeline, Cost (react-chartjs-2), Guardrail (verdict + audit), Memory (internal), Automation (internal). Read-only; approvals trigger via the existing gateway-routed endpoint (no new write authority).
+- **What's deleted**: `routes_dashboard.py`, `routes_approvals.py`, `routes_audit.py`, `routes_profile.py` (HTML routers), `src/server/templates/`, htmx static + 5 htmx tests. Coverage guard: every unique edge-case re-asserted in a JSON test first.
+- **M4 is shipped**: 5 slices (S1 JSON API, S2 React shell, S3 visual views, S4 ops surfaces, S5 wiring), 785 pytest green, vitest 11, ruff clean.

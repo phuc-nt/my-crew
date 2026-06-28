@@ -1,5 +1,5 @@
-// Router root. browser-router with basename="/static/app" (the FastAPI static mount this
-// slice serves from); S5 drops the basename to "/" when the SPA moves to the / catch-all.
+// Router root. browser-router at `/` — the SPA is served at the root by FastAPI's
+// StaticFiles(html=True) mount (S5); client routes deep-link via the index.html catch-all.
 import { BrowserRouter, Route, Routes } from 'react-router'
 import './App.css'
 import { AgentProvider } from './agent-context'
@@ -15,7 +15,7 @@ import { Trigger } from './views/Trigger'
 
 function App() {
   return (
-    <BrowserRouter basename="/static/app">
+    <BrowserRouter>
       <AgentProvider>
         <Routes>
           <Route path="/" element={<Layout />}>

@@ -184,6 +184,41 @@ def test_get_config_returns_four_files(monkeypatch, tmp_path):
     assert set(files) >= {"profile", "soul", "project", "memory"}
 
 
+def test_save_valid_yaml_commits(monkeypatch, tmp_path):
+    """Coverage parity with the deleted htmx config test: a valid edit is written."""
+    _patch(monkeypatch, tmp_path)
+    pdir = _seed_profile(tmp_path, monkeypatch)
+    r = _client().post(
+        "/api/agents/acme/config/profile", json={"text": "name: acme\nenabled: false\n"}
+    )
+    assert r.status_code == 200 and r.json()["saved"] == "profile.yaml"
+    assert "enabled: false" in (pdir / "profile.yaml").read_text()  # committed
+
+
+def test_save_non_mapping_yaml_400(monkeypatch, tmp_path):
+    """A non-mapping yaml (list/scalar) → 400 (ValueError), original kept."""
+    _patch(monkeypatch, tmp_path)
+    pdir = _seed_profile(tmp_path, monkeypatch)
+    original = (pdir / "profile.yaml").read_text()
+    r = _client().post("/api/agents/acme/config/profile", json={"text": "- just\n- a list\n"})
+    assert r.status_code == 400
+    assert (pdir / "profile.yaml").read_text() == original
+
+
+def test_save_markdown_soul(monkeypatch, tmp_path):
+    """SOUL.md is editable free text (coverage parity with the htmx markdown test)."""
+    _patch(monkeypatch, tmp_path)
+    pdir = _seed_profile(tmp_path, monkeypatch)
+    r = _client().post("/api/agents/acme/config/soul", json={"text": "new soul"})
+    assert r.status_code == 200 and r.json()["saved"] == "SOUL.md"
+    assert (pdir / "SOUL.md").read_text() == "new soul"
+
+
+def test_config_unknown_agent_404(monkeypatch, tmp_path):
+    _patch(monkeypatch, tmp_path)
+    assert _client().get("/api/agents/ghost/config").status_code == 404
+
+
 def test_save_invalid_yaml_400_keeps_original(monkeypatch, tmp_path):
     _patch(monkeypatch, tmp_path)
     pdir = _seed_profile(tmp_path, monkeypatch)

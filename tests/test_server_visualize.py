@@ -162,6 +162,26 @@ def test_automation_summarizes_action(monkeypatch, tmp_path):
 # --- audit ---
 
 
+def test_audit_unknown_agent_404(monkeypatch, tmp_path):
+    """Coverage parity with the deleted htmx audit test: unknown id → 404."""
+    _patch(monkeypatch, tmp_path)
+    assert _client().get("/api/audit/ghost").status_code == 404
+
+
+def test_audit_limit_clamped(monkeypatch, tmp_path):
+    """The recent-rows limit is clamped (no unbounded / no limit=0=all)."""
+    data_root = _patch(monkeypatch, tmp_path)
+    d = _agent_dir(data_root)
+    adir = d / "audit"
+    adir.mkdir(parents=True, exist_ok=True)
+    log = AuditLog(adir / "audit.jsonl")
+    for i in range(5):
+        log.record(AuditEntry(action_type="mcp_tool", tool=f"t{i}", verdict="allow"))
+    body = _client().get("/api/audit/acme?limit=2").json()
+    assert len(body["recent"]) == 2  # clamped to the requested limit
+    assert body["counts"]["allow"] == 5  # counts are over ALL rows, not the clamp
+
+
 def test_audit_counts_and_recent(monkeypatch, tmp_path):
     data_root = _patch(monkeypatch, tmp_path)
     d = _agent_dir(data_root)

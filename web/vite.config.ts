@@ -7,7 +7,8 @@ import { defineConfig } from 'vite'
 // Dev: `vite dev` proxies /api to the FastAPI server on 127.0.0.1:8765.
 export default defineConfig({
   plugins: [react()],
-  base: '/static/app/',
+  // S5: the SPA is served at `/` (StaticFiles html=True). Assets resolve under `/assets`.
+  base: '/',
   build: {
     outDir: '../src/server/static/app',
     emptyOutDir: true,
