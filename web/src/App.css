@@ -1,0 +1,12 @@
+/* Minimal dashboard styles (M4). No UI kit — plain CSS. */
+:root { font-family: system-ui, sans-serif; color: #1a1a1a; }
+.app-shell { max-width: 1100px; margin: 0 auto; padding: 1rem; }
+.app-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.app-header h1 { font-size: 1.1rem; margin: 0; }
+.app-nav { display: flex; gap: 0.75rem; margin: 0.75rem 0 1.25rem; border-bottom: 1px solid #ddd; padding-bottom: 0.5rem; }
+.app-nav a { text-decoration: none; color: #555; padding: 0.25rem 0.5rem; border-radius: 4px; }
+.app-nav a.active { background: #1a1a1a; color: #fff; }
+.agent-picker { font-size: 0.9rem; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #eee; }
+.error { color: #b00; }
