@@ -96,6 +96,15 @@ def test_pack_loads_as_importable_package():
     assert f"{_pack_package_name('pm')}.graphs" in sys.modules  # submodule loaded
 
 
+def test_all_report_kinds_is_union_across_packs():
+    # Kind validation (CLI/API) uses this union so a pack's kind is valid without a core
+    # edit. It must contain every PM kind plus any other installed pack's kinds.
+    from src.packs.registry import all_report_kinds
+
+    kinds = all_report_kinds()
+    assert {"daily", "weekly", "okr", "resource"} <= kinds  # PM kinds always present
+
+
 # --- S2: pm-pack registers its report kinds, other seams still empty ---
 
 

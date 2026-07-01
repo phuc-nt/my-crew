@@ -16,7 +16,6 @@ from src.server.sse_stream import stream_run
 
 router = APIRouter(tags=["runs"])
 
-_VALID_KINDS = {"daily", "weekly", "okr", "resource"}
 _VALID_AUDIENCES = {"internal", "external"}
 
 
@@ -37,7 +36,11 @@ async def trigger_run(agent_id: str, request: Request) -> dict:
     audience = params.get("audience", "internal")
     dry_run = bool(params.get("dry_run", False))
 
-    if kind not in _VALID_KINDS:
+    # Pack-aware kind validation (union across all packs), so a domain pack's kind is
+    # accepted without a core edit; the worker enforces the agent's own pack serves it.
+    from src.packs.registry import all_report_kinds
+
+    if kind not in all_report_kinds():
         raise HTTPException(status_code=422, detail=f"invalid kind {kind!r}")
     # Validate audience strictly (not silent-coerce): a typo'd "external" must NOT
     # quietly downgrade to internal and bypass the Lớp B approval gate.

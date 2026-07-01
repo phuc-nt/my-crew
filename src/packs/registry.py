@@ -65,6 +65,21 @@ def discover_domains() -> tuple[str, ...]:
     return tuple(found)
 
 
+def all_report_kinds() -> frozenset[str]:
+    """Every report kind served by any installed pack (the union across domains).
+
+    Used by the CLI/API to validate `--report` without hardcoding PM's kinds — a kind
+    is valid if some pack serves it, so a new pack's kind (HR `headcount`) is accepted
+    with no core edit. The per-agent worker still enforces that the agent's OWN pack
+    serves the kind, so this union only gates obvious typos early.
+    """
+    registry = PackRegistry()
+    kinds: set[str] = set()
+    for domain in registry.known_domains():
+        kinds.update(registry.load(domain).report_kinds)
+    return frozenset(kinds)
+
+
 def pack_skills_dir(domain: str) -> Path:
     """Where a domain bundles its skill `.md` files (v3 M5 S5 pack asset)."""
     return pack_dir(domain) / "skills"

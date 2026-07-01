@@ -15,7 +15,6 @@ from src.entrypoints.mpm import _flag_value
 from src.runtime.registry import load_registry
 from src.runtime.service import _real_spawn, _supervise, _worker_argv
 
-_VALID_KINDS = {"daily", "weekly", "okr", "resource"}
 _DEFAULT_TIMEOUT = 600
 
 
@@ -33,9 +32,15 @@ def run_agent(args: list[str], *, spawn=None, timeout: int = _DEFAULT_TIMEOUT) -
         return 2
     agent_id = args[0]
     kind = _flag_value(args, "--report") or "daily"
-    if kind not in _VALID_KINDS:
+    # Validate against the union of all packs' kinds (pack-aware, not a hardcoded PM
+    # set) so a domain pack's kind (e.g. HR `headcount`) is accepted. The worker still
+    # enforces that the agent's own pack serves the kind.
+    from src.packs.registry import all_report_kinds
+
+    valid_kinds = all_report_kinds()
+    if kind not in valid_kinds:
         print(
-            f"error: --report must be one of {sorted(_VALID_KINDS)}; got {kind!r}.",
+            f"error: --report must be one of {sorted(valid_kinds)}; got {kind!r}.",
             file=sys.stderr,
         )
         return 2
