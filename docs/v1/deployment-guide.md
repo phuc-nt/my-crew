@@ -7,7 +7,8 @@
 - Python 3.12+ (venv pin 3.12 qua `uv python install 3.12`; KHÔNG dùng global nếu là 3.14+)
 - `uv` (khuyến nghị) hoặc `pip`
 - **Node.js** — chạy 3 MCP server (Jira/Confluence/Slack, đều Node/TS stdio). Build `dist/` trước (`npm install && npm run build` trong mỗi repo server).
-- **`gh` CLI** — GitHub integration (auth: `gh auth login`, scoped — xem §3). Tương lai: **GWS CLI**.
+- **`gh` CLI** — GitHub integration (auth: `gh auth login`, scoped — xem §3).
+- **`gws` CLI** (Google Workspace CLI, unofficial — `gws sheets spreadsheets values get`) — [M6+] chỉ cần cho **hr-pack** đọc Google Sheet; PM không cần. Auth qua `gws auth` (OAuth riêng, độc lập core; token KHÔNG ở `.env`). Spawn như `gh`. Không có → hr-pack báo lỗi rõ khi chạy.
 - Token: Atlassian (Jira+Confluence chung site) + Slack **browser-token** → để ở **`.env` của agent**; agent **inject xuống env subprocess** khi spawn MCP server (server đọc từ process env lúc startup). GitHub auth qua `gh`.
 - **OpenRouter API key** — provider LLM (instance thật, không mock). Model mặc định `minimax/minimax-m2.7`, fallback `qwen/qwen-3.7`.
 

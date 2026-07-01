@@ -1,7 +1,7 @@
 # Codebase Summary — my-project-manager
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-06-30 — v3 M5 COMPLETE (domain-pack abstraction).** 816 tests, ruff clean, pm-pack byte-identical pre-v3.
+> Status: **2026-07-01 — v3 M6 COMPLETE (hr-pack + generic seam patches).** 839 tests, ruff clean, pm-pack byte-identical pre-v3, HR output deterministic live.
 
 ## Trạng thái hiện tại (v2 COMPLETE: M1+M2+M3)
 
@@ -27,6 +27,13 @@
 ### M5: Domain-pack abstraction (2026-06-30, 816 tests)
 - **S1-S6 slices**: Extract 3 coupling seams → generic core. PM becomes `domain-packs/pm-pack/` (graphs/tools/analyzers/allowlist/prompts/skills). PackRegistry loadable per domain. ToolProvider Protocol makes tool reads transport-agnostic. Config-driven allowlist stays pack-driven; Lớp A red line stays core-guarded. pm-pack output byte-identical pre-v3. Backward-compat: pre-v3 profiles default `domain: pm`.
 
+### M6: Second domain (hr-pack) + generic seam patches (2026-07-01, 839 tests)
+- **hr-pack lands**: Headcount report kind (count by employment status + department). Reads Confluence + Google Sheets via **gws CLI** (Google Workspace CLI, spawned like gh, independent auth). Writes via same Action Gateway (Lớp A/B unchanged). Config: HR_SHEET_ID / HR_SHEET_RANGE / HR_CONFLUENCE_PAGE_ID (env-only). Output PII-safe (aggregate counts, no employee names).
+- **3 generic seam patches** (no domain logic; enable "git diff src/ = ∅" for future packs):
+  - `discover_domains()` — filesystem-based pack discovery (domain-packs/<x>-pack/graphs.py marker), replaces hardcoded _KNOWN_DOMAINS.
+  - `_ensure_pack_package()` — loads pack as importable domain_pack_<x> so pack modules can import siblings.
+  - `all_report_kinds()` — kind validation unions all packs' kinds; failure-isolated per pack.
+
 **Entry points**: Legacy `python -m src.entrypoints.cli`/`cron` (single-agent). Multi-agent: `python -m src.entrypoints.mpm agent {list,register,run,resume,replay,automate,approvals,approve,reject,audit}`. Runtime: `python -m src.runtime.worker`, `python -m src.runtime.service`.
 
 ## Cây thư mục (v3 M5 state with domain-packs)
@@ -48,14 +55,21 @@ src/
                   # mpm_resume_cmd.py, mpm_replay_cmd.py, mpm_automate_cmd.py (M3)
 
 domain-packs/    # [M5] Domain implementations (pluggable)
-└── pm-pack/     # PM domain: graphs/tools/prompts/skills/allowlist
-    ├── pack.yaml             # manifest: id, report_kinds, required bindings
-    ├── graphs.py             # report_kind builders (daily/weekly/okr/resource)
-    ├── tools.py              # ToolProvider wrapping jira/github/confluence reads
-    ├── write_handlers.py     # allowlist + handler dispatch for slack/confluence
-    ├── models.py             # Issue↔Task mapping (lossless) + generic Task/Event
-    ├── prompts/              # 8 PM system prompts (dynamic-loaded)
-    └── skills/               # 5 bundled PM skills
+├── pm-pack/     # PM domain: graphs/tools/prompts/skills/allowlist
+│   ├── pack.yaml             # manifest: id, report_kinds, required bindings
+│   ├── graphs.py             # report_kind builders (daily/weekly/okr/resource)
+│   ├── tools.py              # ToolProvider wrapping jira/github/confluence reads
+│   ├── write_handlers.py     # allowlist + handler dispatch for slack/confluence
+│   ├── models.py             # Issue↔Task mapping (lossless) + generic Task/Event
+│   ├── prompts/              # 8 PM system prompts (dynamic-loaded)
+│   └── skills/               # 5 bundled PM skills
+└── hr-pack/     # [M6] HR domain: headcount reports via Google Sheets + Confluence
+    ├── pack.yaml             # manifest: id, report_kinds (headcount)
+    ├── graphs.py             # headcount report builder
+    ├── tools.py              # ToolProvider: Confluence read + gws CLI (Google Sheets)
+    ├── write_handlers.py     # allowlist (slack/confluence writes)
+    ├── analyzers.py          # headcount analyzer (count/group_by)
+    └── prompts/              # HR-specific system prompts
 
 profiles/         # Agent configs (gitignored except default/)
 ├── default/      # v1 migration template (SOUL/PROJECT/MEMORY; profile.yaml; domain: pm implicit)
@@ -87,6 +101,11 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 | **[M5] ToolProvider interface** | `src/packs/tool_provider.py::ToolProvider` Protocol — `read(name: str) -> list[Task/Event]`; transport-agnostic |
 | **[M5] Pack allowlist** | `domain-packs/pm-pack/write_handlers.py` — contributes `ALLOWLIST` dict; loaded by `hard_block.py` (Lớp A red line stays core) |
 | **[M5] Profile domain field** | `src/config/settings.py::Settings.domain` — defaults `"pm"` if absent (backward-compat); loaded by profile.py |
+| **[M6] Discover packs (filesystem)** | `src/packs/registry.py::discover_domains()` — finds `domain-packs/<x>-pack/` folders with graphs.py marker (replaces hardcoded _KNOWN_DOMAINS) |
+| **[M6] Pack package registration** | `src/packs/registry.py::_ensure_pack_package()` — loads domain-packs/<x>-pack/ as importable domain_pack_<x> (enables pack self-imports) |
+| **[M6] Kind validation union** | `src/packs/registry.py::all_report_kinds()` — unions all packs' report_kinds for early typo detection; failure-isolated per pack |
+| **[M6] HR gws adapter** | `domain-packs/hr-pack/tools.py::_gws_sheet_rows()` — spawns gws CLI (Google Workspace CLI), parses JSON, mirrors gh CLI pattern |
+| **[M6] HR analyzer** | `domain-packs/hr-pack/analyzers.py` — headcount aggregator (count/group_by employment status + department) |
 | **[NEW P2] Load profile** | `src/profile/loader.py::load_profile()` — parse `profiles/<id>/profile.yaml` + SOUL/PROJECT/MEMORY + domain field |
 | **[NEW P2] Profile → config** | `src/profile/loader_mapping.py` — map profile.yaml fields to P1's Settings/ReportingConfig dicts + domain |
 | **[NEW P2] Prompt injection** | `src/profile/context.py::ProfileContext` — persona (system msg), project+memory (user msg, internal only) |
@@ -154,7 +173,7 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 
 ## Next Phase
 
-**M6 (hr-pack proof):** Validate domain-pack abstraction with Google Sheets HR data adapter. ToolProvider Protocol tests with non-stdio transport (HTTP). PM generic Task/Event model re-used by HR (sheet-row → Task → headcount analyzer).
+**M7 (admin-pack):** Third domain to validate "git diff src/ = ∅" gate (M6 seam patches should suffice). Candidate: billing/cost-center reports via API integrations.
 
 ## Deferred
 

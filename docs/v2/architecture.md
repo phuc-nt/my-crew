@@ -172,53 +172,65 @@ backend. Không node nào của định nghĩa harness bị thiếu.
 - **What's deleted**: `routes_dashboard.py`, `routes_approvals.py`, `routes_audit.py`, `routes_profile.py` (HTML routers), `src/server/templates/`, htmx static + 5 htmx tests. Coverage guard: every unique edge-case re-asserted in a JSON test first.
 - **M4 is shipped**: 5 slices (S1 JSON API, S2 React shell, S3 visual views, S4 ops surfaces, S5 wiring), 785 pytest green, vitest 11, ruff clean.
 
-## 12. Domain-pack abstraction (v3 M5)
+## 12. Domain-pack abstraction (v3 M5 + M6)
 
 **v3 M5 (2026-06-30, 816 tests) extracts PM into pluggable `domain-packs/pm-pack/`, leaving core generic.** PM runs byte-identical to pre-v3. Three coupling seams unplugged:
 
 **1. Report-kind dispatch:**
 - **Old**: `worker.py` if/elif kind → graph builder (hardcoded daily/weekly/okr/resource).
-- **New**: `PackRegistry().load(domain).report_kinds[kind]` routes via pack registry. `pm-pack/graphs.py` registers 4 builders. **Advantage**: M6 hr-pack registers own kinds (e.g., `headcount`, `budget_forecast`) without lõi changes.
+- **New**: `PackRegistry().load(domain).report_kinds[kind]` routes via pack registry. `pm-pack/graphs.py` registers 4 builders. **M6 hr-pack registers own kinds** (e.g., `headcount`) without lõi changes.
 
 **2. Tool providers:**
 - **Old**: graph builders import `jira_read`, `github_read` directly; transport baked in.
-- **New**: graph accepts `tools: ToolProvider` (Protocol in `src/packs/tool_provider.py`). PM ToolProvider wraps jira/github/confluence reads. **Advantage**: M6 plugs Google Sheets adapter (HTTP, no stdio MCP) without rewriting graph.
+- **New**: graph accepts `tools: ToolProvider` (Protocol in `src/packs/tool_provider.py`). PM ToolProvider wraps jira/github/confluence reads. **M6 plugs Google Sheets via gws CLI adapter** (HTTP spawned process, mirrors gh CLI pattern — not stdio MCP).
 
 **3. Config-driven allowlist + handlers:**
 - **Old**: `hard_block._MCP_ALLOWLIST` + `approved_dispatch.dispatch_approved_action` hardcode PM tool whitelist + handler branches (if/elif server).
 - **New**: `pm-pack/write_handlers.py` contributes `ALLOWLIST` dict + handler map. Core `classify()` / `needs_interrupt()` unchanged. **RED-LINE INVARIANT HELD**: Lớp A markers (DATA_LOSS/CREDENTIAL/SECURITY) stay in `src/actions/hard_block.py` — pack cannot override red line, only *add* permitted tools (default-DENY preserved).
 
+**M6 seam patches (v3 M6, 2026-07-01, 839 tests):** HR-pack landing proved M5 abstraction but surfaced 3 generic core seams initially missed. One-time fixes, no domain logic:
+- `src/packs/registry.py::discover_domains()` — pack discovery from filesystem (`domain-packs/<x>-pack/graphs.py` marker), replacing hardcoded `_KNOWN_DOMAINS`. Adding a pack folder now requires zero core edits.
+- `src/packs/registry.py::_ensure_pack_package()` — loads each pack as importable `domain_pack_<x>` so a pack's modules can import siblings (PM never needed this; HR does).
+- `src/packs/registry.py::all_report_kinds()` — kind validation now unions all packs' kinds instead of hardcoded PM set. Failure-isolated: one broken pack doesn't block validation for all.
+
 **Backward-compatibility:** Pre-v3 profiles omit `domain:` field → default `"pm"` → auto-load pm-pack. Byte-identical behavior.
 
-**Pack structure** (`domain-packs/pm-pack/`):
+**Pack structure** (`domain-packs/{pm,hr}-pack/`):
 ```
-pm-pack/
+{pm,hr}-pack/
 ├── pack.yaml             # manifest: id, report_kinds, required bindings
-├── graphs.py             # report_kind builders (daily/weekly/okr/resource)
-├── tools.py              # ToolProvider wrapping jira/github/confluence reads
-├── write_handlers.py     # allowlist + dispatcher handlers for slack/confluence
-├── models.py             # Issue↔Task mapping (lossless) + generic Task/Event
-├── prompts/              # 8 system prompts (dynamic-loaded via load_pack_prompt)
-└── skills/               # 5 bundled PM skills (moved from repo-root)
+├── graphs.py             # report_kind builders (PACK_MARKER: proves valid pack)
+├── tools.py              # ToolProvider (transport-specific adapters)
+├── write_handlers.py     # allowlist + dispatcher handlers (if domain writes)
+├── analyzers.py          # domain-specific metric analyzers (optional)
+├── models.py             # domain model (optional; PM: Issue↔Task mapping)
+├── prompts/              # system prompts (dynamic-loaded)
+└── skills/               # bundled instruction-only skills (optional)
 ```
-**Analyzers** (`src/agent/risk_analyzer.py`, `okr_analyzer.py`, `resource_analyzer.py`): Stay core. Pure functions consuming `Issue`/`Task`; no domain coupling. M6 hr-pack writes own headcount analyzer on `Task`.
+**M6 HR-pack specifics:**
+- **Headcount report kind**: `count/group_by(employment_status, department)` on Google Sheet rows.
+- **Tools**: Confluence table (reused `src.tools.confluence_read`) + Google Sheets via **gws CLI** (`gws sheets spreadsheets values get ...`, Google Workspace CLI auth independent of core).
+- **Config**: HR_SHEET_ID / HR_SHEET_RANGE / HR_CONFLUENCE_PAGE_ID (env-only; pack reads own env).
+- **Analyzer**: headcount aggregations (pure Task→count logic).
+- **Allowlist**: HR writes (Slack+Confluence) via same Action Gateway; same Lớp A/B apply.
+- **PII safety**: output is aggregate counts, never employee names rendered (design-verified).
+
+**Analyzers** (`src/agent/`): `risk_analyzer.py`, `okr_analyzer.py`, `resource_analyzer.py` stay core. Pure functions; no domain coupling. Packs write own (PM on `Issue`, HR on `Task`).
 
 **Core modules** (`src/packs/`):
-- `registry.py`: `PackRegistry` (importlib-load pack modules by domain name).
-- `tool_provider.py`: `ToolProvider` Protocol — `read(name: str)` returns list of `Task`/`Event` (transport-agnostic).
+- `registry.py`: `PackRegistry` (importlib-load, discover_domains, all_report_kinds, _ensure_pack_package).
+- `tool_provider.py`: `ToolProvider` Protocol — `read(name: str)` returns list of `Task`/`Event`.
 
-**Files modified** (config + dispatch entrypoints):
+**Files modified** (M5 + M6 patches):
 - `src/profile/loader.py`: parse `domain:` field (default `"pm"`).
 - `src/config/settings.py`: `Settings.domain` field.
-- `src/runtime/worker.py`: call `PackRegistry().load(settings.domain)` for kind dispatch + graph building.
-- `src/actions/hard_block.py`: load allowlist from `pack.allowlist` (verify Lớp A not overridable).
-- `src/actions/approved_dispatch.py`: handler lookup via pack registry.
-
-**Scope decisions for M6 (documented):**
-- Write-handler DISPATCH stays in lõi (`approved_dispatch.py`) — slack/linear/email are cross-domain shared primitives. Only allowlist config-driven.
-- PM analyzers stay `Issue`-based (byte-identical); `pm-pack/models.py` proves generic Task covers PM. M6 hr-pack writes own analyzer on `Task` (no ToolProvider reuse forced).
+- `src/runtime/worker.py`: call `PackRegistry().load(settings.domain)` for kind dispatch.
+- `src/actions/hard_block.py`: load allowlist from pack; verify Lớp A not overridable.
+- `src/actions/approved_dispatch.py`: handler lookup via pack.
+- `src/entrypoints/mpm_run_cmd.py`, `src/server/routes_runs.py`: kind validation via `all_report_kinds()` (union across packs, failure-isolated).
 
 **Tested invariants:**
-- Red-line suite green (hard_block tests verify Lớp A not loosened by pack).
-- Replay + automation routes through pack-contributed allowlist (no bypass).
-- pm-pack output byte-identical to pre-v3 (report text + Slack mrkdwn + Confluence XHTML diff is empty).
+- Red-line suite green (hard_block tests verify Lớp A not loosened).
+- `git diff src/ = ∅` when adding a domain (M5 design + M6 patches enable this).
+- PM output byte-identical to pre-v3; HR output deterministic (live E2E: 10 people → 10 total, 7 Active, 4 Engineering, Slack+Confluence posted).
+- Replay + automation routed through pack allowlist (no bypass).
