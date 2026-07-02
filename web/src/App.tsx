@@ -7,9 +7,11 @@ import { Layout } from './components/Layout'
 import { Approvals } from './views/Approvals'
 import { Config } from './views/Config'
 import { Cost } from './views/Cost'
+import { CreateAgent } from './views/CreateAgent'
 import { Guardrail } from './views/Guardrail'
 import { MemoryAutomation } from './views/MemoryAuto'
 import { Overview } from './views/Overview'
+import { Team } from './views/Team'
 import { Timeline } from './views/Timeline'
 import { Trigger } from './views/Trigger'
 
@@ -27,6 +29,8 @@ function App() {
             <Route path="approvals" element={<Approvals />} />
             <Route path="config" element={<Config />} />
             <Route path="trigger" element={<Trigger />} />
+            <Route path="team" element={<Team />} />
+            <Route path="create" element={<CreateAgent />} />
           </Route>
         </Routes>
       </AgentProvider>

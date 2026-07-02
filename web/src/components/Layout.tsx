@@ -12,6 +12,8 @@ const NAV = [
   { to: 'approvals', label: 'Approvals' },
   { to: 'config', label: 'Config' },
   { to: 'trigger', label: 'Trigger' },
+  { to: 'team', label: 'Team' },
+  { to: 'create', label: 'Create' },
 ]
 
 export function Layout() {

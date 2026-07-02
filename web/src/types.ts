@@ -124,3 +124,75 @@ export interface TriggerResult {
   run_id: string
   thread_id: string
 }
+
+// --- admin payloads (v3 M7: create wizard, team lifecycle, integration health) ---
+
+export interface Pack {
+  id: string
+  name: string
+  report_kinds: string[]
+  servers: string[]
+}
+
+export interface PacksPayload {
+  packs: Pack[]
+}
+
+export interface SlackBinding {
+  report_channel?: string
+  stakeholder_channel?: string
+  external_channels?: string[]
+}
+
+export interface CreateAgentBindings {
+  jira?: { project_key?: string }
+  confluence?: { space_key?: string; space_id?: string; okr_page_id?: string }
+  github?: { repo?: string }
+  slack?: SlackBinding
+}
+
+export interface CreateAgentSpec {
+  id: string
+  name: string
+  domain: string
+  reports: string[]
+  schedule: Record<string, string>
+  bindings: CreateAgentBindings
+  persona?: string
+}
+
+export interface CreateAgentResult {
+  created: {
+    id: string
+    domain: string
+    reports: string[]
+  }
+}
+
+export interface EnabledResult {
+  agent_id: string
+  enabled: boolean
+  // registry AND profile.yaml `enabled` — the value the service gate actually uses. A
+  // resume can report enabled=true (registry flipped) while this stays false (profile
+  // still vetoes it), so the UI must not treat `enabled: true` alone as "running".
+  effective_enabled: boolean
+}
+
+export interface DeleteAgentResult {
+  agent_id: string
+  deleted: true
+  profile_dir_kept: true
+}
+
+export interface IntegrationCheck {
+  id: string
+  label: string
+  ok: boolean
+  detail: string
+  hint: string
+}
+
+export interface IntegrationHealthPayload {
+  checks: IntegrationCheck[]
+  checked_at: number
+}

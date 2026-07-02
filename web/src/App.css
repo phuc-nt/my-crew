@@ -31,3 +31,25 @@ th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #eee
 .run-stream ul { font-family: ui-monospace, monospace; font-size: 0.8rem; }
 button { cursor: pointer; padding: 0.25rem 0.6rem; }
 button:disabled { cursor: default; opacity: 0.6; }
+
+/* Create-agent wizard + Team view (v3 M7). */
+.wizard-steps { display: flex; gap: 1rem; list-style: none; padding: 0; font-size: 0.85rem; color: #777; }
+.wizard-steps .wizard-step-active { color: #1a1a1a; font-weight: 600; }
+.wizard-nav { margin-top: 1rem; display: flex; gap: 0.5rem; }
+.domain-picker { border: 1px solid #ddd; border-radius: 6px; padding: 0.75rem; }
+.domain-picker-option { display: block; margin: 0.5rem 0; }
+.schedule-builder { margin: 0.4rem 0 0.8rem 1.5rem; padding: 0.5rem; background: #f6f8fa; border-radius: 4px; }
+.schedule-builder-days { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.schedule-builder-cron { font-family: ui-monospace, monospace; }
+.reports-step-kind { margin-bottom: 0.5rem; }
+.persona-textarea { width: 100%; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+.review-spec { background: #f6f8fa; padding: 0.5rem; border-radius: 4px; overflow-x: auto; font-size: 0.8rem; }
+.token-setup-box { border: 1px solid #ddd; border-radius: 6px; padding: 0.75rem; margin: 1rem 0; }
+.env-template { background: #f6f8fa; padding: 0.5rem; border-radius: 4px; overflow-x: auto; font-size: 0.8rem; }
+.health-panel { border: 1px solid #ddd; border-radius: 6px; padding: 0.75rem; margin-bottom: 1.25rem; }
+.health-checks { list-style: none; padding: 0; }
+.health-checks li { margin: 0.3rem 0; }
+.health-dot { display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%; margin-right: 0.3rem; }
+.health-dot-ok { background: #1e7e34; }
+.health-dot-fail { background: #b00; }
+.health-detail { margin-left: 1rem; }

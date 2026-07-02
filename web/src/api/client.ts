@@ -9,7 +9,13 @@ import type {
   AutomationPayload,
   ConfigPayload,
   CostPayload,
+  CreateAgentResult,
+  CreateAgentSpec,
+  DeleteAgentResult,
+  EnabledResult,
+  IntegrationHealthPayload,
   MemoryPayload,
+  PacksPayload,
   RunsPayload,
   TriggerResult,
 } from '../types'
@@ -32,8 +38,12 @@ async function request<T>(path: string): Promise<T> {
 }
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
+  return mutate<T>(path, 'POST', body)
+}
+
+async function mutate<T>(path: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown): Promise<T> {
   const res = await fetch(path, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
@@ -74,6 +84,14 @@ export const api = {
     post<{ saved: string }>(`/api/agents/${id}/config/${which}`, { text }),
   triggerRun: (id: string, params: { kind: string; audience: string; dry_run: boolean }) =>
     post<TriggerResult>(`/api/agents/${id}/trigger`, params),
+
+  // --- admin (v3 M7): create wizard, team lifecycle, integration health ---
+  getPacks: () => request<PacksPayload>('/api/packs'),
+  createAgent: (spec: CreateAgentSpec) => post<CreateAgentResult>('/api/agents/create', spec),
+  setAgentEnabled: (id: string, enabled: boolean) =>
+    mutate<EnabledResult>(`/api/agents/${id}/enabled`, 'PATCH', { enabled }),
+  deleteAgent: (id: string) => mutate<DeleteAgentResult>(`/api/agents/${id}`, 'DELETE'),
+  getIntegrationHealth: () => request<IntegrationHealthPayload>('/api/health/integrations'),
 }
 
 export { ApiError }
