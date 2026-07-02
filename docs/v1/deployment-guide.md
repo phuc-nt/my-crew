@@ -93,6 +93,7 @@ Toàn bộ ở **1 file `.env` của agent** cùng OpenRouter + config report (`
 # LLM
 OPENROUTER_API_KEY=
 OPENROUTER_MODEL=minimax/minimax-m2.7        # fallback: qwen/qwen-3.7
+# OPENROUTER_MODEL_CHAIN=a,b                 # [M9+] fallback chain (optional): lỗi 402/429/5xx/timeout → model kế
 
 # Report config
 JIRA_PROJECT_KEY=
