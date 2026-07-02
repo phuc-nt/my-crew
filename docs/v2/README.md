@@ -15,6 +15,7 @@ tags: [v2, vision, roadmap, multi-agent, langgraph, web-ui]
 > - **M2**: Platform (P5–P8, interrupts + FastAPI/SSE + dashboard + Postgres opt-in), 545 tests.
 > - **M3**: Extensibility (P10/P9/P11/P12, skills + cross-agent memory + integrations/multi-channel + automation/observability), 776 tests, live E2E: Jira 21 issue, real Confluence + Slack post, Postgres facts, replay+automate via gateway.
 > - **M7** (v3): Low-tech UI — Create-agent wizard (5-step, domain→id/name/persona→reports/schedule→bindings→review) + Team view (all-agents table, pause/resume/delete, integration health panel) + 5 new API endpoints; 863 tests, live E2E round-trip (create→pause→delete, registry byte-identical).
+> - **M11** (v3): Ask-agent Slack inbox — mention `@<agent-id>` in the agent's internal channel → threaded answer grounded on `pack.tools.read` real data; poll via scheduler, watermark + gateway dedup (no double-reply), reply sanitized against self-loop; 909 tests, live E2E.
 >
 > Mở rộng [`../v1/project-roadmap.md`](../v1/project-roadmap.md) (v1 Phase 0–5 đã xong). v1 = single-agent, single-project.
 > v2 = **nhiều agent, mỗi agent một project, XONG TOÀN BỘ (multi-agent core + interrupts + streaming + optional Postgres + web dashboard + skills + integrations + automation), guardrail giữ nguyên per-agent.**

@@ -26,6 +26,8 @@ If you have the web dashboard running on localhost, you can create agents withou
 
 The wizard validates everything before saving. On completion, the agent appears in the Team view.
 
+> **Ask-agent (M11):** add an `inbox:` block to the agent's profile.yaml (`channel: <internal channel ID>`, `poll_minutes: N`) and the running service will answer `@<agent-id>` mentions in that channel with real data, in a thread. Internal channels only; every reply goes through the Action Gateway.
+
 ---
 
 ## CLI Method (Traditional)

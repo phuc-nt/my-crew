@@ -39,6 +39,8 @@ Dòng thời gian phát triển kiến trúc + tính năng (repo vừa-làm-vừ
 
 | 2026-07-02 | [v4 M9 — model fallback chain](260702-v4-m9-model-fallback-chain.md) | ✅ Done | Agent không chết vì 1 model lỗi: `model_chain` → 402/429/5xx/timeout/empty tự chuyển model kế, log lớn tiếng (`FALLBACK:` + `LlmResult.fallback_from`); 401/403/Budget KHÔNG fallback (key-level/cap tối thượng, re-check trước mỗi attempt). As-built gọn hơn plan: chain trong `LlmClient.complete` → 0/9 call site sửa, không khai báo = byte-identical. 885 test; E2E live: primary invalid → fallback minimax → report delivered. Review vá M1 fail-loud config, M2 warn chain-override-model. |
 
+| 2026-07-02 | [v3 M11 — ask-agent Slack inbox](260702-v3-m11-ask-agent-inbox.md) | ✅ Done | Agent thành "đồng nghiệp" hỏi được: mention `@<agent-id>` trong channel internal → poll (search MCP, watermark, bootstrap không dội backlog, cap 3/poll) → QA pipeline ground trên `pack.tools.read` (pm-pack thêm `read()`, 0 core change) → reply thread qua Action Gateway (dedup theo mention ts). Internal-only chặt hơn plan (external channel fail lúc load). Review bắt H1 đắt giá: self-loop nếu LLM echo "@id" — vá structural `sanitize_reply`, không tin prompt. 909 test; E2E live: hỏi PR mở → trả lời đúng 2 PR stale thật trong thread, re-poll không double. |
+
 ## Template entry (`YYMMDD-<slug>.md`)
 
 ```markdown
