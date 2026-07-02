@@ -196,3 +196,15 @@ export interface IntegrationHealthPayload {
   checks: IntegrationCheck[]
   checked_at: number
 }
+
+// v3 M8: deterministic fleet alerts (budget near cap, stuck approvals, deny spikes).
+export interface TeamAlert {
+  kind: 'budget' | 'approval_stuck' | 'deny_spike'
+  agent_id: string
+  message: string
+  severity: 'warn' | 'high'
+}
+
+export interface TeamAlertsPayload {
+  alerts: TeamAlert[]
+}

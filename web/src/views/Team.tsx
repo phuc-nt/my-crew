@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../api/client'
 import { IntegrationHealthPanel } from '../components/IntegrationHealthPanel'
-import type { AgentStatus, AgentSummary } from '../types'
+import type { AgentStatus, AgentSummary, TeamAlert } from '../types'
 
 export function Team() {
   const [agents, setAgents] = useState<AgentSummary[]>([])
@@ -21,10 +21,16 @@ export function Team() {
   // agent id -> "profile still disables it" notice after a Resume the profile vetoes
   // (PATCH .../enabled returns effective_enabled=false even though enabled=true).
   const [profileDisabledNotice, setProfileDisabledNotice] = useState<Record<string, boolean>>({})
+  // v3 M8: deterministic fleet alerts (budget near cap, stuck approvals, deny spikes).
+  const [alerts, setAlerts] = useState<TeamAlert[]>([])
 
   const loadAgents = useCallback(() => {
     setLoading(true)
     setError(null)
+    api
+      .getTeamAlerts()
+      .then((p) => setAlerts(p.alerts))
+      .catch(() => undefined) // alerts are an overlay; their failure must not break the table
     api
       .getAgents()
       .then((list) => {
@@ -99,6 +105,15 @@ export function Team() {
       <h2>
         Team <Link to="/create">New agent</Link>
       </h2>
+      {alerts.length > 0 && (
+        <div className="team-alerts" role="alert">
+          {alerts.map((al, i) => (
+            <p key={i} className={al.severity === 'high' ? 'error' : 'muted'}>
+              {al.severity === 'high' ? '🔴' : '🟡'} <strong>{al.agent_id}</strong>: {al.message}
+            </p>
+          ))}
+        </div>
+      )}
       {opError && <p className="error">Error: {opError}</p>}
       {deletedNote && <p className="ok">{deletedNote}</p>}
       {loading && <p>Loading agents…</p>}

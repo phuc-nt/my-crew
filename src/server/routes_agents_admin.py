@@ -98,3 +98,28 @@ def delete_agent(agent_id: str) -> dict:
 def get_integration_health() -> dict:
     """Per-integration ok/hint (no secret values) — the 'what is broken?' panel."""
     return integration_health.integration_checks()
+
+
+_ALERTS_CACHE_TTL_S = 30.0
+_alerts_cache: dict = {"at": 0.0, "payload": None}
+
+
+@router.get("/team/alerts")
+def get_team_alerts() -> dict:
+    """Deterministic fleet alerts (M8 S5): budget near cap, stuck approvals, deny spikes.
+
+    Read-only over every agent's local state via the generic accessor — same data the
+    admin pack's reports aggregate, exposed raw for the Team view banner. Cached 30s
+    per process (same posture as /api/health/integrations): the scan loads every
+    profile + audit tail, so a mounting Team view must not re-run it per render.
+    """
+    import time
+
+    from src.runtime.agent_state_reader import read_all_agent_states, team_alerts
+
+    now = time.time()
+    if _alerts_cache["payload"] is not None and now - _alerts_cache["at"] < _ALERTS_CACHE_TTL_S:
+        return _alerts_cache["payload"]
+    payload = {"alerts": team_alerts(read_all_agent_states())}
+    _alerts_cache["at"], _alerts_cache["payload"] = now, payload
+    return payload

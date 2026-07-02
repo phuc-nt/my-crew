@@ -46,10 +46,11 @@ def build_headcount_graph(
     None ⇒ resolve the hr pack's provider so the graph is runnable standalone."""
     if config is None or settings is None:
         raise ValueError("build_headcount_graph needs config + settings.")
-    if tools is None:
-        from src.packs.registry import PackRegistry
+    from src.packs.registry import PackRegistry
 
-        tools = PackRegistry().load("hr").tools
+    pack = PackRegistry().load("hr")
+    if tools is None:
+        tools = pack.tools
 
     from domain_pack_hr.analyzers import (
         build_headcount,
@@ -59,7 +60,13 @@ def build_headcount_graph(
     )
     from domain_pack_hr.prompts_build import build_headcount_narrative_messages
 
-    gw = ActionGateway(settings, external_channels=config.slack_external_channels)
+    # The pack's allowlist MUST reach the runtime gateway (M8 review H1) — without it
+    # the gateway falls back to the wider core default allowlist.
+    gw = ActionGateway(
+        settings,
+        external_channels=config.slack_external_channels,
+        mcp_allowlist=pack.allowlist or None,
+    )
     box: dict[str, object] = {}
     llm_box: dict[str, object] = {}
 

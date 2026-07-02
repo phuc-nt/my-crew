@@ -1,0 +1,18 @@
+# admin-pack manifest (v3 M8) — the third domain: the agent that watches the fleet.
+#
+# Unlike PM (external Jira/GitHub) and HR (Confluence/Sheets), admin reads the
+# PLATFORM's own per-agent state (budget, approvals, audit, runs) through the generic
+# read-only accessor `src/runtime/agent_state_reader.py`. READ-ONLY across agents is a
+# red line: admin never approves/rejects/triggers a sibling agent.
+id: admin
+name: Administration
+# Report kinds this pack serves — must match the --report values the worker accepts.
+report_kinds:
+  - cost-rollup
+  - guardrail-health
+  - audit-digest
+# Write targets this pack contributes to the gateway allowlist. MUST match the servers
+# in write_handlers.py:ALLOWLIST (the load-bearing source of truth). Slack-only: admin
+# digests are short operational notes, no Confluence detail page in M8.
+servers:
+  - slack

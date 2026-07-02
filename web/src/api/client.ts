@@ -17,6 +17,7 @@ import type {
   MemoryPayload,
   PacksPayload,
   RunsPayload,
+  TeamAlertsPayload,
   TriggerResult,
 } from '../types'
 
@@ -92,6 +93,7 @@ export const api = {
     mutate<EnabledResult>(`/api/agents/${id}/enabled`, 'PATCH', { enabled }),
   deleteAgent: (id: string) => mutate<DeleteAgentResult>(`/api/agents/${id}`, 'DELETE'),
   getIntegrationHealth: () => request<IntegrationHealthPayload>('/api/health/integrations'),
+  getTeamAlerts: () => request<TeamAlertsPayload>('/api/team/alerts'),
 }
 
 export { ApiError }
