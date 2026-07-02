@@ -44,6 +44,33 @@ __all__ = [
 ]
 
 
+def _d_model_chain(value: Any) -> tuple[str, ...]:
+    """Coerce a `model_chain` value (yaml list or comma string) to a tuple of models.
+
+    Empty/absent ⇒ () ⇒ single-model behavior (v4 M9 backward-compat). A non-string
+    entry or a blank-only value raises — a typo'd chain must fail at load, not at the
+    first fallback attempt in a 3 a.m. cron run.
+    """
+    if value is None or value == "" or value == []:
+        return ()
+    if isinstance(value, str):
+        parts = [p.strip() for p in value.split(",")]
+    elif isinstance(value, (list, tuple)):
+        for p in value:
+            if not isinstance(p, str):
+                raise ValueError(
+                    f"model_chain entries must be strings, got {p!r} — quote model names "
+                    "in yaml (an unquoted 2.5 parses as a float)"
+                )
+        parts = [p.strip() for p in value]
+    else:
+        raise ValueError("model_chain must be a list of model names or a comma string")
+    chain = tuple(p for p in parts if p)
+    if not chain:
+        raise ValueError("model_chain is set but contains no model names")
+    return chain
+
+
 def build_settings_from_dict(d: dict[str, Any]) -> Settings:
     """Build Settings from a plain dict. Pure: no env, no I/O. All keys optional."""
     data_dir = d.get("data_dir", DATA_DIR)
@@ -53,6 +80,7 @@ def build_settings_from_dict(d: dict[str, Any]) -> Settings:
         openrouter_referer=d.get("openrouter_referer")
         or "https://github.com/local/my-project-manager",
         openrouter_title=d.get("openrouter_title") or "my-project-manager",
+        model_chain=_d_model_chain(d.get("model_chain")),
         dry_run=_d_bool(d, "dry_run", True),
         write_disabled=_d_bool(d, "write_disabled", False),
         monthly_budget_usd=_d_float(d, "monthly_budget_usd", 50.0),
@@ -80,6 +108,7 @@ def build_settings_from_env() -> Settings:
             "openrouter_model": os.getenv("OPENROUTER_MODEL"),
             "openrouter_referer": os.getenv("OPENROUTER_REFERER"),
             "openrouter_title": os.getenv("OPENROUTER_TITLE"),
+            "model_chain": os.getenv("OPENROUTER_MODEL_CHAIN"),
             "dry_run": os.getenv("DRY_RUN"),
             "write_disabled": os.getenv("AGENT_WRITE_DISABLED"),
             "monthly_budget_usd": os.getenv("MONTHLY_BUDGET_USD"),

@@ -78,6 +78,9 @@ def build_settings_dict(yaml_doc: dict[str, Any], data_dir: Any) -> dict[str, An
     _put(out, "openrouter_model", _fallback(yaml_doc.get("model"), "OPENROUTER_MODEL"))
     _put(out, "openrouter_referer", _fallback(None, "OPENROUTER_REFERER"))
     _put(out, "openrouter_title", _fallback(None, "OPENROUTER_TITLE"))
+    # v4 M9: fallback chain — yaml list wins; else env comma string; else omit (⇒ single
+    # model, byte-identical pre-v4). Coercion/validation lives in _d_model_chain.
+    _put(out, "model_chain", _fallback(yaml_doc.get("model_chain"), "OPENROUTER_MODEL_CHAIN"))
 
     # Booleans: a present YAML key wins (incl. an explicit `false`); else env; else omit.
     _put(out, "dry_run", _explicit_bool(safety, "dry_run", "DRY_RUN"))

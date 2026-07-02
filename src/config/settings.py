@@ -57,6 +57,17 @@ class Settings:
     # configured (LANGCHAIN_TRACING_V2 / LANGSMITH_API_KEY) — see runtime.run_config.
     tracing: bool = False
 
+    # v4 M9: ordered model fallback chain. Empty (default) ⇒ single-model behavior,
+    # byte-identical to pre-v4. When set, entry 0 is the primary and later entries are
+    # tried in order on a provider failure (402/429/5xx/timeout/empty) — the decision
+    # table lives in `llm/fallback_policy.py`. The budget cap stays supreme: it is
+    # re-checked before every attempt, so a fallback can never spend past the cap.
+    model_chain: tuple[str, ...] = ()
+
+    def effective_model_chain(self) -> tuple[str, ...]:
+        """The chain `LlmClient.complete` walks: declared chain, or just the model."""
+        return self.model_chain or (self.openrouter_model,)
+
     def require_api_key(self) -> str:
         """Return the OpenRouter key, or raise a clear error if it is unset.
 

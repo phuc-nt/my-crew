@@ -9,6 +9,8 @@ name: default                 # parsed; consumed in P3 (registry)
 enabled: true                 # parsed; consumed in P3 (registry)
 
 model: minimax/minimax-m2.7   # OPENROUTER_MODEL
+# model_chain: []            # v4 M9 (optional): [primary, fallback1, ...] — tried in
+#                            # order on 402/429/5xx/timeout/empty; omit = single model
 
 budget:
   monthly_usd: 50             # MONTHLY_BUDGET_USD
