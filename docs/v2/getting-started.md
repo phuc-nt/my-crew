@@ -28,6 +28,8 @@ The wizard validates everything before saving. On completion, the agent appears 
 
 > **Ask-agent (M11):** add an `inbox:` block to the agent's profile.yaml (`channel: <internal channel ID>`, `poll_minutes: N`) and the running service will answer `@<agent-id>` mentions in that channel with real data, in a thread. Internal channels only; every reply goes through the Action Gateway.
 
+> **Chat-command (M12):** if the agent's pack ships a command catalog (pm: `create_issue`), a mention like "tạo ticket: …" is queued for HUMAN approval (never executed directly); approve it at /approvals or `mpm agent approve <id> <n>` and the action runs for real.
+
 ---
 
 ## CLI Method (Traditional)

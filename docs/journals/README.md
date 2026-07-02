@@ -43,6 +43,8 @@ Dòng thời gian phát triển kiến trúc + tính năng (repo vừa-làm-vừ
 
 | 2026-07-02 | [v3 M8 — admin-pack (fleet watch)](260702-v3-m8-admin-pack-fleet-watch.md) | ✅ Done | Domain thứ 3, nhìn VÀO TRONG: giám sát cả đội (cost-rollup/guardrail-health/audit-digest) qua accessor generic read-only (`agent_state_reader`, sqlite mode=ro) + team alerts banner (budget≥80%, approval treo 24h, deny spike). GATE PASS: src/ chỉ 2 bổ sung generic dự liệu. Review bắt H1 systemic: pack allowlist chưa wire vào runtime gateway (hr-pack cũng dính từ M6) — vá cả hai + test runtime-path; bài học: test classifier riêng = phantom guarantee. 922 test; E2E live: agent admin TẠO QUA WIZARD M7 → post Slack số liệu đội thật. |
 
+| 2026-07-02 | [v5 M12 — chat-command qua Lớp B](260702-v5-m12-chat-command-lop-b.md) | ✅ Done | Bậc 3 thang trách nhiệm: "đồng nghiệp nhờ được". Mention yêu cầu tiếng Việt → LLM chỉ PHÂN LOẠI theo catalog pack khai (validate lúc load: tool cấm không khai nổi) → args validate bằng code → `enqueue_for_approval` (primitive gateway mới: Lớp A trước, refuse-not-queue) → người duyệt → jira dispatch mới thực thi. Chat không bao giờ chạy thẳng. Reviewer xác nhận invariant, 0 HIGH; vá M1 infra-error≠question (lần 2 pattern này trong ngày). 940 test; E2E live: mention → #23 chờ duyệt (Jira untouched) → approve → SCRUM-23 thật. |
+
 ## Template entry (`YYMMDD-<slug>.md`)
 
 ```markdown
