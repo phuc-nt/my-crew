@@ -15,6 +15,7 @@ from typing import Any
 from src.config.config_builders_helpers import _d_bool, _d_int
 from src.config.reporting_config import McpServerSpec
 from src.config.smtp_config import SmtpConfig
+from src.config.telegram_config import TelegramConfig
 
 
 def build_extra_servers(d: dict[str, Any]) -> dict[str, McpServerSpec]:
@@ -82,6 +83,38 @@ def build_smtp(d: dict[str, Any]) -> SmtpConfig | None:
         smtp_port=_d_int(smtp, "port", 587),
         use_tls=_d_bool(smtp, "use_tls", True),
         recipients=recipients,
+    )
+
+
+def build_telegram(d: dict[str, Any]) -> TelegramConfig | None:
+    """Build the per-agent Telegram bot config (v6 M13), or None when not declared.
+
+    A `telegram` sub-dict with a `bot_token_env` is required; absent ⇒ None ⇒ no telegram
+    channel (backward-compat, byte-identical pre-M13). Fails loud when the block exists
+    but `chat_ids` is empty: a bot with no allowlisted chat can neither read nor send —
+    a silently deaf-and-mute agent is a config error, not a feature. The token VALUE is
+    never read here — resolved from os.environ at call time by the transport.
+    """
+    tg = d.get("telegram")
+    if not isinstance(tg, dict) or not tg.get("bot_token_env"):
+        return None
+    raw_ids = tg.get("chat_ids") or ()
+    if isinstance(raw_ids, str):
+        chat_ids = tuple(c.strip() for c in raw_ids.split(",") if c.strip())
+    else:
+        chat_ids = tuple(str(c).strip() for c in raw_ids if str(c).strip())
+    if not chat_ids:
+        raise RuntimeError(
+            "telegram.bot_token_env is set but telegram.chat_ids is empty; the bot needs at "
+            "least one allowlisted chat id (DM or group), else remove the telegram block."
+        )
+    poll = _d_int(tg, "poll_minutes", 5)
+    if poll < 1:
+        raise RuntimeError("telegram.poll_minutes must be an integer >= 1.")
+    return TelegramConfig(
+        bot_token_env=str(tg.get("bot_token_env")).strip(),
+        chat_ids=chat_ids,
+        poll_minutes=poll,
     )
 
 

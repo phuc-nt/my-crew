@@ -84,14 +84,14 @@ def deliver_extra_channels_and_summarize(
     channels = resolve_channels(config)
     if not channels:
         return ""
-    results = deliver_extra_channels(
+    labeled = deliver_extra_channels(
         body, subject, gateway=gateway, config=config, report_date=report_date,
         audience=audience, rationale=rationale, approved=approved,
     )
     parts = []
-    for channel, result in zip(channels, results, strict=False):
-        suffix = f" {channel}={result.status}"
+    for label, result in labeled:  # one entry per SEND, labeled at the source
+        suffix = f" {label}={result.status}"
         if getattr(result, "approval_id", None) is not None:
-            suffix += f" {channel}_approval_id={result.approval_id}"
+            suffix += f" {label}_approval_id={result.approval_id}"
         parts.append(suffix)
     return "".join(parts)

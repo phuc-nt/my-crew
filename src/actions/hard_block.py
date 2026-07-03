@@ -348,6 +348,37 @@ def _hard_deny_email(action: dict[str, Any]) -> BlockVerdict | None:
     return None
 
 
+def _hard_deny_telegram(action: dict[str, Any]) -> BlockVerdict | None:
+    """Lớp A checks for a telegram send (v6 M13). None = no red-line match.
+
+    Scans chat_id + text for secrets (a credential must never ride out in a message) and
+    rejects a structurally invalid send (no chat_id, empty text). A valid send is allowed
+    past Lớp A and executes DIRECTLY (no Lớp B): the destination set is the agent's
+    operator-declared `chat_ids` — the same trust level as an internal Slack channel —
+    and the send handler refuses any chat outside that set at execution time.
+    """
+    chat_id = action.get("chat_id")
+    text = action.get("text", "")
+
+    cred = _credential_verdict({"chat_id": chat_id, "text": text})
+    if cred:
+        return cred
+
+    if not str(chat_id or "").strip():
+        return BlockVerdict(
+            blocked=True,
+            category=BlockCategory.NOT_ALLOWLISTED,
+            reason="telegram_send has no chat_id",
+        )
+    if not str(text).strip():
+        return BlockVerdict(
+            blocked=True,
+            category=BlockCategory.NOT_ALLOWLISTED,
+            reason="telegram_send has an empty text",
+        )
+    return None
+
+
 def _argv_lower(action: dict[str, Any]) -> list[str]:
     argv = action.get("argv", [])
     if not isinstance(argv, (list, tuple)):
@@ -501,6 +532,14 @@ def classify(
         # recipient/subject/body for secrets and rejects an empty recipient/body; a
         # well-formed send is allowed past Lớp A, then ALWAYS queued Lớp B (needs_interrupt).
         denied = _hard_deny_email(action)
+        if denied:
+            return denied
+        return _ALLOW
+    elif action_type == "telegram_send":
+        # Telegram (v6 M13) is likewise a native gateway action type. Lớp A scans for
+        # secrets + structural validity; a valid send executes directly (internal-only
+        # by construction — see _hard_deny_telegram + the handler's chat allowlist).
+        denied = _hard_deny_telegram(action)
         if denied:
             return denied
         return _ALLOW

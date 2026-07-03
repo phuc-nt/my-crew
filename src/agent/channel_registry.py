@@ -29,13 +29,16 @@ EXTRA_CHANNEL_OK_STATUSES = frozenset({"executed", "dry_run", "deduplicated", "p
 def resolve_channels(config: ReportingConfig) -> tuple[str, ...]:
     """Return the OPTIONAL extra channels to deliver to, beyond Slack + Confluence.
 
-    Email is included only when an `smtp` config is present. No smtp ⇒ () ⇒ no extra
-    delivery (backward-compat). Slack + Confluence are NOT listed here — they are the
-    always-on core path owned by each graph's `_deliver`.
+    Email is included only when an `smtp` config is present; telegram (v6 M13) only
+    when a `telegram` config is present. Neither ⇒ () ⇒ no extra delivery
+    (backward-compat). Slack + Confluence are NOT listed here — they are the always-on
+    core path owned by each graph's `_deliver`.
     """
     channels: list[str] = []
     if getattr(config, "smtp", None) is not None:
         channels.append("email")
+    if getattr(config, "telegram", None) is not None:
+        channels.append("telegram")
     return tuple(channels)
 
 
@@ -49,21 +52,31 @@ def deliver_extra_channels(
     audience: str,
     rationale: str = "",
     approved: bool = False,
-) -> list[GatewayResult]:
+) -> list[tuple[str, GatewayResult]]:
     """Deliver the report to each resolved extra channel through the gateway.
 
     Each send funnels through the Action Gateway (so all guards apply). A channel failure
     is logged and skipped — an extra channel must never break the core Slack+Confluence
-    delivery. Returns the per-channel gateway results (empty when no extra channel).
+    delivery. Returns `(label, result)` per SEND — a channel that fans out (telegram:
+    one send per chat) contributes one labeled entry per send, so summaries can never
+    misattribute a status to the wrong destination.
     """
-    results: list[GatewayResult] = []
+    results: list[tuple[str, GatewayResult]] = []
     for channel in resolve_channels(config):
         try:
             if channel == "email":
-                results.append(
+                results.append((
+                    "email",
                     _deliver_email(
                         body, subject, gateway=gateway, config=config,
                         report_date=report_date, rationale=rationale, approved=approved,
+                    ),
+                ))
+            elif channel == "telegram":
+                results.extend(
+                    _deliver_telegram(
+                        body, subject, gateway=gateway, config=config,
+                        report_date=report_date, rationale=rationale,
                     )
                 )
         except Exception as exc:  # noqa: BLE001 — an extra channel must never break core delivery
@@ -92,3 +105,40 @@ def _deliver_email(
         rationale=f"{rationale} (email)",
         approved=approved,
     )
+
+
+def _deliver_telegram(
+    body: str,
+    subject: str,
+    *,
+    gateway: ActionGateway,
+    config: ReportingConfig,
+    report_date: str,
+    rationale: str,
+) -> list[tuple[str, GatewayResult]]:
+    """One message per allowlisted chat (v6 M13), each through the gateway.
+
+    No `approved` plumbing: telegram chats are the agent's operator-declared internal
+    set, so sends execute directly (never Lớp B) — same trust as the internal Slack
+    channel. Dedup is per (chat, date-hint): a re-run never double-posts. Each chat gets
+    its OWN try — one failing/rate-limited chat must not eat the others' report.
+    """
+    from src.actions.telegram_write import send_telegram_message
+
+    results: list[tuple[str, GatewayResult]] = []
+    for chat_id in config.telegram.chat_ids:
+        try:
+            results.append((
+                f"telegram:{chat_id}",
+                send_telegram_message(
+                    f"{subject}\n\n{body}",
+                    gateway=gateway,
+                    telegram=config.telegram,
+                    chat_id=chat_id,
+                    dedup_hint=f"telegram-report:{chat_id}:{report_date}",
+                    rationale=f"{rationale} (telegram)",
+                ),
+            ))
+        except Exception as exc:  # noqa: BLE001 — per-chat isolation
+            logger.warning("telegram report to chat %s failed, skipping: %s", chat_id, exc)
+    return results

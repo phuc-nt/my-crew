@@ -81,3 +81,12 @@ integrations: {}              # e.g.:
 #   from_addr: you@example.com  # SMTP_FROM_ADDR (defaults to user)
 #   use_tls: true               # SMTP_USE_TLS (STARTTLS)
 #   recipients: []              # SMTP_RECIPIENTS (comma list → tuple)
+
+# v6 M13 (optional): per-agent Telegram bot identity — agent's OWN bot (name/avatar via
+# @BotFather). Through it the agent answers Q&A (M11), takes commands → Lớp B (M12), and
+# receives reports (channel registry). Absent ⇒ no telegram channel (byte-identical).
+# See docs/v2/getting-started.md §Telegram Bot per Agent. Token value lives in .env only.
+# telegram:
+#   bot_token_env: DEFAULT_TELEGRAM_BOT_TOKEN   # env var NAME holding the BotFather token
+#   chat_ids: ["123456789"]     # allowlisted DM/group chat ids (enforced read + write)
+#   poll_minutes: 2             # inbox poll cadence (>=1)

@@ -46,16 +46,19 @@ def _real_spawn(argv: list[str]) -> subprocess.Popen:
 
 
 def _effective_schedule(loaded) -> tuple[dict[str, str], tuple[str, ...]]:
-    """The agent's cron schedule + reports gate, with the M11 inbox poll folded in.
+    """The agent's cron schedule + reports gate, with the inbox poll folded in.
 
-    An `inbox:` block synthesizes a pseudo-kind `inbox` at `*/poll_minutes` and admits
-    it through the reports gate — reusing the one scheduler path instead of a second
-    polling loop. No inbox ⇒ returns the profile values unchanged (pre-M11 identical).
+    Any configured inbox transport (Slack `inbox:` block — M11 — and/or `telegram:`
+    block — v6 M13) synthesizes a pseudo-kind `inbox` at the fastest transport's
+    `*/poll_minutes` and admits it through the reports gate — reusing the one scheduler
+    path instead of a second polling loop. No transport ⇒ profile values unchanged.
     """
-    if not getattr(loaded, "inbox", None):
+    from src.runtime.inbox_dispatch import has_any_inbox, inbox_poll_minutes
+
+    if not has_any_inbox(loaded):
         return loaded.schedule, loaded.reports
     schedule = dict(loaded.schedule)
-    schedule["inbox"] = f"*/{loaded.inbox['poll_minutes']} * * * *"
+    schedule["inbox"] = f"*/{inbox_poll_minutes(loaded)} * * * *"
     return schedule, (*loaded.reports, "inbox")
 
 

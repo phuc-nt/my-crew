@@ -62,8 +62,10 @@ def test_deliver_extra_channels_email_queues(settings_factory, tmp_path):
         report_date="2026-06-26", audience="internal",
     )
     assert len(results) == 1
-    assert results[0].status == "pending_approval"
-    assert results[0].status in EXTRA_CHANNEL_OK_STATUSES
+    label, result = results[0]
+    assert label == "email"
+    assert result.status == "pending_approval"
+    assert result.status in EXTRA_CHANNEL_OK_STATUSES
 
 
 def test_smtplib_imported_only_in_email_write():

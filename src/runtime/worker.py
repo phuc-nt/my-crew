@@ -163,10 +163,11 @@ def main(argv: list[str] | None = None, *, run_report: RunReport = _default_run_
     # v3 M11: the ask-agent inbox poll is a generic run kind, not a pack report kind —
     # it never builds a report graph, so it branches before the graph dispatch.
     if kind == "inbox":
-        from src.runtime.inbox import run_inbox
+        # v6 M13: one tick fans out to every configured transport (Slack and/or Telegram).
+        from src.runtime.inbox_dispatch import run_all_inboxes
 
         try:
-            result = run_inbox(loaded, settings)
+            result = run_all_inboxes(loaded, settings)
         except Exception as exc:  # noqa: BLE001 — record the failure, never crash
             logger.exception("worker %s/inbox failed", agent_id)
             append_run_event(data_dir, _event(agent_id, kind, "internal", "error", None, False))

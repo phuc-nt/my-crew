@@ -37,7 +37,8 @@ logger = logging.getLogger(__name__)
 # Mutating action types this gateway governs. READ actions do not pass here.
 # `email_send` (M3-P11 D2) is an outbound email — a mutation — so it funnels here and
 # inherits dry-run/kill-switch/dedup/audit + Lớp A/B automatically (never a side path).
-_MUTATING_TYPES = {"mcp_tool", "gh_cli", "email_send"}
+# `telegram_send` (v6 M13) is an outbound Telegram message — same reasoning.
+_MUTATING_TYPES = {"mcp_tool", "gh_cli", "email_send", "telegram_send"}
 
 # Rate limit: max mutations per rolling window (blast-radius cap, PDR §7.5).
 _RATE_LIMIT_MAX = 10
@@ -101,6 +102,8 @@ def _label(action: dict[str, Any]) -> str:
         return "gh " + " ".join(str(a) for a in argv[:3])
     if atype == "email_send":
         return f"email:{action.get('to', '?')}"
+    if atype == "telegram_send":
+        return f"telegram:{action.get('chat_id', '?')}"
     return str(atype)
 
 

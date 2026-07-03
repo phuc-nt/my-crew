@@ -34,6 +34,9 @@ _SECRET_REGEXES: tuple[re.Pattern[str], ...] = (
     re.compile(r"eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}"),
     re.compile(r"glpat-[A-Za-z0-9_-]{20,}"),               # GitLab PAT
     re.compile(r"AC[0-9a-f]{32}"),                         # Twilio-style SID
+    # Telegram bot token (v6 M13 introduces this credential class): numeric bot id +
+    # ":" + 35-char secret. Word-bounded so issue keys / timestamps can't false-match.
+    re.compile(r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b"),
 )
 
 # Key names that mark a value as secret-bearing regardless of its content.

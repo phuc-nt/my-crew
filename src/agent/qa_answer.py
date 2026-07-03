@@ -116,7 +116,13 @@ def answer_mention(
 
         pack = PackRegistry().load(loaded.domain)
 
-    channel = loaded.inbox["channel"]  # loader guarantees shape + internal-only
+    # Reply target: a telegram mention carries its own chat_id (allowlisted at read);
+    # a Slack mention replies into the profile's inbox channel (loader guarantees
+    # shape + internal-only) — byte-identical to pre-M13 for Slack.
+    if mention.get("transport") == "telegram":
+        channel = str(mention["channel"])
+    else:
+        channel = loaded.inbox["channel"]
     gw = gateway or ActionGateway(
         settings,
         external_channels=loaded.config.slack_external_channels,
@@ -171,10 +177,30 @@ def _answer_question(
 
 
 def _post_reply(gw, loaded, mention: dict, channel: str, reply: str) -> GatewayResult:
-    """Sanitize + post one threaded reply through the gateway (shared QA/command path)."""
+    """Sanitize + post one reply through the gateway (shared QA/command path).
+
+    Transport comes from the mention itself: a telegram mention (v6 M13) replies via
+    `telegram_send` to its own chat; everything else is the original Slack thread reply.
+    Both paths share the sanitize + gateway + per-mention dedup discipline.
+    """
     reply = sanitize_reply(reply.strip(), loaded.profile_id)
     if not reply:
         raise RuntimeError("empty reply after sanitize — not posting.")
+
+    if mention.get("transport") == "telegram":
+        from src.actions.telegram_write import send_telegram_message
+
+        message_id = mention.get("message_id")
+        return send_telegram_message(
+            reply,
+            gateway=gw,
+            telegram=loaded.config.telegram,
+            chat_id=channel,
+            dedup_hint=f"telegram-qa-reply:{channel}:{mention['ts']}",
+            reply_to_message_id=int(message_id) if message_id is not None else None,
+            rationale=f"ask-agent reply to telegram message {mention['ts']}",
+        )
+
     # Thread root: when the mention is itself a thread reply, Slack wants the PARENT ts
     # as thread_ts — fall back to the mention's own ts for a top-level message.
     thread_root = str(mention.get("thread_ts") or mention["ts"])

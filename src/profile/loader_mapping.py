@@ -173,6 +173,8 @@ def build_reporting_dict(yaml_doc: dict[str, Any]) -> dict[str, Any]:
     _put(out, "extra_servers", _build_integrations(yaml_doc))
     # --- M3-P11 (D2): outbound email channel from the `smtp:` block (password env-only). ---
     _put(out, "smtp", _build_smtp_mapping(yaml_doc))
+    # --- v6 M13: per-agent Telegram bot from the `telegram:` block (token env-only). ---
+    _put(out, "telegram", _build_telegram_mapping(yaml_doc))
     return out
 
 
@@ -216,6 +218,23 @@ def _build_smtp_mapping(yaml_doc: dict[str, Any]) -> dict[str, Any] | None:
         "from_addr": _fallback(smtp.get("from_addr"), "SMTP_FROM_ADDR"),
         "use_tls": _explicit_bool(smtp, "use_tls", "SMTP_USE_TLS"),
         "recipients": _fallback(smtp.get("recipients"), "SMTP_RECIPIENTS"),
+    }
+
+
+def _build_telegram_mapping(yaml_doc: dict[str, Any]) -> dict[str, Any] | None:
+    """Normalize the `telegram:` block → the dict `build_telegram` consumes. None when absent.
+
+    Telegram is inherently PER-AGENT (each agent = its own bot), so there is no global
+    env fallback like SMTP_HOST — the block lives in the profile only. `bot_token_env`
+    is a NAME; the token value stays in `.env` and is read by the transport at call time.
+    """
+    tg = _section(yaml_doc, "telegram")
+    if not tg or not tg.get("bot_token_env"):
+        return None
+    return {
+        "bot_token_env": tg.get("bot_token_env"),
+        "chat_ids": tg.get("chat_ids"),
+        "poll_minutes": tg.get("poll_minutes"),
     }
 
 

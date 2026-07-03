@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.config.smtp_config import SmtpConfig
+from src.config.telegram_config import TelegramConfig
 
 # Default dist paths for the local MCP server repos (overridable via env).
 _DEFAULT_JIRA_DIST = Path.home() / "workspace" / "jira-cloud-mcp-server" / "dist" / "index.js"
@@ -98,3 +99,7 @@ class ReportingConfig:
     # M3-P11 (D2): outbound email delivery channel. None ⇒ no email channel declared
     # ⇒ delivery is Slack+Confluence only (byte-identical to pre-P11).
     smtp: SmtpConfig | None = None
+
+    # v6 M13: per-agent Telegram bot identity (inbox + delivery channel). None ⇒ no
+    # telegram channel declared ⇒ behavior byte-identical to pre-M13.
+    telegram: TelegramConfig | None = None

@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from src.config.config_builders_channels import (
     build_extra_servers,
     build_smtp,
+    build_telegram,
     extra_servers_from_env,
     smtp_from_env,
 )
@@ -112,6 +113,7 @@ def build_reporting_config_from_dict(d: dict[str, Any]) -> ReportingConfig:
         confluence_server=confluence_server,
         extra_servers=build_extra_servers(d),
         smtp=build_smtp(d),
+        telegram=build_telegram(d),
     )
 
 
