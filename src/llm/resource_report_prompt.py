@@ -163,6 +163,7 @@ def build_resource_narrative_messages(
     project: str = "",
     memory: str = "",
     skills: str = "",
+    company_docs: str = "",
     sibling_facts: str = "",
 ) -> list[dict[str, str]]:
     """Messages for the 1-paragraph LLM narrative placed above the tables.
@@ -206,11 +207,13 @@ def build_resource_narrative_messages(
         "quá tải và tình trạng ngân sách nếu đáng chú ý. Nhớ: KHÔNG nêu số cụ thể."
     )
     skill_block = f"{skills.strip()}\n\n" if skills.strip() else ""
+    docs_block = f"{company_docs.strip()}\n\n" if company_docs.strip() else ""
     sibling_block = f"{sibling_facts.strip()}\n\n" if sibling_facts.strip() else ""
     return [
         {"role": "system", "content": prepend_persona(_NARRATIVE_SYSTEM, persona)},
         {"role": "user",
-         "content": build_context_block(project, memory) + skill_block + sibling_block + user},
+         "content": build_context_block(project, memory)
+         + skill_block + docs_block + sibling_block + user},
     ]
 
 

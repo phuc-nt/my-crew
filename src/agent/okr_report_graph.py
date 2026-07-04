@@ -29,6 +29,7 @@ from src.agent.okr_analyzer import OkrRollup
 from src.agent.okr_weekly_section import build_okr_rollup
 from src.agent.sibling_selector import select_sibling_text
 from src.agent.state import ReportState
+from src.company_docs.inject import company_docs_text
 from src.profile.context import EMPTY, ProfileContext
 from src.skills.skill_selector import select_skill_text
 
@@ -122,6 +123,7 @@ def default_okr_deps(
                     project=context.project,
                     memory=context.memory,
                     skills=select_skill_text(context, audience, kind="okr"),
+                    company_docs=company_docs_text(context, audience),
                     sibling_facts=select_sibling_text(
                         context, audience, kind="okr", project_group=context.sibling_project
                     ),

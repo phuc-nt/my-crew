@@ -89,6 +89,7 @@ def _context_of(loaded, settings, store, registry) -> ProfileContext:
     report run uses, so the sibling READ and the remember WRITE share one instance.
     """
     from src.agent.sibling_memory import build_sibling_context
+    from src.company_docs.pool import load_company_docs
     from src.skills.skill_pool import build_skill_context
 
     skills, selector = build_skill_context(loaded, settings)
@@ -98,6 +99,7 @@ def _context_of(loaded, settings, store, registry) -> ProfileContext:
         skills=skills, skill_selector=selector,
         sibling_facts=sib_facts, sibling_selector=sib_sel,
         sibling_project=loaded.project_group,
+        company_docs=load_company_docs(getattr(loaded, "company_docs", ())),
     )
 
 

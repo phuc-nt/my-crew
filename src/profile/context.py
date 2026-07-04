@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.agent.sibling_selector import SiblingFactSelector
+    from src.company_docs.store import CompanyDoc
     from src.skills.models import Skill
     from src.skills.skill_selector import SkillSelector
 
@@ -46,6 +47,7 @@ class ProfileContext:
     sibling_facts: tuple[str, ...] = ()  # M3-P9 sibling memory (internal only)
     sibling_selector: SiblingFactSelector | None = field(default=None)  # injectable ranker
     sibling_project: str | None = None  # label slug for the sibling block
+    company_docs: tuple[CompanyDoc, ...] = ()  # M19 opted-in company docs (internal only)
 
 
 #: The no-op context — used as the default everywhere so v1 behavior is unchanged.

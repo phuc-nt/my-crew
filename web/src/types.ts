@@ -140,6 +140,19 @@ export interface SkillsPayload {
   skills: { name: string; description: string; selected: boolean }[]
 }
 
+// --- company docs library (v7 M19) ---
+
+export interface CompanyDoc {
+  slug: string
+  title: string
+  updated: string
+  body: string
+}
+
+export interface AgentCompanyDocsPayload {
+  docs: { slug: string; title: string; selected: boolean }[]
+}
+
 // --- admin payloads (v3 M7: create wizard, team lifecycle, integration health) ---
 
 export interface Pack {

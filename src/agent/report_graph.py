@@ -24,6 +24,7 @@ from src.agent.approval_gate import add_approval_gate, external_summary
 from src.agent.risk_analyzer import analyze
 from src.agent.sibling_selector import select_sibling_text
 from src.agent.state import ReportState
+from src.company_docs.inject import company_docs_text
 from src.llm.client import LlmClient
 from src.profile.context import EMPTY, ProfileContext
 from src.skills.skill_selector import select_skill_text
@@ -133,6 +134,7 @@ def default_report_deps(
             llm = LlmClient(settings)
         today = _today_utc().isoformat()
         skill_text = select_skill_text(context, audience, kind=report_kind)
+        docs_text = company_docs_text(context, audience)
         try:
             sibling_text = select_sibling_text(
                 context, audience, kind=report_kind, project_group=context.sibling_project
@@ -150,6 +152,7 @@ def default_report_deps(
             project=context.project,
             memory=context.memory,
             skills=skill_text,
+            company_docs=docs_text,
             sibling_facts=sibling_text,
         )
         result = llm.complete(messages)

@@ -107,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     settings, config = loaded.settings, loaded.config
     from src.agent.sibling_memory import build_sibling_context
     from src.agent.store import get_store
+    from src.company_docs.pool import load_company_docs
     from src.runtime.registry import load_registry
     from src.skills.skill_pool import build_skill_context
 
@@ -118,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         skills=skills, skill_selector=selector,
         sibling_facts=sib_facts, sibling_selector=sib_sel,
         sibling_project=loaded.project_group,
+        company_docs=load_company_docs(getattr(loaded, "company_docs", ())),
     )
 
     if not settings.openrouter_api_key:

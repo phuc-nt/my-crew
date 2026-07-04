@@ -34,6 +34,9 @@
   - `_ensure_pack_package()` — loads pack as importable domain_pack_<x> so pack modules can import siblings.
   - `all_report_kinds()` — kind validation unions all packs' kinds; failure-isolated per pack.
 
+### M19: Company Docs (2026-07-04)
+- **P13**: Company Docs library — flat files `company-docs/<slug>.md` (frontmatter title/updated). Agents opt-in via `company_docs:` list in profile.yaml (mirrors `skills:`). Doc bodies inject into INTERNAL compose prompt only as `<company_docs>` block (char-budget declared). **RED LINE: external audience gets zero bytes** (same guard as P10 skills; `company_docs_text` checks `audience != "internal"`). No DB, no RAG/embeddings; per-agent opt-in is selection mechanism (YAGNI). New modules: `src/company_docs/{store,inject,pool}.py`. New routes: `src/server/routes_company_docs.py` (library CRUD) + `src/server/routes_agent_company_docs.py` (per-agent opt-in). Web UI: `web/src/views/CompanyDocs.tsx` + picker in agent profile page. Backup: `deploy/backup.sh` tars `company-docs/`; `.gitignore` ignores (user data, restored from backup).
+
 **Entry points**: Legacy `python -m src.entrypoints.cli`/`cron` (single-agent). Multi-agent: `python -m src.entrypoints.mpm agent {list,register,run,resume,replay,automate,approvals,approve,reject,audit}`. Runtime: `python -m src.runtime.worker`, `python -m src.runtime.service`.
 
 ## Cây thư mục (v3 M5 state with domain-packs)
@@ -106,6 +109,9 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 | **[M6] Kind validation union** | `src/packs/registry.py::all_report_kinds()` — unions all packs' report_kinds for early typo detection; failure-isolated per pack |
 | **[M6] HR gws adapter** | `domain-packs/hr-pack/tools.py::_gws_sheet_rows()` — spawns gws CLI (Google Workspace CLI), parses JSON, mirrors gh CLI pattern |
 | **[M6] HR analyzer** | `domain-packs/hr-pack/analyzers.py` — headcount aggregator (count/group_by employment status + department) |
+| **[M19] Company Docs store** | `src/company_docs/store.py` — CRUD library (load/save docs from `company-docs/<slug>.md` dir) |
+| **[M19] Company Docs inject** | `src/company_docs/inject.py` — opt-in injection into compose prompt; checks `audience != "internal"` (red line) |
+| **[M19] Company Docs pool** | `src/company_docs/pool.py` — doc pooling/selection by agent; char-budget tracking |
 | **[NEW P2] Load profile** | `src/profile/loader.py::load_profile()` — parse `profiles/<id>/profile.yaml` + SOUL/PROJECT/MEMORY + domain field |
 | **[NEW P2] Profile → config** | `src/profile/loader_mapping.py` — map profile.yaml fields to P1's Settings/ReportingConfig dicts + domain |
 | **[NEW P2] Prompt injection** | `src/profile/context.py::ProfileContext` — persona (system msg), project+memory (user msg, internal only) |

@@ -13,6 +13,8 @@ import type {
   CreateAgentSpec,
   DeleteAgentResult,
   EnabledResult,
+  AgentCompanyDocsPayload,
+  CompanyDoc,
   IntegrationHealthPayload,
   KnowledgePayload,
   MemoryPayload,
@@ -170,6 +172,23 @@ export const api = {
     put<{ ok: boolean; skills: string[] }>(
       `/api/agents/${encodeURIComponent(agentId)}/skills`,
       { names },
+    ),
+  // v7 M19: company-docs library + per-agent opt-in.
+  listCompanyDocs: () => request<{ docs: CompanyDoc[] }>('/api/company-docs'),
+  getCompanyDoc: (slug: string) =>
+    request<CompanyDoc>(`/api/company-docs/${encodeURIComponent(slug)}`),
+  createCompanyDoc: (title: string, body: string, updated: string) =>
+    post<CompanyDoc>('/api/company-docs', { title, body, updated }),
+  updateCompanyDoc: (slug: string, title: string, body: string, updated: string) =>
+    put<CompanyDoc>(`/api/company-docs/${encodeURIComponent(slug)}`, { title, body, updated }),
+  deleteCompanyDoc: (slug: string) =>
+    mutate<{ ok: boolean }>(`/api/company-docs/${encodeURIComponent(slug)}`, 'DELETE'),
+  getAgentCompanyDocs: (agentId: string) =>
+    request<AgentCompanyDocsPayload>(`/api/agents/${encodeURIComponent(agentId)}/company-docs`),
+  putAgentCompanyDocs: (agentId: string, slugs: string[]) =>
+    put<{ ok: boolean; company_docs: string[] }>(
+      `/api/agents/${encodeURIComponent(agentId)}/company-docs`,
+      { slugs },
     ),
 }
 

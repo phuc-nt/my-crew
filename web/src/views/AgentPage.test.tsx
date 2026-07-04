@@ -24,6 +24,9 @@ beforeEach(() => {
     spent_this_month: 1.5,
   })
   vi.spyOn(api, 'getRuns').mockResolvedValue({ agent_id: 'acme', runs: [] })
+  // Knowledge tab (M19) also loads the company-docs picker; default to empty so the
+  // existing knowledge/skills assertions aren't disturbed.
+  vi.spyOn(api, 'getAgentCompanyDocs').mockResolvedValue({ docs: [] })
 })
 
 function renderAt(id: string) {

@@ -4,7 +4,7 @@
 #
 #   ./deploy/backup.sh [dest-dir]     # default dest: ./backups/
 #
-# Backs up: .data/ (per-agent sqlite + audit + tasks), profiles/, registry.yaml.
+# Backs up: .data/ (per-agent sqlite + audit + tasks), profiles/, registry.yaml, company-docs/.
 # For a daily cron:  0 2 * * *  /path/to/deploy/backup.sh /path/to/backups
 set -euo pipefail
 
@@ -23,8 +23,9 @@ PATHS=()
 [ -d .data ] && PATHS+=(.data)
 [ -d profiles ] && PATHS+=(profiles)
 [ -f registry.yaml ] && PATHS+=(registry.yaml)
+[ -d company-docs ] && PATHS+=(company-docs)  # M19: the shared company-doc library
 if [ "${#PATHS[@]}" -eq 0 ]; then
-  echo "nothing to back up (no .data/ profiles/ registry.yaml)"; exit 0
+  echo "nothing to back up (no .data/ profiles/ registry.yaml/ company-docs/)"; exit 0
 fi
 
 tar --exclude='.env' --exclude='*/.env' -czf "$ARCHIVE" "${PATHS[@]}"

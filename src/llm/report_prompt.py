@@ -79,6 +79,7 @@ def build_report_messages(
     project: str = "",
     memory: str = "",
     skills: str = "",
+    company_docs: str = "",
     sibling_facts: str = "",
 ) -> list[dict[str, str]]:
     """Build the chat messages for the report-composing LLM call (Slack mrkdwn).
@@ -87,8 +88,9 @@ def build_report_messages(
     the model uses it verbatim instead of inventing a placeholder. `audience`
     "internal" (default) is the full technical report; "external" is a business
     summary for stakeholders (no issue keys / PR numbers). `persona` prepends to the
-    system message; `project`/`memory`/`skills`/`sibling_facts` prepend to the INTERNAL
-    user message only (never external — they carry internal facts). All "" ⇒ v1 prompt.
+    system message; `project`/`memory`/`skills`/`company_docs`/`sibling_facts` prepend to
+    the INTERNAL user message only (never external — they carry internal facts). All ""
+    ⇒ v1 prompt.
     """
     if audience == "external":
         user = (
@@ -118,7 +120,8 @@ def build_report_messages(
         {
             "role": "user",
             "content": build_context_block(project, memory)
-            + _text_block(skills) + _text_block(sibling_facts) + user,
+            + _text_block(skills) + _text_block(company_docs)
+            + _text_block(sibling_facts) + user,
         },
     ]
 
@@ -139,6 +142,7 @@ def build_detail_messages(
     project: str = "",
     memory: str = "",
     skills: str = "",
+    company_docs: str = "",
     sibling_facts: str = "",
 ) -> list[dict[str, str]]:
     """Messages for the detail report on a Confluence page (XHTML).
@@ -188,7 +192,8 @@ def build_detail_messages(
         {
             "role": "user",
             "content": build_context_block(project, memory)
-            + _text_block(skills) + _text_block(sibling_facts) + user,
+            + _text_block(skills) + _text_block(company_docs)
+            + _text_block(sibling_facts) + user,
         },
     ]
 

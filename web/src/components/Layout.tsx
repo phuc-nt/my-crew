@@ -24,6 +24,7 @@ const NAV = [
   { to: 'config', label: 'Config' },
   { to: 'trigger', label: 'Trigger' },
   { to: 'team', label: 'Team' },
+  { to: 'company-docs', label: 'Tài liệu' },
   { to: 'create', label: 'Create' },
 ]
 

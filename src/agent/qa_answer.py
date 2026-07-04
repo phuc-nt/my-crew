@@ -215,9 +215,16 @@ def _answer_question(
 
     system = prepend_persona(pack.prompts.get("qa-system") or _DEFAULT_QA_SYSTEM, loaded.soul)
     context = build_context_block(loaded.project, loaded.memory)  # internal-only path
+    # M19: the opted-in company docs (e.g. HR's leave policy) so a Q&A grounds on them.
+    # The Q&A path is inherently internal (a mention reply), so audience is "internal".
+    from src.company_docs.inject import render_company_docs
+    from src.company_docs.pool import load_company_docs
+
+    docs_block = render_company_docs(list(load_company_docs(getattr(loaded, "company_docs", ()))))
     question = str(mention.get("text") or "").strip()
     user = (
         (f"{context}\n\n" if context else "")
+        + (f"{docs_block}\n\n" if docs_block else "")
         + f"DATA:\n{data_text}\n\nCÂU HỎI (nguyên văn từ Slack):\n{question}"
     )
 

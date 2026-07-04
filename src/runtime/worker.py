@@ -63,6 +63,7 @@ def build_graph_for(loaded: LoadedProfile, settings: Any, kind: str, audience: s
     from src.agent.memory_node import build_remember_node
     from src.agent.sibling_memory import build_sibling_context
     from src.agent.store import get_store
+    from src.company_docs.pool import load_company_docs
     from src.packs.registry import PackRegistry
     from src.runtime.registry import load_registry
     from src.skills.skill_pool import build_skill_context
@@ -77,6 +78,7 @@ def build_graph_for(loaded: LoadedProfile, settings: Any, kind: str, audience: s
         skills=skills, skill_selector=selector,
         sibling_facts=sib_facts, sibling_selector=sib_sel,
         sibling_project=loaded.project_group,
+        company_docs=load_company_docs(getattr(loaded, "company_docs", ())),
     )
     remember = build_remember_node(loaded.profile_id, settings, audience)
 

@@ -56,6 +56,7 @@ class LoadedProfile:
     schedule: dict[str, str]  # consumed in P3 (scheduler)
     reports: tuple[str, ...]  # consumed in P3 (kind gate)
     skills: tuple[str, ...] = ()  # M3-P10: per-agent skill candidate pool (names)
+    company_docs: tuple[str, ...] = ()  # M19: opted-in company-doc slugs (internal-only inject)
     project_group: str | None = None  # M3-P9: sibling group slug (None ⇒ no siblings)
     domain: str = "pm"  # v3 M5: which domain pack drives this agent (absent ⇒ "pm")
     # v3 M11: ask-agent Slack inbox (opt-in). None ⇒ no polling, byte-identical pre-M11.
@@ -110,6 +111,7 @@ def load_profile(
     schedule = yaml_doc.get("schedule") or {}
     reports = yaml_doc.get("reports") or []
     skills = yaml_doc.get("skills") or []
+    company_docs = yaml_doc.get("company_docs") or []
     project_raw = yaml_doc.get("project")
     project_group = str(project_raw).strip() or None if project_raw is not None else None
     # A blank/absent `domain:` defaults to "pm" so every pre-v3 profile (which never
@@ -132,6 +134,7 @@ def load_profile(
         schedule=schedule_map,
         reports=tuple(str(r) for r in reports) if isinstance(reports, list) else (),
         skills=tuple(str(s) for s in skills) if isinstance(skills, list) else (),
+        company_docs=tuple(str(s) for s in company_docs) if isinstance(company_docs, list) else (),
         project_group=project_group,
         domain=domain,
         inbox=inbox,

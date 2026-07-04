@@ -26,7 +26,87 @@ export function KnowledgeTab({ id }: { id: string }) {
       <KnowledgeDoc id={id} doc="soul" title="Tính cách (SOUL)" />
       <KnowledgeDoc id={id} doc="project" title="Bối cảnh dự án (PROJECT)" />
       <SkillsPicker id={id} />
+      <CompanyDocsPicker id={id} />
     </div>
+  )
+}
+
+// v7 M19: tick which company-library docs THIS agent reads. Writes the profile's
+// `company_docs:` list; the ticked docs inject into the agent's internal prompt.
+function CompanyDocsPicker({ id }: { id: string }) {
+  const [docs, setDocs] = useState<{ slug: string; title: string; selected: boolean }[] | null>(
+    null,
+  )
+  const [chosen, setChosen] = useState<Set<string>>(new Set())
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    api
+      .getAgentCompanyDocs(id)
+      .then((d) => {
+        setDocs(d.docs)
+        setChosen(new Set(d.docs.filter((x) => x.selected).map((x) => x.slug)))
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'lỗi'))
+  }, [id])
+
+  const toggle = (slug: string) =>
+    setChosen((p) => {
+      const next = new Set(p)
+      if (next.has(slug)) next.delete(slug)
+      else next.add(slug)
+      return next
+    })
+
+  const save = useCallback(async () => {
+    setBusy(true)
+    setError(null)
+    setSaved(false)
+    try {
+      await api.putAgentCompanyDocs(id, [...chosen])
+      setSaved(true)
+    } catch (e: unknown) {
+      setError(e instanceof ApiError ? e.message : 'lưu thất bại')
+    } finally {
+      setBusy(false)
+    }
+  }, [id, chosen])
+
+  if (error) return <p className="error">Lỗi tài liệu: {error}</p>
+  if (!docs) return <p>Đang tải tài liệu…</p>
+
+  return (
+    <section className="company-docs-picker">
+      <h4>Tài liệu công ty</h4>
+      {docs.length === 0 ? (
+        <p className="muted">
+          Chưa có tài liệu nào trong kho. Thêm ở mục "Tài liệu" rồi tick cho agent tại đây.
+        </p>
+      ) : (
+        <ul className="skills-list">
+          {docs.map((d) => (
+            <li key={d.slug}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={chosen.has(d.slug)}
+                  onChange={() => toggle(d.slug)}
+                />
+                <strong>{d.title}</strong>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="agent-actions">
+        <button type="button" disabled={busy} onClick={() => void save()}>
+          {busy ? 'Đang lưu…' : 'Lưu tài liệu'}
+        </button>
+        {saved && <span className="ok">✓ Đã lưu</span>}
+      </div>
+    </section>
   )
 }
 

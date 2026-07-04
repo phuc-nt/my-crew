@@ -16,6 +16,10 @@ __pycache__/
 # Runtime data: audit log, checkpoints, budget (see plan .data/ decision)
 .data/
 
+# Company Docs library (v7 M19): CEO-curated documents = local user data, restored
+# from backup (backup.sh covers it), never committed.
+company-docs/
+
 # Per-agent profiles: only the `default` template is committed (holds no secrets,
 # only token_env NAMES). Real per-agent profiles stay local.
 profiles/*

@@ -10,6 +10,7 @@ import { Layout } from './components/Layout'
 import { AgentPage } from './views/AgentPage'
 import { Approvals } from './views/Approvals'
 import { Chat } from './views/Chat'
+import { CompanyDocs } from './views/CompanyDocs'
 import { Config } from './views/Config'
 import { Cost } from './views/Cost'
 import { CreateAgent } from './views/CreateAgent'
@@ -79,6 +80,7 @@ function App() {
             <Route path="create" element={<CreateAgent />} />
             <Route path="chat" element={<Chat />} />
             <Route path="tasks" element={<Tasks />} />
+            <Route path="company-docs" element={<CompanyDocs />} />
             <Route path="agents/:id" element={<AgentPage />} />
           </Route>
         </Routes>
