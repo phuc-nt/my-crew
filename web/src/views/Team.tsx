@@ -102,9 +102,15 @@ export function Team() {
     <section>
       <IntegrationHealthPanel />
 
-      <h2>
-        Team <Link to="/create">New agent</Link>
-      </h2>
+      <h2>Đội</h2>
+      <div className="team-actions">
+        <Link to="/create" className="btn-link">
+          + Tạo nhân sự ảo
+        </Link>
+        <Link to="/company-docs" className="btn-link">
+          📄 Kho tài liệu
+        </Link>
+      </div>
       {alerts.length > 0 && (
         <div className="team-alerts" role="alert">
           {alerts.map((al, i) => (

@@ -2,13 +2,14 @@
 // StaticFiles(html=True) mount (S5); client routes deep-link via the index.html catch-all.
 // v6 M16: on load, /api/me decides login vs dashboard; a 401 anywhere flips back to login.
 import { useCallback, useEffect, useState } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import './App.css'
 import { AgentProvider } from './agent-context'
 import { api, setUnauthorizedHandler } from './api/client'
+import { AdvancedAgentView } from './components/AdvancedAgentView'
 import { Layout } from './components/Layout'
+import { PendingApprovalsProvider } from './pending-approvals-context'
 import { AgentPage } from './views/AgentPage'
-import { Approvals } from './views/Approvals'
 import { Chat } from './views/Chat'
 import { CompanyDocs } from './views/CompanyDocs'
 import { Config } from './views/Config'
@@ -18,11 +19,12 @@ import { Guardrail } from './views/Guardrail'
 import { Login } from './views/Login'
 import { MemoryAutomation } from './views/MemoryAuto'
 import { Overview } from './views/Overview'
+import { Settings } from './views/Settings'
 import { Setup } from './views/Setup'
-import { Tasks } from './views/Tasks'
 import { Team } from './views/Team'
 import { Timeline } from './views/Timeline'
 import { Trigger } from './views/Trigger'
+import { Work } from './views/Work'
 
 function App() {
   // null = still checking; true/false = authenticated or not.
@@ -67,21 +69,38 @@ function App() {
     <BrowserRouter>
       <AgentProvider>
         <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Overview />} />
-            <Route path="timeline" element={<Timeline />} />
-            <Route path="cost" element={<Cost />} />
-            <Route path="memory" element={<MemoryAutomation />} />
-            <Route path="guardrail" element={<Guardrail />} />
-            <Route path="approvals" element={<Approvals />} />
-            <Route path="config" element={<Config />} />
-            <Route path="trigger" element={<Trigger />} />
-            <Route path="team" element={<Team />} />
-            <Route path="create" element={<CreateAgent />} />
+          <Route
+            path="/"
+            element={
+              <PendingApprovalsProvider>
+                <Layout />
+              </PendingApprovalsProvider>
+            }
+          >
+            {/* v7 M20: 4 CEO-first destinations. Default is the assistant (chat). */}
+            <Route index element={<Navigate to="/chat" replace />} />
             <Route path="chat" element={<Chat />} />
-            <Route path="tasks" element={<Tasks />} />
-            <Route path="company-docs" element={<CompanyDocs />} />
+            <Route path="team" element={<Team />} />
+            <Route path="work" element={<Work />} />
+            <Route path="settings" element={<Settings />} />
+            {/* Agent page + non-agent advanced views. */}
             <Route path="agents/:id" element={<AgentPage />} />
+            <Route path="create" element={<CreateAgent />} />
+            <Route path="company-docs" element={<CompanyDocs />} />
+            {/* Per-agent technical views (Nâng cao) — wrapped with the agent picker they
+                need, since the global picker was removed from the top nav (M20). */}
+            <Route element={<AdvancedAgentView />}>
+              <Route path="overview" element={<Overview />} />
+              <Route path="timeline" element={<Timeline />} />
+              <Route path="cost" element={<Cost />} />
+              <Route path="memory" element={<MemoryAutomation />} />
+              <Route path="guardrail" element={<Guardrail />} />
+              <Route path="config" element={<Config />} />
+              <Route path="trigger" element={<Trigger />} />
+            </Route>
+            {/* Old URLs → new homes so bookmarks/links survive the M20 reorg. */}
+            <Route path="approvals" element={<Navigate to="/work" replace />} />
+            <Route path="tasks" element={<Navigate to="/work" replace />} />
           </Route>
         </Routes>
       </AgentProvider>

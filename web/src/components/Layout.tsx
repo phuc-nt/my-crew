@@ -1,8 +1,11 @@
-// App shell: top nav linking the 5 view groups + the agent picker. The selected agent id
-// lives in the shared agent context (useAgent); Layout renders nav + the routed <Outlet/>.
+// App shell (v7 M20): CEO-first nav — 4 primary destinations (Trợ lý / Đội / Việc / Cài đặt)
+// instead of the old flat 12-item bar. "Việc" carries a badge with the total pending-approval
+// count across all agents (client-side aggregate — no new backend). The old per-agent global
+// picker is gone: per-agent context now lives on each agent page (M18). Technical views
+// (Overview/Timeline/Guardrail/Trigger/Memory/Cost) are reachable under Cài đặt → Nâng cao.
 import { NavLink, Outlet } from 'react-router'
 import { api } from '../api/client'
-import { AgentPicker } from './AgentPicker'
+import { useSharedPendingApprovals } from '../pending-approvals-context'
 
 async function logout() {
   try {
@@ -13,35 +16,27 @@ async function logout() {
 }
 
 const NAV = [
-  { to: '', label: 'Overview' },
   { to: 'chat', label: 'Trợ lý' },
-  { to: 'tasks', label: 'Việc đã giao' },
-  { to: 'timeline', label: 'Timeline' },
-  { to: 'cost', label: 'Cost' },
-  { to: 'memory', label: 'Memory & Automation' },
-  { to: 'guardrail', label: 'Guardrail' },
-  { to: 'approvals', label: 'Approvals' },
-  { to: 'config', label: 'Config' },
-  { to: 'trigger', label: 'Trigger' },
-  { to: 'team', label: 'Team' },
-  { to: 'company-docs', label: 'Tài liệu' },
-  { to: 'create', label: 'Create' },
+  { to: 'team', label: 'Đội' },
+  { to: 'work', label: 'Việc', badge: true },
+  { to: 'settings', label: 'Cài đặt' },
 ]
 
 export function Layout() {
+  const { count } = useSharedPendingApprovals()
   return (
     <div className="app-shell">
       <header className="app-header">
-        <h1>my-project-manager · agent dashboard</h1>
-        <AgentPicker />
+        <h1>my-project-manager</h1>
         <button type="button" className="logout-btn" onClick={() => void logout()}>
           Đăng xuất
         </button>
       </header>
-      <nav className="app-nav">
+      <nav className="app-nav app-nav-primary">
         {NAV.map((n) => (
-          <NavLink key={n.label} to={n.to} end={n.to === ''}>
+          <NavLink key={n.label} to={n.to}>
             {n.label}
+            {n.badge && count > 0 && <span className="nav-badge">{count}</span>}
           </NavLink>
         ))}
       </nav>

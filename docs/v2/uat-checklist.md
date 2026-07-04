@@ -11,6 +11,8 @@ created: 2026-07-04
 
 Trước khi bắt đầu: đã chạy `./deploy/install.sh` (xem [deployment-production.md](deployment-production.md)) và điền đủ `.env`.
 
+**Bản đồ menu (v7):** dashboard gom về **4 mục** — **Trợ lý** (chat điều hành, trang mặc định) · **Đội** (danh sách agent → trang agent, nút Tạo, Kho tài liệu) · **Việc** (gộp: cần duyệt + việc đã giao, có badge đỏ số chờ) · **Cài đặt** (kết nối + **Nâng cao**: Tổng quan/Timeline/Chi phí/Bộ nhớ/Guardrail/Cấu hình/Chạy thủ công). Không chức năng nào mất; các trang kỹ thuật nằm trong Cài đặt → Nâng cao.
+
 ---
 
 ## 1. Đăng nhập
@@ -19,7 +21,7 @@ Trước khi bắt đầu: đã chạy `./deploy/install.sh` (xem [deployment-pr
 |---|---|
 | Mở trình duyệt vào địa chỉ dashboard (mặc định http://127.0.0.1:8765) | Hiện màn hình **Đăng nhập** (không vào thẳng dashboard) |
 | Nhập sai mật khẩu, bấm Đăng nhập | Báo lỗi "Sai tên đăng nhập hoặc mật khẩu" |
-| Nhập đúng tên + mật khẩu | Vào được dashboard, thấy menu "Trợ lý / Việc đã giao / …" |
+| Nhập đúng tên + mật khẩu | Vào được dashboard, thấy 4 mục menu: **Trợ lý / Đội / Việc / Cài đặt** (mặc định mở Trợ lý) |
 | Thử mở lại một trang bất kỳ ở tab ẩn danh (chưa đăng nhập) | Bị chặn về màn hình đăng nhập |
 
 ☐ Mục 1 đạt
@@ -31,7 +33,7 @@ Trước khi bắt đầu: đã chạy `./deploy/install.sh` (xem [deployment-pr
 | Vào menu **Trợ lý**, gõ tiếng Việt: "tạo agent mã sales-pm, vai trò quản lý dự án" | Trợ lý hỏi lại loại báo cáo |
 | Trả lời: "daily" | Trợ lý hiện **bản xem trước** cấu hình + hỏi "Xác nhận?" |
 | Gõ "xác nhận" | Báo "Đã tạo agent 'sales-pm'…" |
-| Vào menu **Team** | Thấy agent sales-pm trong danh sách |
+| Vào menu **Đội** | Thấy agent sales-pm trong danh sách (bấm vào tên = mở trang agent) |
 
 ☐ Mục 2 đạt
 
@@ -58,8 +60,8 @@ Trước khi bắt đầu: đã chạy `./deploy/install.sh` (xem [deployment-pr
 | Việc làm | Kết quả mong đợi |
 |---|---|
 | Nhắn bot PM: "tạo ticket: lỗi đăng nhập trang admin" | Bot trả "⏳ Đã xếp hàng chờ duyệt #N" — **chưa** tạo gì trên Jira |
-| Vào menu **Approvals** trên dashboard | Thấy yêu cầu #N đang chờ |
-| Bấm Review → Confirm để duyệt | Jira issue thật được tạo, approval biến mất khỏi hàng chờ |
+| Vào menu **Việc** trên dashboard (badge đỏ hiện số việc chờ) | Khối "Cần bạn duyệt" hiện yêu cầu #N của agent tương ứng |
+| Bấm **Xem & duyệt** → **Approve & post** | Jira issue thật được tạo, approval biến mất khỏi hàng chờ, badge giảm |
 | Thử lệnh nguy hiểm: "xóa hết ticket" | Bot **từ chối** — không có lệnh đó |
 
 ☐ Mục 5 đạt
@@ -69,7 +71,7 @@ Trước khi bắt đầu: đã chạy `./deploy/install.sh` (xem [deployment-pr
 | Việc làm | Kết quả mong đợi |
 |---|---|
 | Trong **Trợ lý**: "theo dõi PR số 1 của agent default tới khi merge" | Xác nhận → "Đã giao việc #N" |
-| Vào menu **Việc đã giao** | Thấy việc theo dõi PR #1, trạng thái "đang mở" |
+| Vào menu **Việc**, cuộn xuống khối "Việc đã giao" | Thấy việc theo dõi PR #1, trạng thái "đang mở" |
 | Bấm **Huỷ** trên việc đó | Trạng thái chuyển "đã huỷ" |
 
 ☐ Mục 6 đạt

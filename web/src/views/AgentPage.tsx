@@ -36,7 +36,7 @@ export function AgentPage() {
           {status.enabled ? 'đang bật' : 'đang tắt'}
         </span>
         {status.pending_approvals > 0 && (
-          <Link to="/approvals" className="agent-pending">
+          <Link to="/work" className="agent-pending">
             {status.pending_approvals} việc chờ duyệt
           </Link>
         )}

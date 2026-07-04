@@ -7,6 +7,31 @@
 .app-nav a { text-decoration: none; color: #555; padding: 0.25rem 0.5rem; border-radius: 4px; }
 .app-nav a.active { background: #1a1a1a; color: #fff; }
 .agent-picker { font-size: 0.9rem; }
+
+/* v7 M20: CEO-first nav + badge + chips */
+.app-nav-primary { gap: 1.25rem; font-size: 1.05rem; }
+.app-nav-primary a { padding: 0.4rem 0.9rem; font-weight: 600; }
+.nav-badge { display: inline-block; margin-left: 0.4rem; background: #d33; color: #fff;
+  border-radius: 999px; padding: 0 0.45rem; font-size: 0.75rem; font-weight: 700; }
+.quick-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0; }
+.chip { border: 1px solid #ccc; background: #f6f6f6; border-radius: 999px;
+  padding: 0.3rem 0.8rem; font-size: 0.85rem; cursor: pointer; text-decoration: none; color: #333; }
+.chip:hover { background: #eee; }
+.chip-alert { border-color: #d33; color: #b00; background: #fff5f5; font-weight: 600; }
+.advanced-bar { display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 1rem; }
+.team-actions { display: flex; gap: 0.75rem; margin: 0.5rem 0 1rem; }
+.btn-link { text-decoration: none; border: 1px solid #ccc; border-radius: 6px;
+  padding: 0.35rem 0.8rem; color: #333; }
+.btn-link:hover { background: #f2f2f2; }
+.work-approvals, .work-tasks { margin-bottom: 1.5rem; }
+.work-approvals .badge { background: #d33; color: #fff; border-radius: 999px;
+  padding: 0 0.5rem; font-size: 0.8rem; }
+.approval-list { list-style: none; padding: 0; }
+.approval-list li { border: 1px solid #e0e0e0; border-radius: 6px; padding: 0.6rem 0.8rem;
+  margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.advanced-links { columns: 2; list-style: none; padding: 0; }
+.danger { color: #b00; }
 table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
 th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #eee; }
 .error { color: #b00; }

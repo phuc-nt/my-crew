@@ -4,12 +4,18 @@
 // Telegram DM path, so a dialogue can span both surfaces. No SSE: an ops reply is one short
 // turn (request/response), not a streamed run.
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import { api } from '../api/client'
+import { useSharedPendingApprovals } from '../pending-approvals-context'
 
 interface Turn {
   who: 'ceo' | 'agent'
   text: string
 }
+
+// v7 M20: fixed quick-action prompts on the assistant home so a CEO isn't staring at a blank
+// box. Clicking one sends that message. A dynamic "duyệt" chip appears only when work waits.
+const QUICK_CHIPS = ['Đội mình đang thế nào?', 'Tạo nhân sự ảo mới', 'Tổng chi phí tháng này?']
 
 export function Chat() {
   const [available, setAvailable] = useState<boolean | null>(null)
@@ -19,6 +25,7 @@ export function Chat() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const { count: pendingCount } = useSharedPendingApprovals()
 
   useEffect(() => {
     api
@@ -38,22 +45,25 @@ export function Chat() {
     endRef.current?.scrollIntoView?.({ behavior: 'smooth' })
   }, [turns])
 
-  const send = useCallback(async () => {
-    const message = draft.trim()
-    if (!message || busy) return
-    setTurns((t) => [...t, { who: 'ceo', text: message }])
-    setDraft('')
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await api.opsChat(message)
-      setTurns((t) => [...t, { who: 'agent', text: res.reply }])
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'gửi thất bại')
-    } finally {
-      setBusy(false)
-    }
-  }, [draft, busy])
+  const sendText = useCallback(
+    async (message: string) => {
+      if (!message.trim() || busy) return
+      setTurns((t) => [...t, { who: 'ceo', text: message }])
+      setDraft('')
+      setBusy(true)
+      setError(null)
+      try {
+        const res = await api.opsChat(message)
+        setTurns((t) => [...t, { who: 'agent', text: res.reply }])
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'gửi thất bại')
+      } finally {
+        setBusy(false)
+      }
+    },
+    [busy],
+  )
+  const send = useCallback(() => sendText(draft), [sendText, draft])
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -95,6 +105,18 @@ export function Chat() {
         <div ref={endRef} />
       </div>
       {error && <p className="error">{error}</p>}
+      <div className="quick-chips">
+        {pendingCount > 0 && (
+          <Link to="/work" className="chip chip-alert">
+            ⚠️ {pendingCount} việc chờ duyệt
+          </Link>
+        )}
+        {QUICK_CHIPS.map((c) => (
+          <button key={c} type="button" className="chip" disabled={busy} onClick={() => void sendText(c)}>
+            {c}
+          </button>
+        ))}
+      </div>
       <div className="ops-chat-input">
         <input
           type="text"
