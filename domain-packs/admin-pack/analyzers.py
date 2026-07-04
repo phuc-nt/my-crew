@@ -101,16 +101,60 @@ def build_audit_digest(payload: dict) -> FleetReport:
     )
 
 
+#: Report kinds that read the whole fleet — a project roll-up must EXCLUDE agents serving
+#: these (an admin/roll-up agent has no project of its own, and including it would recurse).
+#: Capability-based, not a domain-name denylist (red-team m3): a future fleet-read pack is
+#: covered automatically.
+_FLEET_READ_KINDS = frozenset({"project-rollup", "cost-rollup", "guardrail-health",
+                               "audit-digest"})
+
+
+def build_project_rollup(payload: dict) -> FleetReport:
+    """One portfolio view: each project-facing agent's latest report summary + freshness.
+
+    Groups the fleet by project (Jira key / repo), pulling each agent's most recent report
+    content from the run-event `report_summary` (M22). Fleet-read agents (admin/roll-up) are
+    excluded — they have no project and would recurse. A never-run agent shows "chưa có báo
+    cáo" (its absence is itself signal). Pure: the LLM only narrates over these rows."""
+    agents = payload.get("agents", [])
+    rows: list[dict] = []
+    for a in sorted(agents, key=lambda x: (x.get("project") or "~", x.get("agent_id", ""))):
+        if _serves_fleet_kind(a):
+            continue
+        last = a.get("last_run") or {}
+        summary = str(last.get("report_summary") or "").strip()
+        rows.append({
+            "agent_id": a["agent_id"],
+            "project": a.get("project") or "(chưa gán project)",
+            "last_report_ts": last.get("ts") or "",
+            "last_status": last.get("status") or "chưa chạy",
+            "summary": summary or "chưa có báo cáo",
+        })
+    projects = {r["project"] for r in rows}
+    headline = (
+        f"Tổng quan {len(rows)} agent dự án trên {len(projects)} project "
+        f"({sum(1 for r in rows if r['summary'] == 'chưa có báo cáo')} chưa có báo cáo)"
+    )
+    return FleetReport(kind="project-rollup", headline=headline, rows=rows, alerts=[])
+
+
+def _serves_fleet_kind(agent_state: dict) -> bool:
+    """True if the agent serves any fleet-read report kind (⇒ exclude from the roll-up)."""
+    return bool(set(agent_state.get("reports") or ()) & _FLEET_READ_KINDS)
+
+
 BUILDERS = {
     "cost-rollup": build_cost_rollup,
     "guardrail-health": build_guardrail_health,
     "audit-digest": build_audit_digest,
+    "project-rollup": build_project_rollup,
 }
 
 _TITLES = {
     "cost-rollup": "Chi phí LLM toàn đội",
     "guardrail-health": "Sức khỏe guardrail",
     "audit-digest": "Nhật ký hoạt động đội agent",
+    "project-rollup": "Tổng quan dự án toàn công ty",
 }
 
 

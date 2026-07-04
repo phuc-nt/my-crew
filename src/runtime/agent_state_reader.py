@@ -68,12 +68,16 @@ def read_agent_state(agent_id: str) -> dict:
     data_dir = agent_data_dir(agent_id)
     schedule: dict[str, str] = {}
     reports: tuple[str, ...] = ()
+    domain, project = "", None
     try:
         loaded = load_profile(agent_id, data_dir=data_dir)
         name, cap = loaded.name, loaded.settings.monthly_budget_usd
         enabled = loaded.enabled
         schedule = dict(loaded.schedule)
         reports = loaded.reports
+        domain = getattr(loaded, "domain", "")
+        # v8 M22: the agent's project identity for the portfolio roll-up (Jira key or repo).
+        project = loaded.config.jira_project_key or loaded.config.github_repo
     except Exception as exc:  # noqa: BLE001 — ANY broken profile (missing file, bad
         # yaml, bad model_chain ValueError, …) degrades to an error row: one
         # misconfigured agent must never blind the admin over the whole fleet.
@@ -97,6 +101,9 @@ def read_agent_state(agent_id: str) -> dict:
         "schedule": schedule,
         "reports": reports,
         "run_events": _recent_events_per_kind(agent_id),
+        # v8 M22: domain + project identity for the portfolio roll-up.
+        "domain": domain,
+        "project": project,
     }
 
 

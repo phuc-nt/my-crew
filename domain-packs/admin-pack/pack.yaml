@@ -11,6 +11,7 @@ report_kinds:
   - cost-rollup
   - guardrail-health
   - audit-digest
+  - project-rollup   # v8 M22: portfolio roll-up of each project agent's latest report
 # Write targets this pack contributes to the gateway allowlist. MUST match the servers
 # in write_handlers.py:ALLOWLIST (the load-bearing source of truth). Slack-only: admin
 # digests are short operational notes, no Confluence detail page in M8.

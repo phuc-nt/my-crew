@@ -26,12 +26,28 @@ def _registry_enabled() -> dict[str, bool]:
     return {e.id: e.enabled for e in load_registry()}
 
 
+#: Run-event fields safe to expose to a client. `report_summary` (v8 M22) holds report
+#: CONTENT and is deliberately EXCLUDED — it is for the internal fleet roll-up only, never
+#: the status API (red-team B3: the raw event must not leak the last report's prose).
+_LAST_RUN_PUBLIC_FIELDS = ("ts", "agent_id", "kind", "audience", "status", "cost_usd",
+                           "delivered")
+
+
+def _public_last_run(agent_id: str) -> dict | None:
+    """The agent's last run-event with only the non-sensitive fields (drops report_summary)."""
+    ev = read_last_run_event(agent_id)
+    if ev is None:
+        return None
+    return {k: ev[k] for k in _LAST_RUN_PUBLIC_FIELDS if k in ev}
+
+
 def list_agents() -> list[dict]:
     """One entry per registry agent: id, name, enabled, last_run.
 
     `enabled` is registry-enabled AND profile-enabled (mirrors the service gate). The
     list view carries no PII — `last_run` is the run-event dict (agent_id/kind/audience/
-    status/cost_usd/delivered/ts), all non-sensitive.
+    status/cost_usd/delivered/ts), all non-sensitive. The M22 `report_summary` field is
+    filtered out here (it is internal roll-up content, not for the status API).
     """
     out: list[dict] = []
     for entry in load_registry():
@@ -47,7 +63,7 @@ def list_agents() -> list[dict]:
                 "id": entry.id,
                 "name": name,
                 "enabled": bool(entry.enabled and prof_enabled),
-                "last_run": read_last_run_event(entry.id),
+                "last_run": _public_last_run(entry.id),
             }
         )
     return out
@@ -72,7 +88,7 @@ def agent_status(agent_id: str) -> dict:
         "id": agent_id,
         "name": loaded.name,
         "enabled": enabled,
-        "last_run": read_last_run_event(agent_id),
+        "last_run": _public_last_run(agent_id),
         "budget": budget,
         "pending_approvals": _pending_count(loaded.settings.data_dir),
     }

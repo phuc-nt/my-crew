@@ -50,7 +50,8 @@ def _state(agent_id="a1", spent=0.5, cap=50.0, pending=(), counts=None, enabled=
 def test_admin_pack_discovered_and_assembled():
     assert "admin" in discover_domains()
     pack = PackRegistry().load("admin")
-    assert set(pack.report_kinds) == {"cost-rollup", "guardrail-health", "audit-digest"}
+    assert set(pack.report_kinds) == {"cost-rollup", "guardrail-health", "audit-digest",
+                                      "project-rollup"}  # v8 M22 added project-rollup
     assert set(pack.allowlist) == {"slack"}  # Slack-only write surface
     assert "admin-narrative-system" in pack.prompts
     assert pack.tools is not None

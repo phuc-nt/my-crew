@@ -252,7 +252,18 @@ def main(argv: list[str] | None = None, *, run_report: RunReport = _default_run_
     delivered = bool(result.get("delivered", False))
     cost = result.get("cost_usd")
     status = "delivered" if delivered else "not_delivered"
-    append_run_event(data_dir, _event(agent_id, kind, audience, status, cost, delivered))
+    # v8 M22: store a short summary of the report so the portfolio roll-up can show each
+    # agent's latest content. INTERNAL only — an external report's content must not be
+    # persisted where the fleet accessor could read it into a roll-up.
+    summary = ""
+    if audience == "internal" and result.get("report_text"):
+        from src.runtime.report_summary import summarize_report
+
+        summary = summarize_report(str(result["report_text"]))
+    append_run_event(
+        data_dir, _event(agent_id, kind, audience, status, cost, delivered,
+                         report_summary=summary),
+    )
     logger.info(
         "worker %s %s/%s: delivered=%s %s",
         agent_id, kind, audience, delivered, result.get("delivery_summary", ""),
@@ -260,11 +271,16 @@ def main(argv: list[str] | None = None, *, run_report: RunReport = _default_run_
     return 0 if delivered else 1
 
 
-def _event(agent_id, kind, audience, status, cost, delivered) -> dict:
-    return {
+def _event(agent_id, kind, audience, status, cost, delivered, *, report_summary="") -> dict:
+    ev = {
         "agent_id": agent_id, "kind": kind, "audience": audience,
         "status": status, "cost_usd": cost, "delivered": delivered,
     }
+    # Only carry the summary field when there is one — event stays byte-identical for the
+    # inbox/tasks/ops-alerts pseudo-kinds and for external runs (backward-compat).
+    if report_summary:
+        ev["report_summary"] = report_summary
+    return ev
 
 
 if __name__ == "__main__":

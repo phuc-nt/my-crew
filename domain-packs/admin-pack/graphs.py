@@ -39,6 +39,14 @@ def build_fleet_graph(
     """Build + compile one admin fleet report graph for `kind`."""
     if config is None or settings is None:
         raise ValueError("build_fleet_graph needs config + settings.")
+    # v8 M22: project-rollup carries other agents' INTERNAL report summaries. It has no
+    # external form — refuse an external run loudly rather than silently composing a
+    # stakeholder page that would leak internal content.
+    if kind == "project-rollup" and audience == "external":
+        raise ValueError(
+            "project-rollup is internal-only (it aggregates internal report summaries); "
+            "an external audience is not supported."
+        )
     from src.packs.registry import PackRegistry
 
     pack = PackRegistry().load("admin")
@@ -132,4 +140,6 @@ REPORT_KINDS = {
     "cost-rollup": partial(build_fleet_graph, "cost-rollup"),
     "guardrail-health": partial(build_fleet_graph, "guardrail-health"),
     "audit-digest": partial(build_fleet_graph, "audit-digest"),
+    # v8 M22: portfolio roll-up — each project agent's latest report summary + freshness.
+    "project-rollup": partial(build_fleet_graph, "project-rollup"),
 }
