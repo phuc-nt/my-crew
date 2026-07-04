@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.server import (
     auth,
+    routes_agent_knowledge,
     routes_agents,
     routes_agents_admin,
     routes_ops_chat,
@@ -81,6 +82,8 @@ def create_app() -> FastAPI:
     app.include_router(routes_agents_admin.router)
     # v6 M14b: CEO chat-ops web endpoint (same engine as the Telegram DM path).
     app.include_router(routes_ops_chat.router)
+    # v7 M18: Agent Studio — telegram bind (M18a) + knowledge/skills form (M18b).
+    app.include_router(routes_agent_knowledge.router)
     # v6 M15b: assigned-tasks board (view + cancel; assigning stays on the chat path).
     app.include_router(routes_tasks.router)
     # Legacy /static assets (kept for any non-SPA asset; the SPA's own assets live under

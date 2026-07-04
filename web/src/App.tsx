@@ -7,6 +7,7 @@ import './App.css'
 import { AgentProvider } from './agent-context'
 import { api, setUnauthorizedHandler } from './api/client'
 import { Layout } from './components/Layout'
+import { AgentPage } from './views/AgentPage'
 import { Approvals } from './views/Approvals'
 import { Chat } from './views/Chat'
 import { Config } from './views/Config'
@@ -78,6 +79,7 @@ function App() {
             <Route path="create" element={<CreateAgent />} />
             <Route path="chat" element={<Chat />} />
             <Route path="tasks" element={<Tasks />} />
+            <Route path="agents/:id" element={<AgentPage />} />
           </Route>
         </Routes>
       </AgentProvider>

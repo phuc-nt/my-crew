@@ -67,7 +67,7 @@ test('happy path builds the correct POST body including cron schedule', async ()
   expect(spec.reports).toEqual(['daily'])
   expect(spec.schedule).toEqual({ daily: '0 9 * * 1' })
 
-  await waitFor(() => expect(screen.getByText(/Created agent/)).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText(/Đã tạo agent/)).toBeInTheDocument())
 })
 
 test('400 detail from the backend surfaces inline', async () => {

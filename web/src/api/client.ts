@@ -136,6 +136,17 @@ export const api = {
       username,
       password,
     }),
+  // v7 M18a: bind a Telegram bot to an agent (validates via getMe, no restart needed).
+  bindTelegram: (agentId: string, token: string, chatIds: string[]) =>
+    post<{ ok: boolean; bot_username?: string; env_name: string }>(
+      `/api/agents/${encodeURIComponent(agentId)}/telegram`,
+      { token, chat_ids: chatIds },
+    ),
+  telegramRecentChats: (agentId: string, token: string) =>
+    post<{ chats: { id: string; name: string }[] }>(
+      `/api/agents/${encodeURIComponent(agentId)}/telegram/updates`,
+      { token },
+    ),
 }
 
 export { ApiError }

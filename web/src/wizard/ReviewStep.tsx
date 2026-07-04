@@ -62,8 +62,9 @@ export function ReviewStep({ spec, pack }: { spec: CreateAgentSpec; pack: { serv
       )}
       {result && (
         <p className="ok">
-          Created agent <strong>{result.created.id}</strong>. Go to{' '}
-          <Link to="/team">Team</Link> to manage it.
+          Đã tạo agent <strong>{result.created.id}</strong>.{' '}
+          <Link to={`/agents/${result.created.id}`}>Mở trang agent</Link> để gắn bot Telegram
+          (nhắn được ngay) và quản lý.
         </p>
       )}
     </section>

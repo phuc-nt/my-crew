@@ -137,7 +137,9 @@ export function Team() {
               const status = statuses[a.id]
               return (
                 <tr key={a.id}>
-                  <td>{a.id}</td>
+                  <td>
+                    <Link to={`/agents/${a.id}`}>{a.id}</Link>
+                  </td>
                   <td>{a.name}</td>
                   <td>
                     {a.enabled ? '✓' : '—'}
