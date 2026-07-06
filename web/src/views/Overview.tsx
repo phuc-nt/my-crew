@@ -11,30 +11,34 @@ export function Overview() {
   return (
     <section>
       <h2>Agents</h2>
-      <table className="agents-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Enabled</th>
-            <th>Last run</th>
-          </tr>
-        </thead>
-        <tbody>
-          {agents.map((a) => (
-            <tr key={a.id}>
-              <td>{a.id}</td>
-              <td>{a.name}</td>
-              <td>{a.enabled ? '✓' : '—'}</td>
-              <td>
-                {a.last_run
-                  ? `${a.last_run.kind ?? '?'} · ${a.last_run.status ?? '?'}`
-                  : 'no runs yet'}
-              </td>
+      {/* Advanced (technical) view — a distinct class so it does NOT inherit the mobile
+          card-list transform meant for the CEO tables; it just scrolls horizontally. */}
+      <div className="table-scroll">
+        <table className="agents-table-advanced">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Enabled</th>
+              <th>Last run</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {agents.map((a) => (
+              <tr key={a.id}>
+                <td>{a.id}</td>
+                <td>{a.name}</td>
+                <td>{a.enabled ? '✓' : '—'}</td>
+                <td>
+                  {a.last_run
+                    ? `${a.last_run.kind ?? '?'} · ${a.last_run.status ?? '?'}`
+                    : 'no runs yet'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   )
 }

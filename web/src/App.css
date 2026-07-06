@@ -217,3 +217,48 @@ button:disabled { cursor: default; opacity: 0.6; }
 .company-docs-list button { display: block; width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: var(--radius); padding: var(--space-2); cursor: pointer; }
 .company-docs-list button:hover { background: var(--color-bg-soft); }
 .company-docs-list button.active { background: #eef3ff; border-color: #b9ccff; font-weight: 600; }
+
+/* Advanced-view tables (technical persona) just need to not overflow the whole page. */
+.table-scroll { overflow-x: auto; }
+
+/* v9 P4: responsive / mobile. Desktop layout above is untouched; everything here is scoped
+   under a max-width media query. Goal from plan v7 M20: read + approve on a phone. */
+@media (max-width: 640px) {
+  .app-shell { padding: var(--space-2); }
+  .app-nav, .app-nav-primary { flex-wrap: wrap; }
+  .quick-chips, .team-actions { flex-wrap: wrap; }
+
+  /* Touch targets: every button/link-button is at least 44px tall (Apple/Material min). */
+  button, .btn, .btn-link { min-height: 44px; }
+
+  /* iOS Safari auto-zooms an input whose font-size < 16px. 1rem (=16px) prevents it. */
+  input, textarea, select { font-size: 1rem; }
+
+  /* CEO-facing tables (Team, assigned tasks, approvals) become a stacked card list: each row
+     is a card, each cell shows its column name via data-label (added on the <td> in the views).
+     The empty action <td> (no data-label) just renders its buttons. Advanced-view tables keep
+     their normal table layout inside .table-scroll — only these three classes convert. */
+  .agents-table, .tasks-table, .proposals-table { border: 0; }
+  .agents-table thead, .tasks-table thead, .proposals-table thead { display: none; }
+  .agents-table tr, .tasks-table tr, .proposals-table tr {
+    display: block; border: 1px solid var(--color-border); border-radius: var(--radius);
+    box-shadow: var(--shadow-sm); padding: var(--space-2); margin-bottom: var(--space-3);
+  }
+  .agents-table td, .tasks-table td, .proposals-table td {
+    display: flex; justify-content: space-between; gap: var(--space-3); text-align: right;
+    border: 0; border-bottom: 1px solid var(--color-border-soft); padding: 0.4rem 0;
+  }
+  .agents-table td:last-child, .tasks-table td:last-child, .proposals-table td:last-child { border-bottom: 0; }
+  .agents-table td::before, .tasks-table td::before, .proposals-table td::before {
+    content: attr(data-label); font-weight: 600; color: var(--color-subtle); text-align: left;
+  }
+  /* A cell with no column label (the actions cell) shouldn't reserve the label gutter. */
+  .agents-table td:not([data-label]), .tasks-table td:not([data-label]), .proposals-table td:not([data-label]) {
+    justify-content: flex-end;
+  }
+  .agents-table td:not([data-label])::before, .tasks-table td:not([data-label])::before, .proposals-table td:not([data-label])::before {
+    content: none;
+  }
+
+  .approval-list li { flex-direction: column; align-items: stretch; }
+}

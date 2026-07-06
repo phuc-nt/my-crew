@@ -4,6 +4,7 @@ import type { RunEvent } from '../types'
 export function RunList({ runs }: { runs: RunEvent[] }) {
   if (runs.length === 0) return <p>No runs yet.</p>
   return (
+    <div className="table-scroll">
     <table className="runs-table">
       <thead>
         <tr>
@@ -28,5 +29,6 @@ export function RunList({ runs }: { runs: RunEvent[] }) {
         ))}
       </tbody>
     </table>
+    </div>
   )
 }

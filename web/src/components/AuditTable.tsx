@@ -4,6 +4,7 @@ import type { AuditRow } from '../types'
 export function AuditTable({ rows }: { rows: AuditRow[] }) {
   if (rows.length === 0) return <p>No audit events yet.</p>
   return (
+    <div className="table-scroll">
     <table className="audit-table">
       <thead>
         <tr>
@@ -26,5 +27,6 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
         ))}
       </tbody>
     </table>
+    </div>
   )
 }

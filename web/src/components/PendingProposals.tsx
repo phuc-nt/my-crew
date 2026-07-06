@@ -5,6 +5,7 @@ import type { Proposal } from '../types'
 export function PendingProposals({ pending }: { pending: Proposal[] }) {
   if (pending.length === 0) return <p className="muted">No pending proposals.</p>
   return (
+    <div className="table-scroll">
     <table className="proposals-table">
       <thead>
         <tr>
@@ -27,5 +28,6 @@ export function PendingProposals({ pending }: { pending: Proposal[] }) {
         ))}
       </tbody>
     </table>
+    </div>
   )
 }

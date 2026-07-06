@@ -83,14 +83,15 @@ export function Tasks() {
                 const open = t.status === 'open' || t.status === 'running'
                 return (
                   <tr key={t.id}>
-                    <td>{t.id}</td>
-                    <td>{taskSummary(t)}</td>
-                    <td>{STATUS_LABEL[t.status]}</td>
-                    <td className="tasks-last">{last ? last.summary : '—'}</td>
+                    <td data-label="#">{t.id}</td>
+                    <td data-label="Việc">{taskSummary(t)}</td>
+                    <td data-label="Trạng thái">{STATUS_LABEL[t.status]}</td>
+                    <td className="tasks-last" data-label="Lần chạy gần nhất">{last ? last.summary : '—'}</td>
                     <td>
                       {open && (
                         <button
                           type="button"
+                          className="btn"
                           onClick={() => void cancel(a.agent_id, t.id)}
                           disabled={busyId === `${a.agent_id}:${t.id}`}
                         >
