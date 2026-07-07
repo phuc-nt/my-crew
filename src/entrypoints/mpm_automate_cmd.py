@@ -99,10 +99,21 @@ def run_automate(args: list[str], *, gateway=None, read_tools=None, analyze_fn=N
     tools = read_tools if read_tools is not None else _build_read_tools(config)
     analyze = analyze_fn or _build_analyze_fn(settings)
 
+    # v11 P3: an automation's `read` steps can each call an MCP tool (jira/confluence/
+    # linear) — pool them into one spawn per server for this run, same as the scheduled
+    # report/inbox/tasks runs. This CLI command runs on the main thread, so the
+    # contextvar can be set directly around the call.
+    from src.adapters.mcp_session_pool import McpSessionPool, _current_pool
+
     try:
-        results = run_workflow(
-            workflow, read_tools=tools, analyze_fn=analyze, gateway=gw, dry_run=dry_run
-        )
+        with McpSessionPool() as pool:
+            token = _current_pool.set(pool)
+            try:
+                results = run_workflow(
+                    workflow, read_tools=tools, analyze_fn=analyze, gateway=gw, dry_run=dry_run
+                )
+            finally:
+                _current_pool.reset(token)
     except (ValueError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

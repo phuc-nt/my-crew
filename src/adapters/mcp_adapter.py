@@ -99,13 +99,27 @@ def _coerce_result(raw: Any) -> Any:
 
 
 def call_tool(spec: McpServerSpec, tool_name: str, args: dict[str, Any]) -> Any:
-    """Spawn the server (if needed), invoke one tool by name, return its result.
+    """Invoke one tool by name on the server, return its (normalized) result.
 
-    Sync wrapper over the async MCP API for use in the sync CLI/graph. Validates
-    the server's dist build + required env first, with a clear error. Bounded by
-    a timeout so a hung server cannot stall the agent.
+    If a per-run session pool is active (v11 P3 — set around a report/task run), the call is
+    served through the pool's reused subprocess for that server. Otherwise it falls back to the
+    original one-spawn-per-call path (a lone call outside any run). Validates the dist build +
+    required env first, with a clear error. Bounded by a timeout so a hung server cannot stall.
     """
     spec.validate()
+
+    from src.adapters.mcp_session_pool import current_pool
+
+    pool = current_pool()
+    if pool is not None:
+        try:
+            raw = pool.call(spec, tool_name, args)
+        except Exception as exc:  # explicit context, never swallowed
+            raise RuntimeError(
+                f"MCP call failed: server={spec.name!r} tool={tool_name!r}: {exc}"
+            ) from exc
+        return _coerce_result(raw)
+
     try:
         raw = asyncio.run(asyncio.wait_for(_acall_tool(spec, tool_name, args), _TOOL_TIMEOUT_S))
     except TimeoutError as exc:

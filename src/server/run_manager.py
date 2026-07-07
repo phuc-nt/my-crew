@@ -138,19 +138,31 @@ class RunManager:
         terminal_box: dict[str, Terminal] = {}
 
         def _run_sync() -> None:
+            # v11 P3: wrap the sync graph.stream loop in a per-run MCP session pool. This
+            # runs inside `asyncio.to_thread` (its own worker thread, separate from the
+            # pool's own background thread+loop) — the contextvar is set HERE, on the
+            # thread that will actually call `call_tool` while streaming the graph, which
+            # is what the pool's owner-task/anyio design requires.
+            from src.adapters.mcp_session_pool import McpSessionPool, _current_pool
+
             cfg = invoke_config_env(handle.thread_id)
             last_delta: dict | None = None
             graph = build_graph(handle.agent_id, handle.kind, handle.audience, dry_run)
             terminal = terminal_for_delivery(None)  # default if no deliver chunk seen
-            for chunk in graph.stream({}, config=cfg, stream_mode="updates"):
-                if "__interrupt__" in chunk:
-                    terminal = terminal_for_interrupt(handle.thread_id, chunk)
-                    break
-                loop.call_soon_threadsafe(_put_nonblocking, handle.queue, chunk)
-                if "deliver" in chunk:
-                    last_delta = chunk["deliver"]
-            else:
-                terminal = terminal_for_delivery(last_delta)
+            with McpSessionPool() as pool:
+                token = _current_pool.set(pool)
+                try:
+                    for chunk in graph.stream({}, config=cfg, stream_mode="updates"):
+                        if "__interrupt__" in chunk:
+                            terminal = terminal_for_interrupt(handle.thread_id, chunk)
+                            break
+                        loop.call_soon_threadsafe(_put_nonblocking, handle.queue, chunk)
+                        if "deliver" in chunk:
+                            last_delta = chunk["deliver"]
+                    else:
+                        terminal = terminal_for_delivery(last_delta)
+                finally:
+                    _current_pool.reset(token)
             terminal_box["t"] = terminal
 
         try:

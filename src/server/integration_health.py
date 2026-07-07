@@ -1,16 +1,24 @@
-"""Integration health checks for the dashboard (v3 M7 S9). READ-ONLY, secret-safe.
+"""Integration health checks for the dashboard (v3 M7 S9). Mostly read-only, secret-safe.
 
 Answers "which connection is broken?" for a non-technical operator: each check returns
 ok/not-ok + a fix hint for whoever does the technical setup. NO secret VALUE is read or
-returned — env checks report presence only (bool), and no check sends any token anywhere.
+returned — env checks report presence only (bool), and no check logs a token value.
 
-`gh auth status` is the only network-ish probe (the gh CLI's own check, 5s timeout);
-everything else is env-presence, file-existence, or PATH lookup. Results are cached for
-30s per process so a dashboard poll cannot spawn a subprocess storm.
+Two checks now do a LIVE network probe: `gh auth status` (the gh CLI's own check, 5s
+timeout) and, since v11 P3, Slack `whoami` — when the Slack MCP server build exists and
+its env is present, this check spawns the server and calls its `whoami` tool (a live
+`auth.test`-equivalent) to confirm the token actually authenticates, not just that the
+env vars are set. This is a deliberate change from the original "no token sent anywhere"
+posture: whoami sends the configured token to Slack to verify it. If the server build
+predates `whoami` (tool-not-found), this check falls back to the old presence-only
+check rather than erroring. Everything else stays env-presence, file-existence, or PATH
+lookup. Results are cached for 30s per process so a dashboard poll cannot spawn a
+subprocess storm.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
@@ -25,8 +33,11 @@ from src.config.reporting_config import (
 )
 from src.config.settings import REPO_ROOT
 
+logger = logging.getLogger(__name__)
+
 _CACHE_TTL_SECONDS = 30.0
 _cache: dict = {"at": 0.0, "payload": None}
+_WHOAMI_TIMEOUT_S = 10.0
 
 
 def integration_checks(*, use_cache: bool = True) -> dict:
@@ -62,13 +73,7 @@ def _run_checks() -> list[dict]:
         )
     )
 
-    ok, detail = _env_set("SLACK_XOXC_TOKEN", "SLACK_XOXD_TOKEN", "SLACK_TEAM_DOMAIN")
-    checks.append(
-        _check(
-            "slack", "Slack browser-token", ok, detail,
-            "Set SLACK_XOXC_TOKEN / SLACK_XOXD_TOKEN / SLACK_TEAM_DOMAIN in .env",
-        )
-    )
+    checks.append(_slack_check())
 
     for check_id, label, env_name, default in (
         ("jira_mcp", "Jira MCP server build", "JIRA_MCP_DIST", _DEFAULT_JIRA_DIST),
@@ -96,6 +101,97 @@ def _run_checks() -> list[dict]:
         )
     )
     return checks
+
+
+def _slack_spec():
+    """Build the Slack McpServerSpec the same way config_builders_reporting does (dist
+    path override + the 3 browser-token env vars), so this probe spawns the exact same
+    server config a real report/inbox run would."""
+    from pathlib import Path
+
+    from src.config.reporting_config import McpServerSpec
+
+    return McpServerSpec(
+        name="slack",
+        dist_path=Path(os.getenv("SLACK_MCP_DIST") or _DEFAULT_SLACK_DIST),
+        env={
+            "SLACK_XOXC_TOKEN": os.getenv("SLACK_XOXC_TOKEN") or "",
+            "SLACK_XOXD_TOKEN": os.getenv("SLACK_XOXD_TOKEN") or "",
+            "SLACK_TEAM_DOMAIN": os.getenv("SLACK_TEAM_DOMAIN") or "",
+        },
+        required_env_keys=("SLACK_XOXC_TOKEN", "SLACK_XOXD_TOKEN", "SLACK_TEAM_DOMAIN"),
+    )
+
+
+def _slack_check() -> dict:
+    """Slack: presence-bool, upgraded to a live `whoami` probe when possible (v11 P3).
+
+    - env absent → skip the spawn entirely, same as before (presence-only, not ok).
+    - env present + dist missing → presence-only check (can't spawn a build that
+      isn't there; the `slack_mcp` check below already reports the missing build).
+    - env present + dist present → spawn, call `whoami`:
+        {ok: true} → healthy, detail names the authenticated user/team.
+        {ok: false, code: "TOKEN_EXPIRED"} → not ok, hint to refresh xoxc/xoxd.
+        {ok: false, ...other} → not ok, detail carries the server's own message.
+        tool not found (old server build, no whoami yet) → fall back to presence-only.
+        any other spawn/call failure → not ok, detail carries the error (still a
+          useful signal — token might be fine but the server itself is broken).
+    """
+    env_ok, env_detail = _env_set("SLACK_XOXC_TOKEN", "SLACK_XOXD_TOKEN", "SLACK_TEAM_DOMAIN")
+    hint = "Set SLACK_XOXC_TOKEN / SLACK_XOXD_TOKEN / SLACK_TEAM_DOMAIN in .env"
+    if not env_ok:
+        return _check("slack", "Slack browser-token", False, env_detail, hint)
+
+    dist = os.getenv("SLACK_MCP_DIST") or str(_DEFAULT_SLACK_DIST)
+    if not os.path.isfile(dist):
+        return _check("slack", "Slack browser-token", env_ok, env_detail, hint)
+
+    try:
+        from src.adapters.mcp_adapter import call_tool
+
+        result = _call_whoami_bounded(call_tool)
+    except Exception as exc:  # noqa: BLE001 — a probe failure is a health signal, not a crash
+        msg = str(exc)
+        if "not found on server" in msg:  # old server build predates whoami
+            logger.info("slack health: whoami not available on this server build, "
+                        "falling back to presence check")
+            return _check("slack", "Slack browser-token", env_ok, env_detail, hint)
+        logger.warning("slack health: whoami probe failed: %s", msg)
+        return _check("slack", "Slack browser-token", False, f"whoami failed: {msg}", hint)
+
+    if isinstance(result, dict) and result.get("ok"):
+        who = f"user @{result.get('user')}" if result.get("user") else "user unknown"
+        team = result.get("team") or "unknown"
+        return _check(
+            "slack", "Slack browser-token", True,
+            f"đã xác thực ({who}, team {team})", hint,
+        )
+
+    code = (result or {}).get("code") if isinstance(result, dict) else None
+    if code == "TOKEN_EXPIRED":
+        return _check(
+            "slack", "Slack browser-token", False, "Token Slack hết hạn",
+            "Lấy lại xoxc/xoxd từ browser rồi cập nhật .env",
+        )
+    detail = f"whoami: {result!r}" if result is not None else "whoami: no response"
+    return _check("slack", "Slack browser-token", False, detail, hint)
+
+
+def _call_whoami_bounded(call_tool):
+    """Run the slack whoami probe bounded by `_WHOAMI_TIMEOUT_S`, independent of the
+    adapter's own 60s per-call timeout (health checks must fail fast, not hang the
+    dashboard poll). On timeout we do NOT join the worker (`shutdown(wait=False)`): a `with`
+    block would block at exit until the underlying 60s call returns, defeating the 10s bound
+    (review MED2). The daemon worker is left to finish/die on its own."""
+    import concurrent.futures
+
+    spec = _slack_spec()
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = pool.submit(call_tool, spec, "whoami", {})
+    try:
+        return future.result(timeout=_WHOAMI_TIMEOUT_S)
+    finally:
+        pool.shutdown(wait=False)
 
 
 def _gh_check() -> dict:

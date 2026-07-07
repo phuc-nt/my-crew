@@ -99,12 +99,34 @@ def build_graph_for(loaded: LoadedProfile, settings: Any, kind: str, audience: s
     )
 
 
+def _run_with_mcp_pool(fn: Callable[[], dict]) -> dict:
+    """Run `fn` (a self-contained run: graph invoke or a poll/tick) under a fresh
+    per-run MCP session pool (v11 P3), so every `call_tool` made while `fn` runs
+    reuses one subprocess per server instead of spawning fresh per call.
+
+    The pool is created and torn down around this single call — the contextvar is
+    set on THIS thread, the same thread `fn` runs on, which the pool's owner-task/
+    anyio design requires. `fn` runs on the worker's sync main thread, so this is a
+    direct call (no `asyncio.to_thread` needed here, unlike run_manager).
+    """
+    from src.adapters.mcp_session_pool import McpSessionPool, _current_pool
+
+    with McpSessionPool() as pool:
+        token = _current_pool.set(pool)
+        try:
+            return fn()
+        finally:
+            _current_pool.reset(token)
+
+
 def _default_run_report(
     loaded: LoadedProfile, settings: Any, kind: str, audience: str, thread_id: str
 ) -> dict:
     """Real dispatch: build the per-agent graph and run one report (mirrors cron)."""
     graph = build_graph_for(loaded, settings, kind, audience)
-    return graph.invoke({}, config=invoke_config(thread_id, settings))
+    return _run_with_mcp_pool(
+        lambda: graph.invoke({}, config=invoke_config(thread_id, settings))
+    )
 
 
 def main(argv: list[str] | None = None, *, run_report: RunReport = _default_run_report) -> int:
@@ -170,7 +192,9 @@ def main(argv: list[str] | None = None, *, run_report: RunReport = _default_run_
         from src.runtime.inbox_dispatch import run_all_inboxes
 
         try:
-            result = run_all_inboxes(loaded, settings)
+            # v11 P3: a poll makes several Slack MCP calls (list_workspace_channels,
+            # search_messages, maybe post_message per reply) — pool them into one spawn.
+            result = _run_with_mcp_pool(lambda: run_all_inboxes(loaded, settings))
         except Exception as exc:  # noqa: BLE001 — record the failure, never crash
             logger.exception("worker %s/inbox failed", agent_id)
             append_run_event(data_dir, _event(agent_id, kind, "internal", "error", None, False))
@@ -191,7 +215,9 @@ def main(argv: list[str] | None = None, *, run_report: RunReport = _default_run_
         from src.runtime.task_runner import run_tasks
 
         try:
-            result = run_tasks(loaded, settings)
+            # v11 P3: each open task's check + reminder can call MCP reads (Jira/GitHub/
+            # Slack) — pool them per tick instead of spawning per call.
+            result = _run_with_mcp_pool(lambda: run_tasks(loaded, settings))
         except Exception as exc:  # noqa: BLE001 — record the failure, never crash
             logger.exception("worker %s/tasks failed", agent_id)
             append_run_event(data_dir, _event(agent_id, kind, "internal", "error", None, False))

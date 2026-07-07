@@ -62,12 +62,34 @@ def save_watermark(data_dir: Path, last_ts: str) -> None:
     os.replace(tmp, path)
 
 
-def _channel_name(slack_server: Any, channel_id: str) -> str:
-    """Resolve a channel ID to its name (search's `in:` operator needs the name)."""
-    out = call_tool(slack_server, "list_workspace_channels", {"include_private": True})
+def _find_channel(out: Any, channel_id: str) -> str | None:
     for ch in out.get("channels", []) if isinstance(out, dict) else []:
         if ch.get("id") == channel_id:
             return str(ch["name"])
+    return None
+
+
+def _channel_name(slack_server: Any, channel_id: str) -> str:
+    """Resolve a channel ID to its name (search's `in:` operator needs the name).
+
+    P1 added a 15-min cache to `list_workspace_channels`, so a newly-created or
+    renamed channel can be briefly invisible on the first (possibly cached) lookup.
+    Retry ONCE with `bypass_cache: True` before declaring the channel not found —
+    only a genuinely absent channel (not a member, wrong id) should still raise.
+    """
+    out = call_tool(slack_server, "list_workspace_channels", {"include_private": True})
+    name = _find_channel(out, channel_id)
+    if name is not None:
+        return name
+
+    out = call_tool(
+        slack_server, "list_workspace_channels",
+        {"include_private": True, "bypass_cache": True},
+    )
+    name = _find_channel(out, channel_id)
+    if name is not None:
+        return name
+
     raise RuntimeError(
         f"inbox channel {channel_id!r} not found in the Slack workspace "
         "(is the agent's account a member of it?)"

@@ -125,6 +125,41 @@ def test_fetch_unknown_channel_raises(monkeypatch):
         inbox_mod.fetch_new_mentions(None, channel_id="C_IN", agent_id="a", last_ts="1")
 
 
+def test_channel_name_retries_with_bypass_cache_before_raising(monkeypatch):
+    """v11 P3 (F7): P1's 15-min cache can hide a new/renamed channel. The first
+    (possibly cached) list misses it; retry ONCE with bypass_cache=True before the
+    resolver gives up — a genuinely absent channel still raises after both tries."""
+    calls: list[dict] = []
+
+    def fake_call_tool(server, tool, args):
+        calls.append(args)
+        if len(calls) == 1:
+            return {"channels": [{"id": "C_OTHER", "name": "x"}]}  # miss (cached)
+        return {"channels": [{"id": "C_IN", "name": "fresh-channel"}]}  # found on retry
+
+    monkeypatch.setattr(inbox_mod, "call_tool", fake_call_tool)
+    name = inbox_mod._channel_name(None, "C_IN")
+
+    assert name == "fresh-channel"
+    assert len(calls) == 2
+    assert calls[0].get("bypass_cache") is not True
+    assert calls[1]["bypass_cache"] is True
+
+
+def test_channel_name_raises_after_retry_still_misses(monkeypatch):
+    calls: list[dict] = []
+
+    def fake_call_tool(server, tool, args):
+        calls.append(args)
+        return {"channels": [{"id": "C_OTHER", "name": "x"}]}  # never found
+
+    monkeypatch.setattr(inbox_mod, "call_tool", fake_call_tool)
+    with pytest.raises(RuntimeError, match="not found"):
+        inbox_mod._channel_name(None, "C_IN")
+    assert len(calls) == 2  # both the plain lookup AND the bypass_cache retry happened
+    assert calls[1]["bypass_cache"] is True
+
+
 def test_bootstrap_answers_nothing_and_sets_watermark(tmp_path, monkeypatch):
     loaded = _loaded(tmp_path, inbox={"channel": "C_IN", "poll_minutes": 2})
     monkeypatch.setattr(
