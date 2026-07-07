@@ -13,7 +13,7 @@ created: 2026-07-04
 
 1 CEO, chạy trong LAN công ty. Nút **Duyệt** trên web mở khóa hành động Lớp B (tạo ticket, post external…) — nên **auth chính là lớp bảo vệ Lớp B**, không phải trang trí. Single-user session login là đủ (không cần SSO/multi-tenant).
 
-## Cài đặt (1 lệnh)
+## Cài đặt (1 lệnh, v10 M26 hardened)
 
 ```bash
 git clone <repo> && cd my-project-manager
@@ -21,7 +21,16 @@ cp config.example.env .env        # rồi điền các key (xem bên dưới)
 ./deploy/install.sh
 ```
 
-`install.sh` làm: `uv sync` → build web SPA → kiểm tra `.env` thiếu key gì → cài 2 launchd service (coordinator chạy agent theo lịch + web dashboard) → in checklist.
+**`install.sh` (v10 M26 hardening):**
+1. **Preflight fail-loud**: kiểm `uv`/`node`/`npm`/`git` → in lệnh `brew install` nếu thiếu, exit 1. `gh` = warning (login interactive, không chặn).
+2. **Restart-only-on-change (F6)**: so plist render vs đã cài → chỉ `launchctl unload/load` nếu khác. Tránh kill agent run giữa chừng.
+3. **SPA build temp + swap**: `vite build` → temp dir, `rsync` vào serve dir CHỈ khi khác (không interrupt live client).
+4. **MCP_DIST-aware**: đọc lại `*_MCP_DIST` từ `.env` trước, ghi vào `.env` nếu thiếu.
+5. **Health gate**: 3 MCP dist + `gh auth` + dashboard auth presence → bảng ✓/✗ trước khi "xong".
+6. **HTTPS clone** (khớp docs, bỏ SSH `git@`).
+7. **bash 3.2 compat** (macOS default): map repo→env-var via `case` function (no `declare -A`).
+
+Script idempotent: re-run không phá gì (restart=no-op nếu config unchanged).
 
 ## Bật đăng nhập (BẮT BUỘC trước khi mở ra LAN)
 

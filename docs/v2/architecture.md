@@ -172,6 +172,47 @@ backend. Không node nào của định nghĩa harness bị thiếu.
 - **What's deleted**: `routes_dashboard.py`, `routes_approvals.py`, `routes_audit.py`, `routes_profile.py` (HTML routers), `src/server/templates/`, htmx static + 5 htmx tests. Coverage guard: every unique edge-case re-asserted in a JSON test first.
 - **M4 is shipped**: 5 slices (S1 JSON API, S2 React shell, S3 visual views, S4 ops surfaces, S5 wiring), 785 pytest green, vitest 11, ruff clean.
 
+### 11.1 Design system & theming layer (v9 M3–M4, v10 M24–M25)
+
+**v9 P3 — Design tokens (CSS-only)**:
+- **`:root` CSS variables** — semantic colors (text/muted/primary/danger/ok/warn), spacing (space-1..5), radius, shadow, type scale. 112+ usages → zero hardcoded hex. WCAG AA verified: all roles ≥4.5:1 contrast light + dark.
+- **Status colors role-split**: `--color-{status}` (text/border) + `-solid` (white-on-fill) + `-bg` (tint) + `--color-on-{status}` → separate tokens per role, not 1-value-fits-all (prerequisite for both-themes AA).
+- **Be Vietnam Pro woff2** self-hosted (8 files, 96KB total, no CDN, offline safe, unicode-range subset).
+- **Motion**: transitions 120–180ms gated by `prefers-reduced-motion: no-preference`; reduce mode strips all.
+
+**v10 M24 — Dark mode system**:
+- **Two-layer tokens**: `:root` (light defaults) + `[data-theme="dark"]` selector (dark values). Same token names, different computed values.
+- **Anti-FOUC**: inline script in `index.html` reads `localStorage['theme']` → sets `<html data-theme>` + `theme-color` meta BEFORE React mounts (zero flicker).
+- **`theme-context.tsx`**: React context manages theme state (light|dark|auto), resolves auto → `prefers-color-scheme`, persists to localStorage. ThemeToggle component (3-state button).
+- **`color-scheme: light/dark`**: native controls (select/input/scrollbar) auto-follow theme.
+- **Chart theme-aware** (`chart-theme.ts`): `getComputedStyle()` reads token colors at render time; `key={resolvedTheme}` remounts charts on theme change.
+
+**v10 M25 — Dual-mode UI toggle**:
+- **`ui-mode-context.tsx`**: global state (low|high), persists to `localStorage['ui-mode']`.
+- **Low mode** (default, CEO): 4-item nav (Team/Chạy tay/Cài đặt/Tài liệu).
+- **High mode**: nav + 7 advanced views (Overview/Timeline/Cost/Memory/Guardrail/Config/Advanced runs); all i18n Vietnamese.
+- **Settings → Chế độ hiển thị** toggle; no auth change (view-layer only, routes still auth-gated).
+- **7 advanced views + 5 components i18n**: labels.ts centralized, zero English leak verified E2E.
+
+**v10 M26 — Installer hardening + health panel**:
+- **IntegrationHealthPanel** DRY: Settings + wizard first-run reuse same component (team view + new context).
+- **Health checks**: env vars present (OPENROUTER_API_KEY), MCP dist paths exist, `gh auth` status (parsed stdout), `gws` CLI availability (HR pack).
+- **Backtick → `<code>`**: hint text `` `command` `` rendered as copy-pasteable code blocks (guard backtick lones → no XSS).
+
+### 11.2 Responsive design (v9 M4)
+
+- **Mobile card-list** (`@media (max-width: 640px)`): CEO tables (Team/Tasks/Approvals) → cards (tr→div, td→flex with data-label prefix).
+- **Advanced tables** (AuditTable/RunList/Overview): `.table-scroll` overflow-x (technical persona expects horizontal scroll, not card collapse).
+- **Touch-friendly**: `min-height: 44px` buttons; `font-size: ≥16px` inputs (iOS Safari zoom prevention).
+- **Wrap**: nav, quick-action chips, approval lists responsive wrap on mobile.
+
+### 11.3 i18n & trust surface (v9 M1)
+
+- **`labels.ts`**: centralized enums (RUN_STATUS, KIND, VERDICT) → Vietnamese labels; formatDateTime, formatCron helpers.
+- **`action-summary.ts`**: tóm tắt tiếng Việt per action type (Jira/Slack/Confluence/Linear/GitHub/Email) — reads field-shape from backend JSON, safe for external class flag.
+- **ConfirmDialog**: Vietnamese title/buttons/summary, external class highlight (red/bold + "Gửi RA NGOÀI công ty" warning), JSON audit in `<details>`.
+- **E2E verified**: 0 English leak across CEO + advanced views + all surfaces.
+
 ## 13. Low-Tech Agent Creation & Lifecycle (v3 M7, 2026-07-02)
 
 **v3 M7 adds non-technical web surfaces for agent creation, configuration, and lifecycle management.** Positions "technical setup" (uv, MCP builds, `.env` tokens) as one-time infrastructure; "day-to-day agent ops" (create/pause/resume/delete) entirely via web — zero terminal/YAML/secrets exposure.

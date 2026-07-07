@@ -92,6 +92,8 @@ Architecture: [docs/system-architecture.md](docs/v1/system-architecture.md) · C
 
 | Read this to… | Doc |
 |---|---|
+| **Dùng hệ thống (tiếng Việt)** — cài đặt + vận hành hằng ngày | [docs/huong-dan-su-dung.md](docs/huong-dan-su-dung.md) |
+| See what shipped, version by version | [docs/project-changelog.md](docs/project-changelog.md) |
 | **Add a new agent** (quick start) | [docs/v2/getting-started.md](docs/v2/getting-started.md) |
 | Understand the guardrail (the main lesson) | [action-gateway-explainer.md](docs/v1/action-gateway-explainer.md) |
 | Understand the problem + vision | [project-overview-pdr.md](docs/v1/project-overview-pdr.md) |
@@ -113,7 +115,13 @@ The [journals](docs/journals/) are the best learning material here: each phase r
 - **M2 platform** (2026-06-26): P5 graph-native Lớp B interrupts + P6 FastAPI SSE streaming + P7 web dashboard (HTMX+Jinja2, 6 ops surfaces) + P8 Postgres checkpointer/Store/cross-thread memory (opt-in). 545 tests. Full E2E against real Jira/GitHub/Slack/Confluence and throwaway Postgres.
 - **M3 extensibility** (2026-06-27): P10 skill system (5 bundled instruction-only skills, injectable LLM selector) + P9 cross-agent memory (sibling fact sharing via Store, internal-only) + P11 integrations/multi-channel (config-driven MCP servers + Linear read/gated-write + Email/SMTP delivery, Lớp B) + P12 automation/observability (opt-in LangSmith tracing, checkpoint-based replay with safe-replay guard, READ-only workflow automation via gateway). 776 tests. Final live E2E: Jira 21 issues, real Confluence page created, Slack post approved, 20 stored facts, B3 replay dedup+refuse-unsafe, D3 proposals Lớp B only.
 
-See [docs/v2/README.md](docs/v2/README.md) and the [journals](docs/journals/) for each phase's decisions, bugs caught, and lessons learned.
+**v3–v10 COMPLETE** (2026-06-30 → 07-07) — grew from "one PM agent" into a CEO-operated virtual-staff company. Highlights (full list in the [changelog](docs/project-changelog.md)):
+- **v3–v5**: domain packs (a new domain is a dropped-in folder, zero core edits — proven by an HR pack), a low-tech web UI, an admin agent that fleet-watches the others, chat-command → approval queue.
+- **v6–v7**: each virtual staffer gets its own Telegram identity; CEO chat-ops; assign work in three shapes; a browser setup wizard; knowledge-as-a-form; a Company Docs library; a 4-item CEO-first nav.
+- **v8**: CEO-observability (a silently-dead agent pings the CEO on Telegram), multi-project rollup, an opt-in trust ladder (auto-approve Lớp B with a per-day cap — the invariant stays intact).
+- **v9–v10**: full Vietnamese UI + a readable trust surface; light/dark theme with a self-hosted VN font (WCAG AA both themes); a low/high-tech dual-mode toggle; a hardened one-command installer + a live system-health panel. Backend at 1206 tests; every version E2E-verified (browser + real integrations).
+
+See [docs/v2/README.md](docs/v2/README.md) and the [journals](docs/journals/) for each phase's decisions, bugs caught, and lessons learned. New users: start with the **[hướng dẫn tiếng Việt](docs/huong-dan-su-dung.md)**.
 
 ## License
 
