@@ -49,9 +49,9 @@ MIN_SERVER_VERSIONS: dict[str, str] = {
     "slack": "1.3.0",
 }
 
-# Env flag to turn the min-version check from warn-only into a hard block. Default is
-# warn-only (P4 changes the default only after the fleet's servers are confirmed
-# upgraded) — set MCP_MIN_VERSION_ENFORCE=true to raise instead of log.
+# Env flag controlling the min-version check. The DEFAULT is enforce (raise): the installer pins
+# the published minimums, so a server below the floor is a stale/hand-built copy the code wasn't
+# verified against. Set MCP_MIN_VERSION_ENFORCE=false to downgrade to a warning.
 _ENFORCE_ENV = "MCP_MIN_VERSION_ENFORCE"
 
 # Warn at most once per server name per process — before P1/P2 shipped real serverInfo,
@@ -83,7 +83,7 @@ def _parse_version(version: str) -> tuple[int, ...] | None:
 
 
 def check_min_version(server_name: str, reported_version: str | None) -> None:
-    """Warn (default) or raise (MCP_MIN_VERSION_ENFORCE=true) when `server_name`'s
+    """Raise (default) or warn (MCP_MIN_VERSION_ENFORCE=false) when `server_name`'s
     reported version is below its configured minimum.
 
     No-ops when: the server isn't in `MIN_SERVER_VERSIONS` (unknown/extra server —
@@ -100,9 +100,14 @@ def check_min_version(server_name: str, reported_version: str | None) -> None:
 
     message = (
         f"MCP server {server_name!r} reports version {reported_version} which is below "
-        f"the minimum {minimum}; upgrade to >= {minimum}."
+        f"the minimum {minimum}; upgrade to >= {minimum} "
+        f"(re-run ./deploy/install.sh to pull the published version)."
     )
-    if os.getenv(_ENFORCE_ENV, "").strip().lower() == "true":
+    # Default is ENFORCE: the installer pins the published minimums, so a server below the floor
+    # means a stale/hand-built copy the code was not verified against. Set
+    # MCP_MIN_VERSION_ENFORCE=false to downgrade to a warning (e.g. while developing an older
+    # server with --mcp-dev).
+    if os.getenv(_ENFORCE_ENV, "").strip().lower() != "false":
         raise RuntimeError(message)
     if server_name not in _warned_servers:
         _warned_servers.add(server_name)

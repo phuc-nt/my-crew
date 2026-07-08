@@ -7,10 +7,15 @@
 #   1. preflight          — fail loud with the exact fix if a required tool is missing
 #   2. uv sync            — install Python deps into the venv
 #   3. build the web SPA  — into a temp dir, then swap atomically (never breaks a live server)
-#   4. MCP servers        — clone + build the 3 stdio servers (idempotent; honors *_MCP_DIST)
+#   4. MCP servers        — install the 3 stdio servers (idempotent; honors *_MCP_DIST)
 #   5. .env preflight     — copy the template on first run (secrets go in the browser wizard)
 #   6. launchd services   — install/reload ONLY when the plist or SPA actually changed
 #   7. health gate        — report what is / isn't ready before declaring success
+#
+# MCP servers install from npm (exact pinned versions, into a repo-local ./.mcp-servers prefix)
+# once the 3 packages are published; pass --mcp-dev to clone+build the repos locally instead
+# (dev path against unpublished/edited server code). Until the npm packages are published, the
+# script always uses clone+build regardless of --mcp-dev (see MCP_NPM_PUBLISHED below).
 #
 # Idempotent: re-running when nothing changed is a no-op — it does NOT restart the coordinator
 # (which would kill in-flight agent runs) or the web service (which would drop sessions). It only
@@ -20,6 +25,25 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
+
+# --mcp-dev opts into the clone+build MCP install path instead of npm. bash 3.2 (macOS
+# system bash) has no getopts long-flag support worth the complexity here — a plain loop
+# is simplest (KISS) for a single boolean flag.
+MCP_DEV=0
+for arg in "$@"; do
+  [ "$arg" = "--mcp-dev" ] && MCP_DEV=1
+done
+
+# The 3 MCP servers are published to npm, so npm install is the default source. --mcp-dev
+# forces clone+build for developing against unpublished/edited server code. (This flag exists
+# so a future maintainer with unpublished servers can set it back to 0 without deleting code.)
+MCP_NPM_PUBLISHED=1
+if [ "$MCP_NPM_PUBLISHED" -eq 1 ] && [ "$MCP_DEV" -eq 0 ]; then
+  MCP_SOURCE="npm"
+else
+  MCP_SOURCE="clone"
+fi
+
 echo "== my-project-manager install =="
 echo "repo: $REPO_DIR"
 
@@ -98,15 +122,27 @@ echo "  built → $SPA_DIR$( [ "$spa_changed" -eq 1 ] && echo '  (changed, swapp
 
 # ---------------------------------------------------------------------------------------------
 # [4/7] MCP servers. Honor any *_MCP_DIST already set in .env (a custom location the config
-# resolves against) — if that dist exists we do NOT re-clone into the default ~/workspace.
+# resolves against) — if that dist exists we do NOT re-install/re-clone by default.
+#
+# Two source modes (MCP_SOURCE, computed above from --mcp-dev + MCP_NPM_PUBLISHED):
+#   npm   — `npm install --prefix .mcp-servers` at EXACT pinned versions (no `^` range), so a
+#           re-run resolves to the identical install and is a true no-op. No build step needed.
+#   clone — clone+build the 3 repos into $MCP_BASE (unchanged legacy path, kept for local dev
+#           against unpublished/edited server code).
 # ---------------------------------------------------------------------------------------------
 echo
-echo "[4/7] MCP servers (Jira / Confluence / Slack)"
+echo "[4/7] MCP servers (Jira / Confluence / Slack) — source: $MCP_SOURCE"
 MCP_BASE="${MCP_BASE:-$HOME/workspace}"
-mkdir -p "$MCP_BASE"
+NPM_PREFIX="$REPO_DIR/.mcp-servers"
+# Pinned exact versions — keep in sync with each repo's published package.json.
+JIRA_PKG_VERSION="4.2.0"
+CONFLUENCE_PKG_VERSION="1.5.0"
+SLACK_PKG_VERSION="1.3.0"
+
 # Read a *_MCP_DIST override from .env (value only), if present.
 env_dist() { [ -f .env ] && grep -E "^$1=" .env 2>/dev/null | tail -1 | cut -d= -f2- || true; }
-# macOS ships bash 3.2 (no associative arrays), so map repo → env-var name with a case (portable).
+# macOS ships bash 3.2 (no associative arrays), so map repo → env-var name / npm pkg name with a
+# case (portable).
 mcp_env_key() {
   case "$1" in
     jira-cloud-mcp-server) echo "JIRA_MCP_DIST" ;;
@@ -114,32 +150,99 @@ mcp_env_key() {
     slack-browser-mcp-server) echo "SLACK_MCP_DIST" ;;
   esac
 }
-for repo in jira-cloud-mcp-server confluence-cloud-mcp-server slack-browser-mcp-server; do
-  key="$(mcp_env_key "$repo")"
-  override="$(env_dist "$key")"
-  if [ -n "$override" ] && [ -f "$override" ]; then
-    echo "  ✓ $repo (using $key=$override)"
-    continue
-  fi
-  dir="$MCP_BASE/$repo"
-  if [ -f "$dir/dist/index.js" ]; then
-    echo "  ✓ $repo (already built)"
-  else
-    echo "  building $repo …"
-    [ -d "$dir/.git" ] || git clone -q "https://github.com/phuc-nt/$repo.git" "$dir" || {
-      echo "  ! clone $repo failed (network?); re-run installer to retry"; continue; }
-    ( cd "$dir" && npm install --silent && npm run build --silent ) \
-      && echo "  ✓ $repo built" || echo "  ! build $repo failed; re-run installer"
-  fi
-  # If MCP_BASE is not the default, the config won't find the dist unless *_MCP_DIST points to it.
-  # Write the override into .env (only when absent — never clobber an existing value).
-  if [ "$MCP_BASE" != "$HOME/workspace" ] && [ -f "$dir/dist/index.js" ] && [ -f .env ]; then
-    if ! grep -qE "^$key=" .env 2>/dev/null; then
-      printf '%s=%s\n' "$key" "$dir/dist/index.js" >> .env
-      echo "    → wrote $key to .env (custom MCP_BASE)"
+mcp_npm_pkg() {
+  case "$1" in
+    jira-cloud-mcp-server) echo "mcp-jira-cloud-server" ;;
+    confluence-cloud-mcp-server) echo "confluence-cloud-mcp-server" ;;
+    slack-browser-mcp-server) echo "slack-browser-mcp-server" ;;
+  esac
+}
+mcp_pkg_version() {
+  case "$1" in
+    jira-cloud-mcp-server) echo "$JIRA_PKG_VERSION" ;;
+    confluence-cloud-mcp-server) echo "$CONFLUENCE_PKG_VERSION" ;;
+    slack-browser-mcp-server) echo "$SLACK_PKG_VERSION" ;;
+  esac
+}
+# Basic semver compare via `sort -V` (portable enough for X.Y.Z pins; no external deps).
+# Returns 0 (true) when $1 < $2.
+version_lt() {
+  [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -1)" = "$1" ]
+}
+# Read "version" out of a package.json without a JSON parser (grep is fine for this one field).
+pkg_json_version() { # path-to-package.json
+  [ -f "$1" ] && grep -m1 '"version"' "$1" | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' || true
+}
+
+if [ "$MCP_SOURCE" = "npm" ]; then
+  mkdir -p "$NPM_PREFIX"
+  # MIGRATION (red-team F5): a machine that already has *_MCP_DIST pointing at an old clone dir
+  # keeps that value (no-clobber, below) even after this npm install runs — if that old build is
+  # BELOW the target version, warn loudly instead of silently leaving a stale server wired in.
+  for repo in jira-cloud-mcp-server confluence-cloud-mcp-server slack-browser-mcp-server; do
+    key="$(mcp_env_key "$repo")"
+    override="$(env_dist "$key")"
+    target_version="$(mcp_pkg_version "$repo")"
+    if [ -n "$override" ] && [ -f "$override" ]; then
+      override_pkg_json="$(dirname "$override")/../package.json"
+      override_version="$(pkg_json_version "$override_pkg_json")"
+      if [ -n "$override_version" ] && version_lt "$override_version" "$target_version"; then
+        echo "  ! $repo: $key=$override is v$override_version, older than the npm target v$target_version."
+        echo "    A newer version is available via npm. To migrate: unset $key in .env and re-run"
+        echo "    this installer, or keep your local build by re-running with --mcp-dev."
+      else
+        echo "  ✓ $repo (using $key=$override, v${override_version:-unknown})"
+      fi
+      continue
     fi
-  fi
-done
+    echo "  ✓ $repo (resolved via npm prefix — installed below)"
+  done
+  echo "  npm install --prefix .mcp-servers (exact versions, idempotent) …"
+  ( npm install --prefix "$NPM_PREFIX" \
+      "mcp-jira-cloud-server@$JIRA_PKG_VERSION" \
+      "confluence-cloud-mcp-server@$CONFLUENCE_PKG_VERSION" \
+      "slack-browser-mcp-server@$SLACK_PKG_VERSION" --silent ) \
+    && echo "  ✓ MCP packages installed from npm" \
+    || echo "  ! npm install failed (network/registry?); re-run installer to retry"
+  for repo in jira-cloud-mcp-server confluence-cloud-mcp-server slack-browser-mcp-server; do
+    key="$(mcp_env_key "$repo")"
+    override="$(env_dist "$key")"
+    [ -n "$override" ] && [ -f "$override" ] && continue  # already handled above, no-clobber
+    pkg="$(mcp_npm_pkg "$repo")"
+    dist="$NPM_PREFIX/node_modules/$pkg/dist/index.js"
+    if [ -f "$dist" ] && [ -f .env ] && ! grep -qE "^$key=" .env 2>/dev/null; then
+      printf '%s=%s\n' "$key" "$dist" >> .env
+      echo "    → wrote $key to .env (npm prefix)"
+    fi
+  done
+else
+  for repo in jira-cloud-mcp-server confluence-cloud-mcp-server slack-browser-mcp-server; do
+    key="$(mcp_env_key "$repo")"
+    override="$(env_dist "$key")"
+    if [ -n "$override" ] && [ -f "$override" ]; then
+      echo "  ✓ $repo (using $key=$override)"
+      continue
+    fi
+    dir="$MCP_BASE/$repo"
+    if [ -f "$dir/dist/index.js" ]; then
+      echo "  ✓ $repo (already built)"
+    else
+      echo "  building $repo …"
+      [ -d "$dir/.git" ] || git clone -q "https://github.com/phuc-nt/$repo.git" "$dir" || {
+        echo "  ! clone $repo failed (network?); re-run installer to retry"; continue; }
+      ( cd "$dir" && npm install --silent && npm run build --silent ) \
+        && echo "  ✓ $repo built" || echo "  ! build $repo failed; re-run installer"
+    fi
+    # If MCP_BASE is not the default, the config won't find the dist unless *_MCP_DIST points to it.
+    # Write the override into .env (only when absent — never clobber an existing value).
+    if [ "$MCP_BASE" != "$HOME/workspace" ] && [ -f "$dir/dist/index.js" ] && [ -f .env ]; then
+      if ! grep -qE "^$key=" .env 2>/dev/null; then
+        printf '%s=%s\n' "$key" "$dir/dist/index.js" >> .env
+        echo "    → wrote $key to .env (custom MCP_BASE)"
+      fi
+    fi
+  done
+fi
 
 echo
 echo "[5/7] .env setup"
@@ -187,10 +290,17 @@ reload_service com.mpm.web.plist "$spa_changed"
 echo
 echo "[7/7] health gate"
 gate_ok=1
-# MCP builds
+# MCP builds — resolve the same way [4/7] wrote them: env override first, else the source-mode
+# default (npm prefix or clone dir).
 for repo in jira-cloud-mcp-server confluence-cloud-mcp-server slack-browser-mcp-server; do
   override="$(env_dist "$(mcp_env_key "$repo")")"
-  dist="${override:-$MCP_BASE/$repo/dist/index.js}"
+  if [ -n "$override" ]; then
+    dist="$override"
+  elif [ "$MCP_SOURCE" = "npm" ]; then
+    dist="$NPM_PREFIX/node_modules/$(mcp_npm_pkg "$repo")/dist/index.js"
+  else
+    dist="$MCP_BASE/$repo/dist/index.js"
+  fi
   if [ -f "$dist" ]; then echo "  ✓ MCP $repo built"; else echo "  ✗ MCP $repo missing — re-run installer"; gate_ok=0; fi
 done
 # gh auth (the one live check we can do without secrets)

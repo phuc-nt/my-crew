@@ -21,14 +21,19 @@ cp config.example.env .env        # rồi điền các key (xem bên dưới)
 ./deploy/install.sh
 ```
 
-**`install.sh` (v10 M26 hardening):**
+**`install.sh` (v10 M26 hardening + v11 P4 npm MCP install):**
 1. **Preflight fail-loud**: kiểm `uv`/`node`/`npm`/`git` → in lệnh `brew install` nếu thiếu, exit 1. `gh` = warning (login interactive, không chặn).
 2. **Restart-only-on-change (F6)**: so plist render vs đã cài → chỉ `launchctl unload/load` nếu khác. Tránh kill agent run giữa chừng.
 3. **SPA build temp + swap**: `vite build` → temp dir, `rsync` vào serve dir CHỈ khi khác (không interrupt live client).
-4. **MCP_DIST-aware**: đọc lại `*_MCP_DIST` từ `.env` trước, ghi vào `.env` nếu thiếu.
-5. **Health gate**: 3 MCP dist + `gh auth` + dashboard auth presence → bảng ✓/✗ trước khi "xong".
-6. **HTTPS clone** (khớp docs, bỏ SSH `git@`).
-7. **bash 3.2 compat** (macOS default): map repo→env-var via `case` function (no `declare -A`).
+4. **MCP servers từ npm (mặc định)**: `npm install --prefix ./.mcp-servers` với version pin
+   chính xác (idempotent — chạy lại = no-op), ghi `*_MCP_DIST` vào `.env` khi còn thiếu. 3 package
+   đã publish (mcp-jira-cloud-server 4.2.0 / confluence-cloud-mcp-server 1.5.0 /
+   slack-browser-mcp-server 1.3.0). Cờ `--mcp-dev` giữ đường tải + build 3 repo cũ vào
+   `~/workspace/` (dùng khi dev server local). Máy cũ còn `*_MCP_DIST` trỏ build cũ hơn min →
+   installer cảnh báo cách migrate (red-team F5).
+5. **Health gate**: 3 MCP build (npm prefix hoặc clone dir, tuỳ nhánh) + `gh auth` + dashboard auth presence → bảng ✓/✗ trước khi "xong".
+6. **HTTPS clone** (khớp docs, bỏ SSH `git@`) khi dùng `--mcp-dev`.
+7. **bash 3.2 compat** (macOS default): map repo→env-var/npm-package via `case` function (no `declare -A`).
 
 Script idempotent: re-run không phá gì (restart=no-op nếu config unchanged).
 

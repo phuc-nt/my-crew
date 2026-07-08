@@ -24,10 +24,15 @@ cd my-project-manager
 ```
 
 It runs a **preflight** (fails loud with the exact `brew install …` if `uv`/`node`/`git`/`gh` is
-missing), `uv sync`, builds the SPA into a temp dir and swaps it in atomically, clones + builds the
-3 MCP servers over **HTTPS** into `~/workspace/` (set `MCP_BASE=<dir>` to relocate — the script then
-writes the matching `*_MCP_DIST` into `.env`), installs the launchd services, and prints a **health
-gate** (MCP builds, `gh auth`, dashboard-auth) before declaring success.
+missing), `uv sync`, builds the SPA into a temp dir and swaps it in atomically, installs the 3 MCP
+servers, installs the launchd services, and prints a **health gate** (MCP builds, `gh auth`,
+dashboard-auth) before declaring success.
+
+**MCP servers**: by default the script runs `npm install --prefix ./.mcp-servers` (exact pinned
+versions, no build step, into a repo-local prefix) — the 3 servers are published to npm. Pass
+`--mcp-dev` to clone + build the 3 server repos over **HTTPS** into `~/workspace/` instead (set
+`MCP_BASE=<dir>` to relocate — the script then writes the matching `*_MCP_DIST` into `.env`); use
+that when developing against unpublished/edited server code.
 
 Re-running when nothing changed is a **no-op**: it does not restart the coordinator (which would
 kill in-flight agent runs) or the web service (which would drop sessions) — it reloads a service
@@ -353,12 +358,18 @@ For a web-based approval UI, see the web dashboard (M2 feature).
 
 **Symptom:** Error like `spawn ENOENT` or `cannot find jira-mcp-server`.
 
-**Cause:** The 3 external MCP servers (Jira, Confluence, Slack) are separate repos you must clone and build.
+**Cause:** The 3 external MCP servers (Jira, Confluence, Slack) either install from npm or must be
+cloned and built, depending on which path `deploy/install.sh` used.
 
-**Fix:**
+**Fix — re-run the installer** (simplest; picks the same source it used before):
 
 ```bash
-# HTTPS clone (matches deploy/install.sh — no SSH key needed)
+./deploy/install.sh
+```
+
+**Fix — manual clone + build** (matches `deploy/install.sh --mcp-dev` — no SSH key needed):
+
+```bash
 cd ~/workspace
 for repo in jira-cloud-mcp-server confluence-cloud-mcp-server slack-browser-mcp-server; do
   git clone https://github.com/phuc-nt/$repo.git

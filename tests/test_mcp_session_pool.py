@@ -67,7 +67,9 @@ class _FakeSession:
         return _Result(self._version)
 
 
-def _install_fake_client(monkeypatch, *, spawn_count: dict, version: str = "1.3.0",
+# Default fake version is far above every min so the enforce-by-default check (v11 P4) is a no-op
+# for tests about pool mechanics; version-specific tests pass their own `version=`.
+def _install_fake_client(monkeypatch, *, spawn_count: dict, version: str = "999.0.0",
                           tools: dict[str, _FakeTool] | None = None,
                           open_error: Exception | None = None):
     """Patch MultiServerMCPClient.session (async CM) + load_mcp_tools for the pool
@@ -266,9 +268,10 @@ def test_adapter_call_tool_uses_pool_when_active(monkeypatch):
 # --- min-version warn/enforce -----------------------------------------------------
 
 
-def test_check_min_version_below_min_warns_once(monkeypatch, caplog):
+def test_check_min_version_below_min_warns_once_when_enforce_off(monkeypatch, caplog):
+    # v11 P4 flipped the default to ENFORCE; MCP_MIN_VERSION_ENFORCE=false downgrades to a warning.
     monkeypatch.setattr(pool_mod, "_warned_servers", set())
-    monkeypatch.delenv("MCP_MIN_VERSION_ENFORCE", raising=False)
+    monkeypatch.setenv("MCP_MIN_VERSION_ENFORCE", "false")
     with caplog.at_level("WARNING"):
         check_min_version("jira", "1.0.0")
         check_min_version("jira", "1.0.0")  # second call must NOT warn again
@@ -276,6 +279,13 @@ def test_check_min_version_below_min_warns_once(monkeypatch, caplog):
     assert len(warnings) == 1
     assert "jira" in warnings[0].message
     assert MIN_SERVER_VERSIONS["jira"] in warnings[0].message
+
+
+def test_check_min_version_below_min_raises_by_default(monkeypatch):
+    # Default (env unset) enforces since v11 P4.
+    monkeypatch.delenv("MCP_MIN_VERSION_ENFORCE", raising=False)
+    with pytest.raises(RuntimeError, match="upgrade to >="):
+        check_min_version("jira", "1.0.0")
 
 
 def test_check_min_version_at_or_above_min_is_silent(caplog):

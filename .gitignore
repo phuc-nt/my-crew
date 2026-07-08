@@ -36,6 +36,10 @@ CLAUDE.md
 web/node_modules/
 web/dist/
 
+# MCP servers installed from npm by the installer (P4) into a repo-local prefix —
+# never committed, re-created by deploy/install.sh.
+.mcp-servers/
+
 # OS
 .DS_Store
 .setup-complete

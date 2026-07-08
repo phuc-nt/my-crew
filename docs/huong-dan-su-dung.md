@@ -51,8 +51,11 @@ Script sẽ tự động:
 1. **Kiểm tra công cụ** — thiếu gì báo ngay kèm lệnh cài chính xác, rồi dừng (không tự cài lên máy bạn).
 2. `uv sync` — cài thư viện Python.
 3. **Build giao diện web** vào thư mục tạm rồi thay vào chỗ đang chạy (không làm gián đoạn nếu web đang mở).
-4. **Tải + build 3 MCP server** (Jira / Confluence / Slack) vào `~/workspace/`.
-   - Muốn để chỗ khác: đặt `MCP_BASE=<thư-mục>` trước khi chạy — script tự ghi đường dẫn vào `.env`.
+4. **Cài 3 MCP server** (Jira / Confluence / Slack). Mặc định: cài từ npm (bản đúng version,
+   không cần build) vào `./.mcp-servers/` trong repo — 3 package đã publish. Thêm cờ `--mcp-dev`
+   để tải + build thủ công 3 repo vào `~/workspace/` thay vì npm (dùng khi phát triển server local).
+   - Muốn để chỗ khác (khi dùng `--mcp-dev`): đặt `MCP_BASE=<thư-mục>` trước khi chạy — script tự
+     ghi đường dẫn vào `.env`.
 5. **Cài dịch vụ launchd** (chạy nền, tự khởi động theo lịch).
 6. **Kiểm tra sức khỏe** cuối: báo ✓/✗ cho từng phần (MCP, gh, đăng nhập) trước khi mở trình duyệt.
 
