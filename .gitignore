@@ -31,6 +31,11 @@ profiles/*
 AGENTS.md
 CLAUDE.md
 
+# Internal working artifacts — not part of the published project
+plans/
+docs/references/
+.dandori-agent/
+
 # Frontend (M4): ignore deps + the in-web build cache, but COMMIT the served dist
 # at src/server/static/app/ (the "FastAPI serves static, zero Node step" property).
 web/node_modules/
