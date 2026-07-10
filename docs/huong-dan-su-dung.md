@@ -207,9 +207,14 @@ Vào **Trợ lý** (hoặc nhắn qua Telegram). Gõ câu hỏi/lệnh vào ô "
     thoại phía trên hiện việc + bước đang làm. V13 thêm bong bóng hỏi-đáp giữa 2 bàn (khi nhân sự hỏi ý kiến đồng nghiệp). Mọi chuyển động đều từ sự kiện thật — không có
     hoạt cảnh giả.
 
-    ![Văn phòng 3D — nhân sự đang làm việc (bàn cam = đang làm, xanh lá = đã xong)](images/van-phong-3d-dang-lam-viec.png)
+    Bong bóng còn hiện **giai đoạn của bước** theo thời gian thực: *đang làm* → *tự soát* →
+    *đang sửa* (khi nhân sự tự kiểm hoặc bị soát chéo yêu cầu sửa).
 
-    ![Văn phòng 3D — toàn cảnh đội 4 nhân sự quanh bàn trưởng phòng](images/van-phong-3d-toan-canh.png)
+    ![Văn phòng 3D — cả đội hoạt động: bong bóng hiện giai đoạn (đang làm / tự soát / soát chéo) và ai đang hỏi ý kiến ai](images/van-phong-3d-toan-canh.png)
+
+    ![Văn phòng 3D — kiem-dinh soát chéo, nghien-cuu tự soát, phan-tich đang làm cùng lúc](images/van-phong-3d-tu-soat-review.png)
+
+    ![Văn phòng 3D — nhân sự đang làm việc (bàn cam = đang làm, xanh lá = đã xong)](images/van-phong-3d-dang-lam-viec.png)
 - Nếu một agent **chết ngầm** (quá hạn không chạy), hệ thống tự nhắn cảnh báo cho bạn qua Telegram.
 
 ## B.6. Đổi giao diện (sáng / tối)
