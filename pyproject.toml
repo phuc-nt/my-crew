@@ -32,11 +32,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# v20 Phase 3: the DeepAgentRuntime backend (agent_runtime: deep_agent). EXPERIMENTAL — Beta,
-# ships a shell middleware + network deps that run in-process with the gateway, so it is
-# optional and gated. Install only when the hardened wrapper (shell/tracing off) is enabled.
-# Pin a range once a reviewed version is chosen; kept unpinned-optional until then.
-deep = ["deepagents"]
+# v20.5: the DeepAgentRuntime backend (agent_runtime: deep_agent). EXPERIMENTAL — deepagents is
+# Beta and pulls langchain-anthropic/google-genai; its shell runs ONLY inside a self-hosted
+# Docker sandbox (never the host). Optional so the base install stays light + never needs Docker.
+# Install with `uv sync --extra deep`; the `docker` SDK drives the local sandbox container.
+deep = ["deepagents==0.6.12", "docker>=7.1"]
 
 [build-system]
 requires = ["hatchling"]

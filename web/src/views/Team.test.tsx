@@ -154,6 +154,7 @@ test('+ Tạo trưởng phòng creates the coordinator from the truong-phong tem
         bindings_hint: ['slack'],
         persona: 'persona text',
   web_search: false,
+  recommended_runtime: 'native',
       },
     ],
   })

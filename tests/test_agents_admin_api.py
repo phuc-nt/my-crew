@@ -137,6 +137,25 @@ def test_create_writes_web_search_opt_in(client, tmp_world):
     assert doc["web_search"] is True
 
 
+def test_create_writes_agent_runtime_opt_in(client, tmp_world):
+    # v20.5: the wizard forwards the chosen runtime; the created profile carries agent_runtime
+    # for a non-native choice, and omits it (native default) otherwise.
+    _, profiles = tmp_world
+    import yaml
+
+    spec = {**_GOOD_SPEC, "id": "deep-1", "reports": [], "schedule": {},
+            "agent_runtime": "create_agent"}
+    assert client.post("/api/agents/create", json=spec).status_code == 201
+    doc = yaml.safe_load((profiles / "deep-1" / "profile.yaml").read_text(encoding="utf-8"))
+    assert doc["agent_runtime"] == "create_agent"
+
+    spec2 = {**_GOOD_SPEC, "id": "nat-1", "reports": [], "schedule": {},
+             "agent_runtime": "native"}
+    assert client.post("/api/agents/create", json=spec2).status_code == 201
+    doc2 = yaml.safe_load((profiles / "nat-1" / "profile.yaml").read_text(encoding="utf-8"))
+    assert "agent_runtime" not in doc2  # native = default, omitted
+
+
 @pytest.mark.parametrize(
     ("patch", "fragment"),
     [

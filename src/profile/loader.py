@@ -78,6 +78,10 @@ class LoadedProfile:
     # v20 agent-runtime seam: which loop backend runs this agent. Absent ⇒ native (existing
     # graphs, byte-identical). TOP-LEVEL `agent_runtime:` key, NOT the infra `runtime:` block.
     agent_runtime: AgentRuntimeConfig = field(default_factory=AgentRuntimeConfig)
+    # v20.5 Phase 0: opt-in team-step external egress. None ⇒ team-step writes only the internal
+    # artifact (byte-identical pre-v20.5). Shape: {"channel": "<slack channel id>"} — when set,
+    # a step's result is posted to that channel THROUGH the Action Gateway (Lớp A/B + audit).
+    team_step_egress: dict | None = None
 
 
 def _read_md(profile_dir: Path, name: str) -> str:
@@ -137,6 +141,7 @@ def load_profile(
         {str(k): str(v) for k, v in schedule.items()} if isinstance(schedule, dict) else {}
     )
     inbox = _parse_inbox(yaml_doc.get("inbox"), config)
+    team_step_egress = _parse_team_step_egress(yaml_doc.get("team_step_egress"))
     auto_approve = _parse_auto_approve(yaml_doc.get("auto_approve"))
     web_search = bool(yaml_doc.get("web_search", False))
     memory_config = parse_memory_config(yaml_doc.get("memory"))
@@ -161,6 +166,7 @@ def load_profile(
         web_search=web_search,
         memory_config=memory_config,
         agent_runtime=agent_runtime,
+        team_step_egress=team_step_egress,
     )
 
 
@@ -242,3 +248,19 @@ def _parse_inbox(raw: object, config: ReportingConfig) -> dict | None:
     if poll < 1:
         raise RuntimeError("profile inbox: poll_minutes must be an integer >= 1.")
     return {"channel": channel, "poll_minutes": poll}
+
+
+def _parse_team_step_egress(raw: object) -> dict | None:
+    """Validate the optional `team_step_egress:` block (v20.5 Phase 0). Absent/empty ⇒ None.
+
+    None means a team-step writes only its internal artifact (byte-identical pre-v20.5). When
+    set, a step's result posts to `channel` THROUGH the gateway. Fail-loud on shape errors.
+    """
+    if raw is None or raw == {} or raw == "":
+        return None
+    if not isinstance(raw, dict):
+        raise RuntimeError("profile team_step_egress: must be a mapping {channel: ...}.")
+    channel = str(raw.get("channel") or "").strip()
+    if not channel:
+        raise RuntimeError("profile team_step_egress: needs a Slack channel id (channel:).")
+    return {"channel": channel}

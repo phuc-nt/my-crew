@@ -66,6 +66,7 @@ const PM_TEMPLATE = {
   bindings_hint: ['jira', 'slack'],
   persona: '# SOUL\n\nBạn là Điều phối dự án.',
   web_search: false,
+  recommended_runtime: 'native',
 }
 
 test('applyTemplate carries the web_search opt-in into buildSpec', () => {
@@ -80,6 +81,20 @@ test('applyTemplate carries the web_search opt-in into buildSpec', () => {
   act(() => result.current.applyTemplate(PM_TEMPLATE, PM_PACK))
   expect(result.current.state.webSearch).toBe(false)
   expect(result.current.buildSpec().web_search).toBeUndefined()
+})
+
+test('applyTemplate prefills recommended_runtime and buildSpec forwards non-native', () => {
+  const { result } = renderHook(() => useCreateAgentWizard())
+  const deep = { ...PM_TEMPLATE, role_id: 'nghien-cuu', recommended_runtime: 'deep_agent' }
+  act(() => result.current.applyTemplate(deep, PM_PACK))
+
+  expect(result.current.state.agentRuntime).toBe('deep_agent')
+  expect(result.current.buildSpec().agent_runtime).toBe('deep_agent')
+
+  // A native template omits agent_runtime from the spec (default).
+  act(() => result.current.applyTemplate({ ...PM_TEMPLATE, recommended_runtime: 'native' }, PM_PACK))
+  expect(result.current.state.agentRuntime).toBe('native')
+  expect(result.current.buildSpec().agent_runtime).toBeUndefined()
 })
 
 test('applyTemplate prefills pack/role/persona/reports and locks persona from auto-regen', () => {

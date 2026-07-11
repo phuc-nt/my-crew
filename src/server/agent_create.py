@@ -151,6 +151,11 @@ def _build_profile_doc(spec: dict, profiles_dir) -> tuple[str, dict, str | None]
     # so a spec can't smuggle arbitrary values into profile.yaml through this key.
     if spec.get("web_search"):
         doc["web_search"] = True
+    # v20.5: opt-in agent runtime backend. Only a known kind is written; the loader validates it
+    # (unknown kind → RuntimeError at load, caught by the create flow's builder run below).
+    runtime_kind = str(spec.get("agent_runtime") or "").strip()
+    if runtime_kind and runtime_kind != "native":
+        doc["agent_runtime"] = runtime_kind
     _apply_bindings(doc, spec.get("bindings") or {})
 
     # Run the real builders — the exact validation `load_profile` applies (incl. the

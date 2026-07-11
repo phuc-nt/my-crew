@@ -5,7 +5,7 @@
 
 ## Trạng thái tổng
 
-**Production-usable, single-user. Đã ship tới v20.** ~1768 backend + 177 FE test, ruff/tsc
+**Production-usable, single-user. Đã ship tới v20.5.** ~1797 backend + 178 FE test, ruff/tsc
 sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật.
 
 ## Đã hoàn thành (gọn — chi tiết ở journals/plans)
@@ -33,6 +33,11 @@ sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật.
 - [x] **v20**: AgentRuntime seam (Native/ToolCalling/DeepAgent) + 3 ổ cắm community. Red-team 4
   reviewer (5 Critical) → fix thiết kế giữ moat. DeepAgent experimental (deepagents optional);
   researcher-pack = template skeleton (team-step đã phục vụ researcher).
+- [x] **v20.5**: runtime-tiers — team-step egress qua gateway (Phase 0, nối external_write) +
+  guardrail phân tầng (runtime_loop_limit per-runtime) + DeepAgent cháy thật (Docker self-hosted
+  sandbox, fail-closed allowlist, PII gate) + wizard chọn runtime theo role. Red-team 3 reviewer
+  (6 Critical, đọc deepagents wheel) → provider đổi sang Docker (không dịch vụ ngoài). Real Docker
+  E2E = follow-up.
 - [ ] **v19.5 (kioku adapter)**: cắm my-kioku sau khi giải 7 điều kiện red-team — dist
   (`bun link`+`MY_KIOKU_BIN`, BỎ `bun x`); recall `<query>` (không `--digest`); wrap digest
   `format_internal_content`; env allowlist subprocess; flock per-vault + stagger reflect;

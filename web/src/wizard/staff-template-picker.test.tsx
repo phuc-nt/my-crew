@@ -15,6 +15,7 @@ const PM_TEMPLATE = {
   bindings_hint: ['jira'],
   persona: '# SOUL',
   web_search: false,
+  recommended_runtime: 'native',
 }
 
 beforeEach(() => {

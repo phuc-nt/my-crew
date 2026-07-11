@@ -106,10 +106,16 @@ thiết kế nhưng CHƯA nối (`deps.external_write=None`). Egress công ty Đ
 (daily/weekly/okr/resource) vốn wire ActionGateway đầy đủ. Vậy ToolCalling/Native team-step KHÔNG
 egress → "invariant #1 giữ" đúng theo nghĩa team-step không có đường ra ngoài, KHÔNG phải "output
 đi qua gateway". Nối `external_write→gateway` là tính năng để step tự egress (kế hoạch v20.5).
-`DeepAgentRuntime` optional/experimental (isolate, thiếu dep app không crash). **THE INVARIANT**:
-mọi runtime egress qua Action Gateway — tool-calling loop KHÔNG tạo egress path 2 (classify
-chokepoint áp cho cả read). 3 ổ cắm community: skill agentskills.io folder-form · pack-MCP
-spawn gate (default-deny) · pack template + PACK-AUTHORING.
+`DeepAgentRuntime` (v20.5) cháy thật: `create_deep_agent` chạy shell CHỈ trong sandbox
+(`fake` test | `docker` self-hosted, token-free, không mount host) — fail-closed positive
+allowlist reject `local`/managed-provider/unknown; PII gate loại internal-context trước sandbox;
+loop cap `runtime_loop_limit` per-runtime. 3 ổ cắm community: skill agentskills.io folder-form ·
+pack-MCP spawn gate (default-deny) · pack template + PACK-AUTHORING.
+
+**Guardrail phân tầng (v20.5)**: độ-tự-do LLM ↔ độ-cách-ly nghịch nhau — Native (0 tool, chặt
+nhất) < ToolCalling (read-only loop + classify shim) < DeepAgent (shell tự do nhưng trong Docker
+sandbox cách ly). Team-step egress công ty qua `external_write → ActionGateway` (Lớp A/B) — nối
+ở v20.5 (Phase 0; trước đó team-step chỉ ghi artifact nội bộ). User chọn runtime khi tạo agent.
 
 ### 3.10 Frontend (`web/src/`)
 React 19 + Vite. Màn chính **Văn phòng** (`views/office-unified/`): 3 cột phòng-việc /

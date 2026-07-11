@@ -63,6 +63,26 @@ export function IdentityStep({
           rows={3}
         />
       </label>
+      <h4>Cách nhân sự làm việc (runtime)</h4>
+      <label>
+        Kiểu vận hành:{' '}
+        <select
+          value={state.agentRuntime}
+          onChange={(e) => update('agentRuntime', e.target.value)}
+        >
+          <option value="native">Chuẩn — kiểm soát chặt nhất (1 lượt, không tự chạy lệnh)</option>
+          <option value="create_agent">Linh hoạt — tự tra cứu nhiều bước (an toàn, chỉ đọc)</option>
+          <option value="deep_agent">Chuyên sâu — tự chạy lệnh trong hộp cát (cách ly)</option>
+        </select>
+      </label>
+      <p className="runtime-hint">
+        {state.agentRuntime === 'native' &&
+          'Chặt nhất: 1 lượt suy nghĩ, không dùng công cụ. Hợp việc cần kiểm soát cao (kiểm định, tài chính).'}
+        {state.agentRuntime === 'create_agent' &&
+          'Trung bình: tự gọi công cụ ĐỌC nhiều vòng (Jira/GitHub), mọi ghi ra ngoài vẫn chờ duyệt. Hợp nội dung, PM.'}
+        {state.agentRuntime === 'deep_agent' &&
+          'Tự do nhất: tự chạy lệnh shell trong hộp cát cách ly (không đụng máy thật). Hợp nghiên cứu sâu. Cần cài Docker.'}
+      </p>
       <h4>SOUL.md (chỉnh được)</h4>
       <textarea
         className="persona-textarea"

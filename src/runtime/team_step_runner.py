@@ -286,6 +286,14 @@ def _run_graph(
     if loaded is not None and getattr(loaded, "agent_runtime", None) is not None \
             and loaded.agent_runtime.kind != "native":
         _extra["reporting_config"] = loaded.config
+        # v20.5: thread the per-runtime caps (loop limit / sandbox) to the runtime.
+        _extra["runtime_config"] = loaded.agent_runtime
+    # v20.5 Phase 0: wire the team-step external_write hook to the per-agent Action Gateway when
+    # the agent opted into step egress. Absent ⇒ external_write stays None (deliver writes only
+    # the internal artifact — byte-identical pre-v20.5).
+    external_write = _resolve_external_write(loaded, settings)
+    if external_write is not None:
+        _extra["external_write"] = external_write
     graph = resolve_runtime(loaded).build_task(
         settings=settings, context=context, step_title=step.title,
         data_dir=team_tasks_root(), task_id=task_id, step_seq=step.seq,
@@ -369,3 +377,32 @@ def _resolve_search_hook(loaded: Any, settings: Any) -> Callable[[str], str] | N
         return text
 
     return _hook
+
+
+def _resolve_external_write(loaded: Any, settings: Any) -> Callable[[str], bool] | None:
+    """Build the team-step external_write hook iff the agent opted into egress (v20.5 Phase 0).
+
+    Returns None (deliver writes only the internal artifact) unless the agent's profile declares
+    `team_step_egress: {channel}`. When set, builds the per-agent Action Gateway and a hook that
+    posts a step's result to that channel THROUGH the gateway (Lớp A/B + audit) — no bypass.
+    """
+    if loaded is None:
+        return None
+    egress = getattr(loaded, "team_step_egress", None)
+    if not egress or not egress.get("channel"):
+        return None
+    from datetime import UTC, datetime
+
+    from src.actions.action_gateway import ActionGateway
+    from src.runtime.team_step_egress import make_external_write
+
+    config = loaded.config
+    gateway = ActionGateway(
+        settings,
+        external_channels=config.slack_external_channels,
+        auto_approve=getattr(loaded, "auto_approve", None),
+    )
+    report_date = datetime.now(UTC).date().isoformat()
+    return make_external_write(
+        gateway, config, loaded.profile_id, egress["channel"], report_date
+    )

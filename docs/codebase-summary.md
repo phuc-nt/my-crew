@@ -1,9 +1,10 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-07-11 — v20 COMPLETE.** ~1768 backend + 177 FE tests, ruff/tsc clean.
-> Product usable single-user tới v20 (agent office, team-task, màn 3D command-center, registry
-> user-data, memory seam, **AgentRuntime multi-runtime + community sockets**). Bản đồ code +
+> Status: **2026-07-11 — v20.5 COMPLETE.** ~1797 backend + 178 FE tests, ruff/tsc clean.
+> Product usable single-user tới v20.5 (agent office, team-task, màn 3D, registry user-data,
+> memory seam, AgentRuntime multi-runtime + community sockets, **runtime-tiers: team-step egress
+> qua gateway + guardrail phân tầng + DeepAgent cháy thật trong Docker sandbox**). Bản đồ code +
 > quyết định kiến trúc theo mốc bên dưới. Đọc cùng
 > [system-architecture](system-architecture.md), [project-overview-pdr](project-overview-pdr.md),
 > [project-roadmap](project-roadmap.md).
@@ -195,9 +196,37 @@
   trong allowlist operator `PACK_MCP_ALLOWED_DIST` + env scrub token. (3) `_template-pack/`
   skeleton (tiền tố `_` loại khỏi discovery) + `docs/PACK-AUTHORING.md`.
 - **THE INVARIANT giữ**: egress công ty (report graph) qua gateway; team-step KHÔNG egress
-  (external_write chưa nối); loop tool qua classify shim; native byte-identical; audience
-  red-line. Researcher-pack → template skeleton (team-step+web_search
+  (external_write chưa nối — ĐÃ NỐI ở v20.5); loop tool qua classify shim; native byte-identical;
+  audience red-line. Researcher-pack → template skeleton (team-step+web_search
   đã phục vụ researcher — red-team Y2).
+
+### v20.5: runtime-tiers — team-step egress qua gateway + guardrail phân tầng + DeepAgent sandbox (2026-07-11)
+- **Phase 0 — team-step egress qua gateway** (`src/runtime/team_step_egress.py`): điều tra red-team
+  phát hiện `external_write` hook (thiết kế v12) CHƯA nối (=None) → team-step không egress được.
+  `make_external_write` nối hook → per-agent ActionGateway (Lớp A/B + audit). Opt-in per agent
+  `team_step_egress: {channel}` (absent → artifact-only, byte-identical). Nền cho mọi runtime egress.
+- **Guardrail phân tầng** (`config.py` mở rộng): `AgentRuntimeConfig.caps()` → `runtime_loop_limit`
+  (native 0 < create_agent 8 < deep_agent 16; KHÔNG nhầm `MAX_STEPS` DAG=7 — red-team F8) +
+  `cost_cap_usd` (OBSERVABILITY-only, không claim enforce vì cost cap thật là company task-level —
+  red-team C4) + `sandbox` (deep only). Config tới runtime qua `build_task(runtime_config=)` (F1).
+- **DeepAgentRuntime cháy thật** (`deep_agent_runtime.py` + `deep_agent_loop.py`): `create_deep_agent`
+  (deepagents 0.6.12, optional extra `[deep]`) chạy shell CHỈ trong sandbox. **Fail-closed up-front**
+  (red-team C3): sandbox provider allowlist `{fake,docker}` — reject `local`/`modal`/`e2b`/unknown +
+  assert-not-LocalShell. E2E LLM thật: shell trong sandbox tính 42, PII gate chặn memory nội bộ.
+- **Sandbox backend** (`sandbox_backend.py`): `fake` (test, temp-dir, token-free env) + `docker`
+  (self-hosted container, KHÔNG token env, KHÔNG mount host `.env`/SSH — red-team C2/C3). Không
+  dịch vụ ngoài, không data egress bên thứ 3. Env-scrub tại backend (execute không có param env — C2).
+- **PII gate** (`deep_agent_pii_gate.py`, red-team H2): deep chạy context external-audience-safe
+  (loại memory/company_docs/capability) → internal data không tới sandbox-có-egress. Teardown
+  (`sandbox_teardown.py`, C6): best-effort + container idle-ceiling là lưới SIGKILL.
+- **Wizard chọn runtime** (`IdentityStep.tsx` + `use-create-agent-wizard.ts`): picker native/
+  create_agent/deep_agent + mô tả guardrail-tier; role template `recommended_runtime` prefill
+  (kiem-dinh→native, noi-dung→create_agent, nghien-cuu→deep_agent); user override. Folded vào
+  IdentityStep (không step-renumber — red-team F7). Backend whitelist `agent_runtime` (agent_create).
+- **Red-team**: 3 reviewer, Security đọc deepagents wheel thật, 6 Critical — nền plan gốc ẢO
+  (deliver→gateway không tồn tại, execute không có env, backend=None không refuse, cost ma, loop
+  không cap, SIGKILL mồ côi). Áp hết + đổi provider sang Docker self-hosted (user chọn: không
+  dịch vụ ngoài). Real Docker E2E = follow-up khi Docker daemon chạy (fake chứng minh WIRING).
 
 **Entry points**: Legacy `python -m src.entrypoints.cli`/`cron` (single-agent). Multi-agent: `python -m src.entrypoints.mpm agent {list,register,run,resume,replay,automate,approvals,approve,reject,audit}`. Runtime: `python -m src.runtime.worker`, `python -m src.runtime.service`.
 

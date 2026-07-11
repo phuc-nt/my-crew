@@ -49,19 +49,46 @@ def require_available() -> None:
 
 
 class DeepAgentRuntime:
-    """A deepagents-backed loop backend — optional, shell/tracing disabled, read-only."""
+    """A deepagents-backed loop backend — shell runs ONLY inside a sandbox (v20.5)."""
 
     def build_report(self, loaded: LoadedProfile, settings: Any, kind: str, audience: str):
         raise RuntimeError("DeepAgentRuntime chưa hỗ trợ báo cáo (report) — chỉ team-step.")
 
     def build_task(self, **kwargs: Any):
         require_available()
-        # deepagents IS installed here. Building a hardened wrapper (shell off, tracing off,
-        # read-only toolset + policy shim, subagent mutation via deliver→gateway only) requires
-        # a vendor review against a pinned version (red-team C5). Until that lands, refuse to
-        # run unsafely rather than expose a shell-capable agent in-process with the gateway.
-        raise RuntimeError(
-            "DeepAgentRuntime: deepagents đã cài nhưng wrapper an toàn (tắt shell/tracing + "
-            "read-only toolset) CHƯA vendor-review cho version pin. Dùng agent_runtime: "
-            "create_agent (ToolCallingRuntime) — đã có loop tool-calling an toàn tương đương."
-        )
+        from src.agent.team_task_graph import build_team_task_graph
+
+        settings = kwargs.get("settings")
+        context = kwargs.get("context")
+        kwargs.pop("reporting_config", None)  # deep agent uses its own sandbox tools, not read seam
+        runtime_config = kwargs.pop("runtime_config", None)
+        caps = runtime_config.caps() if runtime_config is not None else None
+        # Fail-closed UP-FRONT: no sandbox config / local / unknown → refuse before building the
+        # graph (red-team C3 — never in-process host shell). We validate the sandbox provider here
+        # (cheap, no container) so a misconfigured deep_agent fails loud immediately.
+        sandbox_cfg = caps.sandbox if caps is not None else None
+        loop_limit = caps.runtime_loop_limit if caps is not None else 16
+        from src.runtime_backends.config import _ALLOWED_SANDBOX_PROVIDERS
+
+        provider = (sandbox_cfg or {}).get("provider")
+        if provider not in _ALLOWED_SANDBOX_PROVIDERS:
+            raise RuntimeError(
+                f"deep_agent cần sandbox provider hợp lệ ({sorted(_ALLOWED_SANDBOX_PROVIDERS)}); "
+                f"got {provider!r} — fail-closed, không chạy shell trên host."
+            )
+
+        work = self._make_work_override(settings, context, sandbox_cfg, loop_limit)
+        return build_team_task_graph(work_override=work, **kwargs)
+
+    def _make_work_override(self, settings, context, sandbox_cfg, loop_limit):
+        """run_work replacement: a deepagents loop whose shell runs inside a token-free sandbox."""
+
+        def _run_work(title: str, handoff: str, hook) -> tuple[str, float | None]:
+            from src.runtime_backends.deep_agent_loop import run_deep_agent_work
+
+            return run_deep_agent_work(
+                title=title, handoff=handoff, context=context, settings=settings,
+                sandbox_cfg=sandbox_cfg, loop_limit=loop_limit,
+            )
+
+        return _run_work

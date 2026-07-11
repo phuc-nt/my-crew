@@ -196,6 +196,7 @@ export interface CreateAgentSpec {
   bindings: CreateAgentBindings
   persona?: string
   web_search?: boolean
+  agent_runtime?: string // v20.5: 'create_agent' | 'deep_agent' (native omitted = default)
 }
 
 export interface CreateAgentResult {
@@ -298,6 +299,7 @@ export interface StaffTemplate {
   bindings_hint: string[]
   persona: string
   web_search: boolean
+  recommended_runtime: string // v20.5: 'native' | 'create_agent' | 'deep_agent'
 }
 
 export interface StaffTemplatesPayload {

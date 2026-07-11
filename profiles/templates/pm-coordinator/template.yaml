@@ -16,3 +16,6 @@ reports:
 bindings_hint:
   - jira
   - slack
+
+# v20.5: runtime backend gợi ý (wizard prefill; user override được).
+recommended_runtime: native

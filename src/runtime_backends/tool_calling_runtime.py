@@ -25,9 +25,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from src.profile.loader import LoadedProfile
 
-#: Hard ceiling on tool-calling iterations per step (red-team H2). create_react_agent counts
-#: recursion in super-steps; a small cap keeps a looping agent from spending unbounded LLM $.
-MAX_LOOP_STEPS = 8
+# The historical react-loop cap lives in config.py now (single source); re-exported here so
+# `from tool_calling_runtime import MAX_LOOP_STEPS` still resolves (v20 back-compat).
+from src.runtime_backends.config import MAX_LOOP_STEPS  # noqa: E402,F401
 
 
 class ToolCallingRuntime:
@@ -44,10 +44,17 @@ class ToolCallingRuntime:
         settings = kwargs.get("settings")
         context = kwargs.get("context")
         config = kwargs.pop("reporting_config", None)  # optional, threaded by the runner
-        work = self._make_work_override(settings, context, config)
+        # v20.5: per-runtime loop cap from the agent's AgentRuntimeConfig; falls back to the
+        # create_agent default (MAX_LOOP_STEPS) when the runner did not thread a config.
+        runtime_config = kwargs.pop("runtime_config", None)
+        loop_limit = (
+            runtime_config.caps().runtime_loop_limit
+            if runtime_config is not None else MAX_LOOP_STEPS
+        )
+        work = self._make_work_override(settings, context, config, loop_limit)
         return build_team_task_graph(work_override=work, **kwargs)
 
-    def _make_work_override(self, settings, context, config):
+    def _make_work_override(self, settings, context, config, loop_limit):
         """Build the run_work replacement: a create_react_agent loop over the read toolset."""
         from src.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
 
@@ -60,7 +67,7 @@ class ToolCallingRuntime:
 
             return run_react_work(
                 title=title, handoff=handoff, context=context, settings=settings,
-                tools_map=tools_map, max_steps=MAX_LOOP_STEPS,
+                tools_map=tools_map, max_steps=loop_limit,
             )
 
         return _run_work

@@ -14,6 +14,7 @@ export interface WizardState {
   persona: string
   personaEdited: boolean
   webSearch: boolean // opt-in profile flag; only meaningful for research-style roles
+  agentRuntime: string // v20.5: 'native' | 'create_agent' | 'deep_agent'; prefilled from template
   reports: string[]
   schedule: Record<string, string> // kind -> cron5 (only for scheduled kinds)
   jiraProjectKey: string
@@ -64,6 +65,7 @@ const INITIAL: WizardState = {
   persona: '',
   personaEdited: false,
   webSearch: false,
+  agentRuntime: 'native', // safe default; template prefills a recommendation
   ...PACK_SCOPED_RESET,
 }
 
@@ -103,6 +105,7 @@ export function useCreateAgentWizard() {
       persona: template.persona,
       personaEdited: template.persona.trim() !== '', // stop IdentityStep auto-regenerating over it
       webSearch: template.web_search,
+      agentRuntime: template.recommended_runtime || 'native', // v20.5 prefill; user can override
     }))
   }
 
@@ -174,6 +177,9 @@ export function useCreateAgentWizard() {
       bindings,
       ...(state.persona.trim() ? { persona: state.persona.trim() } : {}),
       ...(state.webSearch ? { web_search: true } : {}),
+      ...(state.agentRuntime && state.agentRuntime !== 'native'
+        ? { agent_runtime: state.agentRuntime }
+        : {}),
     }
   }
 

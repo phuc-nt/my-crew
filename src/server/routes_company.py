@@ -31,7 +31,7 @@ _TEMPLATES_DIR = REPO_ROOT / "profiles" / "templates"
 
 #: template.yaml v1 contract — see profiles/templates/*/template.yaml docstring for why
 #: `skills` is deliberately excluded.
-_TEMPLATE_FIELDS = ("role", "domain", "reports", "bindings_hint")
+_TEMPLATE_FIELDS = ("role", "domain", "reports", "bindings_hint", "recommended_runtime")
 
 
 @router.get("/company")
@@ -159,4 +159,7 @@ def _load_one_template(role_dir) -> dict | None:
         # Opt-in web-search flag the wizard forwards into the created profile (only the
         # nghien-cuu template ships true; absent ⇒ false, matching the profile default).
         "web_search": bool(doc.get("web_search", False)),
+        # v20.5: which runtime backend this role is best served by (wizard prefill; user can
+        # override). Absent ⇒ "native" (the safe default).
+        "recommended_runtime": str(doc.get("recommended_runtime") or "native"),
     }
