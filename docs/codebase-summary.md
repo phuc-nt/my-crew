@@ -1,7 +1,11 @@
 # Codebase Summary — my-project-manager
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-07-10 — v13 M31–M34 COMPLETE (Team self-operation: deep step graph, peer review, consult, parallel cap 2, full replan).** 1644 backend + 158 FE tests, ruff clean, THE INVARIANT + 3 new v13 clauses (verdict no-steering, amend CEO-confirm-hash, consult RO-internal-only).
+> Status: **2026-07-11 — v18 COMPLETE.** ~1706 backend + 177 FE tests, ruff/tsc clean.
+> Product usable single-user tới v18 (agent office, team-task, màn 3D command-center,
+> registry user-data). Bản đồ code + quyết định kiến trúc theo mốc bên dưới. Đọc cùng
+> [system-architecture](system-architecture.md), [project-overview-pdr](project-overview-pdr.md),
+> [project-roadmap](project-roadmap.md).
 
 ## Trạng thái hiện tại (v2 COMPLETE: M1+M2+M3)
 
