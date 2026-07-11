@@ -94,6 +94,17 @@ def pack_skills_dir(domain: str) -> Path:
     return pack_dir(domain) / "skills"
 
 
+def profile_skills_dir(profile_id: str, *, profiles_dir: Path | None = None) -> Path:
+    """Where an agent keeps its OWN skill `.md` files (v19 workspace protocol).
+
+    Per-agent skills live in `profiles/<id>/skills/` (user-data, gitignored). They are a
+    LOWER trust tier than pack skills (repo-vetted): their bodies are wrapped through the
+    internal-content guard before entering the prompt (see `load_agent_skills`).
+    """
+    base = profiles_dir if profiles_dir is not None else (REPO_ROOT / "profiles")
+    return base / profile_id / "skills"
+
+
 def pack_prompts_dir(domain: str) -> Path:
     """Where a domain bundles its system-prompt `.md` files (v3 M5 S5 pack asset)."""
     return pack_dir(domain) / "prompts"

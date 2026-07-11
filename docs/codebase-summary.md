@@ -1,9 +1,10 @@
 # Codebase Summary — my-project-manager
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-07-11 — v18 COMPLETE.** ~1706 backend + 177 FE tests, ruff/tsc clean.
-> Product usable single-user tới v18 (agent office, team-task, màn 3D command-center,
-> registry user-data). Bản đồ code + quyết định kiến trúc theo mốc bên dưới. Đọc cùng
+> Status: **2026-07-11 — v19 COMPLETE.** ~1730 backend + 177 FE tests, ruff/tsc clean.
+> Product usable single-user tới v19 (agent office, team-task, màn 3D command-center,
+> registry user-data, memory seam + workspace protocol). Bản đồ code + quyết định kiến trúc
+> theo mốc bên dưới. Đọc cùng
 > [system-architecture](system-architecture.md), [project-overview-pdr](project-overview-pdr.md),
 > [project-roadmap](project-roadmap.md).
 
@@ -145,6 +146,30 @@
 - Fleet thật đổi: `default` DISABLED (quyết định CEO — đội office = mọi agent enabled,
   default là pm không thuộc văn phòng).
 
+### v19: agent-harness vòng 1 — memory seam + workspace protocol (2026-07-11)
+- **Memory provider seam** (`src/memory/`): `resolve_memory_text(loaded)` = MỘT cửa lấy
+  memory text, thay 6 call-site đọc `loaded.memory` trực tiếp (worker/team_step_runner/
+  review_graph/cron/cli + **qa_answer** — site thứ 6 red-team bắt). Provider `static`
+  (MEMORY.md, byte-identical) + `MemoryConfig` từ `memory:` block profile.yaml (default
+  static; parse fail-loud RuntimeError khớp `_parse_inbox`). Provider `kioku` HOÃN v19.5 —
+  chọn nó raise rõ (KHÔNG im lặng fallback static).
+- **Workspace protocol v2**: mỗi `profiles/<id>/` thêm `vault/` (reserved kioku v19.5) +
+  `skills/` (per-agent). `scaffold_profile_dir` tạo 2 thư mục khi tạo nhân viên.
+- **Per-agent skills** (`load_agent_skills`): cùng frontmatter pack skill nhưng **trust tier
+  thấp hơn** — body wrap `format_internal_content` (L1/L2/L4 chống second-order injection),
+  name scrub charset (chặn forge prompt-tag). `load_skill_pool` merge pack∪agent; collision
+  cùng tên **KHÔNG shadow** pack (rename `agent:<name>`, giữ cả hai — pack repo-vetted luôn còn).
+- **Capability block** (`src/profile/capability_block.py`): "TOOLS.md-equivalent" auto-gen
+  deterministic (domain/report-kinds/skills/web_search/memory-provider, ≤600 chars).
+  **INTERNAL-ONLY** — vào `build_context_block` (user msg, gate `audience=="internal"`), KHÔNG
+  system msg (system phục vụ cả external → skill.name free-text = injection vector; red-team H6).
+  `build_context_block` thêm param `capability=""` default → caller cũ byte-identical.
+- **Red-team HOÃN kioku**: adapter viết theo CLI tưởng tượng (my-kioku thật khác 7/16 claim:
+  chưa publish npm, `--digest`=recency-top-5 không-query, `bun x`=RCE-with-creds, race vault
+  thiếu busy_timeout...). v19.5 làm sau khi giải 7 điều kiện (xem plan v19 "Giữ cho v19.5").
+- **Known-limitation**: memory_node (Store P8, report runs) tách khỏi seam — facts học ở
+  report run KHÔNG vào vault (khi kioku về); ghi để v19.5 không "phát hiện lại".
+
 **Entry points**: Legacy `python -m src.entrypoints.cli`/`cron` (single-agent). Multi-agent: `python -m src.entrypoints.mpm agent {list,register,run,resume,replay,automate,approvals,approve,reject,audit}`. Runtime: `python -m src.runtime.worker`, `python -m src.runtime.service`.
 
 ## Cây thư mục (v3 M5 state with domain-packs)
@@ -268,6 +293,10 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 | **[M29] Telegram mirror** | `src/runtime/milestone_mirror_runner.py` — store-poller pseudo-kind, cursor-after-send, milestone-only DM (chỉ nhận việc/xong/hoàn/duyệt), dedup, không spam |
 | **[M30] Office 3D** | `web/src/views/office-3d/` — r3f wireframe (lazy chunk ~930KB), agent-desk/coordinator-desk/speech-bubble, driven by SSE thật; 2D fallback (table) reduced-motion/mobile |
 | **[M27–M30] office-pack** | `domain-packs/office-pack/` — coordinator domain, allowlist wiring bắt buộc (`mcp_allowlist=pack.allowlist or None`) |
+| **[v19] Memory seam** | `src/memory/provider.py::resolve_memory_text(loaded)` — 1 cửa lấy memory text (6 site); `parse_memory_config` fail-loud; `static_provider.py` = MEMORY.md verbatim; `kioku` raise (v19.5) |
+| **[v19] Per-agent skills** | `src/skills/skill_loader.py::load_agent_skills(dir)` — wrap body `format_internal_content` + scrub name; `skill_pool.load_skill_pool(..., profile_id=)` merge pack∪agent, collision→`agent:<name>` |
+| **[v19] Capability block** | `src/profile/capability_block.py::build_capability_block(loaded, pack)` — auto-gen ≤600 chars, INTERNAL-only qua `build_context_block(project, memory, capability)` |
+| **[v19] Workspace scaffold** | `src/runtime/registry_edit.py::scaffold_profile_dir` — tạo `vault/` + `skills/`; `src/packs/registry.py::profile_skills_dir(id)` |
 | Guardrail allow/deny | `src/actions/hard_block.py` (allowlist + Lớp A/B + per-agent in P3) |
 | **[v11 D4] Attachment confinement** | `src/actions/hard_block.py::confined_xlsx_path()` — NEW Lớp A red line; verify attachment is .xlsx, exists, inside artifact_root (symlink-safe via resolve()) |
 | Guardrail giải thích | `docs/v1/action-gateway-explainer.md` — safety model (giữ nguyên từ v1) |

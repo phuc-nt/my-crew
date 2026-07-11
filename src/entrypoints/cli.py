@@ -16,6 +16,7 @@ import sys
 from src.actions.approved_dispatch import dispatch_approved_action as _dispatch_approved_action
 from src.agent.checkpoint import get_checkpointer
 from src.agent.graph import build_graph
+from src.memory.provider import resolve_memory_text
 from src.profile.context import ProfileContext
 from src.profile.loader import load_profile
 from src.runtime.agent_paths import agent_thread_id
@@ -95,7 +96,7 @@ def _context_of(loaded, settings, store, registry) -> ProfileContext:
     skills, selector = build_skill_context(loaded, settings)
     sib_facts, sib_sel = build_sibling_context(loaded, settings, store, registry)
     return ProfileContext(
-        persona=loaded.soul, project=loaded.project, memory=loaded.memory,
+        persona=loaded.soul, project=loaded.project, memory=resolve_memory_text(loaded),
         skills=skills, skill_selector=selector,
         sibling_facts=sib_facts, sibling_selector=sib_sel,
         sibling_project=loaded.project_group,

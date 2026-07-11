@@ -83,7 +83,16 @@ Kiến trúc pluggable: `pm-pack` (mặc định), `hr-pack`, `office-pack`, `ad
 pack = graphs + tools + analyzers + write_handlers + allowlist. `src/packs/registry.py`
 discover pack từ filesystem. Lõi (`src/`) không chứa logic domain.
 
-### 3.8 Frontend (`web/src/`)
+### 3.8 Memory provider seam (`src/memory/`, v19)
+`resolve_memory_text(loaded)` là MỘT cửa mọi prompt path lấy memory text (thay 6 call-site
+đọc `loaded.memory`). Provider chọn qua `memory:` block trong profile.yaml: `static`
+(MEMORY.md verbatim, mặc định, byte-identical) | `kioku` (my-kioku subprocess — HOÃN v19.5,
+chọn nay raise rõ). Memory tiếp tục vào INTERNAL user-msg qua `build_context_block`
+(external nhận 0 byte — red line giữ). Workspace mỗi agent thêm `vault/` (reserved kioku)
++ `skills/` (per-agent, body wrap `format_internal_content`, không shadow pack skill).
+Capability block auto-gen (`capability_block.py`) cũng INTERNAL-only cùng path.
+
+### 3.9 Frontend (`web/src/`)
 React 19 + Vite. Màn chính **Văn phòng** (`views/office-unified/`): 3 cột phòng-việc /
 hoạt-động / kết-quả + panel 3D (`views/office-3d/`, react-three-fiber). Reducer sự kiện
 (`agent-office-state.ts`) biến SSE stream → trạng thái bàn. Build dist commit vào
@@ -112,8 +121,8 @@ hoạt-động / kết-quả + panel 3D (`views/office-3d/`, react-three-fiber).
 | `checkpoints.db` | LangGraph checkpoint (report graphs; team graph KHÔNG checkpoint) |
 | `artifacts/team-tasks/<id>/step-<n>.json` | Kết quả bàn giao từng bước (artifact viewer đọc) |
 
-User-data (gitignored): `.data/`, `registry.yaml`, `company.yaml`, `profiles/<id>/`,
-`company-docs/`.
+User-data (gitignored): `.data/`, `registry.yaml`, `company.yaml`, `profiles/<id>/`
+(gồm `vault/` + `skills/` per-agent, v19), `company-docs/`.
 
 ## 6. Bất biến an toàn (đừng phá khi refactor)
 

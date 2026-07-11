@@ -42,6 +42,7 @@ class ProfileContext:
     persona: str = ""  # SOUL.md → system message (both audiences)
     project: str = ""  # PROJECT.md → user message (internal only)
     memory: str = ""  # MEMORY.md → user message (internal only)
+    capability: str = ""  # v19 auto-gen capability summary → user message (internal only)
     skills: tuple[Skill, ...] = ()  # M3-P10 candidate pool (internal only)
     skill_selector: SkillSelector | None = field(default=None)  # injectable picker
     sibling_facts: tuple[str, ...] = ()  # M3-P9 sibling memory (internal only)
@@ -81,16 +82,22 @@ def prepend_persona(system: str, persona: str) -> str:
     return f"{persona}\n\n{system}"
 
 
-def build_context_block(project: str, memory: str) -> str:
-    """Build the project+memory block to prepend to an INTERNAL user message.
+def build_context_block(project: str, memory: str, capability: str = "") -> str:
+    """Build the capability+project+memory block to prepend to an INTERNAL user message.
 
-    Returns "" when both are empty (⇒ user message unchanged). Never call this on the
-    external path — project/memory carry internal facts a stakeholder must not see.
-    A comment-only placeholder file counts as empty (no meta-text injected).
+    Returns "" when all are empty (⇒ user message unchanged). Never call this on the
+    external path — project/memory carry internal facts a stakeholder must not see, and
+    the v19 `capability` block carries internal skill names/flags (red-team H6: it must
+    NOT ride the system message, which serves both audiences). `capability` defaults to
+    "" so every pre-v19 caller is byte-identical. A comment-only placeholder file counts
+    as empty (no meta-text injected).
     """
     project = _strip_meta(project)
     memory = _strip_meta(memory)
+    capability = capability.strip()
     parts: list[str] = []
+    if capability:
+        parts.append(capability)
     if project:
         parts.append(f"--- Bối cảnh dự án ---\n{project}")
     if memory:

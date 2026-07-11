@@ -26,6 +26,7 @@ from typing import Any
 from src.actions.action_gateway import ActionGateway, GatewayResult
 from src.actions.slack_write import make_slack_post_handler
 from src.llm.client import LlmClient
+from src.memory.provider import resolve_memory_text
 from src.profile.context import build_context_block, prepend_persona
 from src.profile.loader import LoadedProfile
 
@@ -215,7 +216,12 @@ def _answer_question(
     data_text = render_snapshot(payload)
 
     system = prepend_persona(pack.prompts.get("qa-system") or _DEFAULT_QA_SYSTEM, loaded.soul)
-    context = build_context_block(loaded.project, loaded.memory)  # internal-only path
+    from src.profile.capability_block import build_capability_block
+
+    capability = build_capability_block(loaded, pack)  # internal-only (user-msg path)
+    context = build_context_block(
+        loaded.project, resolve_memory_text(loaded), capability
+    )  # internal-only path
     # M19: the opted-in company docs (e.g. HR's leave policy) so a Q&A grounds on them.
     # The Q&A path is inherently internal (a mention reply), so audience is "internal".
     from src.company_docs.inject import render_company_docs

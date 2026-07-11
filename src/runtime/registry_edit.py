@@ -60,6 +60,10 @@ def scaffold_profile_dir(
             (target / name).write_text(soul_md, encoding="utf-8")
         else:
             (target / name).write_text(content, encoding="utf-8")
+    # v19 workspace protocol: every agent gets an (empty) memory vault + own skills dir.
+    # vault/ is reserved for the v19.5 kioku provider; skills/ holds per-agent skills.
+    (target / "vault").mkdir(exist_ok=True)
+    (target / "skills").mkdir(exist_ok=True)
     return target
 
 

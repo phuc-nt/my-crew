@@ -23,6 +23,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
+from src.memory.provider import resolve_memory_text
 from src.profile.context import ProfileContext
 from src.profile.loader import LoadedProfile, load_profile
 from src.runtime.agent_paths import agent_data_dir, agent_thread_id
@@ -74,7 +75,7 @@ def build_graph_for(loaded: LoadedProfile, settings: Any, kind: str, audience: s
     skills, selector = build_skill_context(loaded, settings)
     sib_facts, sib_sel = build_sibling_context(loaded, settings, st, load_registry())
     context = ProfileContext(
-        persona=loaded.soul, project=loaded.project, memory=loaded.memory,
+        persona=loaded.soul, project=loaded.project, memory=resolve_memory_text(loaded),
         skills=skills, skill_selector=selector,
         sibling_facts=sib_facts, sibling_selector=sib_sel,
         sibling_project=loaded.project_group,

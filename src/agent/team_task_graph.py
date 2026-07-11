@@ -279,6 +279,7 @@ def default_team_task_deps(
                     persona=context.persona,
                     project=context.project,
                     memory=context.memory,
+                    capability=context.capability,
                     skills=select_skill_text(context, "internal", kind="team-step"),
                     company_docs=company_docs_text(context, "internal"),
                 )

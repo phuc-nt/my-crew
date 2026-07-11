@@ -15,6 +15,7 @@ pack's dir; `domain` defaults to "pm" so the pre-v3 PM skill pool loads unchange
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 import yaml
@@ -22,6 +23,12 @@ import yaml
 from src.skills.models import Skill
 
 logger = logging.getLogger(__name__)
+
+#: Charset a per-agent skill NAME may use. Names come from gitignored user-data/templates
+#: (v19), so — unlike pack skills — they must not carry structural characters that could
+#: forge a prompt tag. A name failing this is rejected (the skill is dropped, not silently
+#: renamed-to-garbage). Vietnamese letters + digits + space/underscore/hyphen, 1-64 chars.
+_AGENT_SKILL_NAME_RE = re.compile(r"^[0-9A-Za-zÀ-ỹà-ỹ _-]{1,64}$")
 
 
 def load_skills(skills_dir: Path | None = None, *, domain: str = "pm") -> list[Skill]:
@@ -49,6 +56,43 @@ def load_skills(skills_dir: Path | None = None, *, domain: str = "pm") -> list[S
             logger.warning("skill %s skipped: duplicate name %r", path.name, skill.name)
             continue
         by_name[skill.name] = skill
+    return sorted(by_name.values(), key=lambda s: s.name)
+
+
+def load_agent_skills(skills_dir: Path) -> list[Skill]:
+    """Load an agent's OWN skills from `profiles/<id>/skills/` (v19, LOWER trust tier).
+
+    Same frontmatter format as pack skills, but two guards apply because the source is
+    gitignored user-data/templates, not repo-vetted code (red-team H5/H6):
+      - the NAME must pass `_AGENT_SKILL_NAME_RE` (else the skill is dropped with a
+        warning — a name with `[`/`]`/newlines could forge a prompt tag);
+      - the BODY is wrapped through `format_internal_content` so an injection phrase in
+        the body is delimited/spotlighted/quarantined, not executed as an instruction.
+
+    Missing dir ⇒ []. Malformed/again-duplicate files are skipped, never raised.
+    """
+    if not skills_dir.exists():
+        return []
+    from src.tools.search_result_formatter import format_internal_content
+
+    by_name: dict[str, Skill] = {}
+    for path in sorted(skills_dir.glob("*.md")):
+        skill = _load_one(path)
+        if skill is None:
+            continue
+        if not _AGENT_SKILL_NAME_RE.match(skill.name):
+            logger.warning(
+                "agent skill %s skipped: name %r has disallowed characters", path.name, skill.name
+            )
+            continue
+        if skill.name in by_name:
+            logger.warning("agent skill %s skipped: duplicate name %r", path.name, skill.name)
+            continue
+        wrapped = format_internal_content(skill.body, label=skill.name)
+        by_name[skill.name] = Skill(
+            name=skill.name, description=skill.description, body=wrapped,
+            applies_to=skill.applies_to,
+        )
     return sorted(by_name.values(), key=lambda s: s.name)
 
 

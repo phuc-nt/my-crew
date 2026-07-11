@@ -152,6 +152,7 @@ def run_review_step(
     from src.company_docs.pool import load_company_docs
     from src.llm.client import LlmClient
     from src.llm.team_task_prompt import build_review_messages
+    from src.memory.provider import resolve_memory_text
     from src.profile.context import EMPTY, ProfileContext
     from src.skills.skill_pool import build_skill_context
 
@@ -170,7 +171,7 @@ def run_review_step(
     if loaded is not None:
         skills, selector = build_skill_context(loaded, settings)
         context = ProfileContext(
-            persona=loaded.soul, project=loaded.project, memory=loaded.memory,
+            persona=loaded.soul, project=loaded.project, memory=resolve_memory_text(loaded),
             skills=skills, skill_selector=selector,
             company_docs=load_company_docs(getattr(loaded, "company_docs", ())),
         )

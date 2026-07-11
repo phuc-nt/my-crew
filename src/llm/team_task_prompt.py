@@ -83,6 +83,7 @@ def build_team_step_messages(
     memory: str = "",
     skills: str = "",
     company_docs: str = "",
+    capability: str = "",
 ) -> list[dict[str, str]]:
     """Messages for one team-task step's LLM work call.
 
@@ -128,7 +129,8 @@ def build_team_step_messages(
     messages = [
         {"role": "system", "content": prepend_persona(_SYSTEM, persona)},
         {"role": "user",
-         "content": build_context_block(project, memory) + skill_block + docs_block + user},
+         "content": build_context_block(project, memory, capability)
+         + skill_block + docs_block + user},
     ]
     if search_context.strip():
         messages.append({"role": "user", "content": search_context.strip()})

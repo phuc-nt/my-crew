@@ -254,14 +254,19 @@ def _run_graph(
     """
     from src.agent.team_task_graph import build_team_task_graph
     from src.company_docs.pool import load_company_docs
+    from src.memory.provider import resolve_memory_text
+    from src.profile.capability_block import build_capability_block
     from src.profile.context import EMPTY, ProfileContext
     from src.runtime.team_task_paths import team_tasks_root
     from src.skills.skill_pool import build_skill_context
 
     if loaded is not None:
         skills, selector = build_skill_context(loaded, settings)
+        # Capability block is INTERNAL-only (rides build_context_block); pack=None keeps
+        # this step-runner off the pack-load path (report_kinds line is simply omitted).
         context = ProfileContext(
-            persona=loaded.soul, project=loaded.project, memory=loaded.memory,
+            persona=loaded.soul, project=loaded.project, memory=resolve_memory_text(loaded),
+            capability=build_capability_block(loaded, None),
             skills=skills, skill_selector=selector,
             company_docs=load_company_docs(getattr(loaded, "company_docs", ())),
         )
