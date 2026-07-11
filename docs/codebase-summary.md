@@ -223,10 +223,15 @@
   create_agent/deep_agent + mô tả guardrail-tier; role template `recommended_runtime` prefill
   (kiem-dinh→native, noi-dung→create_agent, nghien-cuu→deep_agent); user override. Folded vào
   IdentityStep (không step-renumber — red-team F7). Backend whitelist `agent_runtime` (agent_create).
+- **DeepAgent tự chủ trong Docker — VERIFY THẬT**: E2E LLM thật + Docker daemon thật — agent
+  TỰ gọi `docker exec` (spy bắt lệnh LLM tự gõ), chạy `python3` trong container Debian, trả kết
+  quả đúng (7×191=1337); container token-free (host `OPENROUTER_API_KEY` không lọt), không mount
+  host (`.env` unreachable), teardown sạch (không mồ côi). Test tự động
+  `test_sandbox_docker_live.py` (skipif-no-docker) khóa hành vi.
 - **Red-team**: 3 reviewer, Security đọc deepagents wheel thật, 6 Critical — nền plan gốc ẢO
   (deliver→gateway không tồn tại, execute không có env, backend=None không refuse, cost ma, loop
   không cap, SIGKILL mồ côi). Áp hết + đổi provider sang Docker self-hosted (user chọn: không
-  dịch vụ ngoài). Real Docker E2E = follow-up khi Docker daemon chạy (fake chứng minh WIRING).
+  dịch vụ ngoài).
 
 **Entry points**: Legacy `python -m src.entrypoints.cli`/`cron` (single-agent). Multi-agent: `python -m src.entrypoints.mpm agent {list,register,run,resume,replay,automate,approvals,approve,reject,audit}`. Runtime: `python -m src.runtime.worker`, `python -m src.runtime.service`.
 

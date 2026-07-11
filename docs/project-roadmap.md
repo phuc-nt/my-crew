@@ -36,8 +36,8 @@ sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật.
 - [x] **v20.5**: runtime-tiers — team-step egress qua gateway (Phase 0, nối external_write) +
   guardrail phân tầng (runtime_loop_limit per-runtime) + DeepAgent cháy thật (Docker self-hosted
   sandbox, fail-closed allowlist, PII gate) + wizard chọn runtime theo role. Red-team 3 reviewer
-  (6 Critical, đọc deepagents wheel) → provider đổi sang Docker (không dịch vụ ngoài). Real Docker
-  E2E = follow-up.
+  (6 Critical, đọc deepagents wheel) → provider đổi sang Docker (không dịch vụ ngoài). **DeepAgent
+  tự chủ trong Docker verify THẬT** (LLM tự gọi docker exec, container token-free, teardown sạch).
 - [ ] **v19.5 (kioku adapter)**: cắm my-kioku sau khi giải 7 điều kiện red-team — dist
   (`bun link`+`MY_KIOKU_BIN`, BỎ `bun x`); recall `<query>` (không `--digest`); wrap digest
   `format_internal_content`; env allowlist subprocess; flock per-vault + stagger reflect;

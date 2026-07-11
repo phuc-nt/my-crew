@@ -36,8 +36,19 @@
 - **DeepAgent E2E thật là bằng chứng**: LLM chạy shell trong fake sandbox → 42 đúng, PII gate
   chặn "BÍ MẬT". Chứng minh toàn bộ luồng an toàn bằng thực thi, không chỉ assert.
 
+## Docker E2E — verify THẬT (bổ sung sau khi cook)
+- **DeepAgent tự chủ trong Docker: CHỨNG MINH THẬT**. E2E LLM thật + Docker daemon thật (không
+  mock): agent TỰ gọi `docker exec` (spy bắt lệnh LLM tự gõ `whoami && cat /etc/os-release &&
+  python3 -c ...`), chạy trong container Debian trixie (user=root), kết quả đúng (7×191=1337).
+  Token-free (host OPENROUTER_API_KEY không lọt vào `env` container), không mount host (`.env`
+  unreachable), teardown sạch (container trước=sau, không mồ côi), PII gate chặn "BÍ MẬT".
+- Vòng lặp tự chủ hoàn chỉnh: giao việc → LLM tự quyết chạy shell → gõ lệnh trong container cách
+  ly → đọc kết quả → tổng hợp. `test_sandbox_docker_live.py` (skipif-no-docker) khóa hành vi.
+- Lưu ý: E2E gọi `run_deep_agent_work` trực tiếp (đúng hàm production); wiring qua coordinator→
+  team_step_runner đã verify riêng (UAT-3 build graph qua seam).
+
 ## Mở / sang sau
-- **Real Docker E2E**: fake chứng minh WIRING; isolation OS thật cần Docker daemon chạy +
-  token-scan container thật (follow-up khi bật Docker).
 - **Sandbox cost cap**: hiện chỉ LLM cost (budget tháng backstop); sandbox compute cost chưa cap.
+- **E2E deep qua ticker đầy đủ**: đã verify từng mắt (build graph qua seam + deep loop chạy
+  Docker thật); chưa chạy 1 lượt trọn coordinator-dispatch→worker-spawn→deep-in-Docker.
 - Tiếp: v21 channel binding · v19.5 kioku.
