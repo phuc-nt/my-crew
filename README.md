@@ -42,7 +42,7 @@ Full walkthrough: **[docs/action-gateway-explainer.md](docs/action-gateway-expla
 
 ### A full harness, not just skills + tools
 
-A "harness" (the reins) is the whole environment around the model that keeps the agent on track — and a *real* harness requires a **security gate + guardrails + observability**, not just bolted-on tools and skills. This repo builds all of it: scheduler, memory (working / internal / cross-agent / long-term), provider+budget, tools (MCP + CLI), skills, hooks (PII firewall + approval-gate), the **Action Gateway** security gate, two-layer **guardrails** (Lớp A hard-deny *blocks* + Lớp B/dedup/rate-limit *filters*), and **observability** (immutable audit log + structured run-events + opt-in LangSmith tracing + run replay + cost metrics). The guardrail isn't an add-on — it's an architectural invariant every write must pass, verified live. See the node-by-node map in [docs/v2/architecture.md §10 — Harness conformance](docs/v2/architecture.md).
+A "harness" (the reins) is the whole environment around the model that keeps the agent on track — and a *real* harness requires a **security gate + guardrails + observability**, not just bolted-on tools and skills. This repo builds all of it: scheduler, memory (working / internal / cross-agent / long-term), provider+budget, tools (MCP + CLI), skills, hooks (PII firewall + approval-gate), the **Action Gateway** security gate, two-layer **guardrails** (Lớp A hard-deny *blocks* + Lớp B/dedup/rate-limit *filters*), and **observability** (immutable audit log + structured run-events + opt-in LangSmith tracing + run replay + cost metrics). The guardrail isn't an add-on — it's an architectural invariant every write must pass, verified live. See the node-by-node map in [docs/system-architecture.md §10 — Harness conformance](docs/system-architecture.md).
 
 ## Quickstart
 
@@ -66,7 +66,7 @@ cp config.example.env .env
 uv run python -m src.entrypoints.cli report --daily
 ```
 
-To post for real, set `DRY_RUN=false` in `.env`. See [docs/deployment-guide.md](docs/v1/deployment-guide.md) for secrets, scoped tokens, cron (launchd), and the kill switch.
+To post for real, set `DRY_RUN=false` in `.env`. See [docs/deployment-guide.md](docs/deployment-guide.md) for secrets, scoped tokens, cron (launchd), and the kill switch.
 
 ### External dependency: 3 MCP servers
 
@@ -86,42 +86,42 @@ Point the agent at them with `JIRA_MCP_DIST` / `CONFLUENCE_MCP_DIST` / `SLACK_MC
 
 `perceive → analyze → compose → deliver`, an explicit graph (no hidden agentic loop). State is checkpointed (SQLite) and holds only primitives. Tools are a read layer (`src/tools/`); every mutation is a write layer behind the Action Gateway (`src/actions/`). Entry points (`src/entrypoints/`) are thin — the agent core knows nothing about CLI vs cron, so a service/bot frontend is additive later.
 
-Architecture: [docs/system-architecture.md](docs/v1/system-architecture.md) · Code map: [docs/codebase-summary.md](docs/v1/codebase-summary.md)
+Architecture: [docs/system-architecture.md](docs/system-architecture.md) · Code map: [docs/codebase-summary.md](docs/codebase-summary.md)
 
 ## Documentation
 
 | Read this to… | Doc |
 |---|---|
 | **Dùng hệ thống (tiếng Việt)** — cài đặt + vận hành hằng ngày | [docs/huong-dan-su-dung.md](docs/huong-dan-su-dung.md) |
-| See what shipped, version by version | [docs/project-changelog.md](docs/project-changelog.md) |
-| **Add a new agent** (quick start) | [docs/v2/getting-started.md](docs/v2/getting-started.md) |
+| See what shipped, version by version | [docs/project-roadmap.md](docs/project-roadmap.md) |
+| **Add a new agent** (quick start) | [docs/deployment-guide.md](docs/deployment-guide.md) |
 | Understand the guardrail (the main lesson) | [action-gateway-explainer.md](docs/action-gateway-explainer.md) |
-| Understand the problem + vision | [project-overview-pdr.md](docs/v1/project-overview-pdr.md) |
-| Understand the architecture | [system-architecture.md](docs/v1/system-architecture.md) |
-| Find where any piece of code lives | [codebase-summary.md](docs/v1/codebase-summary.md) |
-| Set up + run it | [deployment-guide.md](docs/v1/deployment-guide.md) |
-| See how it compares to other agent harnesses | [architecture-comparison.md](docs/architecture-comparison.md) — vs DeerFlow 2.0, Hermes, OpenClaw/Pi.dev |
-| See the multi-agent platform | [v2/](docs/v2/README.md) — profiles, registry/workers, scheduler (M1) · interrupts, FastAPI/SSE, web dashboard, Postgres (M2) — all complete |
+| Understand the problem + vision | [project-overview-pdr.md](docs/project-overview-pdr.md) |
+| Understand the architecture | [system-architecture.md](docs/system-architecture.md) |
+| Find where any piece of code lives | [codebase-summary.md](docs/codebase-summary.md) |
+| Set up + run it | [deployment-guide.md](docs/deployment-guide.md) |
+| See how it compares to other agent harnesses | [architecture-comparison.md](docs/archive/architecture-comparison.md) — vs DeerFlow 2.0, Hermes, OpenClaw/Pi.dev |
+| See the multi-agent platform | [v2/](docs/project-roadmap.md) — profiles, registry/workers, scheduler (M1) · interrupts, FastAPI/SSE, web dashboard, Postgres (M2) — all complete |
 | **Follow the build, decision by decision** | [journals/](docs/journals/) — a phase-by-phase narrative with *what we decided & why* and *what broke & what we learned* |
 
 The [journals](docs/journals/) are the best learning material here: each phase records the real decisions and the bugs adversarial review caught (denylist→allowlist, a JQL-injection surface, a privacy leak via a linked artifact). Build narratives like this are rare — that's the point of sharing this repo.
 
 ## Status
 
-**v1 — Phases 0–5 complete** (2026-06-22): reporting, guardrail hardening, OKR, resource/cost, and audience-split, all E2E-verified against real Jira/GitHub/Slack/Confluence. See [docs/v1/project-roadmap.md](docs/v1/project-roadmap.md).
+**v1 — Phases 0–5 complete** (2026-06-22): reporting, guardrail hardening, OKR, resource/cost, and audience-split, all E2E-verified against real Jira/GitHub/Slack/Confluence. See [docs/project-roadmap.md](docs/project-roadmap.md).
 
 **v2 COMPLETE** (2026-06-27) — all 3 milestones shipped, verified by final live E2E:
 - **M1 multi-agent core** (2026-06-24): N agents / N projects, fully isolated, run via CLI/worker + scheduler with the guardrail applied per-agent. 414 tests.
 - **M2 platform** (2026-06-26): P5 graph-native Lớp B interrupts + P6 FastAPI SSE streaming + P7 web dashboard (HTMX+Jinja2, 6 ops surfaces) + P8 Postgres checkpointer/Store/cross-thread memory (opt-in). 545 tests. Full E2E against real Jira/GitHub/Slack/Confluence and throwaway Postgres.
 - **M3 extensibility** (2026-06-27): P10 skill system (5 bundled instruction-only skills, injectable LLM selector) + P9 cross-agent memory (sibling fact sharing via Store, internal-only) + P11 integrations/multi-channel (config-driven MCP servers + Linear read/gated-write + Email/SMTP delivery, Lớp B) + P12 automation/observability (opt-in LangSmith tracing, checkpoint-based replay with safe-replay guard, READ-only workflow automation via gateway). 776 tests. Final live E2E: Jira 21 issues, real Confluence page created, Slack post approved, 20 stored facts, B3 replay dedup+refuse-unsafe, D3 proposals Lớp B only.
 
-**v3–v10 COMPLETE** (2026-06-30 → 07-07) — grew from "one PM agent" into a CEO-operated virtual-staff company. Highlights (full list in the [changelog](docs/project-changelog.md)):
+**v3–v10 COMPLETE** (2026-06-30 → 07-07) — grew from "one PM agent" into a CEO-operated virtual-staff company. Highlights (full list in the [changelog](docs/project-roadmap.md)):
 - **v3–v5**: domain packs (a new domain is a dropped-in folder, zero core edits — proven by an HR pack), a low-tech web UI, an admin agent that fleet-watches the others, chat-command → approval queue.
 - **v6–v7**: each virtual staffer gets its own Telegram identity; CEO chat-ops; assign work in three shapes; a browser setup wizard; knowledge-as-a-form; a Company Docs library; a 4-item CEO-first nav.
 - **v8**: CEO-observability (a silently-dead agent pings the CEO on Telegram), multi-project rollup, an opt-in trust ladder (auto-approve Lớp B with a per-day cap — the invariant stays intact).
 - **v9–v10**: full Vietnamese UI + a readable trust surface; light/dark theme with a self-hosted VN font (WCAG AA both themes); a low/high-tech dual-mode toggle; a hardened one-command installer + a live system-health panel. Backend at 1206 tests; every version E2E-verified (browser + real integrations).
 
-See [docs/v2/README.md](docs/v2/README.md) and the [journals](docs/journals/) for each phase's decisions, bugs caught, and lessons learned. New users: start with the **[hướng dẫn tiếng Việt](docs/huong-dan-su-dung.md)**.
+See [docs/project-roadmap.md](docs/project-roadmap.md) and the [journals](docs/journals/) for each phase's decisions, bugs caught, and lessons learned. New users: start with the **[hướng dẫn tiếng Việt](docs/huong-dan-su-dung.md)**.
 
 ## License
 
