@@ -65,29 +65,70 @@ def _shim(tool_name: str, fn: Callable[[dict], Any]) -> Callable[[dict], Any]:
     return _guarded
 
 
+#: Cap on scraped markdown fed back into the loop (untrusted web content — keep it bounded).
+_SCRAPE_MAX_CHARS = 8000
+
+
+def _firecrawl_tool(settings: Any) -> Callable[[dict], Any] | None:
+    """A `web.scrape` callable backed by Firecrawl, or None when Firecrawl is not configured.
+
+    The returned callable takes `{"url": ...}`, SSRF-guards + scrapes it, and returns bounded
+    markdown. Firecrawl errors (offline, blocked target, bad URL) degrade to a short message
+    string — the loop continues without crashing. The content is UNTRUSTED; the runtime's own
+    result_text still goes through the internal-content wrap before any downstream prompt use.
+    """
+    if settings is None:
+        return None
+    base = getattr(settings, "firecrawl_base_url", None)
+    if not base:
+        return None
+    from src.tools.firecrawl_tool import FirecrawlBlocked, FirecrawlConfig, scrape_url
+
+    fc = FirecrawlConfig(base_url=base, api_key=getattr(settings, "firecrawl_api_key", None))
+
+    def _scrape(args: dict) -> str:
+        url = (args or {}).get("url") or (args or {}).get("query") or ""
+        if not url:
+            return "(web.scrape cần tham số url)"
+        try:
+            res = scrape_url(url, fc)
+        except FirecrawlBlocked as exc:
+            return f"(bị chặn: {exc})"
+        except Exception as exc:  # noqa: BLE001 — scrape best-effort, never crash the loop
+            return f"(scrape lỗi: {exc})"
+        md = res.markdown[:_SCRAPE_MAX_CHARS]
+        return f"# {res.title}\n(nguồn: {res.url})\n\n{md}"
+
+    return _scrape
+
+
 def build_read_toolset(
-    config: ReportingConfig, audience: str = "internal"
+    config: ReportingConfig, audience: str = "internal", settings: Any = None
 ) -> dict[str, Callable[[dict], Any]]:
     """The positive read-allowlist for a tool-calling runtime, policy-shimmed + audience-aware.
 
     Returns a name→callable map. External audience drops internal-only reads. Every callable is
     shimmed through `classify`. There is no path here to a write/destructive tool — they are
-    not listed.
+    not listed. `settings` (optional) enables the Firecrawl web-scrape tool when configured.
     """
-    if config is None:
-        # No ReportingConfig available (e.g. a step with no loaded profile) → no read tools;
-        # the loop still runs and can produce text from the brief alone.
-        return {}
-    from src.tools import confluence_read, github_read, jira_read, linear_read
+    raw: dict[str, Callable[[dict], Any]] = {}
+    if config is not None:
+        from src.tools import confluence_read, github_read, jira_read, linear_read
 
-    raw: dict[str, Callable[[dict], Any]] = {
-        "jira.issues": lambda args: jira_read.get_open_issues(config=config),
-        "github.prs": lambda args: github_read.get_open_prs(config=config),
-        "linear.issues": lambda args: linear_read.get_issues(config, args),
-        "confluence.page": lambda args: confluence_read.get_page_content(
-            args.get("page_id"), config=config
-        ),
-    }
+        raw = {
+            "jira.issues": lambda args: jira_read.get_open_issues(config=config),
+            "github.prs": lambda args: github_read.get_open_prs(config=config),
+            "linear.issues": lambda args: linear_read.get_issues(config, args),
+            "confluence.page": lambda args: confluence_read.get_page_content(
+                args.get("page_id"), config=config
+            ),
+        }
+    # v20.5: Firecrawl web-scrape (fetch a URL → markdown). READ-only + SSRF-guarded at source.
+    # Available on both audiences (it fetches PUBLIC web pages, not internal company data) when
+    # FIRECRAWL_BASE_URL is set; absent ⇒ the tool is simply not offered (degrade, no crash).
+    fc = _firecrawl_tool(settings)
+    if fc is not None:
+        raw["web.scrape"] = fc
     if audience != "internal":
         raw = {name: fn for name, fn in raw.items() if name not in _INTERNAL_ONLY_READS}
     return {name: _shim(name, fn) for name, fn in raw.items()}

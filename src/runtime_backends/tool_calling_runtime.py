@@ -59,8 +59,9 @@ class ToolCallingRuntime:
         from src.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
 
         def _run_work(title: str, handoff: str, hook) -> tuple[str, float | None]:
-            # team-step is inherently internal (no external audience).
-            tools_map = build_read_toolset(config, audience="internal")
+            # team-step is inherently internal (no external audience). `settings` enables the
+            # Firecrawl web-scrape tool when FIRECRAWL_BASE_URL is configured (v20.5).
+            tools_map = build_read_toolset(config, audience="internal", settings=settings)
             assert_read_only(list(tools_map))  # defense-in-depth: prove no write tool leaked in
 
             from src.runtime_backends.react_loop import run_react_work

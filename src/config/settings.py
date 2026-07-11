@@ -69,6 +69,11 @@ class Settings:
     # False and the hook degrades to a no-op — no crash, no key required to run.
     tavily_api_key: str | None = None
     brave_api_key: str | None = None
+    # v20.5: Firecrawl self-host (web scrape → markdown). base_url absent ⇒ FirecrawlConfig
+    # .available() is False and the scrape tool degrades to a no-op (Docker offline / not
+    # deployed) — no crash, no key required to run. api_key is a self-host dummy.
+    firecrawl_base_url: str | None = None
+    firecrawl_api_key: str | None = None
 
     def effective_model_chain(self) -> tuple[str, ...]:
         """The chain `LlmClient.complete` walks: declared chain, or just the model."""

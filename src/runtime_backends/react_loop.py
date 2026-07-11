@@ -15,26 +15,36 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+#: Per-tool description so the model passes the RIGHT argument (e.g. a URL for web.scrape, not
+#: the question text). Falls back to a generic read description for unlisted tools.
+_TOOL_DESCRIPTIONS = {
+    "web.scrape": "Đọc TOÀN BỘ nội dung của MỘT URL web công khai (http/https) và trả về "
+                  "markdown. Tham số `query` PHẢI là URL đầy đủ (vd https://example.com), "
+                  "KHÔNG phải câu hỏi. Read-only, không ghi.",
+}
+
 
 def _as_lc_tools(tools_map: dict[str, Callable[[dict], Any]]) -> list:
     """Wrap read callables as LangChain tools the react agent can invoke.
 
     Each tool takes a single free-form `query` string (the model's ask); the underlying read
     callable receives it as `{"query": ...}`. A permissive one-string schema avoids brittle
-    per-tool arg models while keeping the loop able to call every read.
+    per-tool arg models. Per-tool descriptions (`_TOOL_DESCRIPTIONS`) tell the model what to put
+    in `query` — critical for web.scrape, which needs a URL rather than a question.
     """
     from langchain_core.tools import tool as lc_tool
 
     lc_tools = []
     for name, fn in tools_map.items():
-        def _make(f, tool_name):
-            @lc_tool(tool_name.replace(".", "_"))
+        desc = _TOOL_DESCRIPTIONS.get(name, "Read-only tool. Returns internal data; cannot write.")
+
+        def _make(f, tool_name, description):
+            @lc_tool(tool_name.replace(".", "_"), description=description)
             def _call(query: str = "") -> str:
-                """Read-only tool. Returns internal data; cannot write."""
                 return str(f({"query": query}))
             return _call
 
-        lc_tools.append(_make(fn, name))
+        lc_tools.append(_make(fn, name, desc))
     return lc_tools
 
 

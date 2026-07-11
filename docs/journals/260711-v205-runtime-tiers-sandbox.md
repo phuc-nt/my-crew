@@ -47,6 +47,20 @@
 - Lưu ý: E2E gọi `run_deep_agent_work` trực tiếp (đúng hàm production); wiring qua coordinator→
   team_step_runner đã verify riêng (UAT-3 build graph qua seam).
 
+## Firecrawl web-scrape (tích hợp cho nhân sự research, bổ sung)
+- `src/tools/firecrawl_tool.py`: fetch 1 URL → markdown qua Firecrawl self-host Docker
+  (localhost:3002, no-auth). Đây là năng lực `web_search_tool` cố ý KHÔNG có (snippets-only).
+  READ-only, stdlib HTTP (bám convention). **SSRF guard tại nguồn**: reject localhost/private/
+  link-local/metadata (agent không pivot vào nội bộ) — chặn TRƯỚC HTTP call (test verify).
+- Thêm vào `read_only_toolset` như `web.scrape` → ToolCalling runtime gọi qua classify shim +
+  assert_read_only. `FIRECRAWL_BASE_URL` rỗng → tool tắt (degrade). Nội dung untrusted, bounded
+  8000 chars.
+- **Vấp**: react loop wrap tool bằng 1 param `query` generic → LLM truyền câu hỏi thay vì URL
+  cho web.scrape. Fix: `_TOOL_DESCRIPTIONS` per-tool nói rõ "query PHẢI là URL". Sau fix E2E LLM
+  thật: agent tự gọi web.scrape(https://example.com) → tóm tắt "Example Domain" đúng.
+- E2E thật + live test (skipif no-firecrawl): scrape example.com qua container; SSRF chặn
+  localhost/metadata in-loop.
+
 ## Mở / sang sau
 - **Sandbox cost cap**: hiện chỉ LLM cost (budget tháng backstop); sandbox compute cost chưa cap.
 - **E2E deep qua ticker đầy đủ**: đã verify từng mắt (build graph qua seam + deep loop chạy

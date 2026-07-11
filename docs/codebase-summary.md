@@ -223,6 +223,13 @@
   create_agent/deep_agent + mô tả guardrail-tier; role template `recommended_runtime` prefill
   (kiem-dinh→native, noi-dung→create_agent, nghien-cuu→deep_agent); user override. Folded vào
   IdentityStep (không step-renumber — red-team F7). Backend whitelist `agent_runtime` (agent_create).
+- **Firecrawl web-scrape** (`src/tools/firecrawl_tool.py`, v20.5): fetch 1 URL → markdown qua
+  Firecrawl self-host local (`http://localhost:3002`). Đây là năng lực `web_search_tool` cố ý
+  KHÔNG có (snippets-only). READ-only, stdlib HTTP. **SSRF guard tại nguồn**: reject localhost/
+  private/link-local/metadata (agent không pivot vào nội bộ). Thêm vào `read_only_toolset` như
+  `web.scrape` (ToolCalling runtime gọi qua classify shim); `FIRECRAWL_BASE_URL` rỗng → tool tắt
+  (degrade). E2E LLM thật: research agent tự gọi web.scrape đọc example.com → tóm tắt đúng; SSRF
+  chặn localhost in-loop. Config `FIRECRAWL_BASE_URL`/`FIRECRAWL_API_KEY` (settings, env-only).
 - **DeepAgent tự chủ trong Docker — VERIFY THẬT**: E2E LLM thật + Docker daemon thật — agent
   TỰ gọi `docker exec` (spy bắt lệnh LLM tự gõ), chạy `python3` trong container Debian, trả kết
   quả đúng (7×191=1337); container token-free (host `OPENROUTER_API_KEY` không lọt), không mount
@@ -348,6 +355,7 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 | **[M28b] Coordinator ticker** | `src/agent/coordinator_graph.py` — TICKER pseudo-kind (short tick exit, no 600s-kill), lease logic, step spawn DETACHED, reboot recovery via store read |
 | **[M28b] Decompose+confirm** | `src/agent/task_decomposition.py` — Pydantic schema (max 7 steps, role-constrained), `assign_team_task` on admin ops agent (1 LLM sync), plan hash bind TOCTOU-proof, no re-materialize |
 | **[M28b] Web search** | `src/tools/web_search_tool.py` + `src/tools/search_result_formatter.py` — Tavily primary/Brave fallback, snippets-only (no page fetch), fail-closed pattern-scan before egress, 4-layer injection defense |
+| **[v20.5] Web scrape (Firecrawl)** | `src/tools/firecrawl_tool.py::scrape_url` — fetch URL → markdown qua Firecrawl self-host; SSRF guard tại nguồn (reject localhost/private/metadata); READ-only; `web.scrape` trong `read_only_toolset` (ToolCalling qua classify shim); FIRECRAWL_BASE_URL rỗng → tắt |
 | **[M28b] Query redaction** | Extend `src/actions/secret_patterns.py` — redact query before egress, audit logs redacted query only (KHÔNG raw) |
 | **[M28b] Cost cap per task** | `src/runtime/team_task_cost.py` — sum `HistoryEntry.cost_usd` (decompose+step+aggregate), default $2/task via `company.yaml::team_task_cap_usd` |
 | **[M29] Office room store** | `src/runtime/office_room_store.py` — SQLite WAL+seq AUTOINCREMENT SSoT; append-only, seq-indexed for stream-tail |
