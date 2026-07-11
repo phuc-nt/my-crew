@@ -37,6 +37,14 @@
 - **create_agent thật sự không có** trong stack (langchain-core only) — red-team C3 đúng; fallback
   `create_react_agent` (langgraph) là đường đúng, không kéo meta-package.
 
+## Đính chính (2026-07-11, sau red-team v20.5)
+- Câu "team-step output → deliver→gateway" trong journal này là **over-claim**. Sự thật:
+  team-step deliver CHỈ ghi artifact nội bộ; hook `external_write` (để step egress công ty)
+  đã thiết kế nhưng CHƯA nối (`deps.external_write=None`, grep=0 chỗ gán). Egress công ty đi
+  qua **report graph** (wire gateway đầy đủ). → v20 KHÔNG có lỗ hổng (team-step vốn không ra
+  ngoài được); nhưng "invariant #1 giữ" đúng theo nghĩa "team-step không egress", KHÔNG phải
+  "output qua gateway". Nối external_write→gateway = tính năng v20.5.
+
 ## Mở / sang sau
 - DeepAgentRuntime: vendor-review deepagents pin version + tắt shell/tracing rồi mới bật chạy thật.
 - ToolCallingRuntime cost accounting per-loop hiện best-effort (None) — budget tháng là backstop;

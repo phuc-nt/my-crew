@@ -180,8 +180,9 @@
 - **ToolCallingRuntime** (`tool_calling_runtime.py` + `react_loop.py` + `read_only_toolset.py`):
   tool-calling loop qua `langgraph.prebuilt.create_react_agent` (KHÔNG `langchain` full — dùng
   `langchain-openai` pin, red-team C3). **Swaps CHỈ `run_work`** qua `build_team_task_graph(
-  work_override=)` → perceive/self_check/rework/deliver→gateway giữ native = **invariant #1
-  bằng cấu trúc**. Toolset = **positive read-allowlist** (red-team C2: `deletePage` không lọt) +
+  work_override=)` → perceive/self_check/rework/deliver giữ native = **invariant #1 bằng cấu
+  trúc** (deliver ghi artifact nội bộ; team-step KHÔNG egress công ty — hook `external_write`
+  chưa nối, xem đính chính system-architecture). Toolset = **positive read-allowlist** (red-team C2: `deletePage` không lọt) +
   **policy shim classify mọi tool** (red-team C1 — E2E LLM thật chứng minh classify thấy tool
   call) + audience-aware (external loại internal-data read) + per-loop recursion cap (H2).
 - **DeepAgentRuntime** (`deep_agent_runtime.py`): EXPERIMENTAL, dep `deepagents` OPTIONAL
@@ -193,8 +194,9 @@
   pack-MCP **spawn gate** (`pack_mcp_gate.py`, red-team SEC#4): default-DENY, chỉ absolute path
   trong allowlist operator `PACK_MCP_ALLOWED_DIST` + env scrub token. (3) `_template-pack/`
   skeleton (tiền tố `_` loại khỏi discovery) + `docs/PACK-AUTHORING.md`.
-- **THE INVARIANT giữ**: mọi runtime egress qua gateway (loop tool qua classify shim); native
-  byte-identical; audience red-line. Researcher-pack → template skeleton (team-step+web_search
+- **THE INVARIANT giữ**: egress công ty (report graph) qua gateway; team-step KHÔNG egress
+  (external_write chưa nối); loop tool qua classify shim; native byte-identical; audience
+  red-line. Researcher-pack → template skeleton (team-step+web_search
   đã phục vụ researcher — red-team Y2).
 
 **Entry points**: Legacy `python -m src.entrypoints.cli`/`cron` (single-agent). Multi-agent: `python -m src.entrypoints.mpm agent {list,register,run,resume,replay,automate,approvals,approve,reject,audit}`. Runtime: `python -m src.runtime.worker`, `python -m src.runtime.service`.
