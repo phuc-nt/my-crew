@@ -1,0 +1,14 @@
+# Crew mặc định (v32) — "Tạo cả đội" 1-click trên trang Đội / trang Tạo nhân sự.
+#
+# MỘT crew duy nhất (quyết định CEO v32 — nhiều crew là YAGNI). Mỗi member là một
+# role_id trong profiles/templates/; member đã tồn tại (trùng agent id) được BỎ QUA
+# khi tạo lại — chạy lại an toàn. `coordinator` được ghi vào company.yaml::coordinator_id
+# CHỈ KHI công ty chưa cấu hình coordinator (không ghi đè lựa chọn tay của CEO).
+name: "Đội văn phòng mẫu"
+coordinator: truong-phong
+members:
+  - truong-phong
+  - nghien-cuu
+  - noi-dung
+  - phan-tich
+  - kiem-dinh

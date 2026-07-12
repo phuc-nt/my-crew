@@ -228,7 +228,7 @@ def test_create_collision_is_409(client, tmp_world):
 def test_create_rolls_back_profile_dir_when_registry_append_fails(tmp_world, monkeypatch):
     registry, profiles = tmp_world
 
-    def _boom(reg, agent_id):
+    def _boom(reg, agent_id, **kwargs):
         raise RuntimeError("append failed")
 
     monkeypatch.setattr(agent_create, "append_registry", _boom)

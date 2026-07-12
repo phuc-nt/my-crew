@@ -155,6 +155,9 @@ test('+ Tạo trưởng phòng creates the coordinator from the truong-phong tem
         persona: 'persona text',
   web_search: false,
   recommended_runtime: 'native',
+      academic_search: false,
+      schedule: {},
+      has_skills: false,
       },
     ],
   })

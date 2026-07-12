@@ -67,6 +67,9 @@ const PM_TEMPLATE = {
   persona: '# SOUL\n\nBạn là Điều phối dự án.',
   web_search: false,
   recommended_runtime: 'native',
+  academic_search: false,
+  schedule: {},
+  has_skills: false,
 }
 
 test('applyTemplate carries the web_search opt-in into buildSpec', () => {

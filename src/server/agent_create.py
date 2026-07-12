@@ -93,7 +93,7 @@ def create_agent(spec: dict, *, registry_path=None, profiles_dir=None) -> dict:
     except FileExistsError:  # lost the check→mkdir race with a concurrent create
         raise ConflictError(f"profiles/{agent_id}/ already exists.") from None
     try:
-        append_registry(reg, agent_id)
+        append_registry(reg, agent_id, enabled=doc["enabled"])
     except Exception:
         shutil.rmtree(pdir / agent_id, ignore_errors=True)  # rollback: no orphan profile
         raise
@@ -143,7 +143,10 @@ def _build_profile_doc(spec: dict, profiles_dir) -> tuple[str, dict, str | None]
     template = (profiles_dir / "default" / "profile.yaml").read_text(encoding="utf-8")
     doc = yaml.safe_load(template)
     doc["name"] = str(spec.get("name") or agent_id)
-    doc["enabled"] = True
+    # v32: the one-click template/crew path creates DISABLED (plan invariant — tokens
+    # first, then the operator enables); the wizard keeps its historical enabled-True.
+    # Only the literal False flips it, so a spec can't smuggle other values through.
+    doc["enabled"] = spec.get("enabled") is not False
     doc["domain"] = domain
     doc["reports"] = reports
     doc["schedule"] = schedule
@@ -151,6 +154,9 @@ def _build_profile_doc(spec: dict, profiles_dir) -> tuple[str, dict, str | None]
     # so a spec can't smuggle arbitrary values into profile.yaml through this key.
     if spec.get("web_search"):
         doc["web_search"] = True
+    # v32: opt-in OpenAlex academic search — same literal-True-only posture.
+    if spec.get("academic_search"):
+        doc["academic_search"] = True
     # v30: optional trust mode. Only the two literal policies pass through; absent ⇒ the
     # profile inherits the global default (TRUST_MODE env / builder default "autonomous").
     trust_mode = str(spec.get("trust_mode") or "").strip().lower()

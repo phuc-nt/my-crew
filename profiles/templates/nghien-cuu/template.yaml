@@ -12,3 +12,6 @@ web_search: true
 
 # v20.5: runtime backend gợi ý (wizard prefill; user override được).
 recommended_runtime: deep_agent
+
+# v32: tool gắn sẵn — OpenAlex tra cứu paper (không cần key; flag là cổng duy nhất).
+academic_search: true

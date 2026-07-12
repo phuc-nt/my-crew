@@ -188,6 +188,11 @@ export function Team() {
         <button type="button" className="btn-link" disabled={creating} onClick={goCreate}>
           + Tạo nhân sự ảo
         </button>
+        {/* v32: templates are one-click-executable on the create page's first step —
+            this is the fast path ("Tạo ngay" per role, or the whole default crew). */}
+        <Link to="/create" className="btn-link">
+          ⚡ Tạo nhanh từ mẫu / cả đội
+        </Link>
         {coordinatorId === null && (
           <button
             type="button"
@@ -215,7 +220,17 @@ export function Team() {
       {deletedNote && <p className="ok">{deletedNote}</p>}
       {loading && <p>Đang tải…</p>}
       {error && <p className="error">Lỗi: {error}</p>}
-      {!loading && !error && agents.length === 0 && <p className="muted">Chưa có agent nào.</p>}
+      {!loading && !error && agents.length === 0 && (
+        <div className="team-empty-hero">
+          <p className="muted">Chưa có nhân sự nào.</p>
+          <p>
+            <Link to="/create" className="btn-link">
+              ⚡ Tạo cả đội mẫu trong một lần
+            </Link>{' '}
+            hoặc chọn từng vai từ mẫu có sẵn.
+          </p>
+        </div>
+      )}
       {!loading && !error && agents.length > 0 && (
         <table className="agents-table">
           <thead>

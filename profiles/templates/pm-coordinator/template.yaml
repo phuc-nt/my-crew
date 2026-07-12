@@ -19,3 +19,8 @@ bindings_hint:
 
 # v20.5: runtime backend gợi ý (wizard prefill; user override được).
 recommended_runtime: native
+
+# v32: lịch mặc định cho vai có báo cáo — validate qua create_agent (kind ∈ reports).
+schedule:
+  daily: "0 8 * * *"
+  weekly: "0 17 * * 5"

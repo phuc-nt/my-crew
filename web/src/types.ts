@@ -315,6 +315,42 @@ export interface StaffTemplate {
   persona: string
   web_search: boolean
   recommended_runtime: string // v20.5: 'native' | 'create_agent' | 'deep_agent'
+  // v32 one-click contract: pre-attached tools + default schedule + bundled skills
+  academic_search: boolean
+  schedule: Record<string, string>
+  has_skills: boolean
+}
+
+// v32: one-click create + crew bootstrap payloads
+export interface CreateFromTemplateResult {
+  id: string
+  domain: string
+  reports: string[]
+  name: string
+  hint: string
+}
+
+export interface CrewMemberPreview {
+  role_id: string
+  role: string
+  domain: string
+  exists: boolean
+}
+
+export interface CrewPreview {
+  crew: string
+  members: CrewMemberPreview[]
+  coordinator: string
+  coordinator_already_set: boolean
+  current_coordinator: string | null
+}
+
+export interface CrewCreateResult {
+  crew: string
+  created: string[]
+  skipped: string[]
+  failed: { role_id: string; error: string }[]
+  coordinator_id: string | null
 }
 
 export interface StaffTemplatesPayload {
@@ -376,6 +412,13 @@ export interface TeamAlertsPayload {
 }
 
 // v6 M14b: CEO chat-ops web endpoint.
+// v32: discoverable ops-command listing for the Chat view
+export interface OpsChatCommand {
+  id: string
+  description: string
+  readonly: boolean
+}
+
 export interface OpsChatAvailable {
   available: boolean
   agent_id?: string

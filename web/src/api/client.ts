@@ -20,6 +20,9 @@ import type {
   CostPayload,
   CreateAgentResult,
   CreateAgentSpec,
+  CreateFromTemplateResult,
+  CrewCreateResult,
+  CrewPreview,
   DeleteAgentResult,
   EnabledResult,
   AgentCompanyDocsPayload,
@@ -31,6 +34,7 @@ import type {
   SkillsPayload,
   OfficeRoomsPayload,
   OpsChatAvailable,
+  OpsChatCommand,
   OpsChatReply,
   PacksPayload,
   RunsPayload,
@@ -192,9 +196,19 @@ export const api = {
   assignCancel: (taskId: string) =>
     post<{ ok: boolean }>('/api/office/assign/cancel', { task_id: taskId }),
   getStaffTemplates: () => request<StaffTemplatesPayload>('/api/staff-templates'),
+  // v32: one-click create from a template + whole-crew bootstrap (server builds the spec).
+  createFromTemplate: (roleId: string, agentId?: string) =>
+    post<CreateFromTemplateResult>('/api/agents/create-from-template', {
+      role_id: roleId,
+      ...(agentId ? { agent_id: agentId } : {}),
+    }),
+  getCrewPreview: () => request<CrewPreview>('/api/crew/preview'),
+  createCrew: () => post<CrewCreateResult>('/api/crew/create'),
   // v6 M14b: CEO chat-ops — same engine + shared conversation as the Telegram DM path.
   opsChatAvailable: () => request<OpsChatAvailable>('/api/ops/chat/available'),
   opsChat: (message: string) => post<OpsChatReply>('/api/ops/chat', { message }),
+  getOpsChatCommands: () =>
+    request<{ commands: OpsChatCommand[] }>('/api/ops/chat/commands'),
   // v6 M15b: assigned-tasks board.
   getTasks: () => request<TasksPayload>('/api/tasks'),
   cancelTask: (agentId: string, taskId: number) =>

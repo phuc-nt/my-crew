@@ -6,9 +6,11 @@ the `/api` prefix, which is NOT in `auth._PUBLIC_PREFIXES`, so the existing Auth
 already protects them the same way it protects every other `/api/*` route — no new auth
 wiring needed, just don't add these paths to the public allowlist.
 
-Templates are a PREFILL SOURCE ONLY: `GET /api/staff-templates` lists
+Templates prefill the wizard AND (v32) are directly executable: `GET /api/staff-templates` lists
 `profiles/templates/<role>/template.yaml` + `SOUL.md`; creating an agent from a template
-still goes through the existing `POST /api/agents/create` → `agent_create.create_agent`
+still goes through `agent_create.create_agent` — both the wizard's `POST /api/agents/create`
+and the v32 one-click `POST /api/agents/create-from-template` / `POST /api/crew/create`
+(spec built SERVER-side from the template; the client sends only role_id)
 (no new write path, no gateway involvement).
 """
 
@@ -162,4 +164,53 @@ def _load_one_template(role_dir) -> dict | None:
         # v20.5: which runtime backend this role is best served by (wizard prefill; user can
         # override). Absent ⇒ "native" (the safe default).
         "recommended_runtime": str(doc.get("recommended_runtime") or "native"),
+        # v32 one-click contract additions (all optional; absent keeps v1 behavior):
+        # academic_search mirrors web_search; schedule is {report kind: cron} defaults
+        # (validated by create_agent against the role's reports); has_skills tells the
+        # FE card a skills/ folder will be copied into the created agent.
+        "academic_search": bool(doc.get("academic_search", False)),
+        "schedule": {str(k): str(v) for k, v in (doc.get("schedule") or {}).items()}
+        if isinstance(doc.get("schedule"), dict) else {},
+        "has_skills": (role_dir / "skills").is_dir(),
     }
+
+@router.post("/agents/create-from-template")
+def create_agent_from_template(
+    role_id: str = Body(..., embed=True),
+    agent_id: str | None = Body(None, embed=True),
+) -> dict:
+    """One-click create: server-side spec from the template → the SAME create_agent
+    door the wizard uses. The client cannot send profile config through here."""
+    from src.server import template_create
+    from src.server.agent_create import ConflictError, ValidationError
+
+    try:
+        return template_create.create_from_template(role_id, agent_id)
+    except template_create.TemplateError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except ConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+
+
+@router.get("/crew/preview")
+def get_crew_preview() -> dict:
+    """Confirm-dialog payload for "Tạo cả đội": members + exists flags + coordinator plan."""
+    from src.server import template_create
+
+    try:
+        return template_create.crew_preview()
+    except template_create.TemplateError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
+@router.post("/crew/create")
+def post_crew_create() -> dict:
+    """Create the default crew (per-member independent; existing members skipped)."""
+    from src.server import template_create
+
+    try:
+        return template_create.create_crew()
+    except template_create.TemplateError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None

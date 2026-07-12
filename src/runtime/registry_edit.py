@@ -67,23 +67,32 @@ def scaffold_profile_dir(
     return target
 
 
-def append_registry(registry_path: Path | None, agent_id: str) -> None:
-    """Append one enabled agent block (comments/entries preserved), validate-before-replace.
+def append_registry(
+    registry_path: Path | None, agent_id: str, *, enabled: bool = True
+) -> None:
+    """Append one agent block (comments/entries preserved), validate-before-replace.
 
     The append is built IN MEMORY and only replaces the file after a clean parse that
     contains the new entry — a registry whose on-disk indent style doesn't match the
     appended block (hand-edits) raises and leaves the original byte-unchanged, instead
     of persisting a file no agent can load.
+
+    `enabled=False` (v32 one-click template/crew creates): the agent is registered but
+    OFF until the operator flips it — tokens go into .env first, then one click on the
+    Team page. The wizard path keeps the historical enabled-on-create default.
     """
     path = registry_path if registry_path is not None else _REGISTRY_PATH
+    flag = "true" if enabled else "false"
     with _EDIT_LOCK:
         original = path.read_text(encoding="utf-8")
         prefix = "" if original.endswith("\n") or not original else "\n"
-        new_text = original + prefix + f"  - id: {agent_id}\n    enabled: true\n"
+        new_text = original + prefix + f"  - id: {agent_id}\n    enabled: {flag}\n"
         _replace_validated(
             path,
             new_text,
-            check=lambda entries: any(e.id == agent_id and e.enabled for e in entries),
+            check=lambda entries: any(
+                e.id == agent_id and e.enabled == enabled for e in entries
+            ),
         )
 
 
