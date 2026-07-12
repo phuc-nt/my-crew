@@ -31,7 +31,7 @@ export interface WizardState {
   agentRuntime: string // v20.5: 'native' | 'create_agent' | 'deep_agent'; prefilled from template
   // v30: '' = theo mặc định công ty (TRUST_MODE env); 'autonomous' | 'guarded' ghi tường minh
   // vào safety.trust_mode của profile.yaml.
-  trustMode: string
+  trustMode: '' | 'autonomous' | 'guarded'
   reports: string[]
   schedule: Record<string, string> // kind -> cron5 (only for scheduled kinds)
   jiraProjectKey: string

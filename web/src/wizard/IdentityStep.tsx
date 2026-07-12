@@ -86,7 +86,12 @@ export function IdentityStep({
       <h4>Chế độ hành động</h4>
       <label>
         Mức tin cậy:{' '}
-        <select value={state.trustMode} onChange={(e) => update('trustMode', e.target.value)}>
+        <select
+          value={state.trustMode}
+          onChange={(e) =>
+            update('trustMode', e.target.value as '' | 'autonomous' | 'guarded')
+          }
+        >
           <option value="">Theo mặc định công ty</option>
           <option value="autonomous">Tự chủ — hành động ngay, ghi nhật ký audit</option>
           <option value="guarded">Có duyệt — việc nhạy cảm chờ bạn duyệt</option>
