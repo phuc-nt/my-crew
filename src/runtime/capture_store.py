@@ -116,5 +116,34 @@ class CaptureStore:
         )
         return [dict(zip(_COLUMNS, row, strict=True)) for row in cur.fetchall()]
 
+    def list_recent(
+        self,
+        *,
+        limit: int = 100,
+        since: str | None = None,
+        agent_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Newest-first rows across all tasks, bounded — the fleet-activity read helper.
+
+        `since` compares against the row's write time `ts` (ISO prefix, same convention
+        as AuditLog.query). The clamp mirrors the run-event read bound so a fleet view
+        can never pull an unbounded history in one call.
+        """
+        clauses: list[str] = []
+        params: list[Any] = []
+        if since:
+            clauses.append("ts >= ?")
+            params.append(since)
+        if agent_id:
+            clauses.append("agent_id = ?")
+            params.append(agent_id)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        clamp = max(1, min(int(limit), 500))
+        cur = self._conn.execute(
+            f"SELECT {', '.join(_COLUMNS)} FROM captures{where} ORDER BY ts DESC LIMIT ?",
+            (*params, clamp),
+        )
+        return [dict(zip(_COLUMNS, row, strict=True)) for row in cur.fetchall()]
+
     def close(self) -> None:
         self._conn.close()

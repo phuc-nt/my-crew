@@ -68,6 +68,13 @@ def _norm(text: str) -> str:
     return text.strip().lower()
 
 
+def _add_costs(a: float | None, b: float | None) -> float | None:
+    """Sum two optional costs; None only when BOTH are unknown."""
+    if a is None and b is None:
+        return None
+    return (a or 0.0) + (b or 0.0)
+
+
 def _confirm_decision(message: str) -> str:
     """Classify a confirm-phase reply as 'confirm' | 'cancel' | 'unclear'.
 
@@ -224,6 +231,12 @@ def _start_new(
     if spec.get("readonly"):
         # Status/cost query: run now, no draft, no confirm (it writes nothing).
         try:
+            if spec.get("needs_llm"):
+                # v31 P1: a readonly command that itself needs the LLM (the fleet
+                # activity summarizer) gets the SAME client this turn already used for
+                # intent-classify; its completion cost joins the turn's reply cost.
+                reply, run_cost = spec["run"](slots, llm=llm)
+                return reply, _add_costs(cost, run_cost)
             return spec["run"](slots), cost
         except Exception as exc:  # noqa: BLE001 — a read failure is a message, not a crash
             logger.warning("ops readonly command %r failed: %s", command_id, exc)

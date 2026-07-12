@@ -11,6 +11,7 @@ import { Layout } from './components/Layout'
 import { PendingApprovalsProvider } from './pending-approvals-context'
 import { AgentPage } from './views/AgentPage'
 import { Chat } from './views/Chat'
+import { CompanyActivity } from './views/CompanyActivity'
 import { CompanyDocs } from './views/CompanyDocs'
 import { Config } from './views/Config'
 import { Cost } from './views/Cost'
@@ -90,6 +91,8 @@ function App() {
             <Route path="agents/:id" element={<AgentPage />} />
             <Route path="create" element={<CreateAgent />} />
             <Route path="company-docs" element={<CompanyDocs />} />
+            {/* v31 P1: fleet-wide post-hoc audit — CEO-primary in autonomy-first. */}
+            <Route path="company-activity" element={<CompanyActivity />} />
             {/* v15: the unified office — 3D + live feed + composer, one SSE stream.
                 Lazy so three/@react-three/fiber never land in the main bundle. */}
             <Route path="office" element={<OfficeUnifiedLazy />} />

@@ -52,3 +52,16 @@ def get_automation(agent_id: str) -> dict:
 def get_audit(agent_id: str, limit: int = 50) -> dict:
     """Guardrail events: aggregated verdict counts + recent allowlisted rows."""
     return _guard(visualize_views.audit_view, agent_id, limit=limit)
+
+
+@router.get("/company/activity")
+def get_company_activity(
+    limit: int = 100,
+    since: str | None = None,
+    agent: str | None = None,
+    verdict: str | None = None,
+) -> dict:
+    """Fleet-wide activity timeline (audit + runs + captures, allowlisted, bounded)."""
+    from src.server.fleet_activity import fleet_activity
+
+    return _guard(fleet_activity, limit=limit, since=since, agent=agent, verdict=verdict)

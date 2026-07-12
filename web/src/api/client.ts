@@ -23,6 +23,7 @@ import type {
   DeleteAgentResult,
   EnabledResult,
   AgentCompanyDocsPayload,
+  CompanyActivityPayload,
   CompanyDoc,
   IntegrationHealthPayload,
   KnowledgePayload,
@@ -260,6 +261,21 @@ export const api = {
   // v12 M29: office group-chat room — the room list; the timeline itself streams via
   // raw EventSource (see hooks/use-office-stream.ts), not this request() helper.
   getOfficeRooms: () => request<OfficeRoomsPayload>('/api/office/rooms'),
+  // v31 P1: fleet-wide activity timeline (audit + runs + team-step captures, allowlisted).
+  getCompanyActivity: (params?: {
+    limit?: number
+    since?: string
+    agent?: string
+    verdict?: string
+  }) => {
+    const q = new URLSearchParams()
+    if (params?.limit) q.set('limit', String(params.limit))
+    if (params?.since) q.set('since', params.since)
+    if (params?.agent) q.set('agent', params.agent)
+    if (params?.verdict) q.set('verdict', params.verdict)
+    const qs = q.toString()
+    return request<CompanyActivityPayload>(`/api/company/activity${qs ? `?${qs}` : ''}`)
+  },
 }
 
 export { ApiError }

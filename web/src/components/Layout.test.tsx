@@ -35,10 +35,10 @@ function renderLayout() {
   )
 }
 
-test('renders the 4 CEO-first nav items', async () => {
+test('renders the CEO-first nav items', async () => {
   vi.spyOn(api, 'getApprovals').mockResolvedValue({ agent_id: 'hr', pending: [] })
   renderLayout()
-  for (const label of ['Trợ lý', 'Đội', 'Duyệt', 'Văn phòng', 'Cài đặt']) {
+  for (const label of ['Trợ lý', 'Đội', 'Duyệt', 'Hoạt động', 'Văn phòng', 'Cài đặt']) {
     expect(screen.getByRole('link', { name: new RegExp(label) })).toBeInTheDocument()
   }
 })

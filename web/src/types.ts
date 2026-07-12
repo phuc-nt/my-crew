@@ -102,13 +102,20 @@ export interface AuditPayload {
 // --- ops payloads (S4) ---
 
 export interface PendingAction {
-  type?: string // "mcp_tool" | "gh_cli" | "email_send" | "telegram_send"
+  // "mcp_tool" | "gh_cli" | "email_send" | "telegram_send"
+  // | v31 native: "schedule_update" | "team_task_create" | "team_task_move" | "gws_write"
+  type?: string
   server?: string
   tool?: string
   args?: Record<string, unknown> // mcp_tool: {projectKey, summary, channel, text, title, …}
-  argv?: string[] // gh_cli: ["pr", "merge", "45"]
+  argv?: string[] // gh_cli / gws_write: ["pr", "merge", "45"] / ["sheets", "+append", …]
   to?: string | string[] // email_send: top-level (not in args); backend stores a recipient LIST
   subject?: string // email_send
+  schedule?: Record<string, string> // schedule_update: {kind: cron}
+  title?: string // team_task_create
+  assignee?: string // team_task_create
+  task_id?: string // team_task_move
+  status?: string // team_task_move
 }
 
 export interface ApprovalItem {
@@ -471,4 +478,36 @@ export interface OfficeMessage {
 
 export interface OfficeRoomsPayload {
   rooms: string[]
+}
+
+// v31 P1: fleet-wide activity timeline ("Hoạt động công ty") — one merged, allowlisted
+// item per audit decision / worker run / team-step attempt across every registry agent.
+export interface CompanyActivityItem {
+  ts: string | null
+  agent_id: string
+  source: 'audit' | 'run' | 'capture'
+  // audit
+  action_type?: string | null
+  tool?: string | null
+  verdict?: string | null
+  reason?: string | null
+  // run
+  kind?: string | null
+  audience?: string | null
+  cost_usd?: number | null
+  delivered?: boolean | null
+  auto_approved?: boolean | null
+  // capture (+ run shares `status`)
+  status?: string | null
+  task_id?: string | null
+  step_id?: string | null
+  engine?: string | null
+  step_type?: string | null
+}
+
+export interface CompanyActivityPayload {
+  items: CompanyActivityItem[]
+  agents: string[]
+  // agents whose data dir could not be read (degraded, not a 500)
+  skipped: string[]
 }

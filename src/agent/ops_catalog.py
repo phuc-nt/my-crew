@@ -33,6 +33,7 @@ from src.agent.ops_assign_team_task import (
     preview_assign_team_task,
     run_assign_team_task,
 )
+from src.agent.ops_company_activity import run_company_activity
 
 #: An agent whose work comes only from `assign_team_task` (e.g. office roles) has no
 #: report kind of its own — the CEO says this instead of a report-kind list.
@@ -376,6 +377,20 @@ OPS_COMMANDS: dict[str, dict] = {
         "readonly": True,
         "slots": {},
         "run": _run_get_cost,
+    },
+    "company_activity": {
+        "description": "Tóm tắt hoạt động cả công ty (mọi agent đã tự làm gì) trong N ngày qua",
+        "readonly": True,
+        # v31 P1: this readonly command itself calls the LLM to narrate the (already
+        # code-projected + untrusted-wrapped) activity rows — the engine passes the
+        # turn's client in via `run(slots, llm=)` (see ops_chat readonly dispatch).
+        "needs_llm": True,
+        "slots": {
+            "days": {"prompt": "Xem hoạt động trong bao nhiêu ngày qua (mặc định 7)?",
+                     "required": False, "max_len": 3, "pattern": r"[0-9]+",
+                     "hint": "chỉ con số ngày (vd '7')"},
+        },
+        "run": run_company_activity,
     },
     "watch_pr": {
         "description": "Giao việc theo dõi một PR tới khi merge/đóng, nhắc mỗi ngày",

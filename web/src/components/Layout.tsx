@@ -28,6 +28,9 @@ const NAV = [
   { to: 'office', label: 'Văn phòng' },
   { to: 'team', label: 'Đội', badge: 'health' as const },
   { to: 'work', label: 'Duyệt', badge: 'approvals' as const },
+  // v31 P1: fleet-wide "what did the company do" — the post-hoc audit surface of
+  // autonomy-first, so it sits in the CEO-primary row (NOT behind high ui-mode).
+  { to: 'company-activity', label: 'Hoạt động' },
   { to: 'chat', label: 'Trợ lý' },
   { to: 'settings', label: 'Cài đặt' },
 ]
