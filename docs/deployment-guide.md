@@ -67,6 +67,17 @@ scripts/demo-mode.sh status  # đang ở chế độ nào + service demo + heart
 Lưu ý: demo REFUSE bật nếu đã có `src.runtime.service` khác chạy (2 ticker tranh store) —
 tắt service thật trước.
 
+Preset demo đủ **3 runtime engine** để thử ngay (mỗi nhân sự 1 engine):
+
+| Nhân sự | Engine | Đặc tính |
+|---|---|---|
+| kiem-dinh | `native` | graph tự build, chặt nhất, 0 tool tự do |
+| noi-dung | `create_agent` | tool-calling loop, read-only + `web.scrape` |
+| nghien-cuu | `deep_agent` | shell tự chủ trong **Docker sandbox** cách ly (token-free, no host mount) |
+
+deep_agent cần Docker daemon chạy + model tool-calling mạnh (`qwen/qwen3.7-max` đã pin sẵn
+trong profile demo — minimax fail deep loop).
+
 ## 6. Cấu hình
 
 | File | Vai trò | Git |

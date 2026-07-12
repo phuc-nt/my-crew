@@ -38,3 +38,6 @@ schedule: {}
 reports: []
 integrations: {}
 domain: office
+
+# v20.5 demo: create_agent runtime (tool-calling loop, read-only + web.scrape)
+agent_runtime: create_agent

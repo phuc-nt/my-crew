@@ -1,6 +1,8 @@
 name: Nghiên cứu
 enabled: true
-model: minimax/minimax-m2.7
+# deep_agent engine cần model tool-calling mạnh để drive create_deep_agent loop.
+# minimax-m2.7 (mặc định các nhân sự demo khác) trả choices rỗng → deep loop fail.
+model: qwen/qwen3.7-max
 budget:
   monthly_usd: 50
   warn_ratio: 0.8
@@ -38,3 +40,10 @@ schedule: {}
 reports: []
 integrations: {}
 domain: office
+
+# v20.5 demo: deep_agent runtime (shell trong Docker sandbox cách ly)
+agent_runtime:
+  kind: deep_agent
+  sandbox:
+    provider: docker
+  runtime_loop_limit: 8

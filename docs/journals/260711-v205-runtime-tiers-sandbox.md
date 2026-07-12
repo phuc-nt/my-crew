@@ -61,8 +61,28 @@
 - E2E thật + live test (skipif no-firecrawl): scrape example.com qua container; SSRF chặn
   localhost/metadata in-loop.
 
+## Demo company 3-engine — UAT browser + coordinator THẬT (bổ sung)
+- **Đủ 3 engine trong 1 công ty demo**: gán `agent_runtime` vào profile demo — kiem-dinh=native
+  (không field), noi-dung=create_agent, nghien-cuu=deep_agent+sandbox:{provider:docker}. Bật
+  `scripts/demo-mode.sh on` → giao 1 việc thật/engine qua office (preview→confirm hash-bind) →
+  coordinator daemon spawn worker thật.
+- **NATIVE + CREATE_AGENT chạy trọn**: kiem-dinh task=done (8 bước: 4 work + 4 review 2-tầng),
+  noi-dung task=done (4 bước). Artifact + cost thật ($0.0056/$0.0018/... mỗi bước), output LLM
+  thật (bảng velocity sprint, ghi chú phát hành). Có consult chéo agent trong room.
+- **E2E deep qua coordinator ĐẦY ĐỦ — đóng gap "chưa chạy trọn 1 lượt"**: dispatch→coordinator
+  spawn worker nghien-cuu→deep loop mở container Docker `python:3.12-slim` (verify LIVE: mount
+  rỗng, env chỉ PATH/LANG/PYTHON — token-free, 0 secret)→step done→teardown sạch (0 orphan).
+  Report nghiên cứu thật (market sizing + 6 xu hướng có dẫn chứng).
+- **Vấp — model-compat deepagents**: `minimax/minimax-m2.7` DRIVE ĐƯỢC native+create_agent
+  nhưng FAIL deep_agent loop: trả choices rỗng → LangChain `"Responses expected 1 result,
+  returned 0"`. Container Docker vẫn lên đúng — lỗi ở tầng model, không phải wiring/sandbox.
+  Fix: đổi nghien-cuu sang `qwen/qwen3.7-max` (tool-calling mạnh) → deep loop chạy trọn. **Bài
+  học: deep_agent (create_deep_agent) đòi model tool-calling khỏe hơn 2 engine kia; chọn model
+  demo phải theo engine.**
+
 ## Mở / sang sau
 - **Sandbox cost cap**: hiện chỉ LLM cost (budget tháng backstop); sandbox compute cost chưa cap.
-- **E2E deep qua ticker đầy đủ**: đã verify từng mắt (build graph qua seam + deep loop chạy
-  Docker thật); chưa chạy 1 lượt trọn coordinator-dispatch→worker-spawn→deep-in-Docker.
+- **Deep_agent cost = None trong metered path**: cost đi qua deepagents lib (observability-only,
+  đúng quyết định C4) → team_steps.cost_usd null cho bước deep. Nếu cần metering thật phải hook
+  tầng khác.
 - Tiếp: v21 channel binding · v19.5 kioku.
