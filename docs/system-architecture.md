@@ -7,8 +7,11 @@
 
 ## 1. Nguyên tắc kiến trúc
 
-1. **Một cửa ghi ra ngoài** — mọi mutation external qua Action Gateway (allowlist
-   default-deny + Lớp A hard-block). Không đường tắt.
+1. **Một cửa ghi ra ngoài (autonomy-first + audit, v30)** — mọi mutation external qua Action Gateway:
+   - **Default (autonomous):** hành động ngay → audit rationale "trust_mode=autonomous". Speed-first.
+   - **Opt-in guarded:** Lớp B queue chờ duyệt. Control-first.
+   - **Lớp A (unbreakable):** mất dữ liệu / lộ bí mật → CHẶN cứng, không toggle.
+   - Allowlist default-deny (cưỡng chế ở guarded; autonomous chạy như đã-được-duyệt + audit) + PII firewall write-time. Không đường tắt (single-door).
 2. **Process isolation** — mỗi agent chạy trong subprocess riêng (data-dir/gateway
    riêng). KHÔNG orchestration graph xuyên process (khóa từ v12).
 3. **Điều phối bằng ticker, không long-running orchestrator** — coordinator là một
@@ -73,10 +76,12 @@ re-reserve khi lease hết hạn AND chưa có outcome artifact. Terminal write 
 - `ops_*.py` — lệnh CEO: giao việc (`ops_assign_team_task`), chỉnh việc
   (`ops_adjust_team_task`), chat quản trị (`ops_chat`).
 
-### 3.6 Action Gateway (`src/actions/`)
+### 3.6 Action Gateway (`src/actions/`, v30 autonomy-first)
 `action_gateway.py` = cửa duy nhất. `hard_block.py` = Lớp A (chặn cứng, không duyệt được).
-Lớp B = chờ CEO duyệt (`approval_store.py` + trust ladder `auto_approve_policy.py`).
-`*_write.py` = handler cụ thể (jira/confluence/slack/email) — đều gọi qua gateway.
+Lớp B = phụ thuộc `safety.trust_mode` per-agent:
+- **autonomous** (mặc định): tự chạy ngay → audit log rationale "trust_mode=autonomous".
+- **guarded** (opt-in): chờ CEO duyệt (`approval_store.py` + `auto_approve_policy.py` chỉ dùng khi guarded).
+`*_write.py` = handler cụ thể (jira/confluence/slack/email) — đều gọi qua gateway, không lối tắt.
 
 ### 3.7 Domain packs (`domain-packs/`)
 Kiến trúc pluggable: `pm-pack` (mặc định), `hr-pack`, `office-pack`, `admin-pack`. Mỗi

@@ -2,9 +2,9 @@
 
 An **autonomous LangGraph (Python) agent** that does the repetitive **management** work (PM / Scrum Master / Team Lead) for an AI-native team — it reads project state across **Jira · GitHub · Confluence · Slack**, reasons about it, and *acts* (writes reports, flags risk, tracks OKRs) like a real PM would. Not a chatbot you ask questions — an agent that works on its own schedule.
 
-The interesting part isn't the reporting. It's that the agent has **full autonomous write authority** (it posts to Slack, creates Confluence pages, could create Jira tickets) — and yet is **safe**, because every mutation flows through a single guardrail: the **Action Gateway**.
+The interesting part isn't the reporting. It's that the agent has **full autonomous write authority** by default (it posts to Slack, creates Confluence pages, could create Jira tickets) — and yet is **safe**, because every mutation flows through a single guardrail: the **Action Gateway**.
 
-> **The core idea, in one line:** *autonomous about speed, never about responsibility.* Permanent-data-loss and security are hard red lines the agent literally cannot cross, even if the LLM "wants" to.
+> **The core idea, in one line:** *autonomy-first with locked guardrails and full audit.* Permanent-data-loss and security are hard red lines the agent literally cannot cross, even if the LLM "wants" to. Speed is the default; caution is one-line opt-in per agent.
 
 📖 **If you're here to learn how to build a guardrailed autonomous agent, start with [docs/action-gateway-explainer.md](docs/action-gateway-explainer.md)** — the standalone walkthrough of the safety model.
 
@@ -27,14 +27,17 @@ Runs on demand or on a schedule (launchd cron). Read paths use [MCP servers](#ex
 Every write the agent makes passes through one choke point that applies, in order:
 
 ```
-request → [Lớp A hard-deny] → [Lớp B interrupt? → queue for human approval]
+request → [Lớp A hard-deny] → [Lớp B: autonomous auto-approve OR guarded queue?]
         → [kill-switch] → [dry-run?] → [rate-limit]
         → [idempotency dedup (reserve-before-execute)]
         → [execute handler] → [immutable audit log] → return
 ```
 
 - **Lớp A (red line, hard-coded, never reaches the LLM):** permanent data loss, credential exfiltration, security incidents. Denied at the gateway — *not* a decision the LLM gets to make.
-- **Lớp B (human-in-the-loop):** merge/close a PR, reassign a real person, post to an **external stakeholder** channel. Queued; a human approves before it executes.
+- **Lớp B (trust-mode dependent, v30):** merge/close PR, reassign person, post to **external channel**.
+  - **Autonomous (default):** executes immediately → audit log (rationale "trust_mode=autonomous").
+  - **Guarded (opt-in):** queued; human approves first.
+  - **Proposal-only (automation):** always queued regardless of mode.
 - **Allowlist, not denylist:** unknown tools are denied by default (we switched after adversarial review found denylist bypasses — see [the Phase 0 journal](docs/journals/260621-phase-0-scaffold.md)).
 - Plus: append-only audit log with secret redaction, `DRY_RUN` default in dev, a kill switch, a $50/month OpenRouter budget cap with hard-stop, and persistent dedup so re-runs never double-post.
 

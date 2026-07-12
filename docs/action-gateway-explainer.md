@@ -15,13 +15,32 @@ or make a private repo public).
 
 The guiding principle we landed on:
 
-> **Autonomous about speed, never about responsibility.**
+> **Autonomous in speed; audited, never unaccountable.**
 > Permanent data loss and security incidents are red lines the agent *cannot* cross — not because
-> the LLM is told not to, but because the code makes it impossible.
+> the LLM is told not to, but because the code makes it impossible. Every write is logged and reversible checks are in place.
 
 The mechanism is a single **choke point**: no module calls a write API directly. Every mutation —
 whether it goes through an MCP tool (Jira/Confluence/Slack) or the `gh` CLI (GitHub) — passes
 through `ActionGateway.execute(action, handler)`. If you ever see a write that doesn't, that's a bug.
+
+## Trust modes (v30)
+
+The gateway enforces two distinct trust profiles, configured per-agent via `safety.trust_mode` in `profile.yaml` (or globally via `TRUST_MODE` env):
+
+| Mode | Lớp B behavior | External write gate | Use when |
+|------|---|---|---|
+| **autonomous** (default) | Lớp B / allowlist-miss actions with a real handler execute immediately; approval_gate auto-approves external reports | Action runs INSTANTLY; audit rationale is the constant `trust_mode=autonomous: executed without human approval` (distinguishable from human-approved and trust-ladder rows) | Agent is trusted; speed matters more than human review per-action |
+| **guarded** | Lớp B actions → queue in Duyệt tab; allowlist-miss → denied; human must approve before execution | Action waits in approval queue until CEO approves via Duyệt tab | Agent scope is new or risky; every external write needs a human eye |
+
+**THE INVARIANT (all modes, unbreakable):**
+- **Lớp A (hard-deny, no override):** permanent data loss, credential exfiltration, security changes → DENIED in code, never queued.
+- **Allowlist (default-deny classifier):** unknown (server, tool) → NOT_ALLOWLISTED. Guarded: denied. Autonomous: runs like an already-approved action (real handler + audit) — same pass a human approval would grant. Chat commands hitting an allowlist block are refused outright in EVERY mode (never queued, never run).
+- **Single-door egress:** every external write → Action Gateway → audit → Lớp A check → trust-mode policy (guarded: queue | autonomous: run-now) → execute.
+- **Proposal-only always queued:** automation steps with no handler (pure "propose") **always** queue for human, regardless of mode. This is a separate feature from trust_mode.
+- **Dry-run is independent:** `dry_run=true` blocks execution regardless of trust_mode; used in templates by default.
+- **Fleet flip at upgrade:** existing agents without `trust_mode` → become **autonomous** after update. Release note must warn (especially hr/admin: email/Jira writes execute immediately, not queued). One-liner to pin guarded: add `safety.trust_mode: guarded` to agent's `profile.yaml`.
+
+---
 
 ## The chain
 
@@ -30,7 +49,8 @@ through `ActionGateway.execute(action, handler)`. If you ever see a write that d
 ```
 request
   → [1.  Lớp A hard-deny]      data-loss / credential / security → DENIED in code
-  → [1b. Lớp B interrupt?]     sensitive-but-reversible → QUEUE for human approval, stop here
+  → [1b. trust-mode policy]    Lớp B / allowlist-miss → guarded: QUEUE for human, stop here
+                               autonomous + real handler: run now (audit marks it); no handler: QUEUE
   → [2.  kill switch]          AGENT_WRITE_DISABLED → refuse all writes
   → [3.  dry-run?]             DRY_RUN=true → log intent, execute nothing
   → [4.  rate limit]           cap writes/minute → blast-radius limit
@@ -66,17 +86,21 @@ Hard-coded denials at the gateway. The agent **never** does these, even if the L
 or the **`gh` command line** — not Python SDK calls — and returns a block with a category. A Lớp A
 block is final: it is never overridable, not even by human approval.
 
-### ⏸️ Lớp B — human-in-the-loop (queue, don't auto-run)
+### ⏸️ Lớp B — human-in-the-loop (behavior depends on trust_mode)
 
 Reversible-but-consequential actions that *sometimes* legitimately need doing:
 
 - merge / close a PR, close / transition / reassign a real person's issue,
 - post to an **external stakeholder / customer** channel.
 
-These don't get denied — they get **queued**. `execute()` returns `pending_approval` with an
+**Guarded mode (default before v30):** These get **queued**. `execute()` returns `pending_approval` with an
 `approval_id`; a human runs `cli approve <id>` and *only then* does the action execute (re-entering
 the gateway, where Lớp A + audit still apply, but the Lớp B prompt is skipped — the human approval
 *is* the authorization).
+
+**Autonomous mode (v30 default):** These execute **immediately**, logged with the constant rationale "trust_mode=autonomous: executed without human approval". The approval_gate still runs (internal audit only). Proposal-only steps (no handler) **always queue** regardless of mode — that's a separate feature.
+
+**Chat flatten (autonomous mode only):** Any Slack/Telegram member who can reach the agent (channel member or Telegram chat allowlisted) can trigger Lớp B actions directly — `trusted_senders` no longer gates in this mode. To narrow scope, either: (1) pin the agent to `trust_mode: guarded`, or (2) restrict the channel/chat allowlist.
 
 ### The subtle ordering, and why it matters
 

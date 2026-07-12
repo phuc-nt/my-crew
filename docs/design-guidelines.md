@@ -1,6 +1,6 @@
 # Design Guidelines — my-crew
 
-**Status:** Updated 2026-07-07 (v9 + v10 complete; web UI design system documented).
+**Status:** Updated 2026-07-12 (v30 autonomy-first; web UI design system + trust model).
 
 > Đây là agent backend + web frontend (React SPA). "Design" bao gồm: (1) nguyên tắc thiết kế HÀNH VI agent (agent cư xử như PM/SM đáng tin), (2) thiết kế UI/UX web dashboard (dark mode, responsive, WCAG AA).
 
@@ -12,7 +12,7 @@ Agent đóng vai management → phải hành xử như một PM/SM **giỏi và 
 2. **Dựa số liệu, không phán đoán mù** — mọi kết luận tiến độ phải truy về data Jira/GitHub thật. Không "đoán" trạng thái.
 3. **Ngắn gọn, đúng audience** — report cho team khác cho stakeholder. Không dump raw data; chắt lọc cái cần hành động.
 4. **Minh bạch lý do** — khi agent hành động (tạo ticket, cảnh báo), nêu *vì sao*. Truy vết được (gắn audit).
-5. **Khiêm tốn ở vùng xám** — việc nhạy cảm/khó đảo ngược → dừng hỏi người dù được phép autonomous (architecture §5.2).
+5. **Khiêm tốn ở vùng xám (v30 scoped)** — trong guarded mode hoặc khi dry_run, việc nhạy cảm/khó đảo ngược → dừng hỏi người (architecture §5.2). Autonomous mode chạy ngay (accept risk) kèm full audit rationale.
 
 ## 2. Nguyên tắc report (MVP trọng tâm)
 

@@ -1,7 +1,7 @@
 # Project Roadmap — my-crew
 
 > Lộ trình + trạng thái. Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-07-11.
+> Cập nhật: 2026-07-12.
 
 ## Trạng thái tổng
 
@@ -21,6 +21,7 @@ sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật.
 | **Team self-op (v13-v14)** | Soát chéo tự chèn · consult đồng nghiệp · song song cap 2 · full replan · tự cứu bước kẹt · 3D "sống". |
 | **PIC & office UX (v15-v17)** | Giao việc @PIC/@all · auto-confirm · màn Văn phòng hợp nhất → workrooms → command-center 3 cột · artifact viewer · coordinator health banner. |
 | **Registry user-data (v18)** | registry.yaml thành user-data (hết mất đội) · recovery UI · scheduler seed-at-discovery · 3D theme-aware. |
+| **Autonomy-first trust model (v30)** | Lớp B split: autonomous (chạy ngay, audit rationale "trust_mode=autonomous", mặc định) vs guarded (queue duyệt, opt-in `trust_mode: guarded`). Chat flatten. Fleet-flip. No daily-cap in autonomous. |
 | **Agent-harness v1 (v19)** | Memory provider seam (static; kioku hoãn v19.5) · workspace protocol v2 (vault/ + skills/ per-agent) · per-agent skill có guard · capability block internal-only. |
 | **AgentRuntime + community (v20)** | AgentRuntime seam (Native/ToolCalling/DeepAgent) giữ deliver→gateway · positive read-allowlist + classify shim (E2E LLM thật) · 3 ổ cắm: skill agentskills.io, pack-MCP spawn gate, pack template + PACK-AUTHORING. |
 

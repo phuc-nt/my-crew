@@ -8,10 +8,11 @@ Tài liệu này có **2 phần**:
 - **Phần A — Cài đặt (1 lần, kỹ thuật):** dành cho người dựng hệ thống. Làm một lần lúc đầu.
 - **Phần B — Vận hành hằng ngày (CEO / người quản lý):** không cần kỹ thuật. Dùng qua web + Telegram.
 
-> **Ý tưởng cốt lõi:** trợ lý *tự chủ về tốc độ, không bao giờ tự chủ về trách nhiệm*. Mọi hành động
+> **Ý tưởng cốt lõi:** trợ lý *tự chủ về tốc độ (mặc định); duyệt là tùy chọn*. Mọi hành động
 > ghi ra ngoài (đăng Slack, tạo trang Confluence, gộp PR…) đều đi qua một cửa kiểm soát duy nhất —
-> **Action Gateway**. Việc nguy hiểm (mất dữ liệu, lộ bí mật) bị **chặn cứng**; việc quan trọng (gửi
-> ra ngoài công ty, đóng PR) **chờ bạn duyệt** trước khi chạy.
+> **Action Gateway**. Việc nguy hiểm (mất dữ liệu, lộ bí mật) bị **chặn cứng LUÔN**; việc quan trọng
+> (gửi ra ngoài công ty, đóng PR) **chạy ngay mặc định** (để tự chủ nhanh) — nếu muốn duyệt trước
+> từng hành động, bổ sung vào agent đó: `safety.trust_mode: guarded`.
 
 ---
 
@@ -173,19 +174,22 @@ Vẫn giao được qua **Trợ lý** (gõ "giao việc …", hỏi-đáp từng
 Tiến trình hiển thị ngay cột phải màn Văn phòng; Telegram cũng nhận cột mốc (nhận việc /
 xong bước / hoàn thành / cần duyệt).
 
-### B.3a. Duyệt việc (quan trọng nhất)
+### B.3a. Duyệt việc — phụ thuộc vào chế độ tin tưởng (v30, autonomy-first)
 
-Đây là chỗ bạn giữ quyền kiểm soát. Vào **Việc** — mỗi việc chờ duyệt hiện lý do ngắn gọn.
+Từ v30, **agent chạy việc ngay mặc định (autonomous mode)** để tự chủ nhanh. Tab **Duyệt** chứa 2 loại:
 
-1. Bấm **"Xem & duyệt"** → hộp thoại hiện **tóm tắt tiếng Việt** việc trợ lý muốn làm, ví dụ:
-   *"Tạo ticket Jira 'Sửa lỗi đăng nhập' trong dự án SCRUM"* hoặc *"Giao việc marketing tuần này cho đội"*.
-2. Nếu việc **gửi thông tin RA NGOÀI công ty** (đăng kênh Slack ngoài, gửi email cho khách…), hộp
-   thoại **tô đỏ đậm** và ghi rõ cảnh báo — đây là tín hiệu cuối để bạn cân nhắc.
-3. Xem chi tiết kỹ thuật (nếu muốn) trong phần "chi tiết" gấp lại được.
-4. Bấm **"Duyệt & thực hiện"** để chạy, hoặc **"Từ chối"** để bỏ.
+| Loại | Từ | Hành động |
+|------|---|----------|
+| **Việc từ agent ở chế độ "Guarded"** | Agent cấu hình `trust_mode: guarded` | Chờ bạn duyệt TRƯỚC khi chạy (như cũ) |
+| **Việc "Đề xuất Automation"** | Automation script (không handler) | LUÔN chờ duyệt, mọi chế độ |
 
-> Những việc **nguy hiểm** (xoá vĩnh viễn dữ liệu, lộ bí mật) trợ lý **không bao giờ** làm được, kể cả
-> khi bạn duyệt — chúng bị chặn cứng ở tầng dưới. Bạn chỉ duyệt những việc *có thể phục hồi*.
+**Agent mặc định (autonomous):** hành động **gửi RA NGOÀI công ty** (đăng Slack ngoài, gửi email cho khách, gộp PR) **chạy NGAY** → hiện trong "Đã tự duyệt" (audit log ghi cụ thể). Không cần chờ bạn click.
+
+**Nếu muốn agent chạy chậm hơn** (duyệt từng việc RA NGOÀI): vào **Đội** → chọn agent → tab "Cài đặt" → ghim vào dòng `safety.trust_mode: guarded` trong profile YAML của agent. Lần nâng cấp tiếp theo → agent thành chế độ này (release note v30 sẽ ghi rõ).
+
+> **Cách thu hẹp scope:** Nếu chỉ muốn một agent nhất định hoạt động cẩn trọng, đừng cần tắt toàn bộ — chỉnh `trust_mode: guarded` cho agent đó. Các agent khác vẫn tự chủ.
+
+> **Những việc nguy hiểm:** xoá vĩnh viễn dữ liệu, lộ bí mật — **không bao giờ** chạy, kể cả ở chế độ autonomous hay khi bạn duyệt. Chúng bị chặn cứng ở tầng dưới (Lớp A red line).
 
 ### B.3b. Đội tự kiểm và soát chéo (v13)
 
