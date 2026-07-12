@@ -1,24 +1,22 @@
-// Static floor + wall wireframe grid — the office "room" shell. Pure geometry, no state; split
-// out from office-canvas.tsx to keep that file focused on data wiring. Colors tuned for the
-// light canvas background (see desk-colors.ts).
-import { Edges } from '@react-three/drei'
+// Solid floor slab + center rug (v32 low-poly flat — replaces the wireframe grid).
+// Pure geometry, no state; theme rides in as a prop (r3f can't read CSS vars).
+import { officeTheme } from './desk-colors'
 
-const FLOOR_SIZE: [number, number, number] = [16, 0.05, 12]
+const FLOOR_SIZE: [number, number, number] = [16, 0.3, 11]
 
-// v18: two fixed palettes — r3f materials can't read CSS vars, so the theme rides in
-// as a prop from the canvas (which watches data-theme).
 export function OfficeFloor({ dark = false }: { dark?: boolean }) {
-  const wall = dark ? '#4a4a4a' : '#bdbdbd'
-  const gridMajor = dark ? '#3a3a3a' : '#d6d6d6'
-  const gridMinor = dark ? '#2a2a2a' : '#e7e7e7'
+  const theme = officeTheme(dark)
   return (
     <group>
-      <mesh position={[0, -0.05, 0]}>
+      <mesh position={[0, -0.15, 0]} receiveShadow>
         <boxGeometry args={FLOOR_SIZE} />
-        <meshBasicMaterial color={dark ? '#141414' : '#ffffff'} transparent opacity={0} />
-        <Edges color={wall} lineWidth={1} />
+        <meshLambertMaterial color={theme.floor} />
       </mesh>
-      <gridHelper key={dark ? 'dark' : 'light'} args={[16, 16, gridMajor, gridMinor]} position={[0, 0, 0]} />
+      {/* round rug under the coordinator table — anchors the room center */}
+      <mesh position={[0, 0.03, 0]} receiveShadow>
+        <cylinderGeometry args={[2.2, 2.2, 0.05, 32]} />
+        <meshLambertMaterial color={theme.rug} />
+      </mesh>
     </group>
   )
 }

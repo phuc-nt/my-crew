@@ -1,15 +1,16 @@
-// The 3D office Canvas, props-in only (v15): extracted from the former office-canvas.tsx
-// so the unified office screen owns the ONE SSE stream and passes derived state down to
-// both this canvas and the text activity feed — the two surfaces can never disagree.
-// Everything inside is unchanged v12-v14 behavior: event-driven desks/avatars, slow
-// auto-rotate, static props, low-poly wireframe look.
+// The 3D office Canvas, props-in only (v15): the unified office screen owns the ONE SSE
+// stream and passes derived state down to both this canvas and the text activity feed —
+// the two surfaces can never disagree. v32 "đại tu visual": solid low-poly flat look
+// (soft shadows, pastel palette per theme), camera fits the desk ring, desks are
+// clickable (onDeskSelect) with hover tooltips.
 import { OrbitControls } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useEffect, useState } from 'react'
 import { AgentDesk } from './agent-desk'
 import type { AgentDeskState } from './agent-office-state'
 import { CoordinatorDesk } from './coordinator-desk'
-import { deskPosition } from './desk-layout'
+import { officeTheme } from './desk-colors'
+import { deskPosition, ringRadius } from './desk-layout'
 import { OfficeFloor } from './office-floor'
 import { OfficeProps } from './office-props'
 
@@ -19,8 +20,10 @@ interface OfficeCanvasProps {
   // v16: desks render ONLY for CURRENT registry staff (ghost desks from old events are
   // gone); null/undefined = no filtering (callers without a roster yet).
   rosterIds?: string[] | null
-  // v16: when a workroom is selected, everyone NOT in it dims (opacity) — visual only.
+  // v16: when a workroom is selected, everyone NOT in it dims — visual only.
   dimmedIds?: Set<string>
+  // v32: desk click — the unified screen decides what "open" means (PIC room / agent page).
+  onDeskSelect?: (id: string) => void
 }
 
 // Roster filter runs BEFORE ring-index math (red-team m-visibleDesks): positions are
@@ -47,24 +50,33 @@ function useThemeIsDark(): boolean {
   return dark
 }
 
-export function OfficeCanvas({ agentIds, desks, rosterIds, dimmedIds }: OfficeCanvasProps) {
+export function OfficeCanvas({ agentIds, desks, rosterIds, dimmedIds, onDeskSelect }: OfficeCanvasProps) {
   const visible = visibleDesks(agentIds, rosterIds)
   const dark = useThemeIsDark()
+  const theme = officeTheme(dark)
+  // Camera fit-to-content: distance scales with the desk ring so 3 desks fill the frame
+  // and 15 still fit. Same-count fleets get a stable camera (no jumpiness).
+  const radius = ringRadius(visible.length)
+  const camY = radius * 1.55
+  const camZ = radius * 2.1
   return (
     <div className="office-3d-canvas-wrap">
-      <Canvas camera={{ position: [0, 6, 10], fov: 50 }}>
-        <color attach="background" args={[dark ? '#141414' : '#fafafa']} />
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[5, 8, 5]} intensity={0.8} />
+      <Canvas shadows camera={{ position: [0, camY, camZ], fov: 42 }}>
+        <color attach="background" args={[theme.background]} />
+        <ambientLight intensity={theme.ambient} />
+        <directionalLight
+          position={[6, 10, 4]}
+          intensity={theme.keyIntensity}
+          castShadow
+          shadow-mapSize-width={1024}
+          shadow-mapSize-height={1024}
+        />
         <OfficeFloor dark={dark} />
         <OfficeProps />
-        <CoordinatorDesk />
+        <CoordinatorDesk dark={dark} />
         {visible.map((id, i) => {
           const desk = desks.get(id)
           if (!desk) return null
-          // Colleague desk position while this desk is consulting — ring indexes are
-          // computed over the VISIBLE list (a consult partner outside the roster has no
-          // desk to walk to, so the walk simply doesn't trigger).
           const colleagueIdx = desk.consultWith ? visible.indexOf(desk.consultWith) : -1
           const consultPos = colleagueIdx >= 0 ? deskPosition(colleagueIdx, visible.length) : null
           return (
@@ -75,13 +87,21 @@ export function OfficeCanvas({ agentIds, desks, rosterIds, dimmedIds }: OfficeCa
               desk={desk}
               consultPos={consultPos}
               dimmed={dimmedIds?.has(id) ?? false}
+              dark={dark}
+              onSelect={onDeskSelect}
             />
           )
         })}
-        {/* autoRotate = the v14 "living office" slow 360° pan (~0.5 ≈ full turn / 4 min);
-            drei pauses it while the user drags and resumes after. Reduced-motion users
-            never reach this component — the unified screen renders the 2D table instead. */}
-        <OrbitControls enablePan={false} minDistance={4} maxDistance={20} autoRotate autoRotateSpeed={0.5} />
+        {/* autoRotate = the v14 "living office" slow 360° pan; drei pauses it while the
+            user drags and resumes after. Reduced-motion users never reach this component
+            — the unified screen renders the 2D table instead. */}
+        <OrbitControls
+          enablePan={false}
+          minDistance={4}
+          maxDistance={26}
+          autoRotate
+          autoRotateSpeed={0.5}
+        />
       </Canvas>
     </div>
   )

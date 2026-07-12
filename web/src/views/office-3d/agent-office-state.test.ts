@@ -337,3 +337,19 @@ describe('PIC badge (v15)', () => {
     expect(ids).toEqual(['noi-dung'])
   })
 })
+
+// v32: the desk tooltip line is a pure function — the one visual-logic seam testable
+// without a WebGL canvas.
+import { deskTooltipText } from './agent-desk'
+
+test('deskTooltipText names the state and the current work', () => {
+  const base = {
+    id: 'a', taskTitle: null, stepTitle: null, phase: null, attemptId: null,
+    consultWith: null, picTasks: new Set<string>(),
+  }
+  expect(deskTooltipText({ ...base, state: 'idle' } as never)).toBe('đang rảnh')
+  expect(deskTooltipText({ ...base, state: 'working', stepTitle: 'soạn outline' } as never))
+    .toBe('đang làm — soạn outline')
+  expect(deskTooltipText({ ...base, state: 'done', taskTitle: 'Bài blog' } as never))
+    .toBe('vừa xong một bước — Bài blog')
+})

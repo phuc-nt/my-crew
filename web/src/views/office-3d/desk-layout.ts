@@ -3,11 +3,19 @@
 // grid grows/shrinks with however many distinct agents have appeared in the event stream so far.
 const RING_RADIUS = 4
 
+// v32 camera-fit: up to 8 desks keep the classic radius (positions byte-identical to
+// v12-v31 — existing layout tests hold); bigger fleets widen the ring so desks never
+// overlap, and the canvas camera pulls back from the same number (see office-canvas).
+export function ringRadius(total: number): number {
+  return total <= 8 ? RING_RADIUS : RING_RADIUS + (total - 8) * 0.45
+}
+
 export function deskPosition(index: number, total: number): [number, number, number] {
-  if (total <= 0) return [0, 0, RING_RADIUS]
+  const radius = ringRadius(total)
+  if (total <= 0) return [0, 0, radius]
   const angle = (index / total) * Math.PI * 2
-  const x = Math.sin(angle) * RING_RADIUS
-  const z = Math.cos(angle) * RING_RADIUS
+  const x = Math.sin(angle) * radius
+  const z = Math.cos(angle) * radius
   return [x, 0, z]
 }
 

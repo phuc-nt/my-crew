@@ -13,9 +13,11 @@ const STATE_LABEL: Record<AgentState, string> = {
 interface AgentStatusTableProps {
   agentIds: string[]
   desks: Map<string, AgentDeskState>
+  // v32 parity with the 3D desks: a row click opens the same target a desk click does.
+  onDeskSelect?: (id: string) => void
 }
 
-export function AgentStatusTable({ agentIds, desks }: AgentStatusTableProps) {
+export function AgentStatusTable({ agentIds, desks, onDeskSelect }: AgentStatusTableProps) {
   return (
     <section className="office-3d-scene">
       <h2>Văn phòng 3D</h2>
@@ -40,7 +42,12 @@ export function AgentStatusTable({ agentIds, desks }: AgentStatusTableProps) {
               const d = desks.get(id)
               const state: AgentState = d?.state ?? 'idle'
               return (
-                <tr key={id}>
+                <tr
+                  key={id}
+                  onClick={onDeskSelect ? () => onDeskSelect(id) : undefined}
+                  style={onDeskSelect ? { cursor: 'pointer' } : undefined}
+                  title={onDeskSelect ? 'Bấm để mở' : undefined}
+                >
                   <td data-label="Nhân sự">{id}</td>
                   <td data-label="Trạng thái">
                     <span className={`office-3d-state office-3d-state-${state}`}>{STATE_LABEL[state]}</span>

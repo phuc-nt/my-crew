@@ -10,7 +10,7 @@
 // Desk hygiene (v16): desks render only for CURRENT registry staff (rosterIds) — ghost
 // desks from historical events are gone; selecting a room dims everyone not involved.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { api } from '../../api/client'
 import { useOfficeStream } from '../../hooks/use-office-stream'
 import { agentIdsInOrder, deriveAgentDesks } from '../office-3d/agent-office-state'
@@ -88,6 +88,26 @@ export function OfficeUnified() {
     setSearchParams(roomId ? { room: roomId } : {})
   }
 
+  const navigate = useNavigate()
+  // v32 desk click: a PIC desk opens its task's workroom (room id = task id for a
+  // standalone task; a child task's events mirror into its parent room via room_for_task
+  // server-side, so the task id is still the room the FEED knows). A desk with no PIC
+  // task opens the agent's own page — always a useful destination.
+  const openDesk = useCallback(
+    (agentId: string) => {
+      const desk = desks.get(agentId)
+      const picTask = desk && desk.picTasks.size > 0 ? [...desk.picTasks][0] : null
+      if (picTask && rooms.some((r) => r.room_id === picTask)) {
+        selectRoom(picTask)
+        return
+      }
+      navigate(`/agents/${agentId}`)
+    },
+    // selectRoom is a stable wrapper over setSearchParams; desks/rooms drive the mapping
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [desks, rooms, navigate],
+  )
+
   const toggleCollapsed = () => {
     setCollapsed((c) => {
       try { localStorage.setItem(PANEL_COLLAPSE_KEY, c ? '0' : '1') } catch { /* nicety only */ }
@@ -100,7 +120,7 @@ export function OfficeUnified() {
       <h2>Văn phòng</h2>
       <CoordinatorHealthBanner />
       <p className="ops-chat-hint">
-        Chọn phòng việc bên trái để xem hoạt động và chat trong việc đó; "Toàn cảnh" xem cả
+        Bấm một bàn làm việc để mở việc của nhân sự đó; chọn phòng việc bên trái để xem hoạt động và chat; "Toàn cảnh" xem cả
         đội. Giao việc mới: gõ <code>@tên-nhân-sự</code> để chỉ định PIC, <code>@all</code>/bỏ
         trống để đội tự chọn.
       </p>
@@ -110,10 +130,11 @@ export function OfficeUnified() {
       {!collapsed && (
         <div className="office-unified-main">
           {useFallback ? (
-            <AgentStatusTable agentIds={agentIds} desks={desks} />
+            <AgentStatusTable agentIds={agentIds} desks={desks} onDeskSelect={openDesk} />
           ) : (
             <OfficeCanvas
               agentIds={agentIds} desks={desks} rosterIds={rosterIds} dimmedIds={dimmedIds}
+              onDeskSelect={openDesk}
             />
           )}
         </div>
