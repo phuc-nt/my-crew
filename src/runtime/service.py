@@ -97,6 +97,13 @@ def _effective_schedule(loaded) -> tuple[dict[str, str], tuple[str, ...]]:
         schedule["team-tick"] = "* * * * *"
         reports.append("team-tick")
         changed = True
+    # v31 P5 wake-gate: an agent with declared `watchers:` gets a `watch` pseudo-kind —
+    # a NO-LLM poll tick (read source → hash → wake only on diff). Agents without
+    # watchers keep a byte-identical schedule, like the coordinator check above.
+    if getattr(loaded, "watchers", None):
+        schedule["watch"] = "*/5 * * * *"
+        reports.append("watch")
+        changed = True
     if not changed:
         return loaded.schedule, loaded.reports  # byte-identical when nothing synthesized
     return schedule, tuple(reports)

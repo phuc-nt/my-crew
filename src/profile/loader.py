@@ -72,6 +72,10 @@ class LoadedProfile:
     # Opt-in web-search flag for team-task steps. Default False ⇒ `search_hook`
     # resolves to None regardless of provider keys (see `team_step_runner.py`).
     web_search: bool = False
+    # v31 P6: opt-in OpenAlex academic search for tool-calling runtimes. Default False ⇒
+    # the `academic.search` tool is not offered (toolset byte-identical). OpenAlex needs
+    # no key, so this flag IS the gate (there is no config-availability gate to lean on).
+    academic_search: bool = False
     # v19 memory seam: which provider serves the injectable memory text. Absent ⇒ static
     # (MEMORY.md, byte-identical pre-v19). Consumed by `src/memory.resolve_memory_text`.
     memory_config: MemoryConfig = field(default_factory=MemoryConfig)
@@ -82,6 +86,10 @@ class LoadedProfile:
     # artifact (byte-identical pre-v20.5). Shape: {"channel": "<slack channel id>"} — when set,
     # a step's result is posted to that channel THROUGH the Action Gateway (Lớp A/B + audit).
     team_step_egress: dict | None = None
+    # v31 P5 wake-gate: declared source watchers. () ⇒ no `watch` pseudo-kind is ever
+    # synthesized (schedule byte-identical). Each entry: {id, source, target, prompt} —
+    # validated at load by `_parse_watchers`.
+    watchers: tuple[dict, ...] = ()
 
 
 def _read_md(profile_dir: Path, name: str) -> str:
@@ -144,8 +152,10 @@ def load_profile(
     team_step_egress = _parse_team_step_egress(yaml_doc.get("team_step_egress"))
     auto_approve = _parse_auto_approve(yaml_doc.get("auto_approve"))
     web_search = bool(yaml_doc.get("web_search", False))
+    academic_search = bool(yaml_doc.get("academic_search", False))
     memory_config = parse_memory_config(yaml_doc.get("memory"))
     agent_runtime = parse_agent_runtime_config(yaml_doc.get("agent_runtime"))
+    watchers = _parse_watchers(yaml_doc.get("watchers"))
     return LoadedProfile(
         profile_id=profile_id,
         name=str(yaml_doc.get("name") or profile_id),
@@ -164,10 +174,55 @@ def load_profile(
         inbox=inbox,
         auto_approve=auto_approve,
         web_search=web_search,
+        academic_search=academic_search,
         memory_config=memory_config,
         agent_runtime=agent_runtime,
         team_step_egress=team_step_egress,
+        watchers=watchers,
     )
+
+
+#: Sources `watchers:` may declare. confluence/linear parse but FAIL-CLOSED at poll
+#: time (watcher_normalize) — declaring them is allowed so the operator sees a loud
+#: per-watcher error + alert instead of a load crash taking the whole agent down.
+_WATCHER_SOURCES = frozenset({"jira", "github", "sheets", "confluence", "linear"})
+
+
+def _parse_watchers(raw: object) -> tuple[dict, ...]:
+    """Validate the optional `watchers:` block (v31 P5). Absent/empty ⇒ () (no watch).
+
+    Fail-loud on shape errors: a typo'd watcher silently dropped would read as "the
+    agent is watching" while nothing polls. Each entry needs a unique non-empty `id`,
+    a known `source`, a non-empty `target`, and a non-empty agent-owned `prompt`
+    (the ONLY text a wake ever carries — watched content never enters a prompt).
+    """
+    if raw is None or raw == []:
+        return ()
+    if not isinstance(raw, list):
+        raise RuntimeError("watchers: must be a list of {id, source, target, prompt}.")
+    out: list[dict] = []
+    seen: set[str] = set()
+    for entry in raw:
+        if not isinstance(entry, dict):
+            raise RuntimeError(f"watchers: each entry must be a mapping; got {entry!r}.")
+        wid = str(entry.get("id") or "").strip()
+        source = str(entry.get("source") or "").strip().lower()
+        target = str(entry.get("target") or "").strip()
+        prompt = str(entry.get("prompt") or "").strip()
+        if not wid or wid in seen:
+            raise RuntimeError(f"watchers: 'id' must be non-empty and unique; got {wid!r}.")
+        if source not in _WATCHER_SOURCES:
+            raise RuntimeError(
+                f"watchers: source {source!r} không hợp lệ (biết: "
+                f"{', '.join(sorted(_WATCHER_SOURCES))})."
+            )
+        if not target:
+            raise RuntimeError(f"watchers {wid!r}: 'target' must be non-empty.")
+        if not prompt:
+            raise RuntimeError(f"watchers {wid!r}: 'prompt' must be non-empty.")
+        seen.add(wid)
+        out.append({"id": wid, "source": source, "target": target, "prompt": prompt})
+    return tuple(out)
 
 
 def _parse_auto_approve(raw: object) -> dict | None:
