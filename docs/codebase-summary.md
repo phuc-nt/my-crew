@@ -425,6 +425,15 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 | **[M34] Swap pending** | `src/runtime/team_task_steps.py::swap_pending_steps` — pending-only query, skip reserved |
 | **[M33 Consult bubble** | `web/src/views/office-3d/consult-bubble.tsx` NEW — 2-bàn hỏi-đáp bong bóng |
 | **[M33 Event kind]** | `web/src/types.ts::OfficeEventKind` +`consult` |
+| **[v31] Fleet activity audit** | `src/server/fleet_activity.py` — GET `/api/company/activity` (audit+runs+captures merged, allowlist-projected, no raw args). `routes_visualize.py` + `visualize_views.py` — web view "Hoạt động". |
+| **[v31] Ops company activity** | `src/agent/ops_company_activity.py` — readonly command `company_activity` (LLM summarize audit rows → ops-chat internal-only). |
+| **[v31] Schedule native type** | `src/actions/schedule_write.py` — agent re-schedules its own reports via chat (autonomous chạy ngay / guarded queue per agent mode); `dedup_hint` state-bearing; cron floor */5, ≤6 mục, ≤5 update/day/agent; CEO Telegram each run. |
+| **[v31] Kanban native types** | `src/actions/team_task_write.py` — `team_task_create`/`team_task_move` (store-verified permissions: assignee ∈ roster, move by PIC/creator/step-assignee); planning→open/running move FORBIDDEN (confirm_plan sole door). Office events emit. |
+| **[v31] Gws native type** | `src/actions/gws_write.py` — Google Sheets/Docs via gws CLI (3 prefix: `sheets +append`, `docs documents create` —doc rỗng, `docs +write`); destructive/permission verbs hard-deny both modes; gmail excluded (email_send door). HR-pack pin agent's HR_SHEET_ID. |
+| **[v31] Academic search tool** | `src/tools/openalex_tool.py` — keyless read tool (mirror web_search_tool pattern); per-agent opt-in `academic_search: true` in profile.yaml; query redacted before egress; results untrusted-wrapped + bounded. |
+| **[v31] Watcher store** | `src/runtime/watcher_store.py` — profile.yaml `watchers:` block (jira/github/sheets); 5-min poll → normalize → hash. No-change = 0 LLM (measured capture store). Change → wake 1 pre-built team-task (no decompose LLM). Fail ×3 or stale >24h → CEO Telegram alert. Content KHÔNG vào prompt (watcher-prompt only). |
+| **[v31] Watcher normalize** | `src/runtime/watcher_normalize.py` — normalize Jira/GitHub/Sheets content (dedup rows, stable order). |
+| **[v31] Watcher runner** | `src/runtime/watcher_runner.py` — service pseudo-kind poll + dispatcher (team-task create + set_plan 1 step assigned self). |
 
 ## Key v2 Changes vs v1
 

@@ -76,12 +76,15 @@ re-reserve khi lease hết hạn AND chưa có outcome artifact. Terminal write 
 - `ops_*.py` — lệnh CEO: giao việc (`ops_assign_team_task`), chỉnh việc
   (`ops_adjust_team_task`), chat quản trị (`ops_chat`).
 
-### 3.6 Action Gateway (`src/actions/`, v30 autonomy-first)
+### 3.6 Action Gateway (`src/actions/`, v30–v31)
 `action_gateway.py` = cửa duy nhất. `hard_block.py` = Lớp A (chặn cứng, không duyệt được).
 Lớp B = phụ thuộc `safety.trust_mode` per-agent:
 - **autonomous** (mặc định): tự chạy ngay → audit log rationale "trust_mode=autonomous".
 - **guarded** (opt-in): chờ CEO duyệt (`approval_store.py` + `auto_approve_policy.py` chỉ dùng khi guarded).
-`*_write.py` = handler cụ thể (jira/confluence/slack/email) — đều gọi qua gateway, không lối tắt.
+**Native action types (v31)**: `schedule_update` (agent đổi lịch báo cáo chính mình), `team_task_create`/`team_task_move` (kanban), `gws_write` (Google Sheets/Docs append+create), `academic_search` (read-only). Các handler `*_write.py` khác (jira/confluence/slack/email) — đều gọi qua gateway, không lối tắt.
+
+### 3.6a Fleet activity audit (v31)
+**Hậu kiểm đội**: mọi hành động qua gateway ghi vào `audit.jsonl` (per-agent), `runs.jsonl` (lịch sử chạy), `captures.sqlite3` (chi phí). **Web surface** (`routes_visualize.py` + `visualize_views.py`): GET `/api/company/activity` trả audit rows (allowlist-projected, KHÔNG raw args chứa dữ liệu nhạy), phân trang, filter theo agent/loại. **Ops-chat command** (`ops_company_activity.py`): readonly lệnh mới `company_activity` (LLM tóm tắt hành động đội tuần này → gửi chat nội bộ, KHÔNG external).
 
 ### 3.7 Domain packs (`domain-packs/`)
 Kiến trúc pluggable: `pm-pack` (mặc định), `hr-pack`, `office-pack`, `admin-pack`. Mỗi
@@ -131,6 +134,9 @@ cap). Sanitizer là trust boundary cho network-safe deep_agent; wizard emits `{k
 nhất) < ToolCalling (read-only loop + classify shim) < DeepAgent (shell tự do nhưng trong Docker
 sandbox cách ly + SANITIZE). Team-step egress công ty qua `external_write → ActionGateway` (Lớp A/B).
 User chọn runtime khi tạo agent; role template có `recommended_runtime` prefill.
+
+### 3.9b Watcher (wake-gate, v31, perceive-only)
+**Không LLM poll — chỉ khi nội dung đổi:** `watchers:` block trong profile.yaml (jira/github/sheets sources). Service mỗi 5 phút poll → normalize → hash. Nội dung KHÔNG đổi = 0 LLM (measured capture store). Đổi → wake 1 lần: dispatcher tạo 1 step team-task pre-built (không LLM phân rã), assigned agent chính nó. **Alerts**: fail ×3 → CEO Telegram báo; no-change >24h → stale alert. Modules: `src/runtime/watcher_store.py`, `watcher_normalize.py`, `watcher_runner.py`, `operator_notify.py`.
 
 ### 3.10 Telemetry capture + unified cost (v26)
 Mỗi team-step attempt ghi telemetry vào `captures.sqlite3` (17 columns: attempt_id, task_id,

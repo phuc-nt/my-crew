@@ -231,7 +231,47 @@ Vào **Trợ lý** (hoặc nhắn qua Telegram). Gõ câu hỏi/lệnh vào ô "
 > **An toàn:** trợ lý chỉ *xem trước* và hỏi lại; nó **không thực hiện** hành động ghi ra ngoài cho tới
 > khi bạn gõ **"xác nhận"**. Nói chuyện thoải mái, không sợ nó tự ý làm.
 
-## B.5. Xem báo cáo & số liệu + Văn phòng
+## B.5. Xem Hoạt động công ty (v31)
+
+Vào **Văn phòng → Hoạt động** (cột giữa) hoặc **Trợ lý** → hỏi "tuần này công ty làm gì?" — xem toàn bộ hành động của đội (khi gửi ra ngoài công ty, viết báo cáo, đổi lịch). Mỗi hành động ghi lại **ai**, **cái gì**, **kết quả**. Filter + phân trang. Nếu bật Telegram, CEO nhận tóm tắt tự động. Đây là **hệ thống duyệt lịch sử** (internal-only, không qua công ty bên ngoài).
+
+## B.5a. Agent tự đổi lịch báo cáo (v31 — schedule_update)
+
+Agent có thể yêu cầu qua chat: "đổi lịch báo cáo hàng ngày thành 10 sáng" → **hệ thống cập nhật ngay** (autonomous) hay **chờ bạn duyệt** (nếu agent ở chế độ guarded). Lưu ý:
+- **Giới hạn**: cron floor mỗi 5 phút, tối đa 6 mục lịch, ≤5 đổi/ngày/agent.
+- **Hiệu lực**: sau khi dịch vụ reload (restart `deploy/install.sh` hoặc manual kill coordinator daemon). Thay đổi giữ trong `profile.yaml`; comment trong file bị mất khi round-trip.
+- **Telegram**: mỗi lần chạy báo cáo theo lịch mới, CEO nhận thông báo.
+
+## B.5b. Tạo/chuyển thẻ việc (v31 — team_task_create/move)
+
+Khi giao việc, đội tự **tạo thẻ Kanban** hoặc **chuyển trạng thái** qua chat (ví dụ: "tạo thẻ review cho bước 3" → hệ thống tạo ngay; hoặc "chuyển thẻ từ "Doing" sang "Done""). Quyền được kiểm tra: chỉ assigned, PIC, hoặc người tạo thẻ mới được chuyển. Office event ghi lại mỗi lần chuyển.
+
+## B.5c. Ghi Google Sheets & Docs (v31 — gws_write)
+
+Agent có thể **append hàng vào Google Sheets** hoặc **tạo/sửa Google Doc** (ví dụ: "ghi OKR tháng vào sheet" → hệ thống ghi ngay trên đúng sheet HR hoặc công ty). Cú pháp qua chat là CLI `gws`:
+- `gws sheets +append` — thêm hàng vào sheet
+- `gws docs documents create` — tạo doc trống mới
+- `gws docs +write` — ghi vào doc tồn tại
+
+Chỉ 3 lệnh này cho phép; email (gmail) không qua đây (dùng `email_send` cửa khác). OAuth khóa từ keyring (đã cài ở setup).
+
+## B.5d. Bật Academic Search (v31)
+
+Ở trang **Đội** → chọn agent Nghiên cứu → tab "Cài đặt" → ghim `academic_search: true` trong profile YAML. Lần tới agent có thể tìm paper qua OpenAlex (keyless, trả kết quả không API key).
+
+## B.5e. Khai Watcher (v31)
+
+Ở trang **Đội** → chọn agent → profile YAML, thêm block:
+```yaml
+watchers:
+  - source: jira          # hoặc github, sheets
+    query: "project = SCRUM"
+    prompt: "Report nếu task mới trong SCRUM"
+```
+
+Hệ thống **mỗi 5 phút kiểm tra** (không LLM, chỉ so sánh nội dung). Nội dung **không đổi = 0 LLM** (tiết kiệm chi phí). Khi đổi → wake 1 lần: tạo 1 step task pre-built. Nếu **fail 3 lần liên tiếp** hoặc **không đổi >24h** → CEO Telegram alert. Nội dung watched **KHÔNG bao giờ vào prompt** (chỉ watcher prompt độc lập).
+
+## B.5f. Xem báo cáo & số liệu + Văn phòng
 
 - Báo cáo định kỳ (hằng ngày / tuần / OKR / nhân sự-chi phí) tự chạy theo lịch và đăng lên Slack /
   Confluence. Bạn cũng nhận tóm tắt qua Telegram.

@@ -24,6 +24,7 @@ sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật.
 | **Autonomy-first trust model (v30)** | Lớp B split: autonomous (chạy ngay, audit rationale "trust_mode=autonomous", mặc định) vs guarded (queue duyệt, opt-in `trust_mode: guarded`). Chat flatten. Fleet-flip. No daily-cap in autonomous. |
 | **Agent-harness v1 (v19)** | Memory provider seam (static; kioku hoãn v19.5) · workspace protocol v2 (vault/ + skills/ per-agent) · per-agent skill có guard · capability block internal-only. |
 | **AgentRuntime + community (v20)** | AgentRuntime seam (Native/ToolCalling/DeepAgent) giữ deliver→gateway · positive read-allowlist + classify shim (E2E LLM thật) · 3 ổ cắm: skill agentskills.io, pack-MCP spawn gate, pack template + PACK-AUTHORING. |
+| **Agent-tools capability wave (v31)** | Hậu kiểm fleet-wide (2 surface: web + ops-chat) · 4 native action types (schedule_update, team_task_create/move, gws_write) · wake-gate hồi sinh (perceive-only, no-LLM khi không đổi, CEO alert on fail/stale) · OpenAlex academic search tool. |
 
 ## Việc nên làm tiếp (từ UAT + nợ kỹ thuật)
 
