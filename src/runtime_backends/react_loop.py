@@ -1,13 +1,12 @@
-"""The create_react_agent work loop (v20 Phase 2).
+"""The tools-tier work loop — a community-standard `langchain.agents.create_agent` loop.
 
-Runs `langgraph.prebuilt.create_react_agent` (already in the dep tree — no `langchain`
-meta-package) over the policy-shimmed read toolset, with a hard per-loop step cap. Returns
-`(result_text, cost_usd)` matching the `TeamTaskDeps.run_work` contract, so the surrounding
-team-step graph (self_check / rework / deliver→gateway) is untouched.
+Runs `langchain.agents.create_agent` (langchain 1.x) over the policy-shimmed read toolset, with
+a hard per-loop step cap. Returns `(result_text, cost_usd)` matching the `TeamTaskDeps.run_work`
+contract, so the surrounding team-step graph (self_check / rework / deliver→gateway) is untouched.
 
 Tools are LangChain `@tool` callables wrapping the read allowlist; the model may call them in
-a loop but can never reach a write — the toolset contains only reads. `recursion_limit` caps
-the loop (red-team H2 runaway).
+a loop but can never reach a write — the toolset contains only reads. The cap and the
+overflow-degrade + tracing-off live in `community_loop_core.invoke_capped`.
 """
 
 from __future__ import annotations
@@ -58,14 +57,13 @@ def run_react_work(
     for this attempt; cost itself still returns on the tuple. Absent collector = no-op, so
     the contract and behavior are byte-identical for callers that do not wire it.
     """
+    from langchain.agents import create_agent
     from langchain_core.messages import HumanMessage, SystemMessage
     from langchain_openai import ChatOpenAI
-    from langgraph.prebuilt import create_react_agent
 
     from src.config.settings import OPENROUTER_BASE_URL
-    from src.llm.model_pricing import estimate_cost
     from src.llm.team_task_prompt import build_team_step_messages
-    from src.runtime.step_telemetry import sum_usage_metadata
+    from src.runtime_backends.community_loop_core import invoke_capped, record_loop_result
 
     # Reuse the native system+user prompt so persona/skills/company-docs/red-lines are identical;
     # we only change HOW the model produces text (loop vs one-shot), not WHAT it is told.
@@ -84,19 +82,12 @@ def run_react_work(
         api_key=settings.openrouter_api_key,
         base_url=OPENROUTER_BASE_URL,
     )
-    agent = create_react_agent(model, _as_lc_tools(tools_map))
-    result = agent.invoke(
-        {"messages": [SystemMessage(content=system), HumanMessage(content=user)]},
-        config={"recursion_limit": max_steps * 2},  # super-steps ≈ 2× tool rounds
+    # Community-standard tool-calling agent (langchain 1.x). System prompt goes ONLY via the
+    # SystemMessage below — no `system_prompt=` kwarg — so the tier owns its prompt wiring.
+    agent = create_agent(model, _as_lc_tools(tools_map))
+    result = invoke_capped(
+        agent,
+        [SystemMessage(content=system), HumanMessage(content=user)],
+        recursion_limit=max_steps * 2,  # super-steps ≈ 2× tool rounds (measured: parity)
     )
-    messages = result["messages"]
-    final = messages[-1]
-    text = getattr(final, "content", "") or ""
-    # Estimate cost from summed token usage × the per-model price table (LangChain's OpenRouter
-    # path does not surface a provider cost here). Missing usage/price → None (never fabricated);
-    # the monthly budget_tracker remains the hard backstop.
-    in_tok, out_tok = sum_usage_metadata(messages)
-    cost = estimate_cost(settings.openrouter_model, in_tok, out_tok)
-    if telemetry is not None:
-        telemetry.record(input_tokens=in_tok, output_tokens=out_tok, cost_source="estimated")
-    return str(text), cost
+    return record_loop_result(result, model_name=settings.openrouter_model, telemetry=telemetry)

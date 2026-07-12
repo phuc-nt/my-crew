@@ -3,18 +3,17 @@
 Class name is `ToolCallingRuntime` (NOT `CreateAgentRuntime`) to avoid colliding with the
 existing `agent_create.create_agent` employee-registration function.
 
-The safety design (red-team C1/C2/C3/H2/H4):
+The safety design:
 
-- **No new heavy dep (C3).** LangChain `create_agent` is not installed and churns across
-  minor versions; instead this uses `langgraph.prebuilt.create_react_agent`, already in the
-  dependency tree — a tool-calling loop with the same shape, no `langchain` meta-package.
+- **Community-standard loop.** The work loop is `langchain.agents.create_agent` (langchain 1.x),
+  run in `react_loop.run_react_work`. langsmith tracing is forced off per-invoke there.
 - **Swaps ONLY the work loop.** It overrides `TeamTaskDeps.run_work` via
   `build_team_task_graph(work_override=...)`; perceive / self_check / rework / deliver→gateway
   stay native. So mutation-only-via-gateway holds no matter how `work` produces its text.
-- **Positive read-allowlist + policy shim (C1/C2).** The loop is bound ONLY the callables from
+- **Positive read-allowlist + policy shim.** The loop is bound ONLY the callables from
   `build_read_toolset` — read-only, classify-shimmed, audience-aware. It can never reach a
   write/destructive tool because none is in the toolset.
-- **Per-loop hard cap (H2).** A recursion/step cap bounds the loop so a runaway cannot burn the
+- **Per-loop hard cap.** A recursion/step cap bounds the loop so a runaway cannot burn the
   monthly budget; the cap is enforced in the loop config, not left to a per-tick cost check.
 """
 
@@ -59,7 +58,7 @@ class ToolCallingRuntime:
         return build_team_task_graph(work_override=work, **kwargs)
 
     def _make_work_override(self, settings, context, config, loop_limit, telemetry=None):
-        """Build the run_work replacement: a create_react_agent loop over the read toolset."""
+        """Build the run_work replacement: a create_agent loop over the read toolset."""
         from src.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
 
         def _run_work(title: str, handoff: str, hook) -> tuple[str, float | None]:

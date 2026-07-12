@@ -92,13 +92,17 @@ chọn nay raise rõ). Memory tiếp tục vào INTERNAL user-msg qua `build_con
 + `skills/` (per-agent, body wrap `format_internal_content`, không shadow pack skill).
 Capability block auto-gen (`capability_block.py`) cũng INTERNAL-only cùng path.
 
-### 3.9 AgentRuntime backends (`src/runtime_backends/`, v20–v27)
+### 3.9 AgentRuntime backends (`src/runtime_backends/`, v20–v28)
 Tách agent-LOOP khỏi điều phối + an toàn. `resolve_runtime(loaded)` chọn backend theo
 `agent_runtime:` (native|create_agent|deep_agent; default native, kill-switch
 `RUNTIME_FORCE_NATIVE`). `NativeGraphRuntime` = graph hiện tại byte-identical.
-`ToolCallingRuntime` = tool-calling loop (`create_react_agent`) NHƯNG swaps chỉ `run_work` nên
-deliver (ghi artifact nội bộ) giữ native; toolset positive read-allowlist + classify shim mọi
-tool + audience-aware.
+`ToolCallingRuntime` = tool-calling loop (`create_agent` từ langchain.agents, v28 migrate từ
+`langgraph.prebuilt.create_react_agent`) NHƯNG swaps chỉ `run_work` nên deliver (ghi artifact
+nội bộ) giữ native; toolset positive read-allowlist + classify shim mọi tool + audience-aware.
+**v28 DRY**: `community_loop_core.py` tách `record_loop_result` (post-invoke tail: text +
+`sum_usage_metadata` + `estimate_cost` + telemetry.record) + `invoke_capped` (cap recursion +
+catch `GraphRecursionError`→degrade empty + `_tracing_off()` context manager tắt LangSmith
+tracing bằng env-blank, không `callbacks=[]`).
 
 **Ghi chú egress team-step (đính chính, 2026-07-11)**: team-step deliver hiện CHỈ ghi artifact
 nội bộ (`step-<n>.json`) — hook `external_write` để step ghi ra ngoài công ty (Slack/Jira) đã

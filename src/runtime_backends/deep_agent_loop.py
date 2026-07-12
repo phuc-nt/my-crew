@@ -44,9 +44,8 @@ def run_deep_agent_work(
     from langchain_openai import ChatOpenAI
 
     from src.config.settings import OPENROUTER_BASE_URL
-    from src.llm.model_pricing import estimate_cost
     from src.llm.team_task_prompt import build_team_step_messages
-    from src.runtime.step_telemetry import sum_usage_metadata
+    from src.runtime_backends.community_loop_core import invoke_capped, record_loop_result
     from src.runtime_backends.deep_agent_sanitizer import make_llm_sanitizer, sanitize_bundle
     from src.runtime_backends.sandbox_backend import build_sandbox_backend
     from src.runtime_backends.sandbox_teardown import teardown_sandbox
@@ -90,20 +89,16 @@ def run_deep_agent_work(
         base_url=OPENROUTER_BASE_URL,
     )
     try:
+        # Shell tier binds the system prompt on the agent AND sends it as a SystemMessage (its
+        # built-in tools read the bound prompt); both derive from the sanitized bundle.
         agent = create_deep_agent(model, backend=backend, system_prompt=system)
-        result = agent.invoke(
-            {"messages": [SystemMessage(content=system), HumanMessage(content=user)]},
-            config={"recursion_limit": max(2, loop_limit * 2)},  # C5: bounded loop
+        result = invoke_capped(
+            agent,
+            [SystemMessage(content=system), HumanMessage(content=user)],
+            recursion_limit=max(2, loop_limit * 2),  # bounded loop
         )
-        messages = result["messages"]
-        final = messages[-1]
-        text = getattr(final, "content", "") or ""
-        # Estimate cost from summed token usage × per-model price (LangChain's OpenRouter path
-        # surfaces no provider cost here). Missing usage/price → None; budget_tracker is backstop.
-        in_tok, out_tok = sum_usage_metadata(messages)
-        cost = estimate_cost(settings.openrouter_model, in_tok, out_tok)
-        if telemetry is not None:
-            telemetry.record(input_tokens=in_tok, output_tokens=out_tok, cost_source="estimated")
-        return str(text), cost
+        return record_loop_result(
+            result, model_name=settings.openrouter_model, telemetry=telemetry
+        )
     finally:
         teardown_sandbox(backend)  # C6: best-effort container teardown on the normal path

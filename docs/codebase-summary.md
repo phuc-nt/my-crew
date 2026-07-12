@@ -1,7 +1,7 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-07-12 — v27 COMPLETE.** ~1863 backend + 178 FE tests, ruff/tsc clean.
+> Status: **2026-07-12 — v28 COMPLETE.** ~1871 backend + 178 FE tests, ruff/tsc clean.
 > Product usable single-user tới v26 (agent office, team-task, màn 3D, registry user-data,
 > memory seam, AgentRuntime multi-runtime + community sockets, runtime-tiers, **telemetry
 > capture + unified cost across 3 engines + remember-node extension**). Bản đồ code +
@@ -178,14 +178,17 @@
   `NativeGraphRuntime` bọc graph hiện tại **byte-identical**. `RUNTIME_FORCE_NATIVE` env =
   kill-switch fleet-wide; `None`→native (team-step loaded=None degrade). **Report guard** trong
   `build_graph_for` fail-loud non-native (đóng "âm thầm native" cho 4 caller — red-team C4).
-- **ToolCallingRuntime** (`tool_calling_runtime.py` + `react_loop.py` + `read_only_toolset.py`):
-  tool-calling loop qua `langgraph.prebuilt.create_react_agent` (KHÔNG `langchain` full — dùng
-  `langchain-openai` pin, red-team C3). **Swaps CHỈ `run_work`** qua `build_team_task_graph(
+- **ToolCallingRuntime** (`tool_calling_runtime.py` + `react_loop.py` + `read_only_toolset.py` +
+  `community_loop_core.py`, v28): tool-calling loop qua `langchain.agents.create_agent` (v28
+  migrate từ `langgraph.prebuilt.create_react_agent`, community-standard; KHÔNG `langchain` full —
+  dùng core LangChain + `langchain-openai` pin). **Swaps CHỈ `run_work`** qua `build_team_task_graph(
   work_override=)` → perceive/self_check/rework/deliver giữ native = **invariant #1 bằng cấu
-  trúc** (deliver ghi artifact nội bộ; team-step KHÔNG egress công ty — hook `external_write`
-  chưa nối, xem đính chính system-architecture). Toolset = **positive read-allowlist** (red-team C2: `deletePage` không lọt) +
-  **policy shim classify mọi tool** (red-team C1 — E2E LLM thật chứng minh classify thấy tool
-  call) + audience-aware (external loại internal-data read) + per-loop recursion cap (H2).
+  trúc** (deliver ghi artifact nội bộ; team-step KHÔNG egress công ty). **v28 DRY**: `community_loop_core.py`
+  tách `record_loop_result` (post-invoke tail: text + `sum_usage_metadata` + `estimate_cost` +
+  telemetry.record) + `invoke_capped` (cap recursion + catch `GraphRecursionError`→degrade empty +
+  `_tracing_off()` context manager tắt LangSmith env-blank). Toolset = **positive read-allowlist** +
+  **policy shim classify mọi tool** + audience-aware (external loại internal-data read) + per-loop
+  recursion cap.
 - **DeepAgentRuntime** (`deep_agent_runtime.py`): EXPERIMENTAL, dep `deepagents` OPTIONAL
   (extra `[deep]`). Lazy import → app khởi động không cần dep (isolate, red-team C5). Thiếu dep →
   fail-loud SỚM với hướng dẫn cài (không exit-1 âm thầm mỗi tick — FM5). Wrapper an toàn (tắt

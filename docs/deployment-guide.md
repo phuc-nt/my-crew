@@ -72,11 +72,13 @@ Preset demo đủ **3 runtime engine** để thử ngay (mỗi nhân sự 1 engi
 | Nhân sự | Engine | Đặc tính |
 |---|---|---|
 | kiem-dinh | `native` | graph tự build, chặt nhất, 0 tool tự do |
-| noi-dung | `create_agent` | tool-calling loop, read-only + `web.scrape` |
+| noi-dung | `create_agent` | tool-calling loop (langchain.agents, v28), read-only + `web.scrape` |
 | nghien-cuu | `deep_agent` | shell tự chủ trong **Docker sandbox** cách ly (token-free, no host mount) |
 
-deep_agent cần Docker daemon chạy + model tool-calling mạnh (`qwen/qwen3.7-max` đã pin sẵn
-trong profile demo — minimax fail deep loop).
+**v28**: tools-tier migrate sang `langchain.agents.create_agent` (community-standard). deep_agent
+cần Docker daemon chạy + model tool-calling mạnh (`qwen/qwen3.7-max` đã pin sẵn trong profile
+demo — minimax fail deep loop). `uv sync` cài base deps (tất cả 3 engine sẵn sàng; deep extra
+`[deep]` chỉ cần nếu cài như devops độc lập).
 
 ## 6. Cấu hình
 
