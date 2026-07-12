@@ -54,8 +54,21 @@ def run_team_step(
     working keeps refreshing its own lease and the ticker's unconditional
     kill-on-expiry never fires against live work.
     """
+    import time
+    from datetime import UTC, datetime
+
+    from src.runtime.step_telemetry import StepTelemetry
     from src.runtime.team_task_paths import team_tasks_db_path
     from src.runtime.team_task_store import TeamTaskStore
+
+    # One collector per attempt: whichever engine runs the step fills it with token counts +
+    # cost provenance (side-channel, since run_work's tuple contract can't grow). Timing is
+    # measured IN THIS worker process (monotonic) — never `spawned_at`, which the ticker sets
+    # in a different process, so it is not this worker's wall clock.
+    telemetry = StepTelemetry()
+    started_at = datetime.now(UTC).isoformat()
+    t0 = time.monotonic()
+    engine = getattr(getattr(loaded, "agent_runtime", None), "kind", "native") or "native"
 
     store = TeamTaskStore(team_tasks_db_path())
     try:
@@ -83,14 +96,21 @@ def run_team_step(
                 logger.warning("team-step %s/%s: heartbeat write failed", task_id, step_id)
 
         if step.step_type == "review":
-            result = _run_review(loaded, settings, task_id=task_id, step=step, store=store)
+            result = _run_review(
+                loaded, settings, task_id=task_id, step=step, store=store, telemetry=telemetry
+            )
         else:
             result = _run_graph(
                 loaded, settings, task_id=task_id, step=step, attempt_id=attempt_id,
-                task_title=task.title, on_node=_touch,
+                task_title=task.title, on_node=_touch, telemetry=telemetry,
             )
         if result.get("status") == "awaiting_approval":
             store.mark_awaiting_approval(task_id, step_id, attempt_id=attempt_id)
+            _record_capture(
+                attempt_id=attempt_id, task_id=task_id, step=step, engine=engine,
+                status="awaiting_approval", telemetry=telemetry, cost_usd=result.get("cost_usd"),
+                started_at=started_at, t0=t0, error=None,
+            )
             return {"status": STATUS_PAUSED, "cost_usd": result.get("cost_usd"),
                      "delivered": False, "room_message": ""}
         cost = result.get("cost_usd")
@@ -98,6 +118,11 @@ def run_team_step(
             task_id, step_id,
             outcome_ref=f"team-tasks/{task_id}/step-{step.seq}.json", cost_usd=cost,
             attempt_id=attempt_id,
+        )
+        _record_capture(
+            attempt_id=attempt_id, task_id=task_id, step=step, engine=engine,
+            status="done", telemetry=telemetry, cost_usd=cost,
+            started_at=started_at, t0=t0, error=None,
         )
         room_message = result.get("room_message", "")
         if step.step_type == "review":
@@ -115,7 +140,7 @@ def run_team_step(
             "status": STATUS_DONE, "cost_usd": cost, "delivered": bool(result.get("delivered")),
             "room_message": room_message,
         }
-    except Exception:
+    except Exception as exc:
         # The graph or store call failed — mark the step failed so a stuck lease
         # doesn't block the DAG forever, then re-raise so the WORKER (caller) writes
         # the failed outcome artifact + failed run-event + exit 1 (single place that
@@ -126,6 +151,15 @@ def run_team_step(
             logger.exception("team-step %s/%s: failed to record failure status", task_id, step_id)
         _task = locals().get("task")
         _step = locals().get("step")
+        # Capture the failed attempt — but only if the step was resolved (a pre-work failure,
+        # e.g. the store read raised, has no attempt to describe; mirror the existing defensive
+        # `locals().get("step")` idiom so we don't emit a spurious row/WARNING).
+        if _step is not None:
+            _record_capture(
+                attempt_id=attempt_id, task_id=task_id, step=_step, engine=engine,
+                status="failed", telemetry=telemetry, cost_usd=None,
+                started_at=started_at, t0=t0, error=str(exc)[:500],
+            )
         _append_step_event(
             task_id, author=_step.assigned_to if _step is not None else "coordinator",
             task_title=_task.title if _task is not None else task_id,
@@ -135,6 +169,45 @@ def run_team_step(
         raise
     finally:
         store.close()
+
+
+def _record_capture(
+    *, attempt_id: str, task_id: str, step, engine: str, status: str, telemetry,
+    cost_usd, started_at: str, t0: float, error: str | None,
+) -> None:
+    """Write one per-attempt telemetry row — best-effort, must NEVER fail the step.
+
+    Telemetry is an observability side-channel: a broken capture write is logged at WARNING
+    (with the exception, not silently) but does not abort the step, which has already done its
+    real work and recorded its outcome in the team-task store. `ended_at`/`duration_ms` are
+    computed here from the monotonic clock started in the caller's own process.
+    """
+    import time
+    from datetime import UTC, datetime
+
+    ended_at = datetime.now(UTC).isoformat()
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    try:
+        from src.runtime.capture_store import CaptureStore
+        from src.runtime.team_task_paths import capture_db_path
+
+        cs = CaptureStore(capture_db_path())
+        try:
+            cs.record(
+                attempt_id=attempt_id, task_id=task_id, step_id=step.step_id,
+                agent_id=step.assigned_to, engine=engine, status=status,
+                step_type=step.step_type, review_round=step.review_round,
+                cost_usd=cost_usd, cost_source=telemetry.cost_source,
+                input_tokens=telemetry.input_tokens, output_tokens=telemetry.output_tokens,
+                started_at=started_at, ended_at=ended_at, duration_ms=duration_ms, error=error,
+            )
+        finally:
+            cs.close()
+    except Exception as exc:  # noqa: BLE001 — telemetry must never fail a completed step
+        logger.warning(
+            "team-step %s/%s: capture record failed (step still done): %s",
+            task_id, step.step_id, exc,
+        )
 
 
 def _append_step_event(
@@ -189,7 +262,9 @@ def _append_review_event(
                         also_office=True)
 
 
-def _run_review(loaded: Any, settings: Any, *, task_id: str, step, store: Any) -> dict:
+def _run_review(
+    loaded: Any, settings: Any, *, task_id: str, step, store: Any, telemetry=None,
+) -> dict:
     """Dispatch body for `step_type == "review"` (M32) — the reviewer's own worker run.
 
     Unlike `_run_graph` (perceive→work→self_check→...→deliver, a LangGraph build),
@@ -229,12 +304,15 @@ def _run_review(loaded: Any, settings: Any, *, task_id: str, step, store: Any) -
         review_round=step.review_round, locked_version=locked_version,
         acceptance=content_step.acceptance, step_title=content_step.title,
     )
-    return run_review_step(loaded, settings, data_dir=team_tasks_root(), review_input=review_input)
+    return run_review_step(
+        loaded, settings, data_dir=team_tasks_root(), review_input=review_input,
+        telemetry=telemetry,
+    )
 
 
 def _run_graph(
     loaded: Any, settings: Any, *, task_id: str, step, attempt_id: str = "",
-    task_title: str = "", on_node: Callable[[], None] | None = None,
+    task_title: str = "", on_node: Callable[[], None] | None = None, telemetry=None,
 ) -> dict:
     """Build + invoke the team_task_graph for one step (no checkpointer — a single
     step is a one-shot invoke, not a resumable multi-turn conversation like a report
@@ -294,11 +372,19 @@ def _run_graph(
     external_write = _resolve_external_write(loaded, settings)
     if external_write is not None:
         _extra["external_write"] = external_write
+    # Remember-node: extract salient facts from this step's output into the assignee's MEMORY.md
+    # after deliver, folding the extraction cost into the step total (capture honesty). Built only
+    # for a real loaded profile (a step whose profile failed to load has no MEMORY.md to write).
+    from src.agent.memory_node import build_team_step_remember_node
+
+    remember_node = (
+        build_team_step_remember_node(step.assigned_to, settings) if loaded is not None else None
+    )
     graph = resolve_runtime(loaded).build_task(
         settings=settings, context=context, step_title=step.title,
         data_dir=team_tasks_root(), task_id=task_id, step_seq=step.seq,
         step_deps=step.deps, search_hook=_resolve_search_hook(loaded, settings),
-        self_id=step.assigned_to, **_extra,
+        self_id=step.assigned_to, telemetry=telemetry, remember_node=remember_node, **_extra,
     )
     initial_state: dict[str, Any] = {
         "step_title": step.title, "acceptance": step.acceptance,

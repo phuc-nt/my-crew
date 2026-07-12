@@ -51,10 +51,14 @@ class ToolCallingRuntime:
             runtime_config.caps().runtime_loop_limit
             if runtime_config is not None else MAX_LOOP_STEPS
         )
-        work = self._make_work_override(settings, context, config, loop_limit)
+        # Pop `telemetry` here — build_team_task_graph accepts the param but only its native
+        # deps use it; this runtime routes telemetry into its own work loop instead, so it must
+        # NOT also ride **kwargs into the graph (double-wire).
+        telemetry = kwargs.pop("telemetry", None)
+        work = self._make_work_override(settings, context, config, loop_limit, telemetry)
         return build_team_task_graph(work_override=work, **kwargs)
 
-    def _make_work_override(self, settings, context, config, loop_limit):
+    def _make_work_override(self, settings, context, config, loop_limit, telemetry=None):
         """Build the run_work replacement: a create_react_agent loop over the read toolset."""
         from src.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
 
@@ -68,7 +72,7 @@ class ToolCallingRuntime:
 
             return run_react_work(
                 title=title, handoff=handoff, context=context, settings=settings,
-                tools_map=tools_map, max_steps=loop_limit,
+                tools_map=tools_map, max_steps=loop_limit, telemetry=telemetry,
             )
 
         return _run_work

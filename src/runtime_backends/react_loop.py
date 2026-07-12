@@ -49,15 +49,23 @@ def _as_lc_tools(tools_map: dict[str, Callable[[dict], Any]]) -> list:
 
 
 def run_react_work(
-    *, title: str, handoff: str, context, settings, tools_map, max_steps: int
+    *, title: str, handoff: str, context, settings, tools_map, max_steps: int,
+    telemetry=None,
 ) -> tuple[str, float | None]:
-    """Run one team-step's work as a capped tool-calling loop. Returns (text, cost_usd)."""
+    """Run one team-step's work as a capped tool-calling loop. Returns (text, cost_usd).
+
+    `telemetry` (optional StepTelemetry) receives the summed token counts + cost provenance
+    for this attempt; cost itself still returns on the tuple. Absent collector = no-op, so
+    the contract and behavior are byte-identical for callers that do not wire it.
+    """
     from langchain_core.messages import HumanMessage, SystemMessage
     from langchain_openai import ChatOpenAI
     from langgraph.prebuilt import create_react_agent
 
     from src.config.settings import OPENROUTER_BASE_URL
+    from src.llm.model_pricing import estimate_cost
     from src.llm.team_task_prompt import build_team_step_messages
+    from src.runtime.step_telemetry import sum_usage_metadata
 
     # Reuse the native system+user prompt so persona/skills/company-docs/red-lines are identical;
     # we only change HOW the model produces text (loop vs one-shot), not WHAT it is told.
@@ -81,8 +89,14 @@ def run_react_work(
         {"messages": [SystemMessage(content=system), HumanMessage(content=user)]},
         config={"recursion_limit": max_steps * 2},  # super-steps ≈ 2× tool rounds
     )
-    final = result["messages"][-1]
+    messages = result["messages"]
+    final = messages[-1]
     text = getattr(final, "content", "") or ""
-    # Cost accounting for the loop is best-effort here; the monthly budget_tracker remains the
-    # hard backstop. Return None so the step-cost sum treats it as unpriced-but-bounded.
-    return str(text), None
+    # Estimate cost from summed token usage × the per-model price table (LangChain's OpenRouter
+    # path does not surface a provider cost here). Missing usage/price → None (never fabricated);
+    # the monthly budget_tracker remains the hard backstop.
+    in_tok, out_tok = sum_usage_metadata(messages)
+    cost = estimate_cost(settings.openrouter_model, in_tok, out_tok)
+    if telemetry is not None:
+        telemetry.record(input_tokens=in_tok, output_tokens=out_tok, cost_source="estimated")
+    return str(text), cost

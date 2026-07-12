@@ -77,10 +77,13 @@ class DeepAgentRuntime:
                 f"got {provider!r} — fail-closed, không chạy shell trên host."
             )
 
-        work = self._make_work_override(settings, context, sandbox_cfg, loop_limit)
+        # Pop `telemetry` — routed into this runtime's own work loop, not the graph kwargs
+        # (build_team_task_graph accepts it, but only the native deps path consumes it).
+        telemetry = kwargs.pop("telemetry", None)
+        work = self._make_work_override(settings, context, sandbox_cfg, loop_limit, telemetry)
         return build_team_task_graph(work_override=work, **kwargs)
 
-    def _make_work_override(self, settings, context, sandbox_cfg, loop_limit):
+    def _make_work_override(self, settings, context, sandbox_cfg, loop_limit, telemetry=None):
         """run_work replacement: a deepagents loop whose shell runs inside a token-free sandbox."""
 
         def _run_work(title: str, handoff: str, hook) -> tuple[str, float | None]:
@@ -88,7 +91,7 @@ class DeepAgentRuntime:
 
             return run_deep_agent_work(
                 title=title, handoff=handoff, context=context, settings=settings,
-                sandbox_cfg=sandbox_cfg, loop_limit=loop_limit,
+                sandbox_cfg=sandbox_cfg, loop_limit=loop_limit, telemetry=telemetry,
             )
 
         return _run_work

@@ -223,6 +223,7 @@ def default_team_task_deps(
     search_hook: SearchHook | None = None,
     self_id: str = "",
     work_override: Callable[[str, str, SearchHook | None], tuple[str, float | None]] | None = None,
+    telemetry=None,
 ) -> TeamTaskDeps:
     """Wire the real collaborators. Lazy imports keep graph-build network-free.
 
@@ -285,6 +286,16 @@ def default_team_task_deps(
                     company_docs=company_docs_text(context, "internal"),
                 )
             )
+            # Native path has a real provider cost (cost_source="exact"); fill the side-channel
+            # collector with the token counts + provenance so capture is uniform across engines.
+            # getattr-tolerant: a result without token fields still records exact-cost provenance
+            # with null tokens rather than raising.
+            if telemetry is not None:
+                telemetry.record(
+                    input_tokens=getattr(result, "prompt_tokens", None),
+                    output_tokens=getattr(result, "completion_tokens", None),
+                    cost_source="exact",
+                )
             return result.content, result.cost_usd
         except Exception as exc:  # noqa: BLE001 — surfaced to the caller as a failed step
             logger.warning("team-step work failed: %s", exc)
@@ -675,6 +686,8 @@ def build_team_task_graph(
     search_hook: SearchHook | None = None,
     self_id: str = "",
     work_override: Callable[[str, str, SearchHook | None], tuple[str, float | None]] | None = None,
+    telemetry=None,
+    remember_node=None,
 ) -> CompiledStateGraph:
     """Build + compile the team-task step graph. `deps` defaults to real wiring.
 
@@ -704,7 +717,7 @@ def build_team_task_graph(
         deps = default_team_task_deps(
             settings=settings, context=context, step_title=step_title, data_dir=data_dir,
             task_id=task_id, step_seq=step_seq, step_deps=step_deps, search_hook=search_hook,
-            self_id=self_id, work_override=work_override,
+            self_id=self_id, work_override=work_override, telemetry=telemetry,
         )
     perceive, work, self_check, rework, recover, deliver = _make_team_task_nodes(deps)
 
@@ -725,5 +738,13 @@ def build_team_task_graph(
     )
     builder.add_edge("rework", "self_check")
     builder.add_edge("recover", "work")
-    builder.add_edge("deliver", END)
+    # Optional `remember` node after deliver (extract salient facts from result_text → MEMORY.md,
+    # folding the extraction cost into the step total). Absent ⇒ deliver → END, byte-identical to
+    # pre-v26; the node self-gates on delivered + not-dry-run.
+    if remember_node is not None:
+        from src.agent.memory_node import add_remember_node
+
+        add_remember_node(builder, remember_node)
+    else:
+        builder.add_edge("deliver", END)
     return builder.compile(checkpointer=checkpointer)

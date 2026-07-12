@@ -29,6 +29,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 MemoryExtractor = Callable[[str], list[str]]
+#: Cost-aware extractor: returns the facts AND the extraction call's cost, so a caller that
+#: must account for the LLM spend (the team-step capture path) can fold it into the step total.
+CostedMemoryExtractor = Callable[[str], "tuple[list[str], float | None]"]
 
 _SYSTEM = (
     "Bạn trích các SỰ KIỆN dự án đáng nhớ xuyên các báo cáo (sprint trượt, quyết định, "
@@ -38,10 +41,15 @@ _SYSTEM = (
 )
 
 
-def make_llm_extractor(client: LlmClient) -> MemoryExtractor:
-    """Default extractor: ask the LLM for salient facts; tolerate failure (return [])."""
+def make_llm_costed_extractor(client: LlmClient) -> CostedMemoryExtractor:
+    """Extractor that also reports its call cost: `(facts, cost_usd)`.
 
-    def _extract(report_text: str) -> list[str]:
+    Cost is None when the call failed (facts=[]) or the provider reported no cost. The
+    team-step capture path folds this into the step's total so a captured cost includes the
+    remember-extraction spend rather than silently omitting it.
+    """
+
+    def _extract(report_text: str) -> tuple[list[str], float | None]:
         try:
             result = client.complete(
                 [
@@ -49,10 +57,25 @@ def make_llm_extractor(client: LlmClient) -> MemoryExtractor:
                     {"role": "user", "content": report_text},
                 ]
             )
-            return _parse_facts(result.content)
+            return _parse_facts(result.content), result.cost_usd
         except Exception as exc:  # noqa: BLE001 — memory is best-effort; never break a run
             logger.warning("memory extraction skipped (LLM unavailable): %s", exc)
-            return []
+            return [], None
+
+    return _extract
+
+
+def make_llm_extractor(client: LlmClient) -> MemoryExtractor:
+    """Default extractor: ask the LLM for salient facts; tolerate failure (return []).
+
+    Thin facts-only wrapper over the costed extractor (DRY) for the report path, which does
+    not account for the extraction cost separately.
+    """
+    costed = make_llm_costed_extractor(client)
+
+    def _extract(report_text: str) -> list[str]:
+        facts, _cost = costed(report_text)
+        return facts
 
     return _extract
 

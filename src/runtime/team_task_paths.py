@@ -23,3 +23,12 @@ def team_tasks_root() -> Path:
 def team_tasks_db_path() -> Path:
     """`<team_tasks_root()>/team_tasks.sqlite3` — the one shared team-task store file."""
     return team_tasks_root() / "team_tasks.sqlite3"
+
+
+def capture_db_path() -> Path:
+    """`<team_tasks_root()>/captures.sqlite3` — the per-attempt telemetry store file.
+
+    A sibling of the team-task store (same cross-agent root, same multi-writer access from
+    concurrent workers) but a SEPARATE DB so telemetry stays decoupled from task/step state.
+    """
+    return team_tasks_root() / "captures.sqlite3"

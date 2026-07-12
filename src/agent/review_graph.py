@@ -136,6 +136,7 @@ class ReviewStepInput:
 
 def run_review_step(
     loaded: Any, settings: Settings, *, data_dir: Any, review_input: ReviewStepInput,
+    telemetry=None,
 ) -> dict:
     """Run one review-step to completion. Returns
     `{status, cost_usd, delivered, room_message, passed, failures}` — `status` and
@@ -185,6 +186,15 @@ def run_review_step(
         )
     )
     verdict = parse_review_verdict(result.content)
+
+    # Review uses LlmClient directly → a real provider cost, same as the native work path.
+    # getattr-tolerant so a partial/fake result records exact provenance with null tokens.
+    if telemetry is not None:
+        telemetry.record(
+            input_tokens=getattr(result, "prompt_tokens", None),
+            output_tokens=getattr(result, "completion_tokens", None),
+            cost_source="exact",
+        )
 
     write_review_verdict_artifact(
         data_dir, review_input.task_id, review_input.verdict_seq, review_input.review_round,

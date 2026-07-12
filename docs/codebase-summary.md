@@ -1,10 +1,10 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-07-11 — v20.5 COMPLETE.** ~1797 backend + 178 FE tests, ruff/tsc clean.
-> Product usable single-user tới v20.5 (agent office, team-task, màn 3D, registry user-data,
-> memory seam, AgentRuntime multi-runtime + community sockets, **runtime-tiers: team-step egress
-> qua gateway + guardrail phân tầng + DeepAgent cháy thật trong Docker sandbox**). Bản đồ code +
+> Status: **2026-07-12 — v26 COMPLETE.** ~1842 backend + 178 FE tests, ruff/tsc clean.
+> Product usable single-user tới v26 (agent office, team-task, màn 3D, registry user-data,
+> memory seam, AgentRuntime multi-runtime + community sockets, runtime-tiers, **telemetry
+> capture + unified cost across 3 engines + remember-node extension**). Bản đồ code +
 > quyết định kiến trúc theo mốc bên dưới. Đọc cùng
 > [system-architecture](system-architecture.md), [project-overview-pdr](project-overview-pdr.md),
 > [project-roadmap](project-roadmap.md).
@@ -241,6 +241,12 @@
   dịch vụ ngoài).
 
 **Entry points**: Legacy `python -m src.entrypoints.cli`/`cron` (single-agent). Multi-agent: `python -m src.entrypoints.mpm agent {list,register,run,resume,replay,automate,approvals,approve,reject,audit}`. Runtime: `python -m src.runtime.worker`, `python -m src.runtime.service`.
+
+### v26: Capture telemetry — unified cost + remember-node extension (2026-07-12)
+- **Telemetry store** (`src/runtime/capture_store.py`): `.data/captures.sqlite3` (WAL+busy_timeout, same pattern as team_task_store). 17-column log per team-step attempt (attempt_id, task_id, step_id, agent_id, engine, status, step_type, review_round, cost_usd, cost_source, input_tokens, output_tokens, started_at, ended_at, duration_ms, error, ts). Hook `run_team_step` captures on step end (best-effort log WARNING, never fail). INTERNAL-only state (không qua ActionGateway).
+- **Unified cost** (`src/llm/model_pricing.py`, `src/runtime/step_telemetry.py`): create_agent + deep_agent (LangChain ChatOpenAI) previously returned cost=None → now estimate cost = Σ tokens × per-model price from `config/model_prices.yaml` (operator-editable, placeholder prices minimax/qwen seeded). native keeps OpenRouter exact cost. Column `cost_source` = exact | estimated. StepTelemetry side-channel collector sums usage_metadata (because run_work 2-tuple contract can't grow).
+- **Remember-node extends team-step**: deliver→remember→END (CostedMemoryExtractor extract facts from result_text → MEMORY.md). Gated on delivered + internal + not-dry-run. LLM cost (kiểm tra, kỹ lưỡng) folded into captured step cost (honest total). New modules: `src/runtime/capture_store.py`, `src/llm/model_pricing.py`, `src/runtime/step_telemetry.py`; extend `src/agent/team_task_graph.py` (build_team_step_remember_node), `src/llm/team_task_memory.py` (CostedMemoryExtractor).
+- **NOT in scope**: git-delta, grading/ROI, knowledge-flywheel, UI.
 
 ## Cây thư mục (v3 M5 state with domain-packs)
 

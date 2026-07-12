@@ -47,23 +47,35 @@ def make_memory_node(
     memory_path: Path | None,
     audience: str,
     settings,
+    report_state_key: str = "report_text",
+    costed: bool = False,
 ):
     """Build the `remember` node closure.
 
     `store` is read from the node's `store=` param (injected by the compiled graph).
-    `memory_path` is the agent's MEMORY.md path. The node returns
-    `{"memory_written": n}` for observability (n = facts persisted; 0 when gated out).
+    `memory_path` is the agent's MEMORY.md path. The node returns `{"memory_written": n}`
+    for observability (n = facts persisted; 0 when gated out).
+
+    `report_state_key` names the state field holding the text to extract from — `report_text`
+    for the report graphs (default), `result_text` for the team-step graph. `costed=True`
+    means `extractor` is a `CostedMemoryExtractor` returning `(facts, cost)`; the node then
+    folds that cost into the returned `cost_usd` (prior step cost + extraction cost) so a
+    downstream capture reflects the true per-attempt spend. `costed=False` keeps the report
+    path byte-identical (extractor returns facts only; no cost field emitted).
     """
 
     def remember(state, *, store=None) -> dict:
         # Gate: only a real internal delivery is worth remembering.
         if audience != "internal" or settings.dry_run or not state.get("delivered"):
             return {"memory_written": 0}
-        report_text = state.get("report_text", "")
+        report_text = state.get(report_state_key, "")
         if not report_text.strip():
             return {"memory_written": 0}
 
-        facts = extractor(report_text)
+        if costed:
+            facts, extract_cost = extractor(report_text)
+        else:
+            facts, extract_cost = extractor(report_text), None
         if not facts:
             return {"memory_written": 0}
 
@@ -77,7 +89,14 @@ def make_memory_node(
 
         if memory_path is not None:
             write_memory_file(memory_path, facts)
-        return {"memory_written": len(facts)}
+
+        out: dict = {"memory_written": len(facts)}
+        # Fold the extraction cost into the step total so capture stays honest (the extra LLM
+        # call is part of what this attempt spent). Only when costed AND a cost was reported.
+        if costed and extract_cost is not None:
+            prior = state.get("cost_usd") or 0.0
+            out["cost_usd"] = prior + extract_cost
+        return out
 
     return remember
 
@@ -93,6 +112,32 @@ def add_remember_node(builder, remember) -> None:
     builder.add_node("remember", remember)
     builder.add_edge("deliver", "remember")
     builder.add_edge("remember", END)
+
+
+def build_team_step_remember_node(self_id: str, settings):
+    """Build the `remember` node for a team-step graph (extract from `result_text`).
+
+    Team-step is inherently internal, so there is no audience gate here — but the node still
+    self-gates on delivered + not-dry-run. Uses the COSTED extractor so the extraction call's
+    spend folds into the step's cost (capture honesty). Returns None when `self_id` is blank
+    (a step whose assignee is unknown has no MEMORY.md to write) so the graph keeps
+    `deliver → END`.
+    """
+    if not self_id:
+        return None
+    from src.agent.memory_extractor import make_llm_costed_extractor
+    from src.llm.client import LlmClient
+    from src.profile.loader import profile_memory_path
+
+    return make_memory_node(
+        extractor=make_llm_costed_extractor(LlmClient(settings)),
+        agent_id=self_id,
+        memory_path=profile_memory_path(self_id),
+        audience="internal",
+        settings=settings,
+        report_state_key="result_text",
+        costed=True,
+    )
 
 
 def build_remember_node(profile_id: str, settings, audience: str):

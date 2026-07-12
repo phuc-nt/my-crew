@@ -25,15 +25,22 @@ logger = logging.getLogger(__name__)
 
 
 def run_deep_agent_work(
-    *, title: str, handoff: str, context, settings, sandbox_cfg, loop_limit: int
+    *, title: str, handoff: str, context, settings, sandbox_cfg, loop_limit: int,
+    telemetry=None,
 ) -> tuple[str, float | None]:
-    """Run one team-step's work as a deepagents loop inside a token-free sandbox."""
+    """Run one team-step's work as a deepagents loop inside a token-free sandbox.
+
+    `telemetry` (optional StepTelemetry) receives summed token counts + cost provenance;
+    cost still returns on the tuple. Absent collector = no-op (byte-identical behavior).
+    """
     from deepagents import create_deep_agent
     from langchain_core.messages import HumanMessage, SystemMessage
     from langchain_openai import ChatOpenAI
 
     from src.config.settings import OPENROUTER_BASE_URL
+    from src.llm.model_pricing import estimate_cost
     from src.llm.team_task_prompt import build_team_step_messages
+    from src.runtime.step_telemetry import sum_usage_metadata
     from src.runtime_backends.deep_agent_pii_gate import gate_context_for_sandbox
     from src.runtime_backends.sandbox_backend import build_sandbox_backend
     from src.runtime_backends.sandbox_teardown import teardown_sandbox
@@ -65,8 +72,15 @@ def run_deep_agent_work(
             {"messages": [SystemMessage(content=system), HumanMessage(content=user)]},
             config={"recursion_limit": max(2, loop_limit * 2)},  # C5: bounded loop
         )
-        final = result["messages"][-1]
+        messages = result["messages"]
+        final = messages[-1]
         text = getattr(final, "content", "") or ""
-        return str(text), None  # cost unpriced-but-bounded; monthly budget_tracker is backstop
+        # Estimate cost from summed token usage × per-model price (LangChain's OpenRouter path
+        # surfaces no provider cost here). Missing usage/price → None; budget_tracker is backstop.
+        in_tok, out_tok = sum_usage_metadata(messages)
+        cost = estimate_cost(settings.openrouter_model, in_tok, out_tok)
+        if telemetry is not None:
+            telemetry.record(input_tokens=in_tok, output_tokens=out_tok, cost_source="estimated")
+        return str(text), cost
     finally:
         teardown_sandbox(backend)  # C6: best-effort container teardown on the normal path

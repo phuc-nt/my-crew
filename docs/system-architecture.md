@@ -1,9 +1,9 @@
 # System Architecture — my-crew
 
-> Kiến trúc kỹ thuật (as-built, v18). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
+> Kiến trúc kỹ thuật (as-built, v26). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
 > (vì sao) + [action-gateway-explainer](action-gateway-explainer.md) (mô hình an toàn) +
 > [codebase-summary](codebase-summary.md) (cái gì ở file nào).
-> Cập nhật: 2026-07-11.
+> Cập nhật: 2026-07-12.
 
 ## 1. Nguyên tắc kiến trúc
 
@@ -117,7 +117,20 @@ nhất) < ToolCalling (read-only loop + classify shim) < DeepAgent (shell tự d
 sandbox cách ly). Team-step egress công ty qua `external_write → ActionGateway` (Lớp A/B) — nối
 ở v20.5 (Phase 0; trước đó team-step chỉ ghi artifact nội bộ). User chọn runtime khi tạo agent.
 
-### 3.10 Frontend (`web/src/`)
+### 3.10 Telemetry capture + unified cost (v26)
+Mỗi team-step attempt ghi telemetry vào `captures.sqlite3` (17 columns: attempt_id, task_id,
+step_id, agent_id, engine, status, step_type, review_round, cost_usd, cost_source, input_tokens,
+output_tokens, started_at, ended_at, duration_ms, error, ts). WAL+busy_timeout tương tự
+team_task_store. Hook `run_team_step` thu thập lúc step kết thúc (best-effort, log WARNING
+nếu fail, không tắc quy trình). **INTERNAL state — không qua gateway** (`capture_db_path()` trong
+team_task_paths.py). Unified cost across 3 engines: create_agent + deep_agent dùng
+`config/model_prices.yaml` (mô hình đặt giá chỉnh sửa được, ví dụ placeholders minimax/qwen),
+estimate cost = Σ tokens × per-model price, column `cost_source = 'estimated' | 'exact'`.
+Remember-node extends team-step: deliver→remember→END (CostedMemoryExtractor ghi facts vào
+MEMORY.md, gộp cost LLM vào captured step cost), gated on delivered + internal + not-dry-run.
+Modules: `src/runtime/capture_store.py`, `src/llm/model_pricing.py`, `src/runtime/step_telemetry.py`.
+
+### 3.11 Frontend (`web/src/`)
 React 19 + Vite. Màn chính **Văn phòng** (`views/office-unified/`): 3 cột phòng-việc /
 hoạt-động / kết-quả + panel 3D (`views/office-3d/`, react-three-fiber). Reducer sự kiện
 (`agent-office-state.ts`) biến SSE stream → trạng thái bàn. Build dist commit vào
@@ -141,6 +154,7 @@ hoạt-động / kết-quả + panel 3D (`views/office-3d/`, react-three-fiber).
 |---|---|
 | `team_tasks.sqlite3` | Task đội + steps + lease state |
 | `office_room.sqlite3` | Office events (feed realtime, projected PII-safe) |
+| `captures.sqlite3` | Team-step telemetry: attempt_id, task_id, step_id, agent_id, engine, cost_usd, tokens (WAL, INTERNAL-only) |
 | `approvals.db` | Hàng đợi Lớp B |
 | `dedup.db` | Chống gửi trùng |
 | `checkpoints.db` | LangGraph checkpoint (report graphs; team graph KHÔNG checkpoint) |

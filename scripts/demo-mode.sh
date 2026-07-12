@@ -24,7 +24,7 @@ MARKER=$BACKUP/DEMO_ON
 SERVICE_PID_FILE=$BACKUP/service.pid
 PORT="${PORT:-8765}"
 DEMO_AGENTS=(truong-phong nghien-cuu noi-dung phan-tich kiem-dinh thiet-ke)
-SWAP_STORES=(office_room.sqlite3 team_tasks.sqlite3)
+SWAP_STORES=(office_room.sqlite3 team_tasks.sqlite3 captures.sqlite3)
 
 restart_app() {
   lsof -ti ":$PORT" 2>/dev/null | xargs kill 2>/dev/null || true
