@@ -114,3 +114,18 @@ def test_post_chat_empty_engine_reply_becomes_hint(monkeypatch):
 
     r = _client().post("/api/ops/chat", json={"message": "thời tiết hôm nay"})
     assert r.status_code == 200 and "quản lý đội" in r.json()["reply"]
+
+
+def test_ops_chat_commands_listing_is_descriptions_only(monkeypatch, tmp_path):
+    """v32 discoverability: the catalog listing exposes id/description/readonly and
+    NOTHING else (no slots internals, no handlers)."""
+    from fastapi.testclient import TestClient
+
+    from src.server.app import create_app
+
+    r = TestClient(create_app()).get("/api/ops/chat/commands")
+    assert r.status_code == 200
+    commands = r.json()["commands"]
+    ids = {c["id"] for c in commands}
+    assert {"create_agent", "get_status", "company_activity"} <= ids
+    assert all(set(c) == {"id", "description", "readonly"} for c in commands)

@@ -107,6 +107,12 @@ export function CompanyActivity() {
           </select>
         </label>
       </div>
+      {verdict && (
+        <p className="muted">
+          Bộ lọc kết quả chỉ áp dụng cho quyết định rào chắn — lượt chạy và bước việc đội
+          tạm ẩn khi đang lọc.
+        </p>
+      )}
       {loading && <p>Đang tải…</p>}
       {error && <p className="error">Lỗi: {error}</p>}
       {!loading && !error && items.length === 0 && (

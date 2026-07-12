@@ -24,12 +24,23 @@ export function AgentPage() {
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'lỗi'))
   }, [id])
 
-  if (error) return <p className="error">Lỗi: {error}</p>
+  if (error)
+    return (
+      <section>
+        <p className="error">Lỗi: {error}</p>
+        <p>
+          Nếu nhân sự này có hồ sơ trên máy nhưng chưa nằm trong đội (ví dụ vừa xoá hoặc
+          chép từ máy khác), vào <Link to="/team">trang Đội</Link> — mục "hồ sơ chưa đăng
+          ký" có nút thêm lại bằng một bấm.
+        </p>
+      </section>
+    )
   if (!status) return <p>Đang tải…</p>
 
   return (
     <section className="agent-page">
       <header className="agent-page-head">
+        <p className="agent-back"><Link to="/team">← Đội</Link></p>
         <h2>
           {status.name} <span className="muted">({id})</span>
         </h2>

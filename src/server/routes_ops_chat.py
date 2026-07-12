@@ -85,6 +85,22 @@ def ops_chat_available() -> dict:
         return {"available": False, "reason": exc.detail}
 
 
+@router.get("/chat/commands")
+def ops_chat_commands() -> dict:
+    """The ops catalog as a discoverable list (v32 audit: chat-only capabilities were
+    invisible until a command FAILED to match). Ids + descriptions only — never slots'
+    internals or handlers."""
+    from src.agent.ops_catalog import OPS_COMMANDS
+
+    return {
+        "commands": [
+            {"id": cid, "description": spec.get("description", ""),
+             "readonly": bool(spec.get("readonly"))}
+            for cid, spec in OPS_COMMANDS.items()
+        ]
+    }
+
+
 @router.post("/chat")
 def ops_chat(message: str = Body(..., embed=True)) -> dict:
     """One ops dialogue turn from the web. Returns {reply}.
