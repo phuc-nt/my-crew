@@ -276,12 +276,29 @@ class PackRegistry:
         )
 
 
+#: Gateway action types a pack catalog may declare (v31 P2). Everything else — incl.
+#: real native types like `email_send`/`telegram_send`/`gh_cli` that have their own
+#: dedicated build paths and policies — is rejected BY NAME at pack load: a pack must
+#: not be able to reach an arbitrary gateway type by declaring it in a catalog.
+_VETTED_COMMAND_TYPES = frozenset(
+    {"mcp_tool", "schedule_update", "team_task_create", "team_task_move", "gws_write"}
+)
+
+
 def _load_commands(domain: str, allowlist: dict[str, tuple[str, ...]]) -> dict[str, dict]:
     """Load a pack's optional chat-command catalog (`commands.py:COMMANDS`) — validated.
 
     FAIL-LOUD at load if any command names a tool the pack's own allowlist + Lớp A
     would not permit: the catalog is the ceiling of what chat can request, so a
     red-line tool must be impossible to even declare, not merely denied later.
+
+    v31 P2 — native types: a command may declare `type` ∈ `_VETTED_COMMAND_TYPES`
+    (default "mcp_tool", byte-identical for every existing catalog). For a NATIVE type
+    the load-time check is vetted-set membership ONLY: their Lớp A branches validate
+    payload STRUCTURE as hard categories, so probing them with a fake empty payload
+    would deny every legitimate command and block the pack from booting (the C2
+    chicken-egg). Structure is enforced at runtime twice — classify() on the real
+    payload, then the write handler's own re-enforcement.
     """
     if not (pack_dir(domain) / "commands.py").exists():
         return {}
@@ -300,6 +317,14 @@ def _load_commands(domain: str, allowlist: dict[str, tuple[str, ...]]) -> dict[s
                 f"pack {domain!r} command {command_id!r}: build_args must be callable "
                 "— it is the hook that confines requester args (e.g. pins projectKey)."
             )
+        atype = str(spec.get("type", "mcp_tool"))
+        if atype not in _VETTED_COMMAND_TYPES:
+            raise RuntimeError(
+                f"pack {domain!r} command {command_id!r} declares unvetted action type "
+                f"{atype!r} — a catalog may only use {sorted(_VETTED_COMMAND_TYPES)}."
+            )
+        if atype != "mcp_tool":
+            continue  # native type: runtime classify + handler are the structural gates
         probe = {
             "type": "mcp_tool",
             "server": str(spec.get("server", "")),

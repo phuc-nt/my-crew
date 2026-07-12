@@ -46,7 +46,14 @@ logger = logging.getLogger(__name__)
 # `email_send` (M3-P11 D2) is an outbound email — a mutation — so it funnels here and
 # inherits dry-run/kill-switch/dedup/audit + Lớp A/B automatically (never a side path).
 # `telegram_send` (v6 M13) is an outbound Telegram message — same reasoning.
-_MUTATING_TYPES = {"mcp_tool", "gh_cli", "email_send", "telegram_send"}
+# `schedule_update` (v31 P2) is an agent rewriting its OWN profile schedule — a config
+# mutation with real blast radius (when the agent acts unattended), same single door.
+# `team_task_create`/`team_task_move` (v31 P3) mutate the shared team-task store.
+# `gws_write` (v31 P4) spawns the gws CLI for Sheets/Docs writes (3-prefix table).
+_MUTATING_TYPES = {
+    "mcp_tool", "gh_cli", "email_send", "telegram_send", "schedule_update",
+    "team_task_create", "team_task_move", "gws_write",
+}
 
 # Rate limit: max mutations per rolling window (blast-radius cap, PDR §7.5).
 _RATE_LIMIT_MAX = 10

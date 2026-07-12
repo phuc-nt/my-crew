@@ -22,6 +22,7 @@ red line is the worst possible bug, so the design defaults to denial.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -102,6 +103,18 @@ def needs_interrupt(
         # Locked policy: EVERY outbound email needs human approval (no domain allowlist,
         # no internal/external split). Reached only after Lớp A passes in classify().
         return InterruptVerdict(True, "Lớp B: gửi email cần người duyệt")
+    if atype == "schedule_update":
+        # v31 P2: rescheduling changes when the agent acts on its own — sensitive but
+        # reversible ⇒ Lớp B. Guarded queues it; autonomous runs it audited (v30 path).
+        return InterruptVerdict(True, "Lớp B: đổi lịch chạy cần người duyệt")
+    if atype in ("team_task_create", "team_task_move"):
+        # v31 P3: creating/moving a team-task card changes shared team state —
+        # sensitive but reversible ⇒ Lớp B (guarded queues; autonomous runs audited).
+        return InterruptVerdict(True, "Lớp B: thao tác thẻ việc đội cần người duyệt")
+    if atype == "gws_write":
+        # v31 P4: company Sheets/Docs are INTERNAL assets (not external-channel
+        # semantics) — ordinary Lớp B: guarded queues, autonomous runs audited.
+        return InterruptVerdict(True, "Lớp B: ghi Google Sheets/Docs cần người duyệt")
     if atype == "mcp_tool":
         tool = str(action.get("tool", "")).lower()
         if any(m in tool for m in _LOP_B_MCP_TOOL_MARKERS):
@@ -406,6 +419,196 @@ def _hard_deny_email(
     return None
 
 
+# --- schedule_update (v31 P2): an agent re-scheduling ITS OWN reports ---
+#: Cron floor: no schedule entry may fire faster than this (an LLM must not be able to
+#: turn an agent into a per-minute spam loop / burn the budget).
+_SCHEDULE_MIN_INTERVAL_S = 300
+#: Cap on schedule entries carried by one update payload AND on the merged profile map
+#: (the handler re-enforces the merged side).
+_SCHEDULE_MAX_ENTRIES = 6
+
+
+def cron_floor_error(cron: Any) -> str | None:
+    """Reason string when `cron` is not a valid 5-field expression or fires faster than
+    the floor; None when acceptable. Shared by Lớp A (`_hard_deny_schedule_update`) and
+    the write handler's re-enforcement (schedule_write) so the two can never drift.
+
+    The interval is measured over consecutive fire times from a FIXED base so the
+    verdict is deterministic (a policy answer must not depend on when it is asked).
+    """
+    from datetime import datetime
+
+    from croniter import croniter
+
+    if not isinstance(cron, str) or not cron.strip():
+        return "schedule cron must be a non-empty string"
+    if not croniter.is_valid(cron):
+        return f"invalid cron expression {cron!r}"
+    try:
+        it = croniter(cron, datetime(2026, 1, 1, 0, 0))
+        prev = it.get_next(datetime)
+        for _ in range(5):
+            nxt = it.get_next(datetime)
+            if (nxt - prev).total_seconds() < _SCHEDULE_MIN_INTERVAL_S:
+                return (
+                    f"cron {cron!r} fires faster than every "
+                    f"{_SCHEDULE_MIN_INTERVAL_S // 60} minutes (floor)"
+                )
+            prev = nxt
+    except Exception:  # noqa: BLE001 — e.g. a never-firing date (Feb 30): a policy
+        # verdict must be a reason string at every gateway door, never an exception.
+        return f"cron {cron!r} never fires or cannot be evaluated"
+    return None
+
+
+def _hard_deny_schedule_update(action: dict[str, Any]) -> BlockVerdict | None:
+    """Lớp A checks for a self-schedule change. None = no red-line match.
+
+    Structural/floor violations are HARD categories (SECURITY), never NOT_ALLOWLISTED:
+    in autonomous mode a NOT_ALLOWLISTED block with a real handler is re-entered
+    `approved=True` and would be bypassed — the chat door denies it, but the
+    `execute()`/`approve()` doors would not. A hard category holds at every door.
+    Identity is NOT read here (and not carried by the payload at all): the handler is
+    a closure over the agent's own profile id, so there is nothing to validate.
+    """
+    cred = _credential_verdict(action)
+    if cred:
+        return cred
+    schedule = action.get("schedule")
+    if not isinstance(schedule, dict) or not schedule:
+        return BlockVerdict(
+            blocked=True,
+            category=BlockCategory.SECURITY,
+            reason="schedule_update must carry a non-empty {kind: cron} mapping",
+        )
+    if len(schedule) > _SCHEDULE_MAX_ENTRIES:
+        return BlockVerdict(
+            blocked=True,
+            category=BlockCategory.SECURITY,
+            reason=f"schedule_update carries more than {_SCHEDULE_MAX_ENTRIES} entries",
+        )
+    for kind, cron in schedule.items():
+        if not isinstance(kind, str) or not kind.strip():
+            return BlockVerdict(
+                blocked=True,
+                category=BlockCategory.SECURITY,
+                reason="schedule kind must be a non-empty string",
+            )
+        err = cron_floor_error(cron)
+        if err:
+            return BlockVerdict(blocked=True, category=BlockCategory.SECURITY, reason=err)
+    return None
+
+
+# --- gws_write (v31 P4): Google Sheets/Docs writes via the `gws` CLI ---
+#: The ONLY gws invocations an agent may make, as argv prefixes (mirrors the gh model).
+#: Real gws 0.13.2 syntax (pre-flight verified): helper subcommands carry a `+`.
+#: Gmail is deliberately ABSENT — outbound mail goes through the `email_send` type
+#: (its own Lớp A/B policy + SMTP handler), never through a second door.
+_GWS_ALLOWLIST_PREFIXES: tuple[tuple[str, ...], ...] = (
+    ("sheets", "+append"),
+    ("docs", "documents", "create"),
+    ("docs", "+write"),
+)
+#: Destructive/permission verbs anywhere in a gws argv = Lớp A, both trust modes.
+_GWS_DATA_LOSS_MARKERS = ("delete", "clear", "trash", "batchclear")
+_GWS_SECURITY_MARKERS = ("share", "permission", "permissions", "publish")
+
+
+def _hard_deny_gws(action: dict[str, Any]) -> BlockVerdict | None:
+    """Lớp A checks for a gws CLI write. None = allowed past the red line.
+
+    EVERYTHING here is a hard category (F1): unlike `gh_cli` (whose allowlist miss is
+    NOT_ALLOWLISTED and may be human-approved), the gws surface is a fixed 3-prefix
+    table — an argv outside it is a policy violation, not a queue candidate, because in
+    autonomous mode a NOT_ALLOWLISTED deny with a real handler would be re-entered
+    `approved=True` and executed.
+
+    The destructive/permission markers scan EVERY argv token, including content values
+    ("--values 'delete old records'" is denied). That is a deliberate fail-closed false
+    positive: content wording can be rephrased; a missed destructive verb cannot be
+    undone.
+    """
+    argv_raw = action.get("argv", [])
+    argv_raw = [str(a) for a in argv_raw] if isinstance(argv_raw, (list, tuple)) else []
+    argv = [a.lower() for a in argv_raw]
+
+    cred = _credential_verdict(action)
+    if cred:
+        return cred
+    if not argv:
+        return BlockVerdict(
+            blocked=True,
+            category=BlockCategory.SECURITY,
+            reason="gws_write must carry a non-empty argv",
+        )
+    for marker_set, category, label in (
+        (_GWS_DATA_LOSS_MARKERS, BlockCategory.DATA_LOSS, "destructive"),
+        (_GWS_SECURITY_MARKERS, BlockCategory.SECURITY, "permission/visibility"),
+    ):
+        for tok in argv:
+            if any(m in tok for m in marker_set):
+                return BlockVerdict(
+                    blocked=True,
+                    category=category,
+                    reason=f"gws argv contains a {label} verb ({tok!r})",
+                )
+    if not _matches_any_prefix(argv, _GWS_ALLOWLIST_PREFIXES):
+        return BlockVerdict(
+            blocked=True,
+            category=BlockCategory.SECURITY,
+            reason=f"gws subcommand {' '.join(argv[:3])!r} is outside the fixed prefix table",
+        )
+    return None
+
+
+# --- team_task_create / team_task_move (v31 P3): kanban card actions ---
+_TEAM_TASK_TITLE_MAX = 200
+#: Task ids are coordinator-minted hex (uuid4[:12]) — bound the shape so a payload
+#: cannot smuggle structured junk through the id field.
+_TEAM_TASK_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+_AGENT_ID_SHAPE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
+
+
+def _hard_deny_team_task(action: dict[str, Any]) -> BlockVerdict | None:
+    """Lớp A checks shared by the two kanban card types. None = no red-line match.
+
+    Structural denies are HARD (SECURITY), never NOT_ALLOWLISTED — same F1 posture as
+    `schedule_update`: they must hold at the `execute()`/approve doors too, not only at
+    the chat door. Store-verified PERMISSIONS (assignee ∈ roster, actor may move this
+    task) live in the write handler — they need the store and the actor closure, which
+    policy code deliberately does not have.
+    """
+    cred = _credential_verdict(action)
+    if cred:
+        return cred
+    atype = str(action.get("type", "")).lower()
+
+    def _deny(reason: str) -> BlockVerdict:
+        return BlockVerdict(blocked=True, category=BlockCategory.SECURITY, reason=reason)
+
+    if atype == "team_task_create":
+        title = action.get("title")
+        if not isinstance(title, str) or not title.strip():
+            return _deny("team_task_create must carry a non-empty title")
+        if len(title) > _TEAM_TASK_TITLE_MAX:
+            return _deny(f"team_task_create title exceeds {_TEAM_TASK_TITLE_MAX} chars")
+        assignee = action.get("assignee")
+        if not isinstance(assignee, str) or not _AGENT_ID_SHAPE_RE.match(assignee):
+            return _deny("team_task_create assignee must be a valid agent id")
+        return None
+
+    task_id = action.get("task_id")
+    if not isinstance(task_id, str) or not _TEAM_TASK_ID_RE.match(task_id):
+        return _deny("team_task_move task_id has an invalid shape")
+    status = action.get("status")
+    from src.runtime.team_task_store import _TASK_STATUSES
+
+    if status not in _TASK_STATUSES:
+        return _deny(f"team_task_move status must be one of {_TASK_STATUSES}")
+    return None
+
+
 def _hard_deny_telegram(action: dict[str, Any]) -> BlockVerdict | None:
     """Lớp A checks for a telegram send (v6 M13). None = no red-line match.
 
@@ -599,6 +802,31 @@ def classify(
         # secrets + structural validity; a valid send executes directly (internal-only
         # by construction — see _hard_deny_telegram + the handler's chat allowlist).
         denied = _hard_deny_telegram(action)
+        if denied:
+            return denied
+        return _ALLOW
+    elif action_type == "schedule_update":
+        # v31 P2: native self-reschedule. Lớp A scans secrets + structure + cron floor
+        # (all HARD categories); a valid update is allowed past Lớp A, then Lớp B-queued
+        # in guarded mode (needs_interrupt) / run audited in autonomous. The write
+        # handler re-enforces everything again before touching profile.yaml.
+        denied = _hard_deny_schedule_update(action)
+        if denied:
+            return denied
+        return _ALLOW
+    elif action_type in ("team_task_create", "team_task_move"):
+        # v31 P3: kanban card actions. Lớp A scans secrets + structure (hard
+        # categories); permissions (assignee ∈ roster, actor may move THIS task) are
+        # store-verified in the write handler with the actor's closure identity.
+        denied = _hard_deny_team_task(action)
+        if denied:
+            return denied
+        return _ALLOW
+    elif action_type == "gws_write":
+        # v31 P4: Sheets/Docs write via the gws CLI. The 3-prefix table + destructive
+        # verb scan are ALL hard categories (see _hard_deny_gws); a clean argv is
+        # allowed past Lớp A then Lớp B-gated (internal company asset).
+        denied = _hard_deny_gws(action)
         if denied:
             return denied
         return _ALLOW

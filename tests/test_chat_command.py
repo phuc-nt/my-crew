@@ -62,8 +62,9 @@ def _mention(ts="42.1", text="@acme tạo ticket cho bug login"):
 
 def test_pm_pack_ships_create_issue_catalog():
     commands = _pm_pack().commands
-    assert set(commands) == {"create_issue"}
+    assert set(commands) == {"create_issue", "update_my_schedule"}
     assert commands["create_issue"]["server"] == "jira"
+    assert commands["update_my_schedule"]["type"] == "schedule_update"
 
 
 def test_catalog_with_forbidden_tool_is_rejected_at_load(tmp_path, monkeypatch):

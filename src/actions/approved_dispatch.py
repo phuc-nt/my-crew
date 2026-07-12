@@ -15,6 +15,36 @@ monkeypatch target (`src.actions.slack_write.make_slack_post_handler`) still wor
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
+#: Native types whose handler needs the AGENT's identity (a closure over its profile id).
+#: `dispatch_approved_action` alone cannot run them — see `make_agent_bound_dispatch`.
+_AGENT_BOUND_TYPES = frozenset({"schedule_update", "team_task_create", "team_task_move"})
+
+
+def make_agent_bound_dispatch(profile_id: str, config) -> Callable[[dict], str]:
+    """Dispatch for call sites that HOLD the agent's identity (web approve, mpm, chat).
+
+    v31 P2: native action types like `schedule_update` are self-only BY ARCHITECTURE —
+    the target agent is a closure over `profile_id` taken from the call site's `loaded`
+    profile, NEVER read from the action dict (nothing to forge). Everything else falls
+    through to the shared `dispatch_approved_action` unchanged.
+    """
+
+    def _handler(action: dict) -> str:
+        atype = str(action.get("type"))
+        if atype == "schedule_update":
+            from src.actions.schedule_write import make_schedule_update_handler
+
+            return make_schedule_update_handler(profile_id)(action)
+        if atype in ("team_task_create", "team_task_move"):
+            from src.actions.team_task_write import make_team_task_handler
+
+            return make_team_task_handler(profile_id)(action)
+        return dispatch_approved_action(action, config)
+
+    return _handler
+
 
 def dispatch_approved_action(action: dict, config) -> str:
     """Dispatch an approved Lớp B action to its real executor; return the summary."""
@@ -38,6 +68,13 @@ def dispatch_approved_action(action: dict, config) -> str:
         if spec is None:
             raise RuntimeError("linear MCP server not declared; cannot dispatch approved comment.")
         return make_linear_comment_handler(spec)(action)
+    # v31 P4: an approved gws Sheets/Docs write spawns the gws CLI. No agent identity
+    # needed (the CLI's own OAuth is the credential), so it lives in the SHARED dispatch
+    # — every approve path (web/mpm/chat AND legacy cli) can run it.
+    if action.get("type") == "gws_write":
+        from src.actions.gws_write import make_gws_handler
+
+        return make_gws_handler()(action)
     # M3-P11 (D2): an approved outbound email routes to the SMTP handler. The SMTP config
     # (and the env-resolved password) stay in the handler closure, never on the action.
     if action.get("type") == "email_send":
@@ -47,5 +84,13 @@ def dispatch_approved_action(action: dict, config) -> str:
         if smtp is None:
             raise RuntimeError("smtp not configured; cannot dispatch approved email.")
         return make_email_handler(smtp)(action)
+    if str(action.get("type")) in _AGENT_BOUND_TYPES:
+        # The legacy CLI approve path has no loaded profile, so it cannot build the
+        # identity closure. Explicit, named refusal — never a silent no-op.
+        raise RuntimeError(
+            f"action type {action.get('type')!r} needs an agent-bound handler — approve "
+            "it from the dashboard, `mpm agent approve`, or chat (legacy CLI approve "
+            "does not support this type)."
+        )
     label = action.get("tool") or action.get("argv") or action.get("type")
     raise RuntimeError(f"No live handler wired for approved action: {label!r}")

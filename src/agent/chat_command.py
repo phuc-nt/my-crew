@@ -152,17 +152,28 @@ def maybe_handle_command(
     # fallback here: a command without build_args ships the schema-clean args as-is.
     build_args = spec.get("build_args")
     action_args = build_args(clean, config) if build_args is not None else dict(clean)
-    action = {
-        "type": "mcp_tool",
-        "server": str(spec["server"]),
-        "tool": str(spec["tool"]),
-        "args": action_args,
-    }
+    # v31 P2: a catalog entry may declare a NATIVE gateway type (vetted at pack load —
+    # registry._load_commands). Default stays "mcp_tool" so every existing catalog is
+    # byte-identical. A native action carries the payload fields directly (no
+    # server/tool); the type's own Lớp A branch + write handler validate it.
+    atype = str(spec.get("type", "mcp_tool"))
+    if atype == "mcp_tool":
+        action = {
+            "type": "mcp_tool",
+            "server": str(spec["server"]),
+            "tool": str(spec["tool"]),
+            "args": action_args,
+        }
+    else:
+        # `type` LAST so a build_args payload can never override the load-time-vetted type.
+        action = {**action_args, "type": atype}
     # v8 M23: thread the immutable chat SENDER + an auto-execute handler so the trust ladder
     # can run this WITHOUT queuing when the sender is trusted (Telegram DM). The handler is the
     # same approved-dispatch the human-approval path would use — Lớp A/kill-switch/dry-run/dedup
     # still re-apply inside the gateway. Non-trusted / non-Telegram / group → queued as before.
-    from src.actions.approved_dispatch import dispatch_approved_action
+    # The agent-bound variant closes the AGENT's own identity over native types
+    # (schedule_update writes THIS agent's profile, never one named by the payload).
+    from src.actions.approved_dispatch import make_agent_bound_dispatch
 
     result = gateway.enqueue_for_approval(
         action,
@@ -171,7 +182,7 @@ def maybe_handle_command(
         sender_id=str(mention.get("user") or ""),
         transport=str(mention.get("transport") or ""),
         chat_id=str(mention.get("channel") or ""),
-        auto_handler=lambda a: dispatch_approved_action(a, config),
+        auto_handler=make_agent_bound_dispatch(loaded.profile_id, config),
     )
     if result.status == "executed":
         # Name the real reason it ran: autonomous mode executes for any reachable sender;

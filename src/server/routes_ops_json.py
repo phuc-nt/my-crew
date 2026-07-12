@@ -16,7 +16,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Body, HTTPException
 
 from src.actions.action_gateway import HardBlockedError
-from src.actions.approved_dispatch import dispatch_approved_action
 from src.server import profile_editor
 from src.server.ops_helpers import build_gateway, require_agent
 
@@ -55,7 +54,11 @@ def approve(agent_id: str, approval_id: int) -> dict:
     loaded = require_agent(agent_id)
     gw = build_gateway(loaded)
     try:
-        gw.approve(approval_id, handler=lambda a: dispatch_approved_action(a, loaded.config))
+        # Agent-bound dispatch (v31 P2): native types (schedule_update) get their identity
+        # closure from THIS route's agent_id; mcp/email fall through to the shared dispatch.
+        from src.actions.approved_dispatch import make_agent_bound_dispatch
+
+        gw.approve(approval_id, handler=make_agent_bound_dispatch(agent_id, loaded.config))
     except ValueError as exc:  # unknown / already-consumed id
         raise HTTPException(status_code=400, detail=str(exc)) from None
     except HardBlockedError as exc:  # Lớp A — never approvable

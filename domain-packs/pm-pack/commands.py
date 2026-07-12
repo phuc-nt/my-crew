@@ -23,6 +23,21 @@ def _create_issue_args(args: dict[str, str], config: Any) -> dict[str, str]:
     return out
 
 
+def _schedule_update_args(args: dict[str, str], config: Any) -> dict[str, Any]:
+    """Payload for the native `schedule_update` type (v31 P2). Carries NO agent id —
+    the target is always the agent answering the chat (identity is a handler closure).
+
+    The dedup hint is STATE-BEARING (target value + minute stamp): a real A→B→A
+    re-schedule mints distinct keys, so the no-TTL dedup store can't swallow the
+    third change as a "duplicate" of the first.
+    """
+    from datetime import datetime
+
+    kind, cron = args["kind"], args["cron"]
+    stamp = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    return {"schedule": {kind: cron}, "dedup_hint": f"{kind}:{cron}:{stamp}"}
+
+
 COMMANDS: dict[str, dict] = {
     "create_issue": {
         "description": (
@@ -36,5 +51,19 @@ COMMANDS: dict[str, dict] = {
             "description": {"required": False, "max_len": 2000},
         },
         "build_args": _create_issue_args,
+    },
+    "update_my_schedule": {
+        "description": (
+            "Đổi lịch chạy một báo cáo của CHÍNH agent này (không đổi được lịch agent "
+            "khác). args: kind (mã báo cáo, vd 'daily'), cron (biểu thức cron 5 trường, "
+            "vd '0 8 * * *' = 8h sáng mỗi ngày; không nhanh hơn mỗi 5 phút). "
+            "Hiệu lực từ lần khởi động lại service kế tiếp."
+        ),
+        "type": "schedule_update",
+        "args_schema": {
+            "kind": {"required": True, "max_len": 30, "pattern": r"[a-z0-9][a-z0-9_-]*"},
+            "cron": {"required": True, "max_len": 60},
+        },
+        "build_args": _schedule_update_args,
     },
 }

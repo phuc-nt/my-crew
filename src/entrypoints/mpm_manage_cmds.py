@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import sys
 
-from src.actions.approved_dispatch import dispatch_approved_action as _dispatch_approved_action
 from src.entrypoints.mpm import _flag_value
 from src.runtime.agent_paths import agent_data_dir
 
@@ -71,8 +70,17 @@ def _approve(loaded, rest: list[str]) -> int:
         return 2
     gw = _gateway(loaded)
     try:
+        # Agent-bound dispatch (v31 P2): native types (schedule_update) close over THIS
+        # loaded agent's identity; everything else falls through to the shared dispatch.
+        from src.actions.approved_dispatch import make_agent_bound_dispatch
+
+        # getattr: production `loaded` is a LoadedProfile (always has profile_id);
+        # an id-less double simply gets a dispatch that can't run agent-bound types.
         result = gw.approve(
-            int(rest[0]), handler=lambda action: _dispatch_approved_action(action, loaded.config)
+            int(rest[0]),
+            handler=make_agent_bound_dispatch(
+                getattr(loaded, "profile_id", ""), loaded.config
+            ),
         )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)

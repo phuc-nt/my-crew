@@ -86,6 +86,39 @@ export function summarizeAction(action: PendingAction, reason = ''): ActionSumma
   if (type === 'telegram_send')
     return { text: 'Gửi tin nhắn Telegram', external: false }
 
+  // v31 native types. gws writes touch COMPANY Sheets/Docs — internal assets
+  // (external:false matches the server's needs_interrupt semantics for gws_write).
+  if (type === 'gws_write') {
+    const argv = (action.argv ?? []).map((a) => String(a))
+    const lower = argv.map((a) => a.toLowerCase())
+    if (lower[0] === 'sheets' && lower[1] === '+append')
+      return { text: 'Thêm dòng vào Google Sheet của công ty', external: false }
+    if (lower[0] === 'docs' && lower[1] === 'documents' && lower[2] === 'create')
+      return { text: 'Tạo Google Doc mới (rỗng)', external: false }
+    if (lower[0] === 'docs' && lower[1] === '+write')
+      return { text: 'Ghi nội dung vào một Google Doc', external: false }
+    return { text: `Lệnh Google Workspace: ${argv.slice(0, 3).join(' ') || '(chưa rõ)'}`, external: false }
+  }
+
+  if (type === 'schedule_update') {
+    const entries = Object.entries(action.schedule ?? {})
+      .map(([k, v]) => `${k} → ${String(v)}`)
+      .join(', ')
+    return { text: `Agent tự đổi lịch chạy: ${entries || '(chưa rõ)'}`, external: false }
+  }
+
+  if (type === 'team_task_create')
+    return {
+      text: `Đề xuất thẻ việc '${action.title ?? '(chưa rõ)'}' giao ${action.assignee ?? '?'}`,
+      external: false,
+    }
+
+  if (type === 'team_task_move')
+    return {
+      text: `Chuyển thẻ việc ${action.task_id ?? '?'} sang '${action.status ?? '?'}'`,
+      external: false,
+    }
+
   // Fully unknown → best-effort readable line from whatever we have.
   const hint = action.tool || action.server || action.type || (action.argv ?? []).slice(0, 3).join(' ')
   return { text: `Hành động: ${hint || '(không rõ loại)'}`, external: false }
