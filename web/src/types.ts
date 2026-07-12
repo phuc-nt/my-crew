@@ -196,7 +196,10 @@ export interface CreateAgentSpec {
   bindings: CreateAgentBindings
   persona?: string
   web_search?: boolean
-  agent_runtime?: string // v20.5: 'create_agent' | 'deep_agent' (native omitted = default)
+  // v20.5/v27: a bare kind string ('create_agent') OR, for deep_agent, a mapping carrying its
+  // required sandbox block ('native' omitted = default). A bare 'deep_agent' string would be DOA
+  // (missing sandbox), so the wizard emits the mapping form for it.
+  agent_runtime?: string | { kind: string; sandbox: { provider: string } }
 }
 
 export interface CreateAgentResult {

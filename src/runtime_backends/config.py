@@ -6,12 +6,16 @@ store / postgres_dsn / tracing).
 v20.5 adds per-runtime guardrail caps via `caps()`:
   - `runtime_loop_limit` — the tool-calling / deep-agent RECURSION cap (react super-steps). This
     is DISTINCT from `task_decomposition.MAX_STEPS` (the DAG-decomposition ceiling used by the
-    cost estimator); the two must never be conflated (red-team F8). Default per kind.
+    cost estimator); the two must never be conflated (red-team F8). Default per kind (deep_agent
+    16). NOTE: the loops pass `recursion_limit = runtime_loop_limit * 2` to their LangGraph
+    `invoke` — LangGraph counts each tool ROUND as ~2 super-steps (the model turn + the tool
+    turn), so the ×2 makes `runtime_loop_limit` read as "tool rounds" while the graph gets the
+    super-step budget. So deep_agent's effective recursion_limit is 32.
   - `cost_cap_usd` — OBSERVABILITY ONLY in v20.5. The real per-task hard stop is
     `company.team_task_cap_usd`, enforced task-level in the coordinator; a per-runtime value
     cannot lower a shared per-task cap without a per-agent enforcement seam that does not exist
     yet, so we record the intent but do NOT claim enforcement (red-team C4). None ⇒ use company cap.
-  - `sandbox` — the deep-agent sandbox config (`{provider: fake|modal|e2b}`), REQUIRED for
+  - `sandbox` — the deep-agent sandbox config (`{provider: fake|docker}`), REQUIRED for
     deep_agent (Phase 2/3), rejected on other kinds.
 """
 

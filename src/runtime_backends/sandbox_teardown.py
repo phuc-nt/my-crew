@@ -1,12 +1,12 @@
 """Sandbox teardown registry (v20.5 Phase 3, red-team C6).
 
 A deep-agent step spawns a sandbox container. The team-step worker is a detached subprocess
-killed by SIGKILL when its 600s lease expires — SIGKILL runs no `finally`/`atexit`, so a naive
-teardown would leak the container (still consuming resources). This registry gives the runtime a
-best-effort teardown it calls on the normal path, and documents the SIGKILL gap: the real
-backstop against an orphaned container is the container's OWN self-destruct (the Docker backend
-runs `sleep 3600`, so an orphan dies within an hour on its own — an idle ceiling well under a
-runaway's cost, and the operator can `docker ps`/`docker rm` to reap sooner).
+killed by SIGKILL when its 600s lease expires — SIGKILL runs no `finally`/`atexit`, so this
+best-effort teardown (called on the normal path) never runs for a lease-killed worker. Three
+layers cover the orphan case: the container self-terminates (`sleep 600`), Docker `auto_remove`
+deletes it once it exits, and the ticker's active reaper (`sandbox_reaper`) removes any
+still-running container older than the lease window. So an orphaned container is cleaned within
+the lease window, not left for an hour.
 """
 
 from __future__ import annotations

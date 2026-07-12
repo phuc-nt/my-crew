@@ -135,6 +135,22 @@ def _last_run_event(agent_id: str) -> dict | None:
     return read_last_run_event(agent_id)
 
 
+def _reap_sandboxes_best_effort() -> None:
+    """Sweep orphaned deep_agent sandbox containers once per tick (best-effort).
+
+    Runs in the ticker's own process — the single long-lived scheduler — rather than a second
+    daemon that could race the store. It must never raise or block the tick: the reaper is itself
+    best-effort (Docker-unavailable → no-op, bounded socket timeout), and this wrapper is a final
+    guard so a reaper bug cannot stall report/team-tick spawning.
+    """
+    try:
+        from src.runtime_backends.sandbox_reaper import reap_orphaned_sandboxes
+
+        reap_orphaned_sandboxes()
+    except Exception as exc:  # noqa: BLE001 — telemetry cleanup must never break the scheduler
+        logger.warning("sandbox reaper sweep failed (ignored): %s", exc)
+
+
 class Service:
     """Holds the in-memory `last_fire` map across ticks (per (agent_id, kind))."""
 
@@ -192,6 +208,7 @@ class Service:
                 spawned += 1
             if spawned >= self._cap:
                 break
+        _reap_sandboxes_best_effort()
         return outcomes
 
     def run_forever(self, *, interval: int = _TICK_INTERVAL_S) -> None:  # pragma: no cover

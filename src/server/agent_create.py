@@ -151,11 +151,18 @@ def _build_profile_doc(spec: dict, profiles_dir) -> tuple[str, dict, str | None]
     # so a spec can't smuggle arbitrary values into profile.yaml through this key.
     if spec.get("web_search"):
         doc["web_search"] = True
-    # v20.5: opt-in agent runtime backend. Only a known kind is written; the loader validates it
-    # (unknown kind → RuntimeError at load, caught by the create flow's builder run below).
-    runtime_kind = str(spec.get("agent_runtime") or "").strip()
-    if runtime_kind and runtime_kind != "native":
-        doc["agent_runtime"] = runtime_kind
+    # v20.5: opt-in agent runtime backend. Either a bare kind string (native/create_agent) or a
+    # mapping {kind, sandbox: {...}} (deep_agent needs a sandbox block). The loader validates
+    # either shape (parse_agent_runtime_config accepts both); an unknown kind → RuntimeError at
+    # load, caught by the create flow's builder run below. A deep_agent written as a bare string
+    # would be DOA (its required sandbox block missing), so the mapping form must pass through.
+    runtime = spec.get("agent_runtime")
+    if isinstance(runtime, dict) and runtime.get("kind"):
+        doc["agent_runtime"] = runtime
+    elif isinstance(runtime, str):
+        runtime_kind = runtime.strip()
+        if runtime_kind and runtime_kind != "native":
+            doc["agent_runtime"] = runtime_kind
     _apply_bindings(doc, spec.get("bindings") or {})
 
     # Run the real builders — the exact validation `load_profile` applies (incl. the

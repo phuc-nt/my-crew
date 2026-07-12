@@ -54,22 +54,33 @@ def test_report_not_supported():
 # --- PII gate --------------------------------------------------------------------------
 
 
-def test_pii_gate_strips_internal_context():
-    from src.profile.context import ProfileContext
-    from src.runtime_backends.deep_agent_pii_gate import gate_context_for_sandbox
+def test_sanitize_bundle_redacts_internal_tokens():
+    # The trust boundary: every internal channel is sanitized before it can reach the sandbox.
+    from src.runtime_backends.deep_agent_sanitizer import sanitize_bundle
 
-    ctx = ProfileContext(
-        persona="Bạn là nhân viên nghiên cứu.",
-        project="dự án X",
-        memory="BÍ MẬT nội bộ: lương nhân viên A = 50tr",
-        capability="skill nội bộ",
+    def _redact(text):  # a fake sanitizer that strips a known marker
+        return text.replace("BÍ MẬT", "[đã ẩn]"), True
+
+    bundle, ok = sanitize_bundle(
+        _redact, persona="Bạn là NV.", project="dự án X", memory="BÍ MẬT lương A = 50tr",
+        capability="skill nội bộ", handoff="BÍ MẬT: SCRUM-123",
     )
-    ctx = gate_context_for_sandbox(ctx)
-    assert ctx.persona == "Bạn là nhân viên nghiên cứu."  # kept (role framing)
-    assert ctx.project == "dự án X"  # kept (work input)
-    assert ctx.memory == ""  # STRIPPED (red-team H2)
-    assert ctx.capability == ""  # STRIPPED
-    assert ctx.company_docs == ()  # STRIPPED
+    assert ok is True
+    assert "BÍ MẬT" not in bundle.memory
+    assert "BÍ MẬT" not in bundle.handoff
+
+
+def test_sanitize_failure_reports_not_ok():
+    # A failed sanitize pass returns ok=False so the caller can force network off (fail-closed).
+    from src.runtime_backends.deep_agent_sanitizer import sanitize_bundle
+
+    def _fail(_text):
+        return "", False
+
+    _bundle, ok = sanitize_bundle(
+        _fail, persona="P", project="p", memory="m", capability="c", handoff="h"
+    )
+    assert ok is False
 
 
 # --- teardown --------------------------------------------------------------------------

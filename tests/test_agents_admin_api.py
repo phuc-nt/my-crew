@@ -156,6 +156,19 @@ def test_create_writes_agent_runtime_opt_in(client, tmp_world):
     assert "agent_runtime" not in doc2  # native = default, omitted
 
 
+def test_create_writes_deep_agent_runtime_mapping(client, tmp_world):
+    # v27: a deep_agent is created with its sandbox mapping (not a bare string, which would be
+    # DOA). The handler passes the mapping through and the loader round-trips it.
+    _, profiles = tmp_world
+    import yaml
+
+    spec = {**_GOOD_SPEC, "id": "deep-map", "reports": [], "schedule": {},
+            "agent_runtime": {"kind": "deep_agent", "sandbox": {"provider": "docker"}}}
+    assert client.post("/api/agents/create", json=spec).status_code == 201
+    doc = yaml.safe_load((profiles / "deep-map" / "profile.yaml").read_text(encoding="utf-8"))
+    assert doc["agent_runtime"] == {"kind": "deep_agent", "sandbox": {"provider": "docker"}}
+
+
 @pytest.mark.parametrize(
     ("patch", "fragment"),
     [

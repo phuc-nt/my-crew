@@ -1,6 +1,6 @@
 # System Architecture — my-crew
 
-> Kiến trúc kỹ thuật (as-built, v26). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
+> Kiến trúc kỹ thuật (as-built, v27). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
 > (vì sao) + [action-gateway-explainer](action-gateway-explainer.md) (mô hình an toàn) +
 > [codebase-summary](codebase-summary.md) (cái gì ở file nào).
 > Cập nhật: 2026-07-12.
@@ -92,7 +92,7 @@ chọn nay raise rõ). Memory tiếp tục vào INTERNAL user-msg qua `build_con
 + `skills/` (per-agent, body wrap `format_internal_content`, không shadow pack skill).
 Capability block auto-gen (`capability_block.py`) cũng INTERNAL-only cùng path.
 
-### 3.9 AgentRuntime backends (`src/runtime_backends/`, v20)
+### 3.9 AgentRuntime backends (`src/runtime_backends/`, v20–v27)
 Tách agent-LOOP khỏi điều phối + an toàn. `resolve_runtime(loaded)` chọn backend theo
 `agent_runtime:` (native|create_agent|deep_agent; default native, kill-switch
 `RUNTIME_FORCE_NATIVE`). `NativeGraphRuntime` = graph hiện tại byte-identical.
@@ -106,16 +106,22 @@ thiết kế nhưng CHƯA nối (`deps.external_write=None`). Egress công ty Đ
 (daily/weekly/okr/resource) vốn wire ActionGateway đầy đủ. Vậy ToolCalling/Native team-step KHÔNG
 egress → "invariant #1 giữ" đúng theo nghĩa team-step không có đường ra ngoài, KHÔNG phải "output
 đi qua gateway". Nối `external_write→gateway` là tính năng để step tự egress (kế hoạch v20.5).
-`DeepAgentRuntime` (v20.5) cháy thật: `create_deep_agent` chạy shell CHỈ trong sandbox
-(`fake` test | `docker` self-hosted, token-free, không mount host) — fail-closed positive
-allowlist reject `local`/managed-provider/unknown; PII gate loại internal-context trước sandbox;
-loop cap `runtime_loop_limit` per-runtime. 3 ổ cắm community: skill agentskills.io folder-form ·
-pack-MCP spawn gate (default-deny) · pack template + PACK-AUTHORING.
 
-**Guardrail phân tầng (v20.5)**: độ-tự-do LLM ↔ độ-cách-ly nghịch nhau — Native (0 tool, chặt
+**DeepAgentRuntime (v20.5–v27)**: `create_deep_agent` chạy shell CHỈ trong sandbox (`fake` test |
+`docker` self-hosted, token-free, không mount host). Loop cap `runtime_loop_limit` per-runtime.
+**V27 hardening**: (1) **Input sanitization** — 5 channels (persona/project/memory/capability/
+handoff) được SANITIZED qua LLM pass trước sandbox để loại token/issue-key/tên-người/secret; nếu
+sanitize fail → network OFF (fail-closed AND-gate với opt-in network). (2) **Container hardening**
+— cap_drop=ALL, no-new-privileges, non-root user=nobody, network-off-default, mem_limit/pids_limit/
+read_only/tmpfs (HARD group fail-closed, DEGRADABLE group với warning). (3) **Reaper** — new
+`sandbox_reaper.py` runs mỗi tick để xóa container orphaned (SIGKILL'd worker), tuổi > lease_TTL
++ grace. (4) **Cost robustness** — `estimate_cost` reject nan/inf prices (→None, never poison budget
+cap). Sanitizer là trust boundary cho network-safe deep_agent; wizard emits `{kind, sandbox:{provider}}`.
+
+**Guardrail phân tầng (v20.5–v27)**: độ-tự-do LLM ↔ độ-cách-ly nghịch nhau — Native (0 tool, chặt
 nhất) < ToolCalling (read-only loop + classify shim) < DeepAgent (shell tự do nhưng trong Docker
-sandbox cách ly). Team-step egress công ty qua `external_write → ActionGateway` (Lớp A/B) — nối
-ở v20.5 (Phase 0; trước đó team-step chỉ ghi artifact nội bộ). User chọn runtime khi tạo agent.
+sandbox cách ly + SANITIZE). Team-step egress công ty qua `external_write → ActionGateway` (Lớp A/B).
+User chọn runtime khi tạo agent; role template có `recommended_runtime` prefill.
 
 ### 3.10 Telemetry capture + unified cost (v26)
 Mỗi team-step attempt ghi telemetry vào `captures.sqlite3` (17 columns: attempt_id, task_id,

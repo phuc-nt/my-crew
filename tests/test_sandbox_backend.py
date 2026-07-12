@@ -62,9 +62,133 @@ def test_docker_unavailable_fails_closed(monkeypatch):
     # If Docker is not running, the docker provider raises SandboxDenied (never host shell).
     from src.runtime_backends import sandbox_backend as sb
 
-    def _boom(image):
+    def _boom(image, network=False):
         raise RuntimeError("Cannot connect to the Docker daemon")
 
     monkeypatch.setattr(sb, "_make_docker", lambda: _boom)
     with pytest.raises(sb.SandboxDenied, match="Docker sandbox không khả dụng"):
         sb.DockerSandboxBackend()
+
+
+# --- Docker container hardening (injected fake client; no real daemon) -----------------
+
+
+class _FakeContainer:
+    short_id = "deadbeef"
+
+    def remove(self, force=False):
+        pass
+
+
+class _FakeDockerClient:
+    """Captures the kwargs of each containers.run call; optionally raises to test degrade."""
+
+    def __init__(self, *, raise_on=None):
+        # raise_on: a set of kwarg keys whose PRESENCE triggers an APIError (simulating a daemon
+        # that rejects those kwargs). None ⇒ never raise.
+        self._raise_on = raise_on or set()
+        self.runs: list[dict] = []
+
+        class _Containers:
+            def __init__(self, outer):
+                self._outer = outer
+
+            def run(self, image, **kwargs):
+                self._outer.runs.append(kwargs)
+                import docker
+                if self._outer._raise_on & set(kwargs):
+                    raise docker.errors.APIError("daemon rejects a kwarg")
+                return _FakeContainer()
+
+        self.containers = _Containers(self)
+
+
+def _patch_docker(monkeypatch, client):
+    """Make `import docker` inside sandbox_backend yield a module whose from_env returns `client`
+    and whose errors.APIError is a real exception class."""
+    import sys
+    import types
+
+    fake = types.ModuleType("docker")
+    fake.from_env = lambda *a, **k: client
+    errors = types.ModuleType("docker.errors")
+
+    class APIError(Exception):
+        pass
+
+    errors.APIError = APIError
+    fake.errors = errors
+    monkeypatch.setitem(sys.modules, "docker", fake)
+    monkeypatch.setitem(sys.modules, "docker.errors", errors)
+
+
+def test_docker_network_off_by_default(monkeypatch):
+    from src.runtime_backends import sandbox_backend as sb
+
+    client = _FakeDockerClient()
+    _patch_docker(monkeypatch, client)
+    sb.build_sandbox_backend({"provider": "docker"})
+    assert client.runs[-1]["network_disabled"] is True  # off unless opted in
+
+
+def test_docker_network_opt_in(monkeypatch):
+    from src.runtime_backends import sandbox_backend as sb
+
+    client = _FakeDockerClient()
+    _patch_docker(monkeypatch, client)
+    sb.build_sandbox_backend({"provider": "docker", "network": True})
+    assert client.runs[-1]["network_disabled"] is False  # opt-in flips it on
+
+
+def test_docker_hardening_kwargs_present(monkeypatch):
+    from src.runtime_backends import sandbox_backend as sb
+
+    client = _FakeDockerClient()
+    _patch_docker(monkeypatch, client)
+    sb.build_sandbox_backend({"provider": "docker"})
+    run = client.runs[-1]
+    assert run["cap_drop"] == ["ALL"]
+    assert run["user"] == "nobody"
+    assert run["security_opt"] == ["no-new-privileges"]
+    assert run["mem_limit"] == "512m" and run["pids_limit"] == 256
+    assert run["read_only"] is True
+    # tmpfs is world-writable (1777) so the non-root `nobody` can write its workdir/home.
+    assert run["tmpfs"] == {"/tmp": "rw,mode=1777", "/work": "rw,mode=1777"}
+    assert run["command"] == "sleep 600"
+    # HOME is on the container env only; token-free preserved.
+    assert run["environment"]["HOME"] == "/work"
+
+
+def test_docker_shared_scrubbed_env_has_no_home(monkeypatch):
+    # M4: the shared helper (used by the fake backend's host subprocess) must NOT gain HOME.
+    from src.runtime_backends.sandbox_backend import _scrubbed_sandbox_env
+
+    assert "HOME" not in _scrubbed_sandbox_env()
+
+
+def test_docker_degrade_keeps_privilege_and_network(monkeypatch):
+    # A daemon that rejects a resource/fs kwarg (pids_limit) → retry drops ONLY resource/fs;
+    # privilege + network survive.
+    from src.runtime_backends import sandbox_backend as sb
+
+    client = _FakeDockerClient(raise_on={"pids_limit"})
+    _patch_docker(monkeypatch, client)
+    sb.build_sandbox_backend({"provider": "docker"})
+    assert len(client.runs) == 2  # full attempt failed, base-only retry succeeded
+    retry = client.runs[-1]
+    assert "pids_limit" not in retry and "mem_limit" not in retry  # resource/fs dropped
+    assert retry["cap_drop"] == ["ALL"]  # privilege survives
+    assert retry["security_opt"] == ["no-new-privileges"]
+    assert retry["user"] == "nobody"
+    assert retry["network_disabled"] is True  # network survives
+
+
+def test_docker_hard_kwarg_rejection_fails_closed(monkeypatch):
+    # A daemon that rejects a HARD privilege kwarg (cap_drop) → both attempts fail → SandboxDenied
+    # (never a privileged container).
+    from src.runtime_backends import sandbox_backend as sb
+
+    client = _FakeDockerClient(raise_on={"cap_drop"})
+    _patch_docker(monkeypatch, client)
+    with pytest.raises(sb.SandboxDenied, match="guardrail bắt buộc"):
+        sb.build_sandbox_backend({"provider": "docker"})

@@ -12,10 +12,14 @@ consumer knows the provenance.
 
 from __future__ import annotations
 
+import logging
+import math
 from pathlib import Path
 from typing import Any
 
 from src.config.settings import REPO_ROOT
+
+logger = logging.getLogger(__name__)
 
 #: Default location of the price table (repo-root config/), overridable for tests.
 DEFAULT_PRICES_PATH = REPO_ROOT / "config" / "model_prices.yaml"
@@ -57,10 +61,27 @@ def estimate_cost(
     entry = table.get(model)
     if not isinstance(entry, dict):
         return None
-    input_per_1m = entry.get("input_per_1m")
-    output_per_1m = entry.get("output_per_1m")
-    if input_per_1m is None or output_per_1m is None:
+    in_price = _safe_price(entry.get("input_per_1m"), model, "input_per_1m")
+    out_price = _safe_price(entry.get("output_per_1m"), model, "output_per_1m")
+    if in_price is None or out_price is None:
         return None
-    return (input_tokens / 1_000_000) * float(input_per_1m) + (
-        output_tokens / 1_000_000
-    ) * float(output_per_1m)
+    return (input_tokens / 1_000_000) * in_price + (output_tokens / 1_000_000) * out_price
+
+
+def _safe_price(value: Any, model: str, field: str) -> float | None:
+    """Coerce a YAML price to a usable non-negative finite float, else None (logged).
+
+    A bad price (non-numeric, negative, NaN, or inf) must degrade to None — never raise, and
+    never a negative/NaN cost that would silently poison a budget-cap comparison (`nan > cap` is
+    always False, which would let spend through unchecked).
+    """
+    try:
+        price = float(value)
+    except (TypeError, ValueError):
+        logger.warning("model price %s for %r is not a number (%r) — ignoring", field, model, value)
+        return None
+    if not math.isfinite(price) or price < 0:
+        logger.warning("model price %s for %r is not a finite >=0 value (%r) — ignoring",
+                       field, model, price)
+        return None
+    return price

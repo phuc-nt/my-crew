@@ -89,7 +89,12 @@ test('applyTemplate prefills recommended_runtime and buildSpec forwards non-nati
   act(() => result.current.applyTemplate(deep, PM_PACK))
 
   expect(result.current.state.agentRuntime).toBe('deep_agent')
-  expect(result.current.buildSpec().agent_runtime).toBe('deep_agent')
+  // deep_agent is emitted as a mapping carrying its required sandbox block (a bare string would
+  // be DOA — the backend fails closed with no sandbox).
+  expect(result.current.buildSpec().agent_runtime).toEqual({
+    kind: 'deep_agent',
+    sandbox: { provider: 'docker' },
+  })
 
   // A native template omits agent_runtime from the spec (default).
   act(() => result.current.applyTemplate({ ...PM_TEMPLATE, recommended_runtime: 'native' }, PM_PACK))

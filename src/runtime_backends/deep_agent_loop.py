@@ -26,12 +26,18 @@ logger = logging.getLogger(__name__)
 
 def run_deep_agent_work(
     *, title: str, handoff: str, context, settings, sandbox_cfg, loop_limit: int,
-    telemetry=None,
+    telemetry=None, sanitize=None,
 ) -> tuple[str, float | None]:
-    """Run one team-step's work as a deepagents loop inside a token-free sandbox.
+    """Run one team-step's work as a deepagents loop inside a hardened sandbox.
 
     `telemetry` (optional StepTelemetry) receives summed token counts + cost provenance;
     cost still returns on the tuple. Absent collector = no-op (byte-identical behavior).
+
+    `sanitize` (optional Sanitizer) redacts internal-sensitive tokens from the agent's input
+    (context fields + handoff) before it reaches the sandbox prompt; defaults to an LLM sanitizer
+    built from `settings`. If sanitization fails, the sandbox is forced network-OFF so
+    un-sanitized internal data can never egress — the sanitizer is the trust boundary that makes
+    a network-on deep_agent safe.
     """
     from deepagents import create_deep_agent
     from langchain_core.messages import HumanMessage, SystemMessage
@@ -41,22 +47,39 @@ def run_deep_agent_work(
     from src.llm.model_pricing import estimate_cost
     from src.llm.team_task_prompt import build_team_step_messages
     from src.runtime.step_telemetry import sum_usage_metadata
-    from src.runtime_backends.deep_agent_pii_gate import gate_context_for_sandbox
+    from src.runtime_backends.deep_agent_sanitizer import make_llm_sanitizer, sanitize_bundle
     from src.runtime_backends.sandbox_backend import build_sandbox_backend
     from src.runtime_backends.sandbox_teardown import teardown_sandbox
 
+    # Sanitize the internal input channels (context fields + handoff) BEFORE deciding on network:
+    # the network flag is ANDed with sanitize success, so an opt-in only takes effect on a clean
+    # bundle. Persona (SOUL.md) is sanitized too — it can name real people. company_docs withheld.
+    if sanitize is None:
+        from src.llm.client import LlmClient
+        sanitize = make_llm_sanitizer(LlmClient(settings))
+    bundle, sanitize_ok = sanitize_bundle(
+        sanitize,
+        persona=getattr(context, "persona", "") or "",
+        project=getattr(context, "project", "") or "",
+        memory=getattr(context, "memory", "") or "",
+        capability=getattr(context, "capability", "") or "",
+        handoff=handoff or "",
+    )
+
+    # Network AND-gate: opt-in ONLY takes effect when the input was sanitized. On failure, force
+    # network off via an adjusted per-run cfg (reuses Phase 2's cfg.get("network") seam).
+    net_opt_in = bool((sandbox_cfg or {}).get("network"))
+    effective_network = net_opt_in and sanitize_ok
+    run_cfg = {**(sandbox_cfg or {}), "network": effective_network}
+
     # Fail-closed: raises SandboxDenied on None/local/unknown (red-team C3). The shell has no
     # backend to run on otherwise — deepagents' execute returns an error, but we refuse earlier.
-    backend = build_sandbox_backend(sandbox_cfg)
-
-    # PII gate: external-audience-safe context (red-team H2) — no internal memory/company_docs
-    # can reach the sandbox-with-egress.
-    safe_ctx = gate_context_for_sandbox(context) if context is not None else context
+    backend = build_sandbox_backend(run_cfg)
 
     msgs = build_team_step_messages(
-        step_title=title, handoff_context=handoff,
-        persona=getattr(safe_ctx, "persona", ""), project=getattr(safe_ctx, "project", ""),
-        memory="", capability="",  # gated out
+        step_title=title, handoff_context=bundle.handoff,
+        persona=bundle.persona, project=bundle.project,
+        memory=bundle.memory, capability=bundle.capability,
     )
     system = next((m["content"] for m in msgs if m["role"] == "system"), "")
     user = next((m["content"] for m in msgs if m["role"] == "user"), title)

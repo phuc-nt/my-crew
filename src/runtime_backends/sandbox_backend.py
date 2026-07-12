@@ -19,11 +19,14 @@ goes back through `deliver → external_write → gateway` (Phase 0), not to wri
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
 import tempfile
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     pass
@@ -66,7 +69,11 @@ def build_sandbox_backend(cfg: dict | None):
     if provider == "fake":
         return FakeSandboxBackend()
     if provider == "docker":
-        return DockerSandboxBackend(image=cfg.get("image", "python:3.12-slim"))
+        # Network is OFF by default; only an explicit opt-in in the sandbox config turns it on.
+        # A deep_agent's shell has no legitimate need for the internet (research scraping goes
+        # through the read-only tool-calling engine), so an open network is pure exfil surface.
+        network = bool(cfg.get("network"))
+        return DockerSandboxBackend(image=cfg.get("image", "python:3.12-slim"), network=network)
     raise SandboxDenied(
         f"sandbox provider {provider!r} không được phép (chỉ fake|docker; "
         f"local/localshell/unknown bị từ chối để không đọc .env host)."
@@ -124,20 +131,74 @@ def _make_docker():
     from deepagents.backends.protocol import ExecuteResponse
 
     class _Docker(BaseSandbox):
-        """Self-hosted Docker sandbox: shell runs in a container, no tokens, no host mount."""
+        """Self-hosted Docker sandbox: shell runs in a hardened container, no tokens, no host mount.
 
-        def __init__(self, image: str):
+        Isolation is layered. Two of those layers are NON-NEGOTIABLE and never dropped:
+        - **network** is off unless the agent explicitly opted in — an open network is exfil.
+        - **privilege** (`cap_drop=ALL`, `no-new-privileges`, non-root `nobody`) blocks container
+          escape; network-off does not substitute for it (an escaped root reaches the host
+          regardless of its network namespace).
+        Resource/filesystem limits (`mem_limit`/`pids_limit`/`read_only`/`tmpfs`) are best-effort:
+        some Docker daemons (notably Docker Desktop on macOS) reject them, so they degrade with a
+        loud warning. But if the daemon rejects a privilege/network kwarg, we FAIL CLOSED rather
+        than run an unsafe container.
+        """
+
+        def __init__(self, image: str, network: bool = False):
             import docker  # optional dep
 
             self._image = image
             self._client = docker.from_env()  # raises if Docker daemon unavailable
-            # A long-lived container per step; torn down by the teardown reaper (Phase 3).
-            self._container = self._client.containers.run(
-                image, command="sleep 3600", detach=True, network_disabled=False,
-                environment=_scrubbed_sandbox_env(),  # NO tokens (red-team C2/H1)
-                # No host mount: the container cannot read the CEO's .env / SSH keys (C3).
-                working_dir="/work", tty=False,
-            )
+            # HOME is set on the container's OWN env only (not the shared scrubbed-env helper,
+            # which the fake backend runs as a host subprocess): a non-root read-only container
+            # needs a writable HOME (=/work, a tmpfs) for pip/tools; the host must not get it.
+            container_env = {**_scrubbed_sandbox_env(), "HOME": "/work"}
+            # HARD group — present in every run attempt, never dropped. No host mount (C3).
+            # `sleep 600` + auto_remove: the container self-terminates within the lease window and
+            # Docker removes it, so a self-exited/normally-exited container needs no reaper. The
+            # label lets the reaper find a STILL-RUNNING orphan (SIGKILL'd worker) by our own tag.
+            from src.runtime_backends.sandbox_reaper import SANDBOX_LABEL, SANDBOX_LABEL_VALUE
+            base_kwargs = {
+                "command": "sleep 600", "detach": True, "network_disabled": not network,
+                "environment": container_env, "working_dir": "/work", "tty": False,
+                "cap_drop": ["ALL"], "user": "nobody", "security_opt": ["no-new-privileges"],
+                "labels": {SANDBOX_LABEL: SANDBOX_LABEL_VALUE}, "auto_remove": True,
+            }
+            # DEGRADABLE group — resource/filesystem limits that some daemons reject.
+            # tmpfs mounts are world-writable (mode 1777, like /tmp): the container runs as the
+            # non-root `nobody`, and a default-root-owned tmpfs would deny it writes to its own
+            # workdir/home. 1777 (sticky, world-writable) lets `nobody` write while read_only keeps
+            # the rest of the root filesystem immutable.
+            degradable_kwargs = {
+                "mem_limit": "512m", "pids_limit": 256, "read_only": True,
+                "tmpfs": {"/tmp": "rw,mode=1777", "/work": "rw,mode=1777"},
+            }
+            self._container = self._run_hardened(base_kwargs, degradable_kwargs)
+
+        def _run_hardened(self, base_kwargs: dict, degradable_kwargs: dict):
+            """Start the container with full hardening; degrade ONLY the resource/fs limits.
+
+            One retry: full set → (on daemon reject) base-only. The HARD group rides both attempts,
+            so a resource/fs quirk never strips privilege or network isolation. A failure of the
+            base attempt means a HARD kwarg was rejected → fail closed (never a privileged box).
+            """
+            import docker
+
+            try:
+                return self._client.containers.run(self._image, **base_kwargs, **degradable_kwargs)
+            except (docker.errors.APIError, TypeError) as exc:
+                logger.warning(
+                    "sandbox resource/fs hardening degraded on this Docker daemon; dropped %s: %s",
+                    sorted(degradable_kwargs), exc,
+                )
+                try:
+                    return self._client.containers.run(self._image, **base_kwargs)
+                except (docker.errors.APIError, TypeError) as exc2:
+                    raise SandboxDenied(
+                        "Docker daemon từ chối một guardrail bắt buộc (cap_drop/no-new-privileges"
+                        f"/non-root/network) — fail-closed, không chạy container thiếu cách ly: "
+                        f"{exc2}"
+                    ) from exc2
 
         @property
         def id(self) -> str:
@@ -169,10 +230,16 @@ def FakeSandboxBackend():  # noqa: N802 — factory reads as a class to callers
     return _make_fake()()
 
 
-def DockerSandboxBackend(image: str = "python:3.12-slim"):  # noqa: N802
-    """Construct the Docker (self-hosted) sandbox backend. Raises if Docker is unavailable."""
+def DockerSandboxBackend(image: str = "python:3.12-slim", network: bool = False):  # noqa: N802
+    """Construct the Docker (self-hosted) sandbox backend. Raises if Docker is unavailable.
+
+    `network` is off by default; the caller passes True only when the agent opted in via the
+    sandbox config (and, in the deep_agent path, only when input sanitization succeeded).
+    """
     try:
-        return _make_docker()(image)
+        return _make_docker()(image, network)
+    except SandboxDenied:
+        raise  # a rejected HARD guardrail already fails closed with a precise message
     except Exception as exc:  # noqa: BLE001 — Docker daemon missing / unreachable
         raise SandboxDenied(
             f"Docker sandbox không khả dụng ({exc}). Cài + chạy Docker (Desktop/colima) hoặc "

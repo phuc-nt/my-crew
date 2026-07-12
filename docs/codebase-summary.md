@@ -1,7 +1,7 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-07-12 — v26 COMPLETE.** ~1842 backend + 178 FE tests, ruff/tsc clean.
+> Status: **2026-07-12 — v27 COMPLETE.** ~1863 backend + 178 FE tests, ruff/tsc clean.
 > Product usable single-user tới v26 (agent office, team-task, màn 3D, registry user-data,
 > memory seam, AgentRuntime multi-runtime + community sockets, runtime-tiers, **telemetry
 > capture + unified cost across 3 engines + remember-node extension**). Bản đồ code +
@@ -212,13 +212,12 @@
 - **DeepAgentRuntime cháy thật** (`deep_agent_runtime.py` + `deep_agent_loop.py`): `create_deep_agent`
   (deepagents 0.6.12, optional extra `[deep]`) chạy shell CHỈ trong sandbox. **Fail-closed up-front**
   (red-team C3): sandbox provider allowlist `{fake,docker}` — reject `local`/`modal`/`e2b`/unknown +
-  assert-not-LocalShell. E2E LLM thật: shell trong sandbox tính 42, PII gate chặn memory nội bộ.
+  assert-not-LocalShell. E2E LLM thật: shell trong sandbox tính 42.
 - **Sandbox backend** (`sandbox_backend.py`): `fake` (test, temp-dir, token-free env) + `docker`
   (self-hosted container, KHÔNG token env, KHÔNG mount host `.env`/SSH — red-team C2/C3). Không
   dịch vụ ngoài, không data egress bên thứ 3. Env-scrub tại backend (execute không có param env — C2).
-- **PII gate** (`deep_agent_pii_gate.py`, red-team H2): deep chạy context external-audience-safe
-  (loại memory/company_docs/capability) → internal data không tới sandbox-có-egress. Teardown
-  (`sandbox_teardown.py`, C6): best-effort + container idle-ceiling là lưới SIGKILL.
+- **PII gate** (v20.5 only; replaced by v27 sanitizer): loại memory/company_docs/capability trước
+  sandbox. DEPRECATED — v27 replaces via deep_agent_sanitizer.py sanitize-at-source của 5 kênh.
 - **Wizard chọn runtime** (`IdentityStep.tsx` + `use-create-agent-wizard.ts`): picker native/
   create_agent/deep_agent + mô tả guardrail-tier; role template `recommended_runtime` prefill
   (kiem-dinh→native, noi-dung→create_agent, nghien-cuu→deep_agent); user override. Folded vào
@@ -247,6 +246,14 @@
 - **Unified cost** (`src/llm/model_pricing.py`, `src/runtime/step_telemetry.py`): create_agent + deep_agent (LangChain ChatOpenAI) previously returned cost=None → now estimate cost = Σ tokens × per-model price from `config/model_prices.yaml` (operator-editable, placeholder prices minimax/qwen seeded). native keeps OpenRouter exact cost. Column `cost_source` = exact | estimated. StepTelemetry side-channel collector sums usage_metadata (because run_work 2-tuple contract can't grow).
 - **Remember-node extends team-step**: deliver→remember→END (CostedMemoryExtractor extract facts from result_text → MEMORY.md). Gated on delivered + internal + not-dry-run. LLM cost (kiểm tra, kỹ lưỡng) folded into captured step cost (honest total). New modules: `src/runtime/capture_store.py`, `src/llm/model_pricing.py`, `src/runtime/step_telemetry.py`; extend `src/agent/team_task_graph.py` (build_team_step_remember_node), `src/llm/team_task_memory.py` (CostedMemoryExtractor).
 - **NOT in scope**: git-delta, grading/ROI, knowledge-flywheel, UI.
+
+### v27: Deep-agent hardening — sanitize + container hardening + reaper (2026-07-12)
+- **Input sanitization** (`src/runtime_backends/deep_agent_sanitizer.py`): Deep_agent input sanitized at source via LLM pass over 5 channels (persona, project, memory, capability, handoff) to redact internal-sensitive tokens (issue keys, names, milestones, secrets). Replaces old deep_agent_pii_gate.py (deleted). Fail-closed: sanitize failure returns empty + ok=False flag → caller forces network OFF.
+- **Network off-by-default + opt-in** (`src/runtime_backends/sandbox_backend.py`): Network disabled in docker container unless explicitly `network: true` in sandbox config. Effective network = opt-in AND sanitize-ok (AND-gate, fail-closed on sanitize fail). Sandbox still supports all internal work (no egress requirement).
+- **Container hardening** (`src/runtime_backends/sandbox_backend.py`): HARD group (fail-closed): cap_drop=ALL, no-new-privileges, non-root user=nobody. DEGRADABLE group (with warning/degrade): mem_limit=512m, pids_limit=256, read_only=True, tmpfs (mode=1777). HOME=/work on container env only.
+- **Orphan-container reaper** (`src/runtime_backends/sandbox_reaper.py`): Service tick calls `reap_orphaned_sandboxes()` to remove still-running containers older than lease_TTL + grace (best-effort, bounded docker timeout, labeled mycrew-sandbox). Auto_remove handles normal exit; reaper handles SIGKILL'd workers.
+- **Cost robustness** (`src/llm/model_pricing.py`): `estimate_cost` now rejects nan/inf prices via `math.isfinite()` → returns None (never poison budget cap). Degrades gracefully on bad YAML prices.
+- **Wizard sandbox mapping**: Wizard emits `{kind, sandbox:{provider:docker}}` (was bare string = DOA). agent_create.py accepts dict + string shapes; deep_agent bare-string fails at load-time (complain if no sandbox block).
 
 ## Cây thư mục (v3 M5 state with domain-packs)
 

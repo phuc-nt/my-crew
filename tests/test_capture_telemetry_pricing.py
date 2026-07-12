@@ -30,6 +30,16 @@ def test_estimate_cost_missing_tokens_is_none():
     assert estimate_cost("minimax/minimax-m2.7", 100, None, prices=_PRICES) is None
 
 
+def test_estimate_cost_bad_prices_degrade_to_none():
+    # A malformed price (non-numeric, negative, NaN, inf) must yield None — never raise, never a
+    # negative/NaN cost that would bypass a budget-cap comparison.
+    for bad in ("abc", -1.0, float("nan"), float("inf")):
+        prices = {"m": {"input_per_1m": bad, "output_per_1m": 1.0}}
+        assert estimate_cost("m", 1000, 2000, prices=prices) is None
+        prices2 = {"m": {"input_per_1m": 1.0, "output_per_1m": bad}}
+        assert estimate_cost("m", 1000, 2000, prices=prices2) is None
+
+
 def test_load_prices_seed_has_demo_models():
     # The shipped config seeds the two models the demo + default use, so estimated cost is
     # available for them out of the box (values are operator-verifiable placeholders).

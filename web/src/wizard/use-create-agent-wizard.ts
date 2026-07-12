@@ -4,6 +4,20 @@
 import { useMemo, useState } from 'react'
 import type { CreateAgentBindings, CreateAgentSpec, Pack, StaffTemplate } from '../types'
 
+// Build the `agent_runtime` field of the create spec from the picked runtime. deep_agent needs a
+// sandbox block (a bare 'deep_agent' string would be DOA — the backend fails closed with no
+// sandbox), so it is emitted as a mapping with the self-hosted docker provider. create_agent is a
+// bare string; native is omitted (the default).
+function runtimeSpec(runtime: string): Pick<CreateAgentSpec, 'agent_runtime'> {
+  if (runtime === 'deep_agent') {
+    return { agent_runtime: { kind: 'deep_agent', sandbox: { provider: 'docker' } } }
+  }
+  if (runtime && runtime !== 'native') {
+    return { agent_runtime: runtime }
+  }
+  return {}
+}
+
 export interface WizardState {
   step: number
   pack: Pack | null
@@ -177,9 +191,7 @@ export function useCreateAgentWizard() {
       bindings,
       ...(state.persona.trim() ? { persona: state.persona.trim() } : {}),
       ...(state.webSearch ? { web_search: true } : {}),
-      ...(state.agentRuntime && state.agentRuntime !== 'native'
-        ? { agent_runtime: state.agentRuntime }
-        : {}),
+      ...runtimeSpec(state.agentRuntime),
     }
   }
 
