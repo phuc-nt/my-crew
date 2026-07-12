@@ -288,6 +288,7 @@ def build_resource_graph(
     add_approval_gate(
         builder, audience=audience, summary=external_summary("resource", audience, config),
         report_kind="resource", auto_approve=getattr(context, "auto_approve", None),
+        settings=settings,
     )
     # M2-P8: `remember` node after deliver (internal runs only; self-gates). See report_graph.
     if remember is not None:

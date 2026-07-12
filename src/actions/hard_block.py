@@ -1,15 +1,16 @@
 """Action policy — allowlist + Lớp A hard-deny (PDR §5.2, §7.9).
 
-For "full autonomous write", an enumerate-the-bad denylist is unsafe: it permits
-anything not yet listed, and the unlisted set is unbounded. So the gateway uses a
-default-DENY allowlist, with the Lớp A red line as a second hard-deny layer on top
-(defense-in-depth):
+Two layers with different scopes (v30 trust modes):
 
-  1. **Lớp A hard-deny (checked FIRST)** — permanent data loss, credential
-     exfiltration, security incidents. NEVER allowed, even if a tool is otherwise
-     allowlisted. This is the red line.
-  2. **Allowlist** — only explicitly-listed safe (server, tool) pairs and gh
-     subcommands are permitted. Everything else is denied by default.
+  1. **Lớp A hard-deny (checked FIRST, applies in EVERY trust mode)** — permanent
+     data loss, credential exfiltration, security incidents. NEVER allowed, even if
+     a tool is otherwise allowlisted or the agent runs autonomous. This is the red
+     line; `classify()` runs unconditionally in the gateway.
+  2. **Allowlist (default-DENY — enforced as a block in GUARDED mode)** — only
+     explicitly-listed safe (server, tool) pairs and gh subcommands are permitted;
+     everything else classifies NOT_ALLOWLISTED. In guarded mode that is a deny; in
+     autonomous mode the gateway lets a NOT_ALLOWLISTED action with a real handler
+     run (audited), exactly as it would after a human approval.
 
 Action shapes:
   - MCP tool call:  {"type": "mcp_tool", "server": "confluence", "tool": "deletePage", "args": {}}

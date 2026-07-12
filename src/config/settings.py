@@ -44,6 +44,13 @@ class Settings:
 
     data_dir: Path
 
+    # v30 autonomy-first: "autonomous" (default) executes Lớp B / allowlist-miss actions
+    # immediately with an audit record; "guarded" keeps the human approval queue. Lớp A
+    # hard-deny, audit, dedup, dry-run and kill-switch apply in BOTH modes. Validated in
+    # `build_settings_from_dict`; the gateway reads it lazily so duck-typed test stubs
+    # without the field keep working on paths that never reach the interrupt branch.
+    trust_mode: str = "autonomous"
+
     # M2-P8 runtime infra (opt-in; defaults keep the self-contained local install).
     # checkpointer / store: "sqlite"|"postgres" and "memory"|"postgres". Postgres needs
     # postgres_dsn. The graph state checkpointer + cross-thread memory Store select off

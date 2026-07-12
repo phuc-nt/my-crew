@@ -1,12 +1,13 @@
 """Lớp B graph-native interrupt — the `approval_gate` node (v2 M2-P5).
 
 A pure node placed BETWEEN `compose_report` and `deliver` in every report graph.
-For `audience="external"` it calls LangGraph `interrupt()` so the graph PAUSES
-before any delivery, checkpoint-serializes its state, and resumes deterministically
-via `Command(resume="approve"|"reject")`. Approve routes to `deliver`; reject routes
-to `END` (clean stop, nothing posted). For `audience="internal"` the node is a
-pass-through and the graph runs straight through, so existing internal behavior is
-unchanged.
+For `audience="external"` in GUARDED trust mode it calls LangGraph `interrupt()` so
+the graph PAUSES before any delivery, checkpoint-serializes its state, and resumes
+deterministically via `Command(resume="approve"|"reject")`. Approve routes to
+`deliver`; reject routes to `END` (clean stop, nothing posted). In AUTONOMOUS trust
+mode (v30) the gate auto-approves instead of interrupting — the run is flagged
+`auto_approved` for the CEO's "đã tự duyệt" view. For `audience="internal"` the node
+is a pass-through in every mode, so existing internal behavior is unchanged.
 
 This AUGMENTS the gateway queue path (`pending_approval` + `ApprovalStore` +
 `cli/mpm approve`) — it does not replace it. The one-shot worker subprocess that
@@ -44,23 +45,31 @@ _APPROVE = "approve"
 def make_approval_gate(
     audience: str, *, summary: Callable[[], str],
     report_kind: str = "", auto_approve: dict | None = None,
+    settings=None,
 ) -> Callable[[ReportState], dict]:
     """Return the `approval_gate` node closure for the given audience.
 
     Internal ⇒ pass-through (returns `{}`). External ⇒ normally calls `interrupt(payload)`
     with the non-PII `summary()` and writes the resume decision into state.
 
+    v30 autonomy-first: when `settings.trust_mode == "autonomous"` the gate auto-approves
+    external delivery (no interrupt) — same state shape as the trust-ladder path, so the
+    run surfaces in the CEO's "đã tự duyệt" view. `settings=None` (deps-injected callers
+    that don't wire it) ⇒ GUARDED behavior — the fail-safe default is to interrupt.
+
     v8 M23 trust ladder: if `report_kind` is in the agent's `auto_approve.scheduled_reports`,
     the gate AUTO-APPROVES (no interrupt) — writes `approve` + an `auto_approved` flag into
     state and lets `deliver` run. deliver still posts through the gateway (Lớp A/kill-switch/
     dry-run re-apply). Absent/empty config ⇒ interrupt as before (byte-identical pre-M23)."""
     scheduled = set((auto_approve or {}).get("scheduled_reports") or ())
+    autonomous = settings is not None and settings.trust_mode == "autonomous"
 
     def approval_gate(_state: ReportState) -> dict:
         if audience != "external":
             return {}
-        if report_kind and report_kind in scheduled:
-            # trusted scheduled report → auto-deliver; flag for the CEO's "đã tự duyệt" view.
+        if autonomous or (report_kind and report_kind in scheduled):
+            # autonomous mode / trusted scheduled report → auto-deliver; the flag feeds
+            # the CEO's "đã tự duyệt" view either way.
             return {_DECISION_KEY: _APPROVE, "auto_approved": True}
         decision = interrupt({"summary": summary()})
         return {_DECISION_KEY: str(decision)}
@@ -109,17 +118,19 @@ def add_approval_gate(
     deliver_node: str = "deliver",
     report_kind: str = "",
     auto_approve: dict | None = None,
+    settings=None,
 ) -> None:
     """Register the `approval_gate` node + rewire `compose_report → gate → deliver|END`.
 
     The single wiring site shared by all report graphs (DRY). Replaces the direct
     `compose_report → deliver` edge with the gate + a conditional edge. Caller keeps
     `deliver → END` as before. `report_kind`/`auto_approve` (v8 M23) enable the trust
-    ladder's scheduled-report auto-approve; omitted ⇒ interrupt as before."""
+    ladder's scheduled-report auto-approve; `settings` (v30) enables the autonomous
+    no-interrupt path; omitted ⇒ interrupt as before."""
     builder.add_node(
         "approval_gate",
         make_approval_gate(audience, summary=summary, report_kind=report_kind,
-                           auto_approve=auto_approve),
+                           auto_approve=auto_approve, settings=settings),
     )
     builder.add_edge("compose_report", "approval_gate")
     builder.add_conditional_edges(

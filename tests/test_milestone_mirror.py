@@ -39,6 +39,7 @@ class _Loaded:
 
 class _Settings:
     write_disabled = False
+    trust_mode = "guarded"  # pre-v30 behavior; the real gateway reads this in _execute
 
     def __init__(self, tmp):
         self.data_dir = str(tmp)

@@ -627,7 +627,7 @@ def test_worker_team_step_done_writes_artifact_and_run_event(tmp_path, monkeypat
     attempt = store.reserve_step("t1", "s1")
     store.close()
 
-    settings = build_settings_from_dict({"data_dir": tmp_path})
+    settings = build_settings_from_dict({"data_dir": tmp_path, "trust_mode": "guarded"})
     agent_data_dir = tmp_path / "agents" / "a1"
     rc = _run_team_step_kind(
         ["--report", "team-step", "--task-id", "t1", "--step-id", "s1",
@@ -679,7 +679,7 @@ def test_worker_team_step_graph_exception_writes_failed_outcome_and_error_event(
     attempt = store.reserve_step("t1", "s1")
     store.close()
 
-    settings = build_settings_from_dict({"data_dir": tmp_path})
+    settings = build_settings_from_dict({"data_dir": tmp_path, "trust_mode": "guarded"})
     agent_data_dir = tmp_path / "agents" / "a1"
     rc = _run_team_step_kind(
         ["--report", "team-step", "--task-id", "t1", "--step-id", "s1",
@@ -749,7 +749,7 @@ def test_step_paused_at_approval_gate_worker_exits_3_tick_ignores_then_resumes_a
     attempt = store.reserve_step("t1", "s1")
     store.close()
 
-    settings = build_settings_from_dict({"data_dir": tmp_path})
+    settings = build_settings_from_dict({"data_dir": tmp_path, "trust_mode": "guarded"})
     agent_data_dir = tmp_path / "agents" / "a1"
 
     rc = _run_team_step_kind(

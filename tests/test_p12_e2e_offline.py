@@ -91,7 +91,9 @@ def test_b3_replay_seeded_checkpoint(tmp_path):
 
 
 def test_d3_propose_into_existing_approval_queue(tmp_path):
-    settings = build_settings_from_dict({"dry_run": False, "data_dir": str(tmp_path)})
+    settings = build_settings_from_dict(
+        {"dry_run": False, "trust_mode": "guarded", "data_dir": str(tmp_path)}
+    )
     gw = ActionGateway(
         settings,
         audit_log=AuditLog(tmp_path / "audit.jsonl"),

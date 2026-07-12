@@ -22,7 +22,7 @@ CFG = {
 
 
 def _settings(tmp_path, **over):
-    s = build_settings_from_dict({})
+    s = build_settings_from_dict({"trust_mode": "guarded"})
     over.setdefault("dry_run", False)
     return replace(s, data_dir=pathlib.Path(tmp_path), **over)
 

@@ -71,6 +71,23 @@ def _d_model_chain(value: Any) -> tuple[str, ...]:
     return chain
 
 
+def _d_trust_mode(value: Any) -> str:
+    """Coerce/validate `trust_mode`. Absent/empty ⇒ "autonomous" (the product default).
+
+    Only "autonomous" | "guarded" are meaningful policies; anything else must fail at
+    config load, not silently behave as one of them at the gateway's interrupt branch.
+    """
+    if value is None or value == "":
+        return "autonomous"
+    mode = str(value).strip().lower()
+    if mode not in ("autonomous", "guarded"):
+        raise ValueError(
+            f"trust_mode must be 'autonomous' or 'guarded', got {value!r} "
+            "(safety.trust_mode in profile.yaml or TRUST_MODE in .env)"
+        )
+    return mode
+
+
 def build_settings_from_dict(d: dict[str, Any]) -> Settings:
     """Build Settings from a plain dict. Pure: no env, no I/O. All keys optional."""
     data_dir = d.get("data_dir", DATA_DIR)
@@ -83,6 +100,7 @@ def build_settings_from_dict(d: dict[str, Any]) -> Settings:
         model_chain=_d_model_chain(d.get("model_chain")),
         dry_run=_d_bool(d, "dry_run", True),
         write_disabled=_d_bool(d, "write_disabled", False),
+        trust_mode=_d_trust_mode(d.get("trust_mode")),
         monthly_budget_usd=_d_float(d, "monthly_budget_usd", 50.0),
         budget_warn_ratio=_d_float(d, "budget_warn_ratio", 0.8),
         data_dir=Path(data_dir) if not isinstance(data_dir, Path) else data_dir,
@@ -115,6 +133,7 @@ def build_settings_from_env() -> Settings:
             "model_chain": os.getenv("OPENROUTER_MODEL_CHAIN"),
             "dry_run": os.getenv("DRY_RUN"),
             "write_disabled": os.getenv("AGENT_WRITE_DISABLED"),
+            "trust_mode": os.getenv("TRUST_MODE"),
             "monthly_budget_usd": os.getenv("MONTHLY_BUDGET_USD"),
             "budget_warn_ratio": os.getenv("BUDGET_WARN_RATIO"),
             "data_dir": DATA_DIR,

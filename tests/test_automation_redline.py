@@ -21,7 +21,9 @@ _AUTOMATION_DIR = pathlib.Path("src/automation")
 
 
 def _gateway(tmp_path):
-    settings = build_settings_from_dict({"dry_run": False, "data_dir": str(tmp_path)})
+    settings = build_settings_from_dict(
+        {"dry_run": False, "trust_mode": "guarded", "data_dir": str(tmp_path)}
+    )
     return ActionGateway(
         settings,
         audit_log=AuditLog(tmp_path / "audit.jsonl"),

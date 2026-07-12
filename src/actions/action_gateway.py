@@ -3,17 +3,24 @@
 No module may call a write API (MCP write tool, `gh` mutating command) directly.
 Everything goes through `ActionGateway.execute()`, which runs this chain:
 
-    Lớp A hard-deny -> Lớp B interrupt (queue for approval) -> deny-if-blocked
-        -> kill-switch -> dry-run -> rate-limit -> idempotency -> execute -> audit
+    Lớp A hard-deny -> trust-mode policy (Lớp B queue | autonomous run-now)
+        -> deny-if-blocked -> kill-switch -> dry-run -> rate-limit
+        -> idempotency -> execute -> audit
 
-Each stage can short-circuit. Every outcome is audited. This is the invariant
-that makes "full autonomous write" safe: autonomous in speed, never in
-accountability.
+Each stage can short-circuit. Every outcome is audited — the single door is the
+invariant: an agent may act without waiting for a human (autonomous), but never
+without leaving an audit trail.
 
-Lớp B (sensitive-but-reversible: merge/close PR, close/transition/assign issue)
-is queued via the approval store and only run later through `approve()` — never
-auto-executed. Lớp A (data-loss/credential/security) is never overridable, even
-by `approve()`.
+Two trust modes (v30, `Settings.trust_mode`):
+- "autonomous" (product default): a Lớp B / allowlist-miss action with a real
+  handler executes immediately, audited under `AUTONOMOUS_RATIONALE`. A
+  propose-only call (handler=None) still queues for a human.
+- "guarded": Lớp B (sensitive-but-reversible: merge/close PR, close/transition/
+  assign issue) is queued via the approval store and only run later through
+  `approve()` — never auto-executed (except the v8 M23 trust ladder).
+
+Lớp A (data-loss/credential/security) is never overridable in ANY mode, even by
+`approve()`.
 """
 
 from __future__ import annotations
@@ -44,6 +51,12 @@ _MUTATING_TYPES = {"mcp_tool", "gh_cli", "email_send", "telegram_send"}
 # Rate limit: max mutations per rolling window (blast-radius cap, PDR §7.5).
 _RATE_LIMIT_MAX = 10
 _RATE_LIMIT_WINDOW_S = 60.0
+
+# v30 autonomy-first: the single audit rationale for actions the gateway ran because
+# trust_mode="autonomous" (no human queue). A CONSTANT that OVERWRITES the caller
+# rationale, so `AuditLog.query` can distinguish autonomous-executed rows from
+# human-approved ("approved (id=…)") and trust-ladder ("auto_approve: …") ones.
+AUTONOMOUS_RATIONALE = "trust_mode=autonomous: executed without human approval"
 
 
 class HardBlockedError(RuntimeError):
@@ -228,6 +241,21 @@ class ActionGateway:
         if not skip_interrupt:
             interrupt = needs_interrupt(action, external_channels=self._external_channels)
             is_hard_deny = verdict.blocked and verdict.category != BlockCategory.NOT_ALLOWLISTED
+            # v30 autonomy-first: autonomous mode executes immediately what guarded
+            # would queue (Lớp B) or deny (allowlist-miss) — ONLY with a real handler.
+            # A propose-only call (handler=None) still queues below: skipping it would
+            # silently drop the proposal (neither run nor seen by a human). Re-entering
+            # with approved=True keeps Lớp A, kill-switch, dry-run, rate-limit and
+            # dedup applying exactly as for a human-approved action.
+            gated_but_reversible = (interrupt.interrupt or verdict.blocked) and not is_hard_deny
+            if (
+                gated_but_reversible
+                and handler is not None
+                and self._settings.trust_mode == "autonomous"
+            ):
+                return self._execute(
+                    action, handler=handler, rationale=AUTONOMOUS_RATIONALE, approved=True
+                )
             if interrupt.interrupt and not is_hard_deny:
                 # v8 M23: a scheduled-origin Lớp B action the trust ladder permits (and that
                 # has a free daily slot) runs WITHOUT the human queue — by re-entering with
@@ -349,17 +377,19 @@ class ActionGateway:
     ) -> GatewayResult:
         """Force Lớp B for an action REGARDLESS of `needs_interrupt` (v5 M12).
 
-        The origin-based approval path: a chat-requested action always waits for a
-        human, even one a scheduled run may execute directly. This does NOT alter
-        `classify()`/`needs_interrupt()` semantics — it is strictly MORE restrictive:
-        Lớp A + the default-DENY allowlist are checked first and a blocked action is
-        refused outright (audited as deny), never queued. Execution later goes through
-        `approve()`, which re-applies Lớp A + audit + dedup as for any approval.
+        The origin-based approval path for chat-requested actions. Lớp A + the
+        default-DENY allowlist are checked first and a blocked action is refused
+        outright (audited as deny), never queued.
 
-        v8 M23: if the trust ladder permits this action for the (immutable) chat SENDER —
-        a trusted Telegram DM — it runs auto (re-entrant _execute(approved=True), so Lớp A
-        etc. still apply) instead of queuing. Lớp A is checked FIRST here, so a hard-denied
-        action can never auto-run. A stranger / group chat / non-Telegram sender → queue.
+        GUARDED mode: a chat-requested action waits for a human, even one a scheduled
+        run may execute directly — except the v8 M23 trust ladder: a trusted Telegram
+        DM sender runs auto (re-entrant _execute(approved=True), so Lớp A etc. still
+        apply). A stranger / group chat / non-Telegram sender → queue. Execution later
+        goes through `approve()`, which re-applies Lớp A + audit + dedup.
+
+        AUTONOMOUS mode (v30, explicit CEO decision): the chat command runs immediately
+        for ANY sender that can reach the agent — reachability (Telegram chat allowlist /
+        watched Slack channel) is the remaining gate, not sender identity.
         """
         if not isinstance(action, dict):
             raise ValueError(
@@ -385,8 +415,17 @@ class ActionGateway:
         # Without it we can't execute, so we queue (never a silent no-op).
         auto = None
         if auto_handler is not None:
-            auto = self._try_auto_approve(action, origin="chat", sender_id=sender_id,
-                                          transport=transport, chat_id=chat_id)
+            if self._settings.trust_mode == "autonomous":
+                # v30 (explicit CEO decision): in autonomous mode a chat command runs for
+                # ANY sender that can reach the agent — the trusted-sender ladder gates
+                # only in guarded mode. The remaining gates are upstream reachability
+                # (Telegram chat allowlist / watched Slack channel) plus everything that
+                # re-applies in _execute: Lớp A was checked above; kill-switch, dry-run
+                # and dedup run below.
+                auto = AUTONOMOUS_RATIONALE
+            else:
+                auto = self._try_auto_approve(action, origin="chat", sender_id=sender_id,
+                                              transport=transport, chat_id=chat_id)
         if auto is not None:
             return self._execute(action, handler=auto_handler, rationale=auto, approved=True)
         approval_id = self._approvals.enqueue(action, reason=reason, rationale=rationale)

@@ -20,6 +20,7 @@ def _settings(data_dir, *, monthly_budget_usd=50.0):
         {
             "openrouter_api_key": None,
             "dry_run": False,  # so a Lớp B post reaches the interrupt, not the dry-run branch
+            "trust_mode": "guarded",  # pre-v30 queue behavior is what this suite asserts
             "monthly_budget_usd": monthly_budget_usd,
             "data_dir": data_dir,
         }

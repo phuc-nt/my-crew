@@ -15,7 +15,9 @@ from src.config.config_builders import build_settings_from_dict
 
 
 def _gateway(tmp_path, **kw):
-    settings = build_settings_from_dict({"dry_run": False, "data_dir": str(tmp_path), **kw})
+    settings = build_settings_from_dict(
+        {"dry_run": False, "trust_mode": "guarded", "data_dir": str(tmp_path), **kw}
+    )
     # 'stakeholders' is external ⇒ a slack post there is Lớp B (queues for approval).
     return ActionGateway(
         settings,

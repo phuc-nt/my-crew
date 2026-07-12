@@ -85,6 +85,10 @@ def build_settings_dict(yaml_doc: dict[str, Any], data_dir: Any) -> dict[str, An
     # Booleans: a present YAML key wins (incl. an explicit `false`); else env; else omit.
     _put(out, "dry_run", _explicit_bool(safety, "dry_run", "DRY_RUN"))
     _put(out, "write_disabled", _explicit_bool(safety, "write_disabled", "AGENT_WRITE_DISABLED"))
+    # v30: per-agent trust mode — yaml wins, else TRUST_MODE env, else the from_dict
+    # default ("autonomous"). String field, so the _fallback empty-defers-to-env rule
+    # applies (same shape as runtime.checkpointer below).
+    _put(out, "trust_mode", _fallback(safety.get("trust_mode"), "TRUST_MODE"))
 
     _put(out, "monthly_budget_usd", _explicit(budget, "monthly_usd", "MONTHLY_BUDGET_USD"))
     _put(out, "budget_warn_ratio", _explicit(budget, "warn_ratio", "BUDGET_WARN_RATIO"))

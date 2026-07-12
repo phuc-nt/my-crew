@@ -277,6 +277,7 @@ def build_okr_graph(
     add_approval_gate(
         builder, audience=audience, summary=external_summary("okr", audience, config),
         report_kind="okr", auto_approve=getattr(context, "auto_approve", None),
+        settings=settings,
     )
     # M2-P8: `remember` node after deliver (internal runs only; self-gates). See report_graph.
     if remember is not None:

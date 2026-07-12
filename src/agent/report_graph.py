@@ -341,6 +341,7 @@ def build_report_graph(
         summary=external_summary(report_kind, audience, config),
         report_kind=report_kind,
         auto_approve=getattr(context, "auto_approve", None),
+        settings=settings,
     )
     # M2-P8: a `remember` node after deliver extracts + persists agent memory (internal
     # runs only — the node self-gates). When no remember node is injected, deliver → END.

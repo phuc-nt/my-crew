@@ -39,7 +39,9 @@ def wired(tmp_path, monkeypatch):
     )
 
     class _Loaded:
-        settings = build_settings_from_dict({"dry_run": False, "data_dir": str(tmp_path)})
+        settings = build_settings_from_dict(
+            {"dry_run": False, "trust_mode": "guarded", "data_dir": str(tmp_path)}
+        )
 
         class config:  # noqa: N801 — minimal stand-in
             slack_external_channels = frozenset({"stakeholders"})

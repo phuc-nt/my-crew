@@ -4,7 +4,8 @@
 `read`/`analyze` step (binding results into a flat context), and for each `propose` step
 builds the action dict and ENQUEUES it through `ActionGateway.execute()` (Lớp B ⇒
 `pending_approval`). It NEVER auto-executes a write — no `execute_approved`/`approve`, no
-direct write-handler call.
+direct write-handler call. This holds in BOTH trust modes (v30): the gateway's
+propose-only carve-out keeps a handler-less call queuing even when autonomous.
 
 All collaborators are INJECTED (read tools, analyze fn, gateway) so the engine is fully
 offline-testable. This module imports `ActionGateway` for the TYPE only; the instance is

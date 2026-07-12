@@ -26,6 +26,10 @@ def settings_factory(tmp_path: Path):
         api_key: str | None = None,
         monthly_budget_usd: float = 50.0,
         budget_warn_ratio: float = 0.8,
+        # Tests pin "guarded" (the pre-v30 approval-queue behavior) so the assertion
+        # baseline stays stable while the PRODUCT default is "autonomous". Autonomous
+        # behavior is tested by passing trust_mode="autonomous" explicitly.
+        trust_mode: str = "guarded",
     ) -> Settings:
         return build_settings_from_dict(
             {
@@ -37,6 +41,7 @@ def settings_factory(tmp_path: Path):
                 "write_disabled": write_disabled,
                 "monthly_budget_usd": monthly_budget_usd,
                 "budget_warn_ratio": budget_warn_ratio,
+                "trust_mode": trust_mode,
                 "data_dir": tmp_path,
             }
         )
