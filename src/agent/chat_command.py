@@ -174,8 +174,20 @@ def maybe_handle_command(
         auto_handler=lambda a: dispatch_approved_action(a, config),
     )
     if result.status == "executed":
-        return (f"✅ Đã chạy `{command_id}` ({_args_preview(action_args)}) — tự duyệt (bạn "
-                f"trong danh sách tin cậy).", cost)
+        # Name the real reason it ran: autonomous mode executes for any reachable sender;
+        # in guarded mode only a trusted sender gets here (v8 M23 trust ladder).
+        why = ("chế độ tự chủ" if loaded.settings.trust_mode == "autonomous"
+               else "bạn trong danh sách tin cậy")
+        return (f"✅ Đã chạy `{command_id}` ({_args_preview(action_args)}) — tự duyệt "
+                f"({why}).", cost)
+    if result.status == "deduplicated":
+        # Idempotency, not a refusal — an identical command already ran once.
+        return (f"Lệnh `{command_id}` trùng với một lệnh đã chạy — bỏ qua (chống chạy đúp).",
+                cost)
+    if result.status == "dry_run":
+        # DRY_RUN is a config state, not a guardrail refusal — say so, and say how to lift it.
+        return (f"Lệnh `{command_id}` hợp lệ nhưng agent đang ở chế độ chạy thử (dry-run) — "
+                f"chưa ghi gì thật. Tắt DRY_RUN / safety.dry_run để lệnh chạy thật.", cost)
     if result.status != "pending_approval":
         logger.warning("chat-command %r refused by gateway: %s", command_id, result.summary)
         return (f"Lệnh `{command_id}` bị guardrail từ chối: {result.summary}", cost)

@@ -151,6 +151,14 @@ def _build_profile_doc(spec: dict, profiles_dir) -> tuple[str, dict, str | None]
     # so a spec can't smuggle arbitrary values into profile.yaml through this key.
     if spec.get("web_search"):
         doc["web_search"] = True
+    # v30: optional trust mode. Only the two literal policies pass through; absent ⇒ the
+    # profile inherits the global default (TRUST_MODE env / builder default "autonomous").
+    trust_mode = str(spec.get("trust_mode") or "").strip().lower()
+    if trust_mode:
+        if trust_mode not in ("autonomous", "guarded"):
+            raise ValidationError("trust_mode must be 'autonomous' or 'guarded'")
+        safety = doc.setdefault("safety", {})
+        safety["trust_mode"] = trust_mode
     # v20.5: opt-in agent runtime backend. Either a bare kind string (native/create_agent) or a
     # mapping {kind, sandbox: {...}} (deep_agent needs a sandbox block). The loader validates
     # either shape (parse_agent_runtime_config accepts both); an unknown kind → RuntimeError at

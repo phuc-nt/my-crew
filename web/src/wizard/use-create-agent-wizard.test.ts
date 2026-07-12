@@ -125,3 +125,17 @@ test('applyTemplate drops report kinds the resolved pack does not actually serve
 
   expect(result.current.state.reports).toEqual(['daily'])
 })
+
+test('buildSpec forwards an explicit trust_mode and omits the inherit default', () => {
+  const { result } = renderHook(() => useCreateAgentWizard())
+  act(() => result.current.applyTemplate(PM_TEMPLATE, PM_PACK))
+
+  // '' = inherit the company default → the key must be absent from the POST body.
+  expect(result.current.buildSpec().trust_mode).toBeUndefined()
+
+  act(() => result.current.update('trustMode', 'guarded'))
+  expect(result.current.buildSpec().trust_mode).toBe('guarded')
+
+  act(() => result.current.update('trustMode', 'autonomous'))
+  expect(result.current.buildSpec().trust_mode).toBe('autonomous')
+})

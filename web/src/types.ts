@@ -19,6 +19,8 @@ export interface AgentSummary {
   // v10 M25: report kinds this agent's pack serves (drives the Trigger form). Optional so
   // older cached payloads / tests without it still typecheck.
   report_kinds?: string[]
+  // v30: effective trust mode (server merges the yaml override over the env default).
+  trust_mode?: 'autonomous' | 'guarded'
 }
 
 export interface Budget {
@@ -34,6 +36,7 @@ export interface AgentStatus {
   last_run: RunEvent | null
   budget: Budget
   pending_approvals: number
+  trust_mode?: 'autonomous' | 'guarded'
 }
 
 // --- M4-S1 visualization payloads ---
@@ -196,6 +199,8 @@ export interface CreateAgentSpec {
   bindings: CreateAgentBindings
   persona?: string
   web_search?: boolean
+  // v30: omit ⇒ inherit the company-wide default (TRUST_MODE env).
+  trust_mode?: 'autonomous' | 'guarded'
   // v20.5/v27: a bare kind string ('create_agent') OR, for deep_agent, a mapping carrying its
   // required sandbox block ('native' omitted = default). A bare 'deep_agent' string would be DOA
   // (missing sandbox), so the wizard emits the mapping form for it.

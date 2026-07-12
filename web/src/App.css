@@ -455,6 +455,9 @@ button:disabled { cursor: default; opacity: 0.6; }
 .agent-page-head { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .badge-on { background: var(--color-ok-bg); color: var(--color-ok); padding: 0.15rem 0.5rem; border-radius: 10px; font-size: var(--fs-xs); }
 .badge-off { background: var(--color-neutral-bg); color: var(--color-subtle); padding: 0.15rem 0.5rem; border-radius: 10px; font-size: var(--fs-xs); }
+/* v30: trust-mode badge — accent = autonomous (free to act), warn = guarded (waits for review) */
+.badge-trust-auto { background: var(--color-accent-bg); color: var(--color-accent); padding: 0.15rem 0.5rem; border-radius: 10px; font-size: var(--fs-xs); }
+.badge-trust-guarded { background: var(--color-warn-bg); color: var(--color-warn); padding: 0.15rem 0.5rem; border-radius: 10px; font-size: var(--fs-xs); }
 .agent-pending { color: var(--color-warn); font-size: 0.85rem; }
 .agent-tabs { display: flex; gap: var(--space-2); margin: var(--space-4) 0; border-bottom: 1px solid var(--color-border-soft); }
 .agent-tabs button { background: none; border: none; padding: var(--space-2) var(--space-3); cursor: pointer; color: var(--color-muted); border-bottom: 2px solid transparent; transition: color var(--motion-fast), border-color var(--motion-fast); }

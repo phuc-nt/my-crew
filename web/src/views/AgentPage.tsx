@@ -36,6 +36,18 @@ export function AgentPage() {
         <span className={status.enabled ? 'badge-on' : 'badge-off'}>
           {status.enabled ? 'đang bật' : 'đang tắt'}
         </span>
+        {status.trust_mode && (
+          <span
+            className={status.trust_mode === 'autonomous' ? 'badge-trust-auto' : 'badge-trust-guarded'}
+            title={
+              status.trust_mode === 'autonomous'
+                ? 'Tự chủ: hành động ngay, hậu kiểm qua nhật ký audit. Lưới cứng (chống xoá dữ liệu, lộ khoá) luôn bật.'
+                : 'Có duyệt: việc nhạy cảm chờ bạn duyệt ở tab Duyệt.'
+            }
+          >
+            {status.trust_mode === 'autonomous' ? 'tự chủ' : 'có duyệt'}
+          </span>
+        )}
         {status.pending_approvals > 0 && (
           <Link to="/work" className="agent-pending">
             {status.pending_approvals} việc chờ duyệt

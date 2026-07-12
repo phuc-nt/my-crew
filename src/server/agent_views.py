@@ -91,8 +91,12 @@ def list_agents() -> list[dict]:
             loaded = load_profile(entry.id, data_dir=agent_data_dir(entry.id))
             name, prof_enabled = loaded.name, loaded.enabled
             report_kinds = _kinds_for(loaded.domain)
+            # v30: EFFECTIVE trust mode (yaml override merged over env/default) — the FE
+            # must never re-derive this from raw yaml.
+            trust_mode = loaded.settings.trust_mode
         except (FileNotFoundError, RuntimeError) as exc:
             name, prof_enabled, report_kinds = f"<error: {exc}>", False, []
+            trust_mode = "guarded"  # broken profile: show the conservative mode
         out.append(
             {
                 "id": entry.id,
@@ -101,6 +105,7 @@ def list_agents() -> list[dict]:
                 "last_run": _public_last_run(entry.id),
                 # v10 M25: the report kinds this agent's pack serves (drives the Trigger form).
                 "report_kinds": report_kinds,
+                "trust_mode": trust_mode,
             }
         )
     return out
@@ -128,6 +133,7 @@ def agent_status(agent_id: str) -> dict:
         "last_run": _public_last_run(agent_id),
         "budget": budget,
         "pending_approvals": _pending_count(loaded.settings.data_dir),
+        "trust_mode": loaded.settings.trust_mode,
     }
 
 

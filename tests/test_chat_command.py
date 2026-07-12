@@ -32,7 +32,7 @@ def _config():
 
 def _loaded(tmp_path):
     settings = build_settings_from_dict(
-        {"openrouter_api_key": "k", "data_dir": tmp_path, "dry_run": False}
+        {"openrouter_api_key": "k", "data_dir": tmp_path, "dry_run": False, "trust_mode": "guarded"}
     )
     return LoadedProfile(
         profile_id="acme", name="Acme", enabled=True, settings=settings, config=_config(),
@@ -287,5 +287,76 @@ def test_approve_dispatches_jira_create_issue(tmp_path, monkeypatch):
         )
         assert result.status == "executed" and "SCRUM-99" in result.summary
         assert calls["tool"] == "createIssue" and calls["args"]["projectKey"] == "SCRUM"
+    finally:
+        gw.close()
+
+
+# --- autonomous trust mode: chat runs immediately for any reachable sender (v30) ---
+
+
+def _loaded_autonomous(tmp_path, *, dry_run=False):
+    settings = build_settings_from_dict(
+        {"openrouter_api_key": "k", "data_dir": tmp_path, "dry_run": dry_run,
+         "trust_mode": "autonomous"}
+    )
+    return LoadedProfile(
+        profile_id="acme", name="Acme", enabled=True, settings=settings, config=_config(),
+        soul="", project="", memory="", schedule={}, reports=("daily",), domain="pm",
+        inbox={"channel": "C_IN", "poll_minutes": 2},
+    )
+
+
+def test_autonomous_command_runs_now_and_names_the_mode(tmp_path, monkeypatch):
+    loaded = _loaded_autonomous(tmp_path)
+    gw = _gw(loaded)
+    calls = []
+    monkeypatch.setattr(
+        "src.actions.approved_dispatch.dispatch_approved_action",
+        lambda a, cfg: calls.append(a) or "jira createIssue -> SCRUM-9",
+    )
+    try:
+        llm = _FakeLlm('{"intent":"command","command_id":"create_issue",'
+                       '"args":{"summary":"Bug login"}}')
+        reply, _ = maybe_handle_command(
+            loaded=loaded, config=loaded.config, mention=_mention(),
+            pack=_pm_pack(), gateway=gw, llm=llm,
+        )
+        assert "chế độ tự chủ" in reply and "✅" in reply
+        assert len(calls) == 1
+        assert gw.pending_approvals() == []
+    finally:
+        gw.close()
+
+
+def test_autonomous_duplicate_command_reports_dedup_not_refusal(tmp_path, monkeypatch):
+    loaded = _loaded_autonomous(tmp_path)
+    gw = _gw(loaded)
+    monkeypatch.setattr(
+        "src.actions.approved_dispatch.dispatch_approved_action", lambda a, cfg: "ok",
+    )
+    try:
+        llm = _FakeLlm('{"intent":"command","command_id":"create_issue",'
+                       '"args":{"summary":"Bug"}}')
+        kwargs = dict(loaded=loaded, config=loaded.config, pack=_pm_pack(), gateway=gw, llm=llm)
+        maybe_handle_command(mention=_mention(ts="1.1"), **kwargs)
+        reply2, _ = maybe_handle_command(mention=_mention(ts="2.2"), **kwargs)
+        assert "chống chạy đúp" in reply2
+        assert "từ chối" not in reply2
+    finally:
+        gw.close()
+
+
+def test_autonomous_dry_run_reply_names_dry_run_not_refusal(tmp_path):
+    loaded = _loaded_autonomous(tmp_path, dry_run=True)
+    gw = _gw(loaded)
+    try:
+        llm = _FakeLlm('{"intent":"command","command_id":"create_issue",'
+                       '"args":{"summary":"Bug"}}')
+        reply, _ = maybe_handle_command(
+            loaded=loaded, config=loaded.config, mention=_mention(),
+            pack=_pm_pack(), gateway=gw, llm=llm,
+        )
+        assert "dry-run" in reply
+        assert "từ chối" not in reply
     finally:
         gw.close()

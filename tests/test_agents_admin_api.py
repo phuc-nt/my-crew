@@ -137,6 +137,33 @@ def test_create_writes_web_search_opt_in(client, tmp_world):
     assert doc["web_search"] is True
 
 
+def test_create_writes_trust_mode_when_picked(client, tmp_world):
+    # The wizard's explicit pick lands in safety.trust_mode; absent ⇒ the profile
+    # inherits the company-wide default (TRUST_MODE env), so the key must not appear.
+    _, profiles = tmp_world
+    spec = {**_GOOD_SPEC, "id": "guarded-1", "reports": [], "schedule": {},
+            "trust_mode": "guarded"}
+    res = client.post("/api/agents/create", json=spec)
+    assert res.status_code == 201, res.text
+    import yaml
+
+    doc = yaml.safe_load((profiles / "guarded-1" / "profile.yaml").read_text(encoding="utf-8"))
+    assert doc["safety"]["trust_mode"] == "guarded"
+
+    spec2 = {**_GOOD_SPEC, "id": "default-1", "reports": [], "schedule": {}}
+    assert client.post("/api/agents/create", json=spec2).status_code == 201
+    doc2 = yaml.safe_load((profiles / "default-1" / "profile.yaml").read_text(encoding="utf-8"))
+    assert "trust_mode" not in doc2.get("safety", {})
+
+
+def test_create_rejects_unknown_trust_mode(client, tmp_world):
+    spec = {**_GOOD_SPEC, "id": "weird-1", "reports": [], "schedule": {},
+            "trust_mode": "yolo"}
+    res = client.post("/api/agents/create", json=spec)
+    assert res.status_code == 400
+    assert "trust_mode" in res.text
+
+
 def test_create_writes_agent_runtime_opt_in(client, tmp_world):
     # v20.5: the wizard forwards the chosen runtime; the created profile carries agent_runtime
     # for a non-native choice, and omits it (native default) otherwise.

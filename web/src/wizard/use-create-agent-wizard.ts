@@ -29,6 +29,9 @@ export interface WizardState {
   personaEdited: boolean
   webSearch: boolean // opt-in profile flag; only meaningful for research-style roles
   agentRuntime: string // v20.5: 'native' | 'create_agent' | 'deep_agent'; prefilled from template
+  // v30: '' = theo mặc định công ty (TRUST_MODE env); 'autonomous' | 'guarded' ghi tường minh
+  // vào safety.trust_mode của profile.yaml.
+  trustMode: string
   reports: string[]
   schedule: Record<string, string> // kind -> cron5 (only for scheduled kinds)
   jiraProjectKey: string
@@ -80,6 +83,7 @@ const INITIAL: WizardState = {
   personaEdited: false,
   webSearch: false,
   agentRuntime: 'native', // safe default; template prefills a recommendation
+  trustMode: '', // inherit the company-wide default unless the CEO picks explicitly
   ...PACK_SCOPED_RESET,
 }
 
@@ -191,6 +195,7 @@ export function useCreateAgentWizard() {
       bindings,
       ...(state.persona.trim() ? { persona: state.persona.trim() } : {}),
       ...(state.webSearch ? { web_search: true } : {}),
+      ...(state.trustMode ? { trust_mode: state.trustMode } : {}),
       ...runtimeSpec(state.agentRuntime),
     }
   }

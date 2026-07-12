@@ -15,6 +15,7 @@ beforeEach(() => {
     last_run: { kind: 'daily', status: 'delivered', ts: 't1' },
     budget: { spent: 1, cap: 50, ratio: 0.02 },
     pending_approvals: 0,
+    trust_mode: 'autonomous',
   })
   vi.spyOn(api, 'getCost').mockResolvedValue({
     agent_id: 'acme',
@@ -43,7 +44,22 @@ test('renders agent identity and activity', async () => {
   renderAt('acme')
   await waitFor(() => expect(screen.getByText(/ACME PM/)).toBeInTheDocument())
   expect(screen.getByText('đang bật')).toBeInTheDocument()
+  expect(screen.getByText('tự chủ')).toBeInTheDocument()
   await waitFor(() => expect(screen.getByText(/\$1.5000/)).toBeInTheDocument())
+})
+
+test('shows the guarded badge when the agent is pinned guarded', async () => {
+  vi.spyOn(api, 'getAgentStatus').mockResolvedValue({
+    id: 'acme',
+    name: 'ACME PM',
+    enabled: true,
+    last_run: null,
+    budget: { spent: 0, cap: 50, ratio: 0 },
+    pending_approvals: 0,
+    trust_mode: 'guarded',
+  })
+  renderAt('acme')
+  await waitFor(() => expect(screen.getByText('có duyệt')).toBeInTheDocument())
 })
 
 test('binds a telegram bot from the panel', async () => {

@@ -61,6 +61,8 @@ def test_list_agents_one_entry_per_registry_agent(monkeypatch, settings_factory)
     assert body[0]["name"] == "Acme" and body[0]["enabled"] is True
     assert body[0]["last_run"]["status"] == "delivered"
     assert body[1]["last_run"] is None
+    # effective trust mode rides the list payload (fixture settings pin "guarded")
+    assert body[0]["trust_mode"] == "guarded"
 
 
 def test_list_agents_exposes_report_kinds_per_pack(monkeypatch, settings_factory):
@@ -125,6 +127,7 @@ def test_status_includes_budget_and_pending(monkeypatch, settings_factory, tmp_p
     assert body["budget"]["cap"] == 50.0
     assert abs(body["budget"]["ratio"] - 0.25) < 1e-9
     assert body["pending_approvals"] == 1
+    assert body["trust_mode"] == "guarded"
 
 
 def test_status_unknown_id_404(monkeypatch, settings_factory):
@@ -156,6 +159,8 @@ def test_list_survives_a_broken_profile(monkeypatch, settings_factory):
     assert body["good"]["name"] == "Good"
     assert body["broken"]["enabled"] is False
     assert body["broken"]["name"].startswith("<error:")
+    # a broken profile must surface the conservative mode, not crash the field
+    assert body["broken"]["trust_mode"] == "guarded"
 
 
 def test_list_no_api_key_needed(monkeypatch, settings_factory):

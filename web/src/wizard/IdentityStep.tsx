@@ -79,9 +79,26 @@ export function IdentityStep({
         {state.agentRuntime === 'native' &&
           'Chặt nhất: 1 lượt suy nghĩ, không dùng công cụ. Hợp việc cần kiểm soát cao (kiểm định, tài chính).'}
         {state.agentRuntime === 'create_agent' &&
-          'Trung bình: tự gọi công cụ ĐỌC nhiều vòng (Jira/GitHub), mọi ghi ra ngoài vẫn chờ duyệt. Hợp nội dung, PM.'}
+          'Trung bình: tự gọi công cụ ĐỌC nhiều vòng (Jira/GitHub); mọi ghi ra ngoài đi qua cửa audit. Hợp nội dung, PM.'}
         {state.agentRuntime === 'deep_agent' &&
           'Tự do nhất: tự chạy lệnh shell trong hộp cát cách ly (không đụng máy thật). Hợp nghiên cứu sâu. Cần cài Docker.'}
+      </p>
+      <h4>Chế độ hành động</h4>
+      <label>
+        Mức tin cậy:{' '}
+        <select value={state.trustMode} onChange={(e) => update('trustMode', e.target.value)}>
+          <option value="">Theo mặc định công ty</option>
+          <option value="autonomous">Tự chủ — hành động ngay, ghi nhật ký audit</option>
+          <option value="guarded">Có duyệt — việc nhạy cảm chờ bạn duyệt</option>
+        </select>
+      </label>
+      <p className="runtime-hint">
+        {state.trustMode === 'autonomous' &&
+          'Agent thực thi ngay không chờ duyệt; bạn hậu kiểm qua nhật ký audit. Lưới an toàn cứng (chống xoá dữ liệu, lộ khoá) luôn bật.'}
+        {state.trustMode === 'guarded' &&
+          'Việc nhạy cảm (gửi email, sửa Jira, đăng kênh ngoài) xếp hàng ở tab Duyệt chờ bạn.'}
+        {state.trustMode === '' &&
+          'Dùng thiết lập chung của công ty (TRUST_MODE trong .env, mặc định Tự chủ).'}
       </p>
       <h4>SOUL.md (chỉnh được)</h4>
       <textarea

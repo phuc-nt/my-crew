@@ -19,6 +19,9 @@ budget:
 safety:
   dry_run: true               # DRY_RUN  (v1 default true)
   write_disabled: false       # AGENT_WRITE_DISABLED
+  # trust_mode: guarded       # v30: bỏ trống = theo TRUST_MODE .env (mặc định autonomous —
+  #                           # hành động ngay + audit). Ghi "guarded" để agent này xếp
+  #                           # hàng chờ duyệt như trước.
 
 runtime:                      # M2-P8 infra (opt-in; defaults = self-contained local)
   checkpointer: sqlite        # CHECKPOINTER_TYPE  (sqlite | postgres)
