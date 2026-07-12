@@ -123,17 +123,26 @@ Thanh điều hướng có 4 mục (giao diện gọn, CEO-first):
 
 Vào **Đội** → bấm **"+ Tạo nhân sự ảo"**. Có 2 đường:
 
-- **Qua hội thoại** (khuyến nghị): nút dẫn vào **Trợ lý**, trợ lý hỏi bạn từng bước (loại nhân sự,
-  tên, dự án, báo cáo nào, lịch chạy) rồi tạo giúp.
-- **Qua biểu mẫu**: nếu chưa có trợ lý điều hành, nút dẫn vào wizard tạo agent theo form.
+### B.2a. Tạo từ template — tạo ngay (v32, ≤2 click)
 
-Nhân sự ảo có thể thuộc nhiều "chuyên môn" (pack): PM, HR… mỗi loại làm các báo cáo khác nhau.
+Trang wizard hiện **bộ template nhân sự có sẵn** (6 vai trò: Trưởng phòng, Nghiên cứu, Nội dung, Phân tích, Kiểm định, PM-Coordinator). Mỗi template mang **tool gắn sẵn** (web search, academic search, lịch báo cáo mặc định, skills). Chọn card template → bấm **"Tạo ngay"** → xác nhận → nhân sự **được tạo NGAY** (chỉ 2 click, không qua form):
 
-## B.2a. Tạo trưởng phòng (1-click)
+- Nhân sự mới sẽ **TẮT** theo mặc định. Điền token `.env` cho vai trò (nếu cần) rồi bấm **bật** ở trang **Đội**.
+- Wizard **tuỳ-chỉnh** (chọn "Tạo tuỳ chỉnh") vẫn nguyên: full form nếu muốn đổi tên, báo cáo, hoặc cấu hình riêng.
 
-Ở trang **Đội**, nút **"+ Tạo trưởng phòng"** tạo nhanh coordinator từ template `profiles/templates/truong-phong/` rồi
-tự bộ lệnh làm trưởng phòng mặc định (`coordinator_id` trong `company.yaml`). Không cần biên tập gì,
-bấm nút xong xong.
+### B.2b. Tạo cả đội — tạo crew (v32, ≤3 click)
+
+Ở trang **Đội**, nút **"+ Tạo cả đội"** tạo nhanh **crew mặc định** (trưởng phòng + 4 nhân sự Nghiên cứu/Nội dung/Phân tích/Kiểm định):
+
+1. Bấm nút → hệ thống **xem trước** danh sách đội (banner hiện **thành viên nào đã tồn tại** — skip, không abort).
+2. Bấm **"Xác nhận tạo"** → tạo **độc lập từng người** (nếu 1 người lỗi, những người khác vẫn tạo).
+3. Xong: trưởng phòng tự **set làm coordinator** nếu chưa có trưởng phòng nào; mọi người **TẮT** → tuân tự B.2a.
+
+### B.2c. Qua hội thoại (tuỳ-chỉnh đầy đủ)
+
+Nút dẫn vào **Trợ lý**, trợ lý hỏi bạn từng bước (loại nhân sự, tên, dự án, báo cáo nào, lịch chạy) rồi tạo giúp (lịch sử wizard, nhân sự **được bật** ngay).
+
+Nhân sự ảo có thể thuộc nhiều "chuyên môn" (pack): PM, HR, Office… mỗi loại làm các báo cáo khác nhau.
 
 ## B.3. Giao việc cho đội
 
@@ -231,6 +240,10 @@ Vào **Trợ lý** (hoặc nhắn qua Telegram). Gõ câu hỏi/lệnh vào ô "
 > **An toàn:** trợ lý chỉ *xem trước* và hỏi lại; nó **không thực hiện** hành động ghi ra ngoài cho tới
 > khi bạn gõ **"xác nhận"**. Nói chuyện thoải mái, không sợ nó tự ý làm.
 
+### B.4a. "Trợ lý làm được gì?" — danh sách lệnh
+
+Vào tab **Trợ lý** → bấm nút **"Trợ lý làm được gì?"** (hoặc gõ "help") → hệ thống liệt kê mọi **lệnh có sẵn** với **mô tả ngắn** (giao việc, tạo nhân sự, chỉnh kế hoạch, chạy báo cáo, v.v.). Mỗi lệnh có **gợi ý cách dùng** — bấm để copy sẵn vào khung chat rồi điền chi tiết.
+
 ## B.5. Xem Hoạt động công ty (v31)
 
 Vào **Văn phòng → Hoạt động** (cột giữa) hoặc **Trợ lý** → hỏi "tuần này công ty làm gì?" — xem toàn bộ hành động của đội (khi gửi ra ngoài công ty, viết báo cáo, đổi lịch). Mỗi hành động ghi lại **ai**, **cái gì**, **kết quả**. Filter + phân trang. Nếu bật Telegram, CEO nhận tóm tắt tự động. Đây là **hệ thống duyệt lịch sử** (internal-only, không qua công ty bên ngoài).
@@ -292,13 +305,7 @@ Hệ thống **mỗi 5 phút kiểm tra** (không LLM, chỉ so sánh nội dung
 
     ![Văn phòng hợp nhất — 3D + hoạt động trực tiếp + ô giao việc](images/van-phong-hop-nhat-3d-feed-composer.png)
 
-  - Không gian 3D: bàn trưởng phòng ở giữa, mỗi nhân sự một bàn với màu và phụ kiện riêng
-    (nón / kính / cà vạt), có tay chân và nhịp thở nhẹ. Camera **tự xoay 360° chậm** (dừng
-    khi bạn kéo chuột), nội thất văn phòng (chậu cây, bảng viết, ghế sofa, đèn cây); hai
-    nhân sự hỏi ý kiến nhau thì **hai avatar rời bàn đi lại gần nhau** rồi tự về chỗ. Bàn
-    của **PIC** có dấu ⭐ + nhãn PIC trên bong bóng (v15). Màu viền bàn = trạng thái: xám
-    (chờ việc), xanh dương (nhận việc), cam (đang làm), xanh lá (xong). Mọi chuyển động
-    đều từ sự kiện thật — không có hoạt cảnh giả.
+  - Không gian 3D (v32 "đại tu visual"): bàn trưởng phòng ở giữa, mỗi nhân sự một bàn với **màu avatar riêng** (stable per agent, 8 sắc thái), bàn có **trạng thái hiển thị trên màn hình** (xám/xanh/cam/xanh lá). Camera **tự xoay 360° chậm** (dừng khi bạn kéo chuột), nội thất văn phòng (chậu cây, bảng viết, ghế sofa, đèn cây); hai nhân sự hỏi ý kiến nhau thì **hai avatar rời bàn đi lại gần nhau** rồi tự về chỗ. Bàn của **PIC** có dấu ⭐ + nhãn PIC. **Bấm vào bàn** = mở phòng việc (nếu đang chạy) hoặc trang agent (nếu rảnh); **hover tooltip** hiện trạng thái live. Panel 3D **gọn hơn** (38vh cap 400px) nên máy 1280×800 thấy 3D + feed + composer **cùng lúc**. Mọi chuyển động đều từ sự kiện thật — không có hoạt cảnh giả.
   - **Nhật ký văn phòng** (menu nâng cao, `Văn phòng → Nhật ký`): dòng thời gian ĐẦY ĐỦ
     theo từng phòng việc — mỗi sự kiện 1 dòng (người, hành động, thời gian), có chọn
     phòng theo việc.

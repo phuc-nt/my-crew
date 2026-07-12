@@ -83,6 +83,8 @@ Lớp B = phụ thuộc `safety.trust_mode` per-agent:
 - **guarded** (opt-in): chờ CEO duyệt (`approval_store.py` + `auto_approve_policy.py` chỉ dùng khi guarded).
 **Native action types (v31)**: `schedule_update` (agent đổi lịch báo cáo chính mình), `team_task_create`/`team_task_move` (kanban), `gws_write` (Google Sheets/Docs append+create), `academic_search` (read-only). Các handler `*_write.py` khác (jira/confluence/slack/email) — đều gọi qua gateway, không lối tắt.
 
+**Agent creation (v32)**: Template-based create-from-template / crew bootstrap (`src/server/template_create.py`) both build spec server-side from `profiles/templates/`, then go through the same `agent_create.create_agent(spec)` door as wizard — no bypass, new agents land DISABLED (CEO sets .env tokens, then enables on Team page).
+
 ### 3.6a Fleet activity audit (v31)
 **Hậu kiểm đội**: mọi hành động qua gateway ghi vào `audit.jsonl` (per-agent), `runs.jsonl` (lịch sử chạy), `captures.sqlite3` (chi phí). **Web surface** (`routes_visualize.py` + `visualize_views.py`): GET `/api/company/activity` trả audit rows (allowlist-projected, KHÔNG raw args chứa dữ liệu nhạy), phân trang, filter theo agent/loại. **Ops-chat command** (`ops_company_activity.py`): readonly lệnh mới `company_activity` (LLM tóm tắt hành động đội tuần này → gửi chat nội bộ, KHÔNG external).
 

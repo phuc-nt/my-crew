@@ -25,6 +25,7 @@ sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật.
 | **Agent-harness v1 (v19)** | Memory provider seam (static; kioku hoãn v19.5) · workspace protocol v2 (vault/ + skills/ per-agent) · per-agent skill có guard · capability block internal-only. |
 | **AgentRuntime + community (v20)** | AgentRuntime seam (Native/ToolCalling/DeepAgent) giữ deliver→gateway · positive read-allowlist + classify shim (E2E LLM thật) · 3 ổ cắm: skill agentskills.io, pack-MCP spawn gate, pack template + PACK-AUTHORING. |
 | **Agent-tools capability wave (v31)** | Hậu kiểm fleet-wide (2 surface: web + ops-chat) · 4 native action types (schedule_update, team_task_create/move, gws_write) · wake-gate hồi sinh (perceive-only, no-LLM khi không đổi, CEO alert on fail/stale) · OpenAlex academic search tool. |
+| **Staff templates + crew, office-3D refactor, UI/UX audit (v32)** | One-click template create (agent TẮT → token → bật ở trang Đội) + crew bootstrap từ `profiles/templates/crew.yaml` (per-member independent, skip-existing, coordinator auto-wire) · office-3D visual overhaul (flat low-poly solid pastel theme per light/dark, state hue on monitor, desk click→room/page, hover tooltip, panel 38vh) · error boundary + 12s watchdog cho lazy-office chunk · chat /commands listing "Trợ lý làm được gì?" · AgentPage profile-error recovery · office activity filter note. |
 
 ## Việc nên làm tiếp (từ UAT + nợ kỹ thuật)
 

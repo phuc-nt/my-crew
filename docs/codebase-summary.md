@@ -1,7 +1,7 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-07-12 — v28 COMPLETE.** ~1871 backend + 178 FE tests, ruff/tsc clean.
+> Status: **2026-07-13 — v32 COMPLETE.** ~2032 backend + 186 FE tests, ruff/tsc clean.
 > Product usable single-user tới v26 (agent office, team-task, màn 3D, registry user-data,
 > memory seam, AgentRuntime multi-runtime + community sockets, runtime-tiers, **telemetry
 > capture + unified cost across 3 engines + remember-node extension**). Bản đồ code +
@@ -146,6 +146,11 @@
   (agent bật web_search mà máy thiếu TAVILY/BRAVE key — ok khi không ai bật).
 - Fleet thật đổi: `default` DISABLED (quyết định CEO — đội office = mọi agent enabled,
   default là pm không thuộc văn phòng).
+
+### v32: Staff templates one-click + crew, office-3D refactor, UI/UX quick-wins (2026-07-13)
+- **One-click template create**: `src/server/template_create.py` — `POST /api/agents/create-from-template` + `POST /api/crew/create` + `GET /api/crew/preview`. Spec built server-side từ `profiles/templates/<role_id>/template.yaml` (client gửi role_id + optional agent_id). Agent tạo qua CHÍNH `create_agent.create_agent(spec)` door, **DISABLED by default** (CEO điền token → bật ở trang Đội). Skills/ (*.md only, symlink-confined) copy sau create thành công. Crew `profiles/templates/crew.yaml` (ONE default crew, per-member independent create via loop, skip-existing idempotent, coordinator auto-wire `company.yaml::coordinator_id` khi chưa set).
+- **Office-3D visual overhaul** (v32 "đại tu visual"): solid low-poly flat aesthetic (thay v12-v31 wireframe), per-theme palette (light/dark) trong `web/src/views/office-3d/desk-colors.ts` — agent personality hue trên avatar body (8 stable colors per agent id), state hue on monitor screen + status pill (idle/assigned/working/done). Desktop click→PIC room/agent page, hover→tooltip status. Panel compact (38vh cap 400px) giúp 1280×800 thấy 3D+feed+composer cùng lúc. Lazy chunk error boundary + 12s watchdog (`web/src/routes/office-unified-lazy.tsx`) chuyển "Đang tải" hang thành reload+link table.
+- **UI quick-wins** (P4): `GET /api/ops/chat/commands` (id/description/readonly) → Chat "Trợ lý làm được gì?" listing; AgentPage orphan-profile error explain + recovery link; AgentPage back-link; Hoạt động filter note rõ verdict=gateway-only.
 
 ### v19: agent-harness vòng 1 — memory seam + workspace protocol (2026-07-11)
 - **Memory provider seam** (`src/memory/`): `resolve_memory_text(loaded)` = MỘT cửa lấy
