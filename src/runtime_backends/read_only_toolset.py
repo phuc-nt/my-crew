@@ -102,14 +102,39 @@ def _firecrawl_tool(settings: Any) -> Callable[[dict], Any] | None:
     return _scrape
 
 
+def _openalex_tool() -> Callable[[dict], Any]:
+    """An `academic.search` callable over OpenAlex (public data, no key, fixed host).
+
+    Provider/network failures degrade to a short message string — the loop continues.
+    The rendered results are untrusted-wrapped by `render_works` itself.
+    """
+
+    def _search(args: dict) -> str:
+        query = str((args or {}).get("query") or "")
+        if not query.strip():
+            return "(academic.search cần tham số query)"
+        from src.tools.openalex_tool import render_works, search_works
+
+        try:
+            works = search_works(query)
+        except Exception as exc:  # noqa: BLE001 — search best-effort, never crash the loop
+            return f"(tra cứu OpenAlex lỗi: {exc})"
+        return render_works(works)
+
+    return _search
+
+
 def build_read_toolset(
-    config: ReportingConfig, audience: str = "internal", settings: Any = None
+    config: ReportingConfig, audience: str = "internal", settings: Any = None,
+    academic_search: bool = False,
 ) -> dict[str, Callable[[dict], Any]]:
     """The positive read-allowlist for a tool-calling runtime, policy-shimmed + audience-aware.
 
     Returns a name→callable map. External audience drops internal-only reads. Every callable is
     shimmed through `classify`. There is no path here to a write/destructive tool — they are
-    not listed. `settings` (optional) enables the Firecrawl web-scrape tool when configured.
+    not listed. `settings` (optional) enables the Firecrawl web-scrape tool when configured;
+    `academic_search` (the per-agent profile flag, v31 P6) enables OpenAlex — keyless, so the
+    flag is its only gate and the default keeps every existing toolset byte-identical.
     """
     raw: dict[str, Callable[[dict], Any]] = {}
     if config is not None:
@@ -129,6 +154,9 @@ def build_read_toolset(
     fc = _firecrawl_tool(settings)
     if fc is not None:
         raw["web.scrape"] = fc
+    # v31 P6: OpenAlex paper search — public academic data, both audiences, flag-gated.
+    if academic_search:
+        raw["academic.search"] = _openalex_tool()
     if audience != "internal":
         raw = {name: fn for name, fn in raw.items() if name not in _INTERNAL_ONLY_READS}
     return {name: _shim(name, fn) for name, fn in raw.items()}

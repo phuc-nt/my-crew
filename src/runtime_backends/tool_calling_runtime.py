@@ -54,17 +54,23 @@ class ToolCallingRuntime:
         # deps use it; this runtime routes telemetry into its own work loop instead, so it must
         # NOT also ride **kwargs into the graph (double-wire).
         telemetry = kwargs.pop("telemetry", None)
-        work = self._make_work_override(settings, context, config, loop_limit, telemetry)
+        # v31 P6: the agent's academic-search opt-in (threaded by the step runner from the
+        # loaded profile); popped so it never rides **kwargs into the graph.
+        academic_search = bool(kwargs.pop("academic_search", False))
+        work = self._make_work_override(settings, context, config, loop_limit, telemetry,
+                                        academic_search)
         return build_team_task_graph(work_override=work, **kwargs)
 
-    def _make_work_override(self, settings, context, config, loop_limit, telemetry=None):
+    def _make_work_override(self, settings, context, config, loop_limit, telemetry=None,
+                            academic_search=False):
         """Build the run_work replacement: a create_agent loop over the read toolset."""
         from src.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
 
         def _run_work(title: str, handoff: str, hook) -> tuple[str, float | None]:
             # team-step is inherently internal (no external audience). `settings` enables the
             # Firecrawl web-scrape tool when FIRECRAWL_BASE_URL is configured (v20.5).
-            tools_map = build_read_toolset(config, audience="internal", settings=settings)
+            tools_map = build_read_toolset(config, audience="internal", settings=settings,
+                                           academic_search=academic_search)
             assert_read_only(list(tools_map))  # defense-in-depth: prove no write tool leaked in
 
             from src.runtime_backends.react_loop import run_react_work

@@ -61,6 +61,7 @@ class DeepAgentRuntime:
         settings = kwargs.get("settings")
         context = kwargs.get("context")
         kwargs.pop("reporting_config", None)  # deep agent uses its own sandbox tools, not read seam
+        kwargs.pop("academic_search", None)  # read-toolset flag — the sandbox loop has no read seam
         runtime_config = kwargs.pop("runtime_config", None)
         caps = runtime_config.caps() if runtime_config is not None else None
         # Fail-closed UP-FRONT: no sandbox config / local / unknown → refuse before building the
