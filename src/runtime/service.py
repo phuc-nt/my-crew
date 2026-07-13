@@ -177,6 +177,19 @@ def _consolidate_memories_best_effort(now: datetime) -> None:
         logger.warning("memory consolidation sweep failed (ignored): %s", exc)
 
 
+def _archive_stale_skills_best_effort(now: datetime) -> None:
+    """Nightly skill-curator archive sweep (v38 #2) — same nightly window + best-effort
+    contract as memory consolidation; never raises or blocks the tick."""
+    if now.hour != _MEMORY_SWEEP_HOUR:
+        return
+    try:
+        from src.skills.skill_curator import run_skill_archive_sweep
+
+        run_skill_archive_sweep(now=now)
+    except Exception as exc:  # noqa: BLE001 — maintenance must never break the scheduler
+        logger.warning("skill archive sweep failed (ignored): %s", exc)
+
+
 class Service:
     """Holds the in-memory `last_fire` map across ticks (per (agent_id, kind))."""
 
@@ -236,6 +249,7 @@ class Service:
                 break
         _reap_sandboxes_best_effort()
         _consolidate_memories_best_effort(now)
+        _archive_stale_skills_best_effort(now)
         return outcomes
 
     def run_forever(self, *, interval: int = _TICK_INTERVAL_S) -> None:  # pragma: no cover

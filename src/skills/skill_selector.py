@@ -58,12 +58,18 @@ def select_skill_text(context: ProfileContext, audience: str, *, kind: str) -> s
 
     External audience, no candidate skills, or no selector ⇒ "" (no injection). The
     selector's returned names are FILTERED to the candidate pool, so a hallucinated name
-    is dropped.
+    is dropped. When the context carries an `agent_id`, the chosen names are recorded for
+    the skill curator (v38 #2) — best-effort telemetry that never affects the text.
     """
     if audience != "internal" or not context.skills or context.skill_selector is None:
         return ""
     chosen_names = set(context.skill_selector(list(context.skills), kind))
     chosen = [s for s in context.skills if s.name in chosen_names]
+    agent_id = getattr(context, "agent_id", None)
+    if agent_id and chosen:
+        from src.skills.skill_curator import record_usage
+
+        record_usage(agent_id, [s.name for s in chosen])
     return render_skills(chosen)
 
 

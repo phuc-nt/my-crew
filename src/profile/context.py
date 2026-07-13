@@ -51,6 +51,8 @@ class ProfileContext:
     company_docs: tuple[CompanyDoc, ...] = ()  # M19 opted-in company docs (internal only)
     auto_approve: dict | None = None  # v8 M23 trust-ladder config (None ⇒ OFF); threaded to
     # the approval gate + the delivery gateway so a trusted scheduled report auto-delivers.
+    agent_id: str | None = None  # v38 #2: whose skills these are — enables skill-usage
+    # tracking in select_skill_text. None ⇒ no tracking (byte-identical). Set at profile load.
 
 
 #: The no-op context — used as the default everywhere so v1 behavior is unchanged.

@@ -34,6 +34,7 @@ from src.agent.ops_assign_team_task import (
     run_assign_team_task,
 )
 from src.agent.ops_company_activity import run_company_activity
+from src.agent.ops_send_message import preview_send_message, run_send_message
 
 #: An agent whose work comes only from `assign_team_task` (e.g. office roles) has no
 #: report kind of its own — the CEO says this instead of a report-kind list.
@@ -485,6 +486,28 @@ OPS_COMMANDS: dict[str, dict] = {
         },
         "run": _run_cancel_task,
         "preview": _preview_cancel_task,
+    },
+    "send_message": {
+        "description": "Chủ động gửi một tin nhắn tới kênh/người nhận (Slack/Telegram/email) "
+                       "— qua Action Gateway (guarded thì chờ duyệt)",
+        "readonly": False,
+        "slots": {
+            "channel": {"prompt": "Gửi qua kênh nào? (slack / telegram / email)",
+                        "required": True, "max_len": 12, "lower": True,
+                        "choices": {
+                            "slack": ("slack",),
+                            "telegram": ("telegram", "tele"),
+                            "email": ("email", "mail", "e-mail", "thư"),
+                        },
+                        "hint": "đúng MỘT: slack, telegram, hoặc email"},
+            "to": {"prompt": "Gửi tới đâu? (id kênh Slack, chat id Telegram, hoặc địa chỉ email)",
+                   "required": True, "max_len": 120},
+            "text": {"prompt": "Nội dung tin nhắn?", "required": True, "max_len": 2000},
+            "subject": {"prompt": "Tiêu đề (chỉ dùng cho email, bỏ qua nếu không)?",
+                        "required": False, "max_len": 120},
+        },
+        "run": run_send_message,
+        "preview": preview_send_message,
     },
     "assign_team_task": {
         "description": "Giao một việc lớn cho cả đội — hệ thống tự chia thành các bước "

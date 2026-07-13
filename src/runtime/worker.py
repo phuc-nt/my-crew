@@ -94,6 +94,7 @@ def build_graph_for(loaded: LoadedProfile, settings: Any, kind: str, audience: s
         sibling_project=loaded.project_group,
         company_docs=load_company_docs(getattr(loaded, "company_docs", ())),
         auto_approve=getattr(loaded, "auto_approve", None),
+        agent_id=loaded.profile_id,  # v38 #2: enables skill-usage tracking
     )
     remember = build_remember_node(loaded.profile_id, settings, audience)
 
