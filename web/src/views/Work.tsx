@@ -9,6 +9,8 @@ import { formatDateTime } from '../labels'
 import { useAutoApproved } from '../hooks/use-auto-approved'
 import { type AgentApproval, usePendingApprovals } from '../hooks/use-pending-approvals'
 import { Tasks } from './Tasks'
+import { ClarifySection } from './clarify-section'
+import { TeamTaskKanban } from './team-task-kanban'
 
 export function Work() {
   const { items, loading, error, refresh } = usePendingApprovals()
@@ -41,6 +43,9 @@ export function Work() {
   return (
     <section className="work-page">
       <h2>Việc</h2>
+
+      {/* v33 P4: clarify questions — the CEO's other inbox besides approvals. */}
+      <ClarifySection />
 
       <section className="work-approvals">
         <h3>Cần bạn duyệt {items.length > 0 && <span className="badge">{items.length}</span>}</h3>
@@ -76,6 +81,9 @@ export function Work() {
         )}
         {opError && <p className="error">{opError}</p>}
       </section>
+
+      {/* v33 P3: team tasks as read-only kanban lanes — card click opens the workroom. */}
+      <TeamTaskKanban />
 
       <section className="work-tasks">
         <h3>Việc đã giao cho từng nhân sự</h3>

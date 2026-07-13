@@ -298,6 +298,20 @@ class TeamTaskStore:
         ).fetchall()
         return [t for (task_id,) in rows if (t := self.get(task_id)) is not None]
 
+    def list_recent_tasks(self, limit: int = 200, *,
+                          include_planning: bool = False) -> list[TeamTask]:
+        """Read-only newest-first task list for cross-room surfaces (outputs hub /
+        kanban board). Excludes `cancelled` always; excludes `planning` drafts unless
+        the caller is a board that wants the draft column. NEVER a dispatch source —
+        see `list_dispatchable`."""
+        excluded = ("cancelled",) if include_planning else ("cancelled", "planning")
+        rows = self._conn.execute(
+            f"SELECT id FROM team_tasks WHERE status NOT IN "
+            f"({','.join('?' * len(excluded))}) ORDER BY created_at DESC LIMIT ?",
+            (*excluded, int(limit)),
+        ).fetchall()
+        return [t for (task_id,) in rows if (t := self.get(task_id)) is not None]
+
     def list_dispatchable(self) -> list[TeamTask]:
         """DISPATCH list — the ONLY task set the coordinator ticker may act on.
 
