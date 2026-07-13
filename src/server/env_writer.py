@@ -38,6 +38,9 @@ SETUP_WRITABLE_KEYS: frozenset[str] = frozenset({
     "JIRA_PROJECT_KEY", "GITHUB_REPO",
     "CONFLUENCE_SPACE_KEY", "CONFLUENCE_SPACE_ID", "OKR_CONFLUENCE_PAGE_ID",
     "TAVILY_API_KEY", "BRAVE_API_KEY",
+    # v39 #2: SMTP config for email delivery + send_message email channel (Connections UI).
+    "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD",
+    "SMTP_FROM_ADDR", "SMTP_USE_TLS", "SMTP_RECIPIENTS",
     # BIND_HOST/PORT deliberately NOT wizard-writable (review M2): setting BIND_HOST=0.0.0.0
     # before finishing wedges startup via assert_bind_safe. Exposing to LAN is a deliberate
     # post-setup step (edit .env + restart), not a first-run wizard field.

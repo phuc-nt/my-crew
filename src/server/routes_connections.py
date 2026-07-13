@@ -68,10 +68,21 @@ _CATALOG: tuple[dict, ...] = (
         "note": "Đăng nhập bằng `gh auth login` trong terminal — không có key trong .env.",
     },
     {
-        "id": "gws", "label": "Google Workspace (gws CLI — hr-pack)",
+        "id": "gws", "label": "Google Workspace (gws CLI — Sheets, Gmail, Calendar, Drive)",
         "check_ids": ("gws",),
         "keys": (),
-        "note": "Cài gws CLI và chạy `gws auth` — xác thực OAuth riêng, không có key trong .env.",
+        "note": "Cài gws CLI và chạy `gws auth` — xác thực OAuth riêng, không có key trong .env. "
+                "Bật `gws_context: true` trong hồ sơ agent để agent đọc Gmail/Calendar/Drive.",
+    },
+    {
+        "id": "smtp", "label": "Email (SMTP)",
+        "check_ids": ("smtp",),
+        "keys": (
+            "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD",
+            "SMTP_FROM_ADDR", "SMTP_USE_TLS", "SMTP_RECIPIENTS",
+        ),
+        "note": "Cấu hình SMTP để gửi email báo cáo + send_message qua email. "
+                "Mật khẩu chỉ dùng lúc gửi, không hiển thị lại.",
     },
     {
         "id": "telegram", "label": "Telegram (bot theo từng nhân sự)",

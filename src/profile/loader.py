@@ -76,6 +76,10 @@ class LoadedProfile:
     # the `academic.search` tool is not offered (toolset byte-identical). OpenAlex needs
     # no key, so this flag IS the gate (there is no config-availability gate to lean on).
     academic_search: bool = False
+    # v39 #1: opt-in Google Workspace READ tools (Gmail/Calendar/Drive) for tool-calling
+    # runtimes. Default False ⇒ the gws.* tools are not offered (toolset byte-identical).
+    # The gws CLI's OAuth is the credential; no key gate to lean on, so the flag IS the gate.
+    gws_context: bool = False
     # v19 memory seam: which provider serves the injectable memory text. Absent ⇒ static
     # (MEMORY.md, byte-identical pre-v19). Consumed by `src/memory.resolve_memory_text`.
     memory_config: MemoryConfig = field(default_factory=MemoryConfig)
@@ -159,6 +163,7 @@ def load_profile(
     auto_approve = _parse_auto_approve(yaml_doc.get("auto_approve"))
     web_search = bool(yaml_doc.get("web_search", False))
     academic_search = bool(yaml_doc.get("academic_search", False))
+    gws_context = bool(yaml_doc.get("gws_context", False))
     memory_config = parse_memory_config(yaml_doc.get("memory"))
     agent_runtime = parse_agent_runtime_config(yaml_doc.get("agent_runtime"))
     watchers = _parse_watchers(yaml_doc.get("watchers"))
@@ -181,6 +186,7 @@ def load_profile(
         auto_approve=auto_approve,
         web_search=web_search,
         academic_search=academic_search,
+        gws_context=gws_context,
         memory_config=memory_config,
         agent_runtime=agent_runtime,
         team_step_egress=team_step_egress,

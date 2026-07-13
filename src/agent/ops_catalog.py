@@ -33,6 +33,10 @@ from src.agent.ops_assign_team_task import (
     preview_assign_team_task,
     run_assign_team_task,
 )
+from src.agent.ops_calendar_event import (
+    preview_create_calendar_event,
+    run_create_calendar_event,
+)
 from src.agent.ops_company_activity import run_company_activity
 from src.agent.ops_send_message import preview_send_message, run_send_message
 
@@ -508,6 +512,22 @@ OPS_COMMANDS: dict[str, dict] = {
         },
         "run": run_send_message,
         "preview": preview_send_message,
+    },
+    "create_calendar_event": {
+        "description": "Tạo một sự kiện Google Calendar (qua Action Gateway; guarded thì "
+                       "chờ duyệt)",
+        "readonly": False,
+        "slots": {
+            "title": {"prompt": "Tiêu đề sự kiện?", "required": True, "max_len": 300},
+            "start": {"prompt": "Bắt đầu (định dạng RFC3339, vd 2026-07-20T09:00:00+07:00)?",
+                      "required": True, "max_len": 40},
+            "end": {"prompt": "Kết thúc (RFC3339, bỏ qua nếu trùng giờ bắt đầu)?",
+                    "required": False, "max_len": 40},
+            "attendees": {"prompt": "Email người dự (cách nhau dấu phẩy, tuỳ chọn)?",
+                          "required": False, "max_len": 400},
+        },
+        "run": run_create_calendar_event,
+        "preview": preview_create_calendar_event,
     },
     "assign_team_task": {
         "description": "Giao một việc lớn cho cả đội — hệ thống tự chia thành các bước "

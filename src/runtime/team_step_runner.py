@@ -417,6 +417,8 @@ def _run_graph(
         _extra["runtime_config"] = loaded.agent_runtime
         # v31 P6: per-agent OpenAlex opt-in for the read toolset (keyless — the flag gates).
         _extra["academic_search"] = bool(getattr(loaded, "academic_search", False))
+        # v39 #1: per-agent Google-Workspace-read opt-in (gws CLI OAuth is the credential).
+        _extra["gws_context"] = bool(getattr(loaded, "gws_context", False))
     # v20.5 Phase 0: wire the team-step external_write hook to the per-agent Action Gateway when
     # the agent opted into step egress. Absent ⇒ external_write stays None (deliver writes only
     # the internal artifact — byte-identical pre-v20.5).

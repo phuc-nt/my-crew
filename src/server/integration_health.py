@@ -92,6 +92,7 @@ def _run_checks() -> list[dict]:
 
     checks.append(_gh_check())
     checks.append(_websearch_flag_check())
+    checks.append(_smtp_check())
 
     gws = shutil.which("gws")
     checks.append(
@@ -134,6 +135,20 @@ def _websearch_flag_check() -> dict:
         "websearch_key", "Web search key (agent bật web_search)", ok, detail,
         "Thêm TAVILY_API_KEY hoặc BRAVE_API_KEY ở Setup wizard, hoặc tắt web_search "
         "trong profile các agent trên",
+    )
+
+
+def _smtp_check() -> dict:
+    """v39 #2: SMTP presence for email delivery + send_message email. ok = SMTP_HOST set
+    (present-only — a password value never leaves the server). Absent ⇒ not-ok with a hint;
+    email/send_message-email simply aren't usable until configured."""
+    import os as _os
+
+    ok = bool(_os.getenv("SMTP_HOST"))
+    detail = "SMTP_HOST đã đặt" if ok else "chưa cấu hình SMTP (email/send_message email tắt)"
+    return _check(
+        "smtp", "Email (SMTP)", ok, detail,
+        "Điền SMTP_HOST/PORT/USER/PASSWORD ở trang Kết nối (thẻ Email) để bật gửi email",
     )
 
 

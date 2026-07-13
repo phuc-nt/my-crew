@@ -57,12 +57,14 @@ class ToolCallingRuntime:
         # v31 P6: the agent's academic-search opt-in (threaded by the step runner from the
         # loaded profile); popped so it never rides **kwargs into the graph.
         academic_search = bool(kwargs.pop("academic_search", False))
+        # v39 #1: the agent's Google-Workspace-read opt-in (threaded from the loaded profile).
+        gws_context = bool(kwargs.pop("gws_context", False))
         work = self._make_work_override(settings, context, config, loop_limit, telemetry,
-                                        academic_search)
+                                        academic_search, gws_context)
         return build_team_task_graph(work_override=work, **kwargs)
 
     def _make_work_override(self, settings, context, config, loop_limit, telemetry=None,
-                            academic_search=False):
+                            academic_search=False, gws_context=False):
         """Build the run_work replacement: a create_agent loop over the read toolset."""
         from src.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
 
@@ -70,7 +72,8 @@ class ToolCallingRuntime:
             # team-step is inherently internal (no external audience). `settings` enables the
             # Firecrawl web-scrape tool when FIRECRAWL_BASE_URL is configured (v20.5).
             tools_map = build_read_toolset(config, audience="internal", settings=settings,
-                                           academic_search=academic_search)
+                                           academic_search=academic_search,
+                                           gws_context=gws_context)
             assert_read_only(list(tools_map))  # defense-in-depth: prove no write tool leaked in
 
             from src.runtime_backends.react_loop import run_react_work

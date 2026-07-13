@@ -509,10 +509,14 @@ _GWS_ALLOWLIST_PREFIXES: tuple[tuple[str, ...], ...] = (
     ("sheets", "+append"),
     ("docs", "documents", "create"),
     ("docs", "+write"),
+    # v39 #3: create a Google Calendar event. Reversible-but-sensitive ⇒ ordinary Lớp B
+    # (guarded queues, autonomous runs audited). Calendar delete/acl-share are caught by
+    # the destructive/permission marker scan above, so they never reach this allowlist.
+    ("calendar", "events", "insert"),
 )
 #: Destructive/permission verbs anywhere in a gws argv = Lớp A, both trust modes.
 _GWS_DATA_LOSS_MARKERS = ("delete", "clear", "trash", "batchclear")
-_GWS_SECURITY_MARKERS = ("share", "permission", "permissions", "publish")
+_GWS_SECURITY_MARKERS = ("share", "permission", "permissions", "publish", "acl")
 
 
 def _hard_deny_gws(action: dict[str, Any]) -> BlockVerdict | None:

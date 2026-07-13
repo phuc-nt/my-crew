@@ -91,8 +91,10 @@ def tool_error_guard(tool_name: str, fn: Callable[[dict], Any]) -> Callable[[dic
 
 #: Read tools whose output is INTERNAL-only (per-person workload, headcount, issue detail).
 #: Withheld from external-audience runs so summarize/compose cannot leak them outward.
+#: v39 #1: the Google Workspace reads (company mail/calendar/drive) are internal too.
 _INTERNAL_ONLY_READS = frozenset(
-    {"jira.issues", "linear.issues", "confluence.page", "history.search"}
+    {"jira.issues", "linear.issues", "confluence.page", "history.search",
+     "gws.gmail", "gws.calendar", "gws.drive"}
 )
 
 
@@ -185,6 +187,37 @@ def _openalex_tool() -> Callable[[dict], Any]:
     return _search
 
 
+def _gws_tool(surface: str) -> Callable[[dict], Any]:
+    """A Google Workspace READ callable (`gmail`/`calendar`/`drive`) over the gws CLI.
+
+    Wraps the result in the internal-content guard (company data) and degrades a CLI/OAuth
+    failure to a short string — the loop continues. The read argv is CODE-fixed inside
+    `gws_read`; only a `query` param (drive) is passed through, never an argv.
+    """
+
+    def _read(args: dict) -> str:
+        from src.tools.gws_read import (
+            GwsReadError,
+            calendar_agenda,
+            drive_list,
+            gmail_triage,
+        )
+        from src.tools.search_result_formatter import format_internal_content
+
+        try:
+            if surface == "gmail":
+                raw = gmail_triage()
+            elif surface == "calendar":
+                raw = calendar_agenda()
+            else:  # drive
+                raw = drive_list(str((args or {}).get("query") or ""))
+        except GwsReadError as exc:
+            return f"(gws {surface} lỗi: {exc})"
+        return format_internal_content(raw, label=f"gws {surface}")
+
+    return _read
+
+
 def _history_search_tool() -> Callable[[dict], Any]:
     """A `history.search` callable over the team's own past work (v33 P5).
 
@@ -226,7 +259,7 @@ def _history_search_tool() -> Callable[[dict], Any]:
 
 def build_read_toolset(
     config: ReportingConfig, audience: str = "internal", settings: Any = None,
-    academic_search: bool = False,
+    academic_search: bool = False, gws_context: bool = False,
 ) -> dict[str, Callable[[dict], Any]]:
     """The positive read-allowlist for a tool-calling runtime, policy-shimmed + audience-aware.
 
@@ -235,6 +268,8 @@ def build_read_toolset(
     not listed. `settings` (optional) enables the Firecrawl web-scrape tool when configured;
     `academic_search` (the per-agent profile flag, v31 P6) enables OpenAlex — keyless, so the
     flag is its only gate and the default keeps every existing toolset byte-identical.
+    `gws_context` (v39 #1) enables the Google Workspace READ tools (Gmail/Calendar/Drive) —
+    INTERNAL company data, so internal-audience only, and OFF by default (byte-identical).
     """
     raw: dict[str, Callable[[dict], Any]] = {}
     if config is not None:
@@ -257,6 +292,14 @@ def build_read_toolset(
     # v31 P6: OpenAlex paper search — public academic data, both audiences, flag-gated.
     if academic_search:
         raw["academic.search"] = _openalex_tool()
+    # v39 #1: Google Workspace READ (Gmail/Calendar/Drive) via the gws CLI — INTERNAL
+    # company context, flag-gated per agent (default OFF ⇒ toolset byte-identical). Each
+    # tool degrades to a "(gws … lỗi)" string on CLI/OAuth failure; the read argv is
+    # CODE-fixed (LLM supplies only a query param), never a write.
+    if gws_context:
+        raw["gws.gmail"] = _gws_tool("gmail")
+        raw["gws.calendar"] = _gws_tool("calendar")
+        raw["gws.drive"] = _gws_tool("drive")
     # v33 P5: history search over the team's own past work (steps + audit). Internal
     # company data by nature → listed in _INTERNAL_ONLY_READS; always on for internal
     # audiences (read-only, no key, no network).
