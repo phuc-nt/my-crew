@@ -15,6 +15,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from src.agent.review_graph import ReviewStepInput, parse_review_verdict, run_review_step
 from src.llm.team_task_check_prompt import parse_check_verdict
 
@@ -121,3 +123,22 @@ def test_decompose_prompt_demands_measurable_criteria():
 
     assert "ĐO ĐƯỢC" in _DECOMPOSE_SYSTEM
     assert "CEO nêu tiêu chí" in _DECOMPOSE_SYSTEM
+
+
+def test_parsers_tolerate_markdown_fences_and_leading_prose():
+    """v34 UAT finding: a reviewer model wrapped its verdict in ```json fences →
+    parse died → review step failed → whole task stalled. Every LLM-JSON parser now
+    strips fences/prose deterministically; genuine garbage still fails loud."""
+    from src.agent.review_graph import parse_review_verdict
+    from src.agent.task_decomposition import DecompositionError, parse_decomposed_task
+    from src.llm.team_task_check_prompt import parse_check_verdict
+
+    fenced = '```json\n{"passed": true, "failures": []}\n```'
+    assert parse_review_verdict(fenced).passed is True
+    prose = 'Đây là kết quả thẩm định:\n{"passed": false, "failures": ["x"], "confidence": 0.9}'
+    assert parse_check_verdict(prose).passed is False
+    with pytest.raises(Exception):
+        parse_review_verdict("hoàn toàn không có JSON")
+    import pytest as _pt
+    with _pt.raises(DecompositionError):
+        parse_decomposed_task("không JSON")

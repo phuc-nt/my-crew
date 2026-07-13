@@ -41,6 +41,19 @@ _REWORK_SYSTEM = (
 )
 
 
+def strip_json_fences(raw: str) -> str:
+    """Trim markdown code fences / leading prose around a JSON completion (v34 UAT
+    finding: a reviewer model wrapped its verdict in ```json fences → parse failed →
+    the review step died and stalled the whole task). Deterministic only: take the
+    substring from the first '{' to the last '}' when both exist; otherwise return
+    the input unchanged (genuine garbage still fails loud in the parser)."""
+    text = (raw or "").strip()
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end > start:
+        return text[start:end + 1]
+    return text
+
+
 def _coerce_criteria(value):
     """Tolerant coercion for the OPTIONAL `criteria` checklist (review M1): a weak
     model emitting a string / list of strings / junk must NEVER fail the verdict —
@@ -92,7 +105,7 @@ def parse_check_verdict(raw_json: str) -> CheckVerdict:
     the schema — mirrors `task_decomposition.parse_decomposed_task`'s convention.
     """
     try:
-        doc = json.loads(raw_json)
+        doc = json.loads(strip_json_fences(raw_json))
     except json.JSONDecodeError as exc:
         raise CheckVerdictError(f"self-check không phải JSON hợp lệ: {exc}") from None
     if not isinstance(doc, dict):

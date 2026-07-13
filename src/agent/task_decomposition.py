@@ -159,8 +159,10 @@ def parse_decomposed_task(raw_json: str) -> DecomposedTask:
     Raises `DecompositionError` on anything that is not valid JSON or does not match
     the schema — the caller (ops_catalog.assign_team_task) retries on this (bounded,
     before the CEO ever sees a preview)."""
+    from src.llm.team_task_check_prompt import strip_json_fences
+
     try:
-        doc = json.loads(raw_json)
+        doc = json.loads(strip_json_fences(raw_json))
     except json.JSONDecodeError as exc:
         raise DecompositionError(f"phân rã không phải JSON hợp lệ: {exc}") from None
     if not isinstance(doc, dict):

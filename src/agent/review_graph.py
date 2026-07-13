@@ -105,8 +105,10 @@ class StaleArtifactError(RuntimeError):
 
 
 def parse_review_verdict(raw_json: str) -> ReviewVerdict:
+    from src.llm.team_task_check_prompt import strip_json_fences
+
     try:
-        doc = json.loads(raw_json)
+        doc = json.loads(strip_json_fences(raw_json))
     except json.JSONDecodeError as exc:
         raise ReviewVerdictError(f"soát chéo không trả về JSON hợp lệ: {exc}") from None
     if not isinstance(doc, dict):
