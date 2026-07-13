@@ -10,135 +10,62 @@ The interesting part isn't the reporting. It's that the agent has **full autonom
 
 ---
 
-## What it does (all built + E2E-verified)
+## Why this repo exists
 
-| Report | Command | What it produces |
-|---|---|---|
-| Daily standup | `report --daily` | Risk digest (overdue, blockers, stale PRs, CI failures) → Slack + Confluence |
-| Weekly sprint review | `report --weekly` | Sprint progress + embedded OKR & resource sections |
-| OKR status | `report --okr` | Reads an OKR table from Confluence → rolls up weighted progress from Jira epics |
-| Resource & cost | `report --resource` | Per-assignee workload (overload vs team mean) + LLM-budget + labor estimate |
-| Any of the above, for stakeholders | `... --audience external` | Business-tone summary → posts to a stakeholder channel **via human approval** |
+Most "AI agent" projects bolt tools + skills onto a model and hope it behaves. This one takes the opposite stance: **the guardrail comes first, autonomy second.** The bet is that an agent you can *trust to act on its own* is worth more than one you must babysit — but only if "trust" is enforced by architecture, not by prompting.
 
-Runs on demand or on a schedule (launchd cron). Read paths use [MCP servers](#external-dependency-3-mcp-servers) (Jira/Confluence/Slack) + the `gh` CLI (GitHub).
+Three convictions shape everything:
 
-## The Action Gateway (why this repo is worth reading)
+1. **Autonomy is the default, not a reward.** The agent runs on a schedule and acts without asking. Caution (approve-before-write) is an explicit per-agent opt-in, not the baseline. Speed is the point.
+2. **Some lines the LLM never gets to cross.** Permanent data loss, credential exfiltration, and security incidents are denied at the gateway *before* the model is even consulted (**Lớp A**). No prompt, jailbreak, or bug in the model can reach them — the block is hard-coded, not a decision.
+3. **Everything is a real harness, not a demo.** A model with tools is not an agent. A *real* harness needs a security gate + guardrails + observability around the model: scheduler, layered memory, budget, hooks (PII firewall + approval-gate), an immutable audit log, and the Action Gateway every write must pass. The guardrail isn't an add-on — it's an invariant, verified live.
 
-Every write the agent makes passes through one choke point that applies, in order:
+## The Action Gateway (the one thing worth reading)
+
+Every write the agent makes passes through one choke point:
 
 ```
 request → [Lớp A hard-deny] → [Lớp B: autonomous auto-approve OR guarded queue?]
         → [kill-switch] → [dry-run?] → [rate-limit]
-        → [idempotency dedup (reserve-before-execute)]
-        → [execute handler] → [immutable audit log] → return
+        → [idempotency dedup] → [execute] → [immutable audit log] → return
 ```
 
-- **Lớp A (red line, hard-coded, never reaches the LLM):** permanent data loss, credential exfiltration, security incidents. Denied at the gateway — *not* a decision the LLM gets to make.
-- **Lớp B (trust-mode dependent, v30):** merge/close PR, reassign person, post to **external channel**.
-  - **Autonomous (default):** executes immediately → audit log (rationale "trust_mode=autonomous").
-  - **Guarded (opt-in):** queued; human approves first.
-  - **Proposal-only (automation):** always queued regardless of mode.
-- **Allowlist, not denylist:** unknown tools are denied by default (we switched after adversarial review found denylist bypasses — see [the Phase 0 journal](docs/journals/260621-phase-0-scaffold.md)).
-- Plus: append-only audit log with secret redaction, `DRY_RUN` default in dev, a kill switch, a $50/month OpenRouter budget cap with hard-stop, and persistent dedup so re-runs never double-post.
+- **Lớp A (red line, hard-coded, never reaches the LLM):** permanent data loss, credential exfiltration, security incidents.
+- **Lớp B (trust-mode dependent):** merge/close PR, reassign person, post to external channel — *autonomous* (execute + audit) by default, *guarded* (queue for human approval) when opted in.
+- **Allowlist, not denylist:** unknown tools are denied by default (we switched after adversarial review found denylist bypasses).
 
-Full walkthrough: **[docs/action-gateway-explainer.md](docs/action-gateway-explainer.md)**. Code: [`src/actions/action_gateway.py`](src/actions/action_gateway.py) + [`src/actions/hard_block.py`](src/actions/hard_block.py).
+Full walkthrough — the model, the layers, and the bugs adversarial review caught — is in **[docs/action-gateway-explainer.md](docs/action-gateway-explainer.md)**. The node-by-node harness map is in [docs/system-architecture.md](docs/system-architecture.md).
 
-### A full harness, not just skills + tools
+## What it grew into
 
-A "harness" (the reins) is the whole environment around the model that keeps the agent on track — and a *real* harness requires a **security gate + guardrails + observability**, not just bolted-on tools and skills. This repo builds all of it: scheduler, memory (working / internal / cross-agent / long-term), provider+budget, tools (MCP + CLI), skills, hooks (PII firewall + approval-gate), the **Action Gateway** security gate, two-layer **guardrails** (Lớp A hard-deny *blocks* + Lớp B/dedup/rate-limit *filters*), and **observability** (immutable audit log + structured run-events + opt-in LangSmith tracing + run replay + cost metrics). The guardrail isn't an add-on — it's an architectural invariant every write must pass, verified live. See the node-by-node map in [docs/system-architecture.md §10 — Harness conformance](docs/system-architecture.md).
+It started as one PM agent producing daily/weekly/OKR/resource reports. It's now a **CEO-operated virtual-staff company**: many isolated agents across projects, a browser dashboard, a 3D virtual office, one-click staff templates, chat-ops, and multi-runtime tiers (native / tool-calling / sandboxed deep-agent). The safety invariant held across every step — that's the whole point.
 
-## Quickstart
-
-```bash
-# 1. Clone + install (uses uv; Python 3.12)
-git clone git@github.com:phuc-nt/my-crew.git
-cd my-crew
-uv sync
-
-# 2. Verify the install (no network, no secrets needed)
-uv run pytest            # 2149 BE + 200 FE tests should pass
-uv run ruff check src tests
-
-# 3. Configure (see docs/deployment-guide.md for each value)
-cp config.example.env .env
-# fill in: OPENROUTER_API_KEY, Atlassian + Slack tokens, JIRA_PROJECT_KEY, GITHUB_REPO, channels
-
-# 4. Build the 3 MCP servers it talks to (see "External dependency" below)
-
-# 5. Run — DRY_RUN=true by default, so this logs what it WOULD do, posts nothing
-uv run python -m src.entrypoints.cli report --daily
-```
-
-To post for real, set `DRY_RUN=false` in `.env`. See [docs/deployment-guide.md](docs/deployment-guide.md) for secrets, scoped tokens, cron (launchd), and the kill switch.
-
-### External dependency: 3 MCP servers
-
-Jira, Confluence, and Slack are reached through **Model Context Protocol** servers (Node, stdio) that the agent spawns as subprocesses. GitHub uses the `gh` CLI. Clone + build the three servers (each has its own README):
-
-- Jira → [github.com/phuc-nt/jira-cloud-mcp-server](https://github.com/phuc-nt/jira-cloud-mcp-server)
-- Confluence → [github.com/phuc-nt/confluence-cloud-mcp-server](https://github.com/phuc-nt/confluence-cloud-mcp-server)
-- Slack (browser-token) → [github.com/phuc-nt/slack-browser-mcp-server](https://github.com/phuc-nt/slack-browser-mcp-server)
-
-```bash
-cd ~/workspace && git clone <each repo> && cd <repo> && npm install && npm run build
-```
-
-Point the agent at them with `JIRA_MCP_DIST` / `CONFLUENCE_MCP_DIST` / `SLACK_MCP_DIST` in `.env` if they aren't at the default `~/workspace/*-mcp-server` paths.
-
-## How it's built (the LangGraph core)
-
-`perceive → analyze → compose → deliver`, an explicit graph (no hidden agentic loop). State is checkpointed (SQLite) and holds only primitives. Tools are a read layer (`src/tools/`); every mutation is a write layer behind the Action Gateway (`src/actions/`). Entry points (`src/entrypoints/`) are thin — the agent core knows nothing about CLI vs cron, so a service/bot frontend is additive later.
-
-Architecture: [docs/system-architecture.md](docs/system-architecture.md) · Code map: [docs/codebase-summary.md](docs/codebase-summary.md)
+The full feature history, version by version, lives in **[docs/project-roadmap.md](docs/project-roadmap.md)**.
 
 ## Documentation
 
 | Read this to… | Doc |
 |---|---|
-| **Dùng hệ thống (tiếng Việt)** — cài đặt + vận hành hằng ngày | [docs/huong-dan-su-dung.md](docs/huong-dan-su-dung.md) |
+| **Use the system (tiếng Việt)** — install + daily operation | [docs/huong-dan-su-dung.md](docs/huong-dan-su-dung.md) |
+| **Set up + run it** — secrets, MCP servers, cron, kill switch | [docs/deployment-guide.md](docs/deployment-guide.md) |
+| Understand the guardrail (the main lesson) | [docs/action-gateway-explainer.md](docs/action-gateway-explainer.md) |
+| Understand the problem + vision | [docs/project-overview-pdr.md](docs/project-overview-pdr.md) |
+| Understand the architecture | [docs/system-architecture.md](docs/system-architecture.md) |
 | See what shipped, version by version | [docs/project-roadmap.md](docs/project-roadmap.md) |
-| **Add a new agent** (quick start) | [docs/deployment-guide.md](docs/deployment-guide.md) |
-| Understand the guardrail (the main lesson) | [action-gateway-explainer.md](docs/action-gateway-explainer.md) |
-| Understand the problem + vision | [project-overview-pdr.md](docs/project-overview-pdr.md) |
-| Understand the architecture | [system-architecture.md](docs/system-architecture.md) |
-| Find where any piece of code lives | [codebase-summary.md](docs/codebase-summary.md) |
-| Set up + run it | [deployment-guide.md](docs/deployment-guide.md) |
-| See how it compares to other agent harnesses | [architecture-comparison.md](docs/archive/architecture-comparison.md) — vs DeerFlow 2.0, Hermes, OpenClaw/Pi.dev |
-| See the multi-agent platform | [v2/](docs/project-roadmap.md) — profiles, registry/workers, scheduler (M1) · interrupts, FastAPI/SSE, web dashboard, Postgres (M2) — all complete |
-| **Follow the build, decision by decision** | [journals/](docs/journals/) — a phase-by-phase narrative with *what we decided & why* and *what broke & what we learned* |
+| Find where any piece of code lives | [docs/codebase-summary.md](docs/codebase-summary.md) |
+| **Follow the build, decision by decision** | [docs/journals/](docs/journals/) — *what we decided & why*, *what broke & what we learned* |
 
 The [journals](docs/journals/) are the best learning material here: each phase records the real decisions and the bugs adversarial review caught (denylist→allowlist, a JQL-injection surface, a privacy leak via a linked artifact). Build narratives like this are rare — that's the point of sharing this repo.
 
-## Status
+## Try it
 
-**v1 — Phases 0–5 complete** (2026-06-22): reporting, guardrail hardening, OKR, resource/cost, and audience-split, all E2E-verified against real Jira/GitHub/Slack/Confluence. See [docs/project-roadmap.md](docs/project-roadmap.md).
+```bash
+git clone git@github.com:phuc-nt/my-crew.git && cd my-crew
+uv sync
+uv run pytest          # 2149 BE + 200 FE tests should pass, no secrets needed
+```
 
-**v2 COMPLETE** (2026-06-27) — all 3 milestones shipped, verified by final live E2E:
-- **M1 multi-agent core** (2026-06-24): N agents / N projects, fully isolated, run via CLI/worker + scheduler with the guardrail applied per-agent. 414 tests.
-- **M2 platform** (2026-06-26): P5 graph-native Lớp B interrupts + P6 FastAPI SSE streaming + P7 web dashboard (HTMX+Jinja2, 6 ops surfaces) + P8 Postgres checkpointer/Store/cross-thread memory (opt-in). 545 tests. Full E2E against real Jira/GitHub/Slack/Confluence and throwaway Postgres.
-- **M3 extensibility** (2026-06-27): P10 skill system (5 bundled instruction-only skills, injectable LLM selector) + P9 cross-agent memory (sibling fact sharing via Store, internal-only) + P11 integrations/multi-channel (config-driven MCP servers + Linear read/gated-write + Email/SMTP delivery, Lớp B) + P12 automation/observability (opt-in LangSmith tracing, checkpoint-based replay with safe-replay guard, READ-only workflow automation via gateway). 776 tests. Final live E2E: Jira 21 issues, real Confluence page created, Slack post approved, 20 stored facts, B3 replay dedup+refuse-unsafe, D3 proposals Lớp B only.
-
-**v3–v10 COMPLETE** (2026-06-30 → 07-07) — grew from "one PM agent" into a CEO-operated virtual-staff company. Highlights (full list in the [changelog](docs/project-roadmap.md)):
-- **v3–v5**: domain packs (a new domain is a dropped-in folder, zero core edits — proven by an HR pack), a low-tech web UI, an admin agent that fleet-watches the others, chat-command → approval queue.
-- **v6–v7**: each virtual staffer gets its own Telegram identity; CEO chat-ops; assign work in three shapes; a browser setup wizard; knowledge-as-a-form; a Company Docs library; a 4-item CEO-first nav.
-- **v8**: CEO-observability (a silently-dead agent pings the CEO on Telegram), multi-project rollup, an opt-in trust ladder (auto-approve Lớp B with a per-day cap — the invariant stays intact).
-- **v9–v10**: full Vietnamese UI + a readable trust surface; light/dark theme with a self-hosted VN font (WCAG AA both themes); a low/high-tech dual-mode toggle; a hardened one-command installer + a live system-health panel. Backend at 1206 tests; every version E2E-verified (browser + real integrations).
-
-**v11–v37 COMPLETE** (2026-07-08 → 07-13) — multi-runtime tiers + virtual 3D office + autonomy-first pivot:
-- **v11**: 3 MCP server suite with adapter sync (Jira/Confluence/Slack) + npm publish + session-pool cache (2ms warm).
-- **v12–v18**: **virtual office** — r3f/three.js 3D coordinator + team-task dispatcher + workroom-based rooms + artifact viewer + command-center UI + registry as user-data (persistent, no data loss).
-- **v19–v20.5**: **agent-harness** — memory seam + AgentRuntime abstraction (Native/ToolCalling/DeepAgent) + Docker sandbox for deep agents + community socket extensibility.
-- **v26–v28**: telemetry capture + DRY loop consolidation + langchain.agents migration + cost unification.
-- **v30–v32**: **autonomy-first pivot** — Lớp B split into autonomous (default, chạy ngay audit rationale) vs guarded (opt-in, duyệt trước) + one-click staff templates + crew bootstrap + office 3D low-poly redesign (solid flat pastel theme).
-- **v33**: connections panel (visual .env edit) + output hub (kanban team-task read-only) + clarify buttons (CEO can answer mid-execution) + history FTS5 search.
-- **v34**: **autonomy core** — checkpointer resume after crash + interrupt() for pause-ask-resume flow + proactive follow-up sweep (8h cooldown, SQL-only) + per-criterion review scoring + fan-out parallelization (1 step → N subtasks in parallel + gather results). Live E2E verified (kill-9 resume, fan-out parallelism, per-criterion review on live service daemon).
-- **v35**: **resilience** — read-tool errors (Jira/Confluence/web) no longer abort a step; the agent gets a "⚠️ tool lỗi" message back and keeps working or concludes with what it has. Nightly (03:00) memory consolidation condenses an agent's `MEMORY.md` once it grows large, archiving the original first (`MEMORY.archive.md`) — fully automatic.
-- **v36**: **template live-skills + config upgrade** — agents created from a role template no longer copy its skills at creation; skills load LIVE from the template every run, so editing a template's skill reaches every agent of that role immediately (agents created before v36 keep old copy-once behavior). Each template config is version-pinned: bumping it surfaces an "⬆ bản mới vN" badge on the **Đội** page, with a review dialog showing which fields would apply vs. which hand-customized fields are kept (profile backed up before any write). Plus background storage GC (old captures/office-feed/settled clarifications) + daily integrity audit.
-- **v37**: **UI polish** — Office (Văn phòng) screen's 3 columns now align at the same baseline, clearer size hierarchy in the Kết quả column, and consistent input/button sizing app-wide. Visual only, no behavior change.
-
-**2149 BE tests + 200 FE tests**, live E2E verified across v34–v37.
-
-See [docs/project-roadmap.md](docs/project-roadmap.md) and the [journals](docs/journals/) for each phase's decisions, bugs caught, and lessons learned. New users: start with the **[hướng dẫn tiếng Việt](docs/huong-dan-su-dung.md)**.
+`DRY_RUN=true` is the default — it logs what it *would* do and posts nothing. To configure secrets, build the 3 MCP servers it talks to, and go live, follow **[docs/deployment-guide.md](docs/deployment-guide.md)**.
 
 ## License
 

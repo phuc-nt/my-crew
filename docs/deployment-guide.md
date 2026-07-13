@@ -19,6 +19,16 @@ Tài khoản/token cần (điền trong trình duyệt, KHÔNG qua terminal): Op
 Atlassian (Jira+Confluence), Slack (xoxc+xoxd), GitHub (qua `gh`). Tùy chọn: Tavily/Brave
 (web-search cho vai trò nghiên cứu), SMTP (email .xlsx), Telegram (điều hành di động).
 
+**3 MCP server** (Jira/Confluence/Slack — Node, stdio; GitHub dùng `gh` CLI). `install.sh`
+cài từ npm mặc định; nếu build từ source (`--mcp-dev`) thì clone + `npm install && npm run build`:
+
+- Jira → [github.com/phuc-nt/jira-cloud-mcp-server](https://github.com/phuc-nt/jira-cloud-mcp-server)
+- Confluence → [github.com/phuc-nt/confluence-cloud-mcp-server](https://github.com/phuc-nt/confluence-cloud-mcp-server)
+- Slack (browser-token) → [github.com/phuc-nt/slack-browser-mcp-server](https://github.com/phuc-nt/slack-browser-mcp-server)
+
+Trỏ agent tới chúng bằng `JIRA_MCP_DIST` / `CONFLUENCE_MCP_DIST` / `SLACK_MCP_DIST` trong
+`.env` nếu không nằm ở mặc định `~/workspace/*-mcp-server`.
+
 ## 2. Cài một lệnh (production, macOS/launchd)
 
 ```bash
