@@ -170,17 +170,20 @@ def setup_finish(request: Request, password: str = Body(..., embed=True),
             "message": "Đã lưu. Đang khởi động lại dịch vụ — đợi ~5 giây rồi đăng nhập."}
 
 
-def _restart_web_service() -> None:
+def _restart_web_service() -> bool:
     """Ask launchd to restart this service so the new .env auth values load. If launchd isn't
     managing us (dev: uvicorn by hand), this no-ops with a log — the operator restarts by
-    hand (the response tells them to). Never crashes finish."""
+    hand (the response tells them to). Never crashes finish. Returns True only when launchd
+    accepted the kickstart, so callers can tell the operator the honest story."""
     label = "com.mpm.web"
     try:
         uid = os.getuid()
         # kickstart -k restarts the job; only works if it's a loaded launchd service.
-        os.system(f"launchctl kickstart -k gui/{uid}/{label} >/dev/null 2>&1")  # noqa: S605
+        rc = os.system(f"launchctl kickstart -k gui/{uid}/{label} >/dev/null 2>&1")  # noqa: S605
+        return rc == 0
     except Exception:  # noqa: BLE001 — restart is best-effort; finish already persisted
         logger.warning("could not auto-restart web service; restart it manually", exc_info=True)
+        return False
 
 
 __all__ = ["router", "setup_complete"]

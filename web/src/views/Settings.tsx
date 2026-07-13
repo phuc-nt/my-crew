@@ -88,6 +88,10 @@ export function Settings() {
 
       {/* Sức khỏe hệ thống — the shared panel: per-integration ok/fail + fix hint (v10 M26). */}
       <IntegrationHealthPanel />
+      <p>
+        {/* v33 P1: the editable counterpart of the health list — status + key forms. */}
+        <Link to="/connections">→ Kết nối &amp; khoá API (xem trạng thái, điền key)</Link>
+      </p>
 
       <section>
         <h3>Nâng cao</h3>

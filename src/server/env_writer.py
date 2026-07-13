@@ -75,11 +75,18 @@ def merge_env(
     """Merge `updates` into `.env`, atomically, preserving unrelated lines.
 
     Raises DisallowedEnvKey if any key is not writable on this path (nothing is written —
-    all-or-nothing). A blank/None value is skipped (don't overwrite a set key with empty).
+    all-or-nothing), or if any VALUE carries a control character: a newline in a value
+    would append a second `KEY=...` line, smuggling a key past the whitelist entirely
+    (e.g. WEB_AUTH_PASSWORD_HASH, which FINISH_WRITABLE_KEYS exists to fence off).
+    A blank/None value is skipped (don't overwrite a set key with empty).
     """
-    for key in updates:
+    for key, value in updates.items():
         if not is_writable(key, allow=allow, allow_telegram_token=allow_telegram_token):
             raise DisallowedEnvKey(f"env key {key!r} không được phép ghi qua đường này")
+        if any(ord(ch) < 0x20 or ch == "\x7f" for ch in str(value)):
+            raise DisallowedEnvKey(
+                f"giá trị cho {key!r} chứa ký tự điều khiển (xuống dòng?) — từ chối"
+            )
 
     path = env_path or _ENV_PATH
     clean = {k: str(v) for k, v in updates.items() if str(v).strip() != ""}

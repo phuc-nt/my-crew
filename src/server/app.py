@@ -25,14 +25,17 @@ from src.server import (
     routes_agent_telegram,
     routes_agents,
     routes_agents_admin,
+    routes_clarify,
     routes_company,
     routes_company_docs,
+    routes_connections,
     routes_office_artifacts,
     routes_office_assign,
     routes_office_room_chat,
     routes_office_stream,
     routes_ops_chat,
     routes_ops_json,
+    routes_outputs,
     routes_runs,
     routes_setup,
     routes_tasks,
@@ -91,6 +94,12 @@ def create_app() -> FastAPI:
     app.include_router(routes_agents_admin.router)
     # Company identity (config-only) + staff-template picker read API.
     app.include_router(routes_company.router)
+    # v33 P1: Connections screen — env-key presence + whitelisted merge + restart.
+    app.include_router(routes_connections.router)
+    # v33 P3: outputs hub (cross-room artifact index + downloads) + team-task board.
+    app.include_router(routes_outputs.router)
+    # v33 P4: clarify — agent questions the CEO answers from web or Telegram buttons.
+    app.include_router(routes_clarify.router)
     # v15: office composer assignment (thin wrappers over the assign command's own
     # preview/confirm/cancel — hash-bind and @PIC parsing live there, not here).
     app.include_router(routes_office_assign.router)
