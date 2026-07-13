@@ -51,7 +51,7 @@ The [journals](docs/journals/) are the best learning material here — each phas
 
 ```bash
 git clone git@github.com:phuc-nt/my-crew.git && cd my-crew && uv sync
-uv run pytest    # 2149 BE + 200 FE tests pass, no secrets needed
+uv run pytest    # 2207 BE + 200 FE tests pass, no secrets needed
 ```
 
 `DRY_RUN=true` by default — it logs what it *would* do, posts nothing. To go live, follow **[docs/deployment-guide.md](docs/deployment-guide.md)**.

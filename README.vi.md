@@ -51,7 +51,7 @@ Một agent PM (báo cáo ngày/tuần/OKR/nguồn lực) đã thành **công ty
 
 ```bash
 git clone git@github.com:phuc-nt/my-crew.git && cd my-crew && uv sync
-uv run pytest    # 2149 BE + 200 FE test pass, không cần bí mật
+uv run pytest    # 2207 BE + 200 FE test pass, không cần bí mật
 ```
 
 `DRY_RUN=true` mặc định — chỉ ghi log việc nó *sẽ* làm, không đăng gì. Để chạy thật, theo **[docs/deployment-guide.md](docs/deployment-guide.md)**.

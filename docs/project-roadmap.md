@@ -5,7 +5,7 @@
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v37.** 2149 backend + 200 FE test, ruff/tsc
+**Production-usable, single-user autonomy-first. Đã ship tới v39.** 2207 backend + 200 FE test, ruff/tsc
 sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out parallelism).
 
 ## Đã hoàn thành (gọn — chi tiết ở journals/plans)
@@ -36,6 +36,8 @@ sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật (live daemon, 
 | **Tool-error resilience + memory consolidation (v35)** | `tool_error_guard` bọc mọi read-tool (Jira/Confluence/web) — lỗi thân tool trả "⚠️ tool lỗi" cho LLM thay vì làm nổ cả step · nightly (03:00) memory consolidation rút gọn `MEMORY.md` khi vượt ngưỡng, archive bản gốc trước khi ghi. |
 | **Storage hygiene + template hybrid (v36)** | Template skill nạp LIVE lúc chạy (không copy-once) → sửa skill template lan mọi agent cùng vai ngay · template config version-pin: badge "⬆ bản mới vN" ở trang Đội, review dialog áp/giữ theo trường tự-chỉnh, backup `profile.yaml.bak-<ts>` trước khi ghi · GC nền (captures 180d/office_room 90d/clarify 90d đã trả lời/dedup 7d) + daily integrity audit. 2149 BE + 200 FE tests. |
 | **UI design-system sync (v37)** | Văn phòng 3 cột canh cùng baseline · phân cấp size rõ ở cột Kết quả · input/button đồng nhất kích cỡ toàn app. Thuần CSS, không đổi hành vi. |
+| **Harness wave 1: send_message + skill-curator (v38)** | `send_message` facade (slack/telegram/email) qua Action Gateway — agent chủ động gửi, thừa hưởng Lớp A/B + trust_mode + audit; surface chat-ops (không tool LLM ghi trong loop) · skill-curator: đếm skill được chọn + archive skill agent-own quá hạn (không xoá, không đụng template-role). 2177 BE + 200 FE tests. |
+| **Google Workspace context + SMTP + Calendar-create (v39)** | Agent bật `gws_context` đọc Gmail/Calendar/Drive (gws CLI, argv CODE-cố-định, internal-only, flag mặc định TẮT) · SMTP vào Connections UI · Calendar-create WRITE qua Gateway (`("calendar","events","insert")` allowlist, delete/acl = Lớp A). 2207 BE + 200 FE tests, live E2E OAuth thật. |
 
 ## Việc nên làm tiếp (từ UAT + nợ kỹ thuật)
 
