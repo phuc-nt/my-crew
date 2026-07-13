@@ -28,6 +28,8 @@ const NAV = [
   { to: 'office', label: 'Văn phòng' },
   { to: 'team', label: 'Đội', badge: 'health' as const },
   { to: 'work', label: 'Duyệt', badge: 'approvals' as const },
+  // v33 P3: the cross-room outputs hub — "mọi kết quả một chỗ" sits one click away.
+  { to: 'outputs', label: 'Kết quả' },
   // v31 P1: fleet-wide "what did the company do" — the post-hoc audit surface of
   // autonomy-first, so it sits in the CEO-primary row (NOT behind high ui-mode).
   { to: 'company-activity', label: 'Hoạt động' },

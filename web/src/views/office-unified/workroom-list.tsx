@@ -17,6 +17,7 @@ interface WorkroomListProps {
 export function WorkroomList({ rooms, activeRoom, onSelect }: WorkroomListProps) {
   return (
     <nav className="workroom-list" aria-label="Phòng việc">
+      <p className="office-zone-title">Phòng việc</p>
       <button
         type="button"
         className={activeRoom === null ? 'chip chip-active' : 'chip'}

@@ -14,6 +14,7 @@ import { Chat } from './views/Chat'
 import { CompanyActivity } from './views/CompanyActivity'
 import { CompanyDocs } from './views/CompanyDocs'
 import { Config } from './views/Config'
+import { Connections } from './views/Connections'
 import { Cost } from './views/Cost'
 import { CreateAgent } from './views/CreateAgent'
 import { Guardrail } from './views/Guardrail'
@@ -21,6 +22,7 @@ import { Login } from './views/Login'
 import { MemoryAutomation } from './views/MemoryAuto'
 import { OfficeRoom } from './views/OfficeRoom'
 import { OfficeUnifiedLazy } from './routes/office-unified-lazy'
+import { Outputs } from './views/Outputs'
 import { Overview } from './views/Overview'
 import { Settings } from './views/Settings'
 import { Setup } from './views/Setup'
@@ -87,6 +89,10 @@ function App() {
             <Route path="team" element={<Team />} />
             <Route path="work" element={<Work />} />
             <Route path="settings" element={<Settings />} />
+            {/* v33 P1: Connections — the UI version of .env (fixed catalog). */}
+            <Route path="connections" element={<Connections />} />
+            {/* v33 P3: outputs hub — every delivered artifact/file, one list. */}
+            <Route path="outputs" element={<Outputs />} />
             {/* Agent page + non-agent advanced views. */}
             <Route path="agents/:id" element={<AgentPage />} />
             <Route path="create" element={<CreateAgent />} />

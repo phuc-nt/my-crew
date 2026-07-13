@@ -47,7 +47,7 @@ export function ActivityFeed({ messages, connected, errored }: ActivityFeedProps
 
   return (
     <aside className="office-unified-feed" aria-label="Hoạt động trực tiếp">
-      <p className="office-room-status">
+      <p className="office-zone-title">
         {errored ? 'Mất kết nối luồng — thử tải lại trang.' : connected ? 'Hoạt động trực tiếp' : 'Đang kết nối…'}
       </p>
       {tail.length === 0 && !errored && (

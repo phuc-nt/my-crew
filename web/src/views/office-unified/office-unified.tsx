@@ -117,16 +117,24 @@ export function OfficeUnified() {
 
   return (
     <section className="office-unified">
-      <h2>Văn phòng</h2>
+      {/* v33 P2: one compact header row — title left, panel toggle right; the long
+          how-to text folds into <details> so the working area starts higher. */}
+      <header className="office-header">
+        <h2>Văn phòng</h2>
+        <button type="button" className="chip office-3d-toggle" onClick={toggleCollapsed}>
+          {collapsed ? 'Hiện không gian 3D' : 'Thu gọn không gian 3D'}
+        </button>
+      </header>
       <CoordinatorHealthBanner />
-      <p className="ops-chat-hint">
-        Bấm một bàn làm việc để mở việc của nhân sự đó; chọn phòng việc bên trái để xem hoạt động và chat; "Toàn cảnh" xem cả
-        đội. Giao việc mới: gõ <code>@tên-nhân-sự</code> để chỉ định PIC, <code>@all</code>/bỏ
-        trống để đội tự chọn.
-      </p>
-      <button type="button" className="chip office-3d-toggle" onClick={toggleCollapsed}>
-        {collapsed ? 'Hiện không gian 3D' : 'Thu gọn không gian 3D'}
-      </button>
+      <details className="office-hint">
+        <summary>Hướng dẫn nhanh</summary>
+        <p className="ops-chat-hint">
+          Bấm một bàn làm việc để mở việc của nhân sự đó; chọn phòng việc bên trái để xem
+          hoạt động và chat; "Toàn cảnh" xem cả đội. Giao việc mới: gõ{' '}
+          <code>@tên-nhân-sự</code> để chỉ định PIC, <code>@all</code>/bỏ trống để đội tự
+          chọn.
+        </p>
+      </details>
       {!collapsed && (
         <div className="office-unified-main">
           {useFallback ? (
