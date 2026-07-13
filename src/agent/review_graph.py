@@ -63,7 +63,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 if TYPE_CHECKING:
     from src.config.settings import Settings
@@ -78,6 +78,18 @@ class ReviewVerdict(BaseModel):
 
     passed: bool
     failures: list[str] = Field(default_factory=list)
+    # v34 P5: optional per-criterion checklist — [] from any pre-P5 model output.
+    # Same shape as `team_task_check_prompt.CriterionGrade`; kept as raw dicts here to
+    # avoid a cross-module model import for a display-only field. Tolerant (review
+    # M1): malformed criteria must never fail an otherwise-valid verdict.
+    criteria: list[dict] = Field(default_factory=list)
+
+    @field_validator("criteria", mode="before")
+    @classmethod
+    def _tolerant_criteria(cls, v):
+        from src.llm.team_task_check_prompt import _coerce_criteria
+
+        return _coerce_criteria(v)
 
 
 class ReviewVerdictError(ValueError):
@@ -200,6 +212,7 @@ def run_review_step(
         data_dir, review_input.task_id, review_input.verdict_seq, review_input.review_round,
         {
             "passed": verdict.passed, "failures": list(verdict.failures),
+            "criteria": list(verdict.criteria),
             "reviewed_version": review_input.locked_version, "round": review_input.review_round,
             "result_text": _rework_handoff_text(result_text, verdict.failures),
         },
@@ -208,7 +221,8 @@ def run_review_step(
     room_message = f"Soát chéo [{review_input.step_title}]: {verdict_label}"
     return {
         "status": "done", "cost_usd": result.cost_usd, "delivered": True,
-        "room_message": room_message, "passed": verdict.passed, "failures": list(verdict.failures),
+        "room_message": room_message, "passed": verdict.passed,
+        "failures": list(verdict.failures), "criteria": list(verdict.criteria),
     }
 
 

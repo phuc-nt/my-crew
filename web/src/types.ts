@@ -504,6 +504,9 @@ export interface OfficeEventBody {
   // room (see office_event_projection.py's `review` allowlist branch).
   verdict?: 'passed' | 'needs_rework'
   failure_count?: number
+  // v34 P5: per-criterion COUNTS (same count-only posture as failure_count).
+  criteria_total?: number
+  criteria_passed?: number
   // `assignment` only (v15 PIC): `pic` = agent id responsible for the whole task;
   // `task_id` (also on `milestone`) is the key the desk-state reducer uses to badge
   // the PIC's desk on assignment and clear it on that task's `milestone: done`.

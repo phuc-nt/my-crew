@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.profile.context import prepend_persona
 from src.tools.search_result_formatter import format_internal_content
@@ -22,7 +22,10 @@ from src.tools.search_result_formatter import format_internal_content
 _CHECK_SYSTEM = (
     "Bạn là người thẩm định kết quả một bước công việc trong đội ngũ agent nội bộ. "
     "Đọc kỹ TIÊU CHÍ CHẤP NHẬN và KẾT QUẢ, rồi trả về DUY NHẤT một JSON (không markdown) "
-    'đúng dạng: {"passed": true|false, "failures": ["..."], "confidence": 0.0-1.0}. '
+    'đúng dạng: {"passed": true|false, "failures": ["..."], "confidence": 0.0-1.0, '
+    '"criteria": [{"criterion": "...", "passed": true|false, "note": "..."}]}. '
+    "`criteria` chấm TỪNG dòng tiêu chí một mục (criterion = nguyên văn rút gọn; note = 1 "
+    "câu vì sao đạt/không). "
     "Nếu kết quả đạt MỌI tiêu chí, `passed=true` và `failures` rỗng. Nếu KHÔNG đạt, "
     "`passed=false` và liệt kê TỐI ĐA 3 lý do cụ thể tại sao thất bại (mỗi lý do một câu "
     "ngắn, bám sát tiêu chí — không chung chung). `confidence` là mức tự tin của bạn vào "
@@ -38,6 +41,26 @@ _REWORK_SYSTEM = (
 )
 
 
+def _coerce_criteria(value):
+    """Tolerant coercion for the OPTIONAL `criteria` checklist (review M1): a weak
+    model emitting a string / list of strings / junk must NEVER fail the verdict —
+    the binary `passed`/`failures` are the load-bearing fields; criteria are display
+    detail. Anything not a list of dicts degrades to []/dropped items."""
+    if not isinstance(value, list):
+        return []
+    return [v for v in value if isinstance(v, dict)]
+
+
+class CriterionGrade(BaseModel):
+    """One acceptance criterion's grade (v34 P5) — optional, per-criterion detail on
+    top of the binary verdict. `route_after_check` never reads this; it exists for
+    the verdict artifact + the room event's x/y count."""
+
+    criterion: str = ""
+    passed: bool = True
+    note: str = ""
+
+
 class CheckVerdict(BaseModel):
     """The self_check LLM call's parsed judgment. Binary + failures-first rubric
     (criteria-anchored: "list up to 3 reasons FAILED, else pass") — `confidence` rides
@@ -47,6 +70,13 @@ class CheckVerdict(BaseModel):
     passed: bool
     failures: list[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0, default=0.5)
+    # v34 P5: optional per-criterion checklist — [] from any pre-P5 model output.
+    criteria: list[CriterionGrade] = Field(default_factory=list)
+
+    @field_validator("criteria", mode="before")
+    @classmethod
+    def _tolerant_criteria(cls, v):
+        return _coerce_criteria(v)
 
 
 class CheckVerdictError(ValueError):

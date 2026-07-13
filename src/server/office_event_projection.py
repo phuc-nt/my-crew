@@ -139,6 +139,10 @@ def summarize_office_event(kind: str, body: dict) -> dict:
             "step_title": _short(body.get("step_title")),
             "verdict": verdict if verdict in _REVIEW_VERDICTS else "",
             "failure_count": int(body.get("failure_count") or 0),
+            # v34 P5: per-criterion COUNTS (ints, same no-content-echo category as
+            # failure_count) — 0/absent for any pre-P5 event.
+            "criteria_total": int(body.get("criteria_total") or 0),
+            "criteria_passed": int(body.get("criteria_passed") or 0),
             "assigned_to": _short(body.get("assigned_to")),
         }
     return {}
