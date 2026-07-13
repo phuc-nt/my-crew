@@ -33,14 +33,21 @@ def _as_lc_tools(tools_map: dict[str, Callable[[dict], Any]]) -> list:
     """
     from langchain_core.tools import tool as lc_tool
 
+    from src.runtime_backends.read_only_toolset import tool_error_guard
+
     lc_tools = []
     for name, fn in tools_map.items():
         desc = _TOOL_DESCRIPTIONS.get(name, "Read-only tool. Returns internal data; cannot write.")
 
         def _make(f, tool_name, description):
+            # Guard here too: build_read_toolset already guards its own tools, but a
+            # hand-built tools_map (tests, future tiers) must not be able to kill the
+            # graph with a raising tool body. Double-guarding is a no-op.
+            safe = tool_error_guard(tool_name, f)
+
             @lc_tool(tool_name.replace(".", "_"), description=description)
             def _call(query: str = "") -> str:
-                return str(f({"query": query}))
+                return str(safe({"query": query}))
             return _call
 
         lc_tools.append(_make(fn, name, desc))

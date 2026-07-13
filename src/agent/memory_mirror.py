@@ -45,6 +45,23 @@ def rewrite_agent_section(existing: str, facts: list[str], *, cap: int = DEFAULT
     return f"{before}{block}{after}"
 
 
+def replace_agent_section(existing: str, facts: list[str]) -> str:
+    """Return `existing` with the agent section REPLACED by exactly `facts` (no merge).
+
+    Unlike `rewrite_agent_section` (which appends to prior facts — the remember-node
+    path), this swaps the whole block: the memory-consolidation sweep uses it to shrink
+    the section to the condensed fact list. Content outside the markers is preserved
+    byte-for-byte via the same `_split` machinery.
+    """
+    before, _prior, after = _split(existing)
+    kept = [f.strip() for f in facts if f.strip()]
+    block = "\n".join([START, *kept, END])
+    if before is None:
+        base = _strip_marker_lines(existing).rstrip("\n")
+        return f"{base}\n\n{block}\n" if base else f"{block}\n"
+    return f"{before}{block}{after}"
+
+
 def write_memory_file(path: Path, facts: list[str], *, cap: int = DEFAULT_CAP) -> None:
     """Read MEMORY.md, rewrite the agent section with `facts`, write atomically.
 

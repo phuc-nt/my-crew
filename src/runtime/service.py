@@ -158,6 +158,25 @@ def _reap_sandboxes_best_effort() -> None:
         logger.warning("sandbox reaper sweep failed (ignored): %s", exc)
 
 
+#: Local hour the nightly memory-consolidation sweep may run (03:00–03:59 — outside
+#: working hours, so the sweep never races a remember-node write from an active step;
+#: the per-agent 24h cooldown inside the sweep keeps it to one LLM attempt per night).
+_MEMORY_SWEEP_HOUR = 3
+
+
+def _consolidate_memories_best_effort(now: datetime) -> None:
+    """Nightly MEMORY.md consolidation sweep (v35 P2), same contract as the reaper:
+    runs in the scheduler's own process and must never raise or block the tick."""
+    if now.hour != _MEMORY_SWEEP_HOUR:
+        return
+    try:
+        from src.memory.consolidation import run_consolidation_sweep
+
+        run_consolidation_sweep(now=now)
+    except Exception as exc:  # noqa: BLE001 — maintenance must never break the scheduler
+        logger.warning("memory consolidation sweep failed (ignored): %s", exc)
+
+
 class Service:
     """Holds the in-memory `last_fire` map across ticks (per (agent_id, kind))."""
 
@@ -216,6 +235,7 @@ class Service:
             if spawned >= self._cap:
                 break
         _reap_sandboxes_best_effort()
+        _consolidate_memories_best_effort(now)
         return outcomes
 
     def run_forever(self, *, interval: int = _TICK_INTERVAL_S) -> None:  # pragma: no cover

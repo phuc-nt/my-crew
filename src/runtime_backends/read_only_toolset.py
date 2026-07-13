@@ -20,15 +20,73 @@ it binds only what `build_read_toolset` returns.
 
 from __future__ import annotations
 
+import logging
+import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.config.reporting_config import ReportingConfig
 
+logger = logging.getLogger(__name__)
+
 
 class ToolPolicyError(RuntimeError):
     """A tool was refused by the policy shim (not a read tool, or classify blocked it)."""
+
+
+#: Cap on the error text fed back to the model — enough to act on, never a traceback dump.
+_ERROR_MSG_MAX_CHARS = 300
+
+#: Common secret-key prefixes (OpenAI/OpenRouter sk-, Slack xox-, GitHub ghp-, GitLab glpat-).
+#: Provider error messages sometimes echo the offending key — scrub before it reaches the model.
+_TOKEN_LIKE_RE = re.compile(r"\b(?:sk|xox[a-z]?|ghp|glpat)-[A-Za-z0-9_\-]{8,}")
+
+
+def _short_error_text(exc: BaseException) -> str:
+    """One bounded, control-char-free, secret-scrubbed line describing a tool failure."""
+    msg = str(exc).strip() or exc.__class__.__name__
+    msg = "".join(ch for ch in msg if ch == "\n" or ord(ch) >= 32)
+    msg = _TOKEN_LIKE_RE.sub("***", msg)
+    return msg[:_ERROR_MSG_MAX_CHARS]
+
+
+def _is_loop_control_exception(exc: BaseException) -> bool:
+    """langgraph signals interrupt/bubble-up VIA exceptions — swallowing one would break
+    resume/interrupt semantics, so the guard must let them propagate untouched."""
+    try:
+        from langgraph.errors import GraphBubbleUp
+    except ImportError:  # toolset used outside a langgraph runtime — nothing to bubble
+        return False
+    return isinstance(exc, GraphBubbleUp)
+
+
+def tool_error_guard(tool_name: str, fn: Callable[[dict], Any]) -> Callable[[dict], Any]:
+    """Wrap a tool callable so failures come back as short "⚠️" strings for the model.
+
+    With the pinned langchain, only schema errors are fed back to the LLM; any exception
+    from the tool BODY propagates and kills the whole graph invoke — one flaky network
+    read would fail the step and discard the model's work. This guard converts failures
+    into text the model can react to (retry differently, use another tool, answer from
+    what it has). Two shapes on purpose: "bị từ chối" (policy block — do not retry) vs
+    "lỗi" (transient — trying something else may work). Loop-control exceptions
+    (GraphInterrupt & co.) and system BaseExceptions are re-raised, never swallowed.
+    """
+
+    def _safe(args: dict) -> Any:
+        try:
+            return fn(args)
+        except ToolPolicyError as exc:
+            logger.warning("tool %s refused by policy: %s", tool_name, exc)
+            return f"⚠️ tool {tool_name} bị từ chối: {_short_error_text(exc)}"
+        except Exception as exc:  # noqa: BLE001 — the whole point: degrade, don't kill the loop
+            if _is_loop_control_exception(exc):
+                raise
+            logger.warning("tool %s failed: %s", tool_name, exc, exc_info=True)
+            return f"⚠️ tool {tool_name} lỗi: {_short_error_text(exc)}"
+
+    _safe.__name__ = tool_name.replace(".", "_")
+    return _safe
 
 
 #: Read tools whose output is INTERNAL-only (per-person workload, headcount, issue detail).
@@ -57,14 +115,15 @@ def _classify_ok(tool_name: str, args: dict) -> None:
 
 
 def _shim(tool_name: str, fn: Callable[[dict], Any]) -> Callable[[dict], Any]:
-    """Wrap a read callable so every invocation passes through classify first."""
+    """Wrap a read callable so every invocation passes through classify first, then the
+    error guard — a policy block or a tool-body failure returns a "⚠️" string instead of
+    raising through (and killing) the agent loop."""
 
     def _guarded(args: dict) -> Any:
         _classify_ok(tool_name, args or {})
         return fn(args or {})
 
-    _guarded.__name__ = tool_name.replace(".", "_")
-    return _guarded
+    return tool_error_guard(tool_name, _guarded)
 
 
 #: Cap on scraped markdown fed back into the loop (untrusted web content — keep it bounded).
