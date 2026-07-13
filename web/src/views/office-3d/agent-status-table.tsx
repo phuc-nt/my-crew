@@ -20,7 +20,9 @@ interface AgentStatusTableProps {
 export function AgentStatusTable({ agentIds, desks, onDeskSelect }: AgentStatusTableProps) {
   return (
     <section className="office-3d-scene">
-      <h2>Văn phòng 3D</h2>
+      {/* v37: h3 not h2 — this is a subsection of the Office page, whose own <h2>"Văn phòng"
+          is the page title; two stacked h2s read as a duplicate title in the 2D fallback. */}
+      <h3>Văn phòng 3D</h3>
       <p className="ops-chat-hint">
         Chế độ bảng (thu gọn hoạt ảnh) — cùng dữ liệu trạng thái nhân sự, hiển thị dạng bảng thay
         vì sơ đồ 3D.

@@ -35,7 +35,9 @@ export function ArtifactPanel({ activeRoom, roomMessages }: ArtifactPanelProps) 
     return (
       <aside className="office-artifacts" aria-label="Kết quả">
         <p className="office-zone-title">Kết quả</p>
-        <p className="ops-chat-empty">Chọn một phòng việc để xem kết quả bàn giao.</p>
+        <div className="office-artifacts-body">
+          <p className="ops-chat-empty">Chọn một phòng việc để xem kết quả bàn giao.</p>
+        </div>
       </aside>
     )
   }
@@ -51,6 +53,7 @@ export function ArtifactPanel({ activeRoom, roomMessages }: ArtifactPanelProps) 
   return (
     <aside className="office-artifacts" aria-label="Kết quả">
       <p className="office-zone-title">Kết quả</p>
+      <div className="office-artifacts-body">
       {!hasAny && <p className="ops-chat-empty">Chưa có bàn giao nào trong phòng này.</p>}
       {tasks.map((t) => t.delivered.length > 0 && (
         <section key={t.task_id} className="artifact-task">
@@ -73,6 +76,7 @@ export function ArtifactPanel({ activeRoom, roomMessages }: ArtifactPanelProps) 
           </ul>
         </section>
       ))}
+      </div>
       {open && (
         <ArtifactViewer
           taskId={open.taskId} seq={open.seq} stepId={open.stepId}

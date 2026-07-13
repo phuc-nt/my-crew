@@ -213,7 +213,8 @@ h4 { font-size: var(--fs-h4); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* v15 PIC tag — desk belongs to the người-chịu-trách-nhiệm-chính of a running task. */
 .office-3d-bubble-pic { display: inline-block; background: #b8860b; color: #fff;
-  font-size: 0.62rem; font-weight: 700; padding: 0 4px; border-radius: 3px;
+  /* v37: was 0.62rem (below the scale) → --fs-2xs (0.75rem), the smallest real token. */
+  font-size: var(--fs-2xs); font-weight: 700; padding: 0 4px; border-radius: 3px;
   margin-bottom: 2px; }
 .office-3d-label { font-size: var(--fs-2xs); font-weight: 700; white-space: nowrap;
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9); }
@@ -278,11 +279,22 @@ h4 { font-size: var(--fs-h4); }
 .office-feed-warn .office-room-text { color: var(--color-warn); }
 .office-feed-pending .office-room-text { color: var(--color-pending); }
 /* v17: 3-column command center — rooms | feed | results. */
-.office-columns { display: grid; grid-template-columns: minmax(200px, 240px) 1fr minmax(260px, 340px);
+/* v37: 3 peer columns. The middle (live feed) takes the flexible remainder — within the
+   1100px app-shell that lands ~464px vs 240/340 sides, a sensible hierarchy (feed widest for
+   message text). Each column is a flex stack whose zone-title sits flush at the top — no
+   column wraps its title in a padded box, so all three titles share one baseline. */
+.office-columns { display: grid;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(260px, 340px);
   gap: var(--space-3); align-items: start; }
-.office-artifacts { border: 1px solid var(--color-border); border-radius: 8px;
+/* v37: the artifacts column is now a bare stack like the other two; the border/scroll box
+   moved onto the inner list (.office-artifacts-body) so the "Kết quả" title aligns with
+   "Phòng việc"/"Hoạt động trực tiếp" instead of sitting ~9px lower inside a padded box. */
+.office-artifacts { display: flex; flex-direction: column; }
+.office-artifacts-body { border: 1px solid var(--color-border); border-radius: 8px;
   padding: var(--space-2); max-height: 70vh; overflow-y: auto; }
-.office-artifacts h4 { margin: var(--space-2) 0 var(--space-1); font-size: var(--fs-sm); }
+/* v37: give the "Kết quả" column a real size hierarchy — task name (h4) sits above the
+   item text, not merely bolder at the same size. */
+.office-artifacts h4 { margin: var(--space-2) 0 var(--space-1); font-size: var(--fs-h4); }
 .office-artifacts ul { list-style: none; margin: 0; padding: 0; }
 .artifact-pic { margin-left: 0.4rem; }
 .artifact-item { width: 100%; text-align: left; background: none; border: none;
@@ -393,8 +405,17 @@ th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(
 .unsaved { color: var(--color-warn); font-weight: 600; margin-left: var(--space-2); }
 .trigger-form { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
 .run-stream ul { font-family: ui-monospace, monospace; font-size: var(--fs-xs); }
-button { cursor: pointer; padding: var(--space-1) 0.6rem; }
+/* v37: unclassed <button> previously inherited the browser default (~13.3px), a hair
+   smaller than every .chip/.btn (--fs-sm). Give the element a base token so raw buttons
+   match classed ones; specific classes (.btn, .chip, .theme-toggle-btn) still override. */
+button { cursor: pointer; padding: var(--space-1) 0.6rem; font-size: var(--fs-sm); }
 button:disabled { cursor: default; opacity: 0.6; }
+
+/* v37: form fields previously had NO font-size token on desktop — the only rule lived in
+   the max-width:640px block, so desktop inputs rendered at the UA default (~13.3px), smaller
+   than the labels around them. This base rule (=16px) covers desktop AND doubles as the iOS
+   anti-auto-zoom guard, so the mobile block no longer needs to repeat it. */
+input, textarea, select { font-size: var(--fs-body); }
 
 /* Create-agent wizard + Team view (v3 M7). */
 .wizard-steps { display: flex; gap: var(--space-4); list-style: none; padding: 0; font-size: var(--fs-sm); color: var(--color-muted); }
@@ -419,9 +440,9 @@ button:disabled { cursor: default; opacity: 0.6; }
 .health-dot-fail { background: var(--color-danger-solid); }
 .health-detail { margin-left: var(--space-4); }
 /* v36 P3: "template có bản mới" badge on a Team-page agent row. */
-.template-upgrade-badge { margin-left: var(--space-3); font-size: 0.85em; padding: 2px 8px; }
+.template-upgrade-badge { margin-left: var(--space-3); font-size: var(--fs-xs); padding: 2px 8px; }
 /* Copy-paste shell command inside a remediation hint (v10 M26). */
-.health-fix-cmd { font-family: ui-monospace, monospace; font-size: 0.85em; background: var(--color-bg-soft); border: 1px solid var(--color-border-soft); border-radius: 4px; padding: 0.05rem 0.35rem; user-select: all; }
+.health-fix-cmd { font-family: ui-monospace, monospace; font-size: var(--fs-xs); background: var(--color-bg-soft); border: 1px solid var(--color-border-soft); border-radius: 4px; padding: 0.05rem 0.35rem; user-select: all; }
 
 /* v6 M14b: CEO chat-ops box */
 .ops-chat-hint { color: var(--color-muted); font-size: var(--fs-sm); margin: var(--space-1) 0 var(--space-3); }
@@ -510,8 +531,8 @@ button:disabled { cursor: default; opacity: 0.6; }
   /* Touch targets: every button/link-button is at least 44px tall (Apple/Material min). */
   button, .btn, .btn-link { min-height: 44px; }
 
-  /* iOS Safari auto-zooms an input whose font-size < 16px. 1rem (=16px) prevents it. */
-  input, textarea, select { font-size: var(--fs-body); }
+  /* (iOS anti-auto-zoom: the base `input,textarea,select` rule already sets 16px — see v37
+     note above; no mobile-specific override needed.) */
 
   /* CEO-facing tables (Team, assigned tasks, approvals) become a stacked card list: each row
      is a card, each cell shows its column name via data-label (added on the <td> in the views).
@@ -616,7 +637,9 @@ button:disabled { cursor: default; opacity: 0.6; }
   background: var(--color-bg);
 }
 .connection-card-header { display: flex; align-items: center; gap: 0.4rem; }
-.connection-card-header h3 { margin: 0; font-size: var(--fs-md, 1rem); }
+/* v37: was var(--fs-md,1rem) but --fs-md is undefined → silently fell back to a 1rem literal,
+   0.8px off every other h3. Use the real h3 token so card titles match the app. */
+.connection-card-header h3 { margin: 0; font-size: var(--fs-h3); }
 .connection-detail { margin: 0.35rem 0 0; word-break: break-word; }
 .connection-hint { margin: 0.35rem 0 0; font-size: var(--fs-sm); }
 .connection-note { margin: 0.35rem 0 0; }
