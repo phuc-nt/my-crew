@@ -554,3 +554,90 @@ export interface CompanyActivityPayload {
   // agents whose data dir could not be read (degraded, not a 500)
   skipped: string[]
 }
+
+// v33 P1: Connections screen — presence-only key state, never a secret value.
+export interface ConnectionKeyState {
+  name: string
+  set: boolean
+}
+
+export interface ConnectionCard {
+  id: string
+  label: string
+  ok: boolean
+  detail: string
+  hint: string
+  note: string
+  keys: ConnectionKeyState[]
+}
+
+export interface ConnectionsPayload {
+  cards: ConnectionCard[]
+  needs_restart: boolean
+}
+
+export interface ConnectionKeysResult {
+  ok: boolean
+  written: string[]
+  needs_restart: boolean
+}
+
+export interface RestartResult {
+  ok: boolean
+  managed: boolean
+  message: string
+}
+
+// v33 P3: outputs hub + team-task kanban board.
+export interface OutputItem {
+  kind: 'step' | 'file'
+  task_id: string
+  task_title: string
+  room_id: string
+  seq: number
+  step_title: string
+  agent_id: string
+  ts: string
+  name?: string
+  size?: number
+}
+
+export interface OutputsPayload {
+  items: OutputItem[]
+  truncated: boolean
+}
+
+export interface TeamBoardCard {
+  task_id: string
+  title: string
+  pic_id: string
+  room_id: string
+  status: string
+  created_at: string
+  steps_done: number
+  steps_total: number
+}
+
+export interface TeamBoardLane {
+  id: string
+  cards: TeamBoardCard[]
+}
+
+export interface TeamBoardPayload {
+  lanes: TeamBoardLane[]
+}
+
+// v33 P4: clarify — agent questions awaiting the CEO's answer.
+export interface ClarifyQuestion {
+  id: number
+  agent_id: string
+  task_id: string
+  question: string
+  options: string[]
+  asked_at: string
+  expires_at: string
+}
+
+export interface ClarifyPendingPayload {
+  questions: ClarifyQuestion[]
+}

@@ -13,10 +13,14 @@ import type {
   AgentStatus,
   AgentSummary,
   ApprovalsPayload,
+  ClarifyPendingPayload,
   AuditPayload,
   AutomationPayload,
   CompanyPayload,
   ConfigPayload,
+  ConnectionKeysResult,
+  ConnectionsPayload,
+  RestartResult,
   CostPayload,
   CreateAgentResult,
   CreateAgentSpec,
@@ -34,6 +38,8 @@ import type {
   SkillsPayload,
   OfficeRoomsPayload,
   OpsChatAvailable,
+  OutputsPayload,
+  TeamBoardPayload,
   OpsChatCommand,
   OpsChatReply,
   PacksPayload,
@@ -159,6 +165,24 @@ export const api = {
   registerExistingProfile: (id: string) =>
     post<{ id: string; registered: boolean }>(`/api/agents/${id}/register`, {}),
   getIntegrationHealth: () => request<IntegrationHealthPayload>('/api/health/integrations'),
+  // v33 P1: Connections screen — presence-only reads, whitelisted key writes, restart.
+  getConnections: () => request<ConnectionsPayload>('/api/connections'),
+  putConnectionKeys: (updates: Record<string, string>) =>
+    put<ConnectionKeysResult>('/api/connections/keys', { updates }),
+  restartService: () => post<RestartResult>('/api/connections/restart', {}),
+  // v33 P3: outputs hub (cross-room artifact index) + team-task kanban board.
+  getOutputs: (agent?: string, days?: number) => {
+    const q = new URLSearchParams()
+    if (agent) q.set('agent', agent)
+    if (days) q.set('days', String(days))
+    const qs = q.toString()
+    return request<OutputsPayload>(`/api/outputs${qs ? `?${qs}` : ''}`)
+  },
+  getTeamTaskBoard: () => request<TeamBoardPayload>('/api/team-tasks/board'),
+  // v33 P4: clarify — agent questions the CEO answers (buttons or free text).
+  getClarifyPending: () => request<ClarifyPendingPayload>('/api/clarify/pending'),
+  answerClarify: (id: number, answer: string) =>
+    post<{ ok: boolean; id: number }>(`/api/clarify/${id}/answer`, { answer }),
   getTeamAlerts: () => request<TeamAlertsPayload>('/api/team/alerts'),
   // Company identity (config-only) + staff-template picker.
   getCompany: () => request<CompanyPayload>('/api/company'),
