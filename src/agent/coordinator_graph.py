@@ -12,16 +12,20 @@ Tick actions, in priority order for a given task:
      `failed`; lease expired -> kill the pid, mark `timeout`, escalate to Telegram.
   3. A step is `awaiting_approval` WITH an `approval_id` (the gateway queued its
      external write in `ApprovalStore`) -> poll that approval: `approved` ->
-     re-reserve + re-spawn the SAME step (there is no LangGraph checkpointer on this
-     graph — resuming means re-running perceive/work/deliver from scratch, and
-     `deliver`'s external write is gateway-dedup-idempotent against the earlier
-     attempt, see `team_task_graph.py`'s module docstring); `rejected` -> mark the
+     re-reserve + re-spawn the SAME step (since v34 P1 the step graph IS checkpointed
+     — the re-spawned worker RESUMES the saved thread at its last completed node;
+     a lost checkpoint degrades to a from-scratch re-run whose external write is
+     gateway-dedup-idempotent, see `team_task_graph.py`); `rejected` -> mark the
      step `failed` + escalate; still `pending` (no decision yet) -> leave it, exactly
      like an `awaiting_approval` step with NO `approval_id` (e.g. a test double, or a
      gate this ticker never learned an id for) — the lease clock is considered PAUSED
      for `awaiting_approval` by construction; only `running` steps are ever polled for
      lease expiry (see `coordinator_nodes.tick_actions.poll_running_step`), never an
      `awaiting_approval` one, approval-decided-or-not.
+  3b. A step is `waiting_clarify` WITH a `clarify_id` (v34 P2: its graph interrupted
+     on a CEO question) -> poll the ClarifyStore: answered/expired -> re-reserve +
+     re-spawn; the worker resumes the thread with `Command(resume=<answer or "">)`.
+     Still pending -> leave it (lease clock paused, same as awaiting_approval).
   4. All steps `done` -> aggregate (one LLM summarize call) -> deliver a room payload,
      mark the task `done`, record the aggregate cost.
   5. Cost cap exceeded (step + decompose + aggregate) -> stop the task, mark `stalled`,
@@ -64,6 +68,7 @@ from src.agent.coordinator_nodes.tick_actions import (
     dispatch_ready_steps,
     poll_awaiting_approval_step,
     poll_running_step,
+    poll_waiting_clarify_step,
     ready_pending_steps,
 )
 from src.runtime.company import DEFAULT_TEAM_TASK_CONCURRENCY
@@ -148,6 +153,13 @@ class CoordinatorDeps:
     # alone forever (never auto-resumed), matching every
     # existing test that never sets `approval_id` on a step at all).
     approval_status: Callable[[int], str | None] = lambda _approval_id: "pending"
+    # clarify_status(clarify_id) -> ("pending"|"answered"|"expired", answer) | None
+    # (v34 P2). Reads the ClarifyStore the web/Telegram answer paths write to. Default
+    # mirrors approval_status: always-pending, so a caller that does not wire this
+    # never auto-resumes a waiting_clarify step.
+    clarify_status: Callable[[int], tuple[str, str] | None] = (
+        lambda _clarify_id: ("pending", "")
+    )
     # roster_ok(agent_id) -> True iff agent_id is CURRENTLY a valid team-task step
     # assignee (enabled registry agent, excluding the coordinator + admin agent — see
     # `team_task_roster.is_assignable`). Re-checked at DISPATCH time (not just at
@@ -250,6 +262,14 @@ def _act_on_task(deps: CoordinatorDeps, task: TeamTask) -> TickResult:
     awaiting = [s for s in task.steps if s.status == "awaiting_approval" and s.approval_id]
     for step in awaiting:
         result = poll_awaiting_approval_step(deps, task, step)
+        if result.action != "none":
+            return result
+
+    # v34 P2: steps paused mid-graph on a CEO clarify question — poll the ClarifyStore
+    # and re-dispatch on answer/expiry (the worker resumes the saved checkpoint).
+    clarifying = [s for s in task.steps if s.status == "waiting_clarify" and s.clarify_id]
+    for step in clarifying:
+        result = poll_waiting_clarify_step(deps, task, step)
         if result.action != "none":
             return result
 
@@ -372,7 +392,13 @@ def _dead_end_result(deps: CoordinatorDeps, task: TeamTask) -> TickResult | None
     dead_steps = [s for s in task.steps if s.status in ("failed", "timeout")]
     if not dead_steps:
         return None
-    in_flight = any(s.status in ("running", "awaiting_approval") for s in task.steps)
+    # waiting_clarify counts as in-flight (review H1): a step paused on the CEO is
+    # legitimately alive — a sibling's terminal failure must not stall the task out
+    # of list_dispatchable(), or the pending clarify would never be polled again.
+    in_flight = any(
+        s.status in ("running", "awaiting_approval", "waiting_clarify")
+        for s in task.steps
+    )
     if in_flight:
         return None
 

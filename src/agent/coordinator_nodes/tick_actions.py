@@ -189,13 +189,14 @@ def poll_awaiting_approval_step(
     """A step paused on a Lớp B gate WITH a known `approval_id`: poll `ApprovalStore`
     (via `deps.approval_status`) and act on a resolved decision.
 
-    `approved` -> re-reserve + re-spawn the SAME step. There is no LangGraph
-    checkpointer on the team-step graph (`team_task_graph.py`'s module docstring), so
-    "resume" means re-running perceive/work/deliver from scratch on a fresh
-    `attempt_id` — safe because `deliver`'s external write goes back through the SAME
-    per-agent `ActionGateway`, whose reserve-before-execute dedup claim (content-hash or
-    `dedup_hint`, see `action_gateway._action_dedup_key`) makes an identical re-attempt
-    a no-op `"deduplicated"` result if the write already went out, and a normal single
+    `approved` -> re-reserve + re-spawn the SAME step. Since v34 P1 the step graph is
+    checkpointed, so the re-spawned worker RESUMES the saved thread at its last
+    completed node (fresh `attempt_id`, adopted into the saved state). A lost/unusable
+    checkpoint degrades to a from-scratch re-run — still safe because `deliver`'s
+    external write goes back through the SAME per-agent `ActionGateway`, whose
+    reserve-before-execute dedup claim (content-hash or `dedup_hint`, see
+    `action_gateway._action_dedup_key`) makes an identical re-attempt a no-op
+    `"deduplicated"` result if the write already went out, and a normal single
     execution if it never did — either way the CEO never gets a duplicate external
     effect from this replay.
 
@@ -222,6 +223,32 @@ def poll_awaiting_approval_step(
         return TickResult(task_id=task.id, action="failed", detail=step.step_id)
     return TickResult(task_id=task.id, action="none",
                       detail=f"{step.step_id} awaiting_approval (id={step.approval_id})")
+
+
+def poll_waiting_clarify_step(
+    deps: CoordinatorDeps, task: TeamTask, step: TeamStep
+) -> TickResult:
+    """v34 P2: a step paused mid-graph on a CEO clarify question WITH a known
+    `clarify_id` — poll the ClarifyStore (via `deps.clarify_status`).
+
+    `answered` or `expired` -> re-reserve + re-spawn the SAME step; its worker resumes
+    the saved checkpoint thread with `Command(resume=<answer or "">)` (an expired
+    question resumes with "" — the safe-default draft ships as-is; the queue can never
+    wedge a task, mirroring `clarify_store`'s own expiry contract).
+
+    `pending` (or an id that no longer resolves, `None` — e.g. a wiped clarify DB) ->
+    leave the step exactly alone; the lease clock stays PAUSED like an
+    `awaiting_approval` step. An unresolvable id never blocks forever in practice:
+    the row it pointed at is gone, so the expire sweep can't flip it either — the
+    follow-up sweep (v34 P3) is the escalation net for that pathological case.
+    """
+    from src.agent.coordinator_graph import TickResult
+
+    status = deps.clarify_status(step.clarify_id) if step.clarify_id else None
+    if status is not None and status[0] in ("answered", "expired"):
+        return reserve_and_spawn(deps, task, step)
+    return TickResult(task_id=task.id, action="none",
+                      detail=f"{step.step_id} waiting_clarify (id={step.clarify_id})")
 
 
 def aggregate_and_deliver(deps: CoordinatorDeps, task: TeamTask) -> TickResult:

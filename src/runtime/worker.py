@@ -460,12 +460,16 @@ def _run_team_step_kind(args: list[str], *, agent_id: str, loaded: LoadedProfile
 
     status = result["status"]
     if status == STATUS_PAUSED:
-        _write_outcome("awaiting_approval")
+        # v34 P2 (review M5): a pause is either the Lớp B approval gate or a CEO
+        # clarify interrupt — label the outcome truthfully so the artifact/log never
+        # claims an approval gate for a clarify pause.
+        reason = result.get("pause_reason") or "approval"
+        _write_outcome("waiting_clarify" if reason == "clarify" else "awaiting_approval")
         append_run_event(
             data_dir, _event(agent_id, "team-step", "internal", "interrupted", None, False)
         )
         logger.info(
-            "worker %s team-step %s/%s: PAUSED at approval gate", agent_id, task_id, step_id
+            "worker %s team-step %s/%s: PAUSED (%s)", agent_id, task_id, step_id, reason
         )
         return 3
 

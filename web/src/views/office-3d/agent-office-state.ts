@@ -58,6 +58,10 @@ function nextState(prev: AgentState, status: string | undefined): AgentState {
       // idle rather than showing a false "working"/"done"; the office room timeline (not the
       // 3D scene) is the surface for failure detail.
       return 'idle'
+    case 'waiting_clarify':
+      // v34 P2: paused mid-step on a CEO question — show the "has a task, not
+      // actively working" visual (existing state, no new enum) until resume.
+      return 'assigned'
     default:
       return prev
   }

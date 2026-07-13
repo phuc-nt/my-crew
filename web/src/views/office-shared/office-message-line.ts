@@ -34,7 +34,10 @@ export function messageLine(m: OfficeMessage): string {
     case 'step_status': {
       const phaseLabel = b.phase ? PHASE_LABEL[b.phase] : undefined
       const suffix = phaseLabel ? ` (${phaseLabel})` : ''
-      return `${b.task_title ?? ''} / ${b.step_title ?? ''}: ${b.status ?? ''}${suffix}`
+      // v34 P2: the one non-self-explanatory status value gets a human label — the
+      // rest (started/done/failed) read fine as-is and stay byte-identical.
+      const status = b.status === 'waiting_clarify' ? 'chờ CEO trả lời' : (b.status ?? '')
+      return `${b.task_title ?? ''} / ${b.step_title ?? ''}: ${status}${suffix}`
     }
     case 'handoff':
       // v17: the feed is an index, not a report viewer — the FULL result lives in the
@@ -46,7 +49,10 @@ export function messageLine(m: OfficeMessage): string {
       return `${b.from ?? ''} hỏi ${b.to ?? ''}: ${b.question_summary ?? ''} → ${b.answer_summary ?? ''}`
     case 'review': {
       const verdictLabel = b.verdict === 'passed' ? 'đạt' : `cần sửa (${b.failure_count ?? 0} lỗi)`
-      return `${b.task_title ?? ''} / ${b.step_title ?? ''}: ${verdictLabel}`
+      // v34 P5: per-criterion count when the verdict graded a checklist (0 = pre-P5
+      // event or no criteria on the step — omit rather than show "0/0").
+      const checklist = b.criteria_total ? ` — ${b.criteria_passed ?? 0}/${b.criteria_total} tiêu chí đạt` : ''
+      return `${b.task_title ?? ''} / ${b.step_title ?? ''}: ${verdictLabel}${checklist}`
     }
     default:
       return ''

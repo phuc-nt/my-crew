@@ -38,12 +38,14 @@ def _clean(text: str, cap: int) -> str:
 
 def ask_ceo(
     *, agent_id: str, task_id: str, question: str, options: list[str] | None = None,
-) -> str:
-    """Record a CEO question + notify. Returns the note the asking step folds into
-    its own context — NEVER raises (a clarify hiccup must not fail the step)."""
+) -> tuple[str, int | None]:
+    """Record a CEO question + notify. Returns `(note, clarify_id)` — the note is what
+    the asking step folds into its own context; the id (None on refusal/failure) is
+    what v34's interrupt path pauses on. NEVER raises (a clarify hiccup must not fail
+    the step)."""
     q = _clean(question, _QUESTION_MAX)
     if not q:
-        return ""
+        return "", None
     opts = [o for o in (_clean(o, _OPTION_MAX) for o in (options or [])) if o]
     store = ClarifyStore(clarify_db_path())
     try:
@@ -53,16 +55,17 @@ def ask_ceo(
     except ClarifyCapError as exc:
         logger.warning("clarify refused: %s", exc)
         return ("Không gửi được câu hỏi cho CEO (đã có quá nhiều câu hỏi chờ) — "
-                "tự quyết theo phương án an toàn nhất.")
+                "tự quyết theo phương án an toàn nhất.", None)
     except Exception:  # noqa: BLE001 — a broken queue must not fail the step
         logger.warning("clarify store failed", exc_info=True)
-        return ""
+        return "", None
     finally:
         store.close()
 
     _notify(clarify_id, agent_id, q, opts)
     return (f"Đã gửi câu hỏi cho CEO (mã #{clarify_id}). Làm tiếp phần còn lại theo "
-            f"phương án an toàn nhất; câu trả lời của CEO sẽ được đưa vào bước sau.")
+            f"phương án an toàn nhất; câu trả lời của CEO sẽ được đưa vào bước sau.",
+            clarify_id)
 
 
 def _notify(clarify_id: int, agent_id: str, question: str, options: list[str]) -> None:
@@ -118,6 +121,23 @@ def answer_from_callback(data: str) -> tuple[bool, str]:
                         else "Câu hỏi này vừa được trả lời ở nơi khác.")
     finally:
         store.close()
+
+
+def clarify_status(clarify_id: int) -> tuple[str, str] | None:
+    """(status, answer) of one question, or None if it does not exist — the ticker's
+    poll seam for resuming a `waiting_clarify` step (mirror of `approval_status`)."""
+    try:
+        store = ClarifyStore(clarify_db_path())
+        try:
+            row = store.get(int(clarify_id))
+        finally:
+            store.close()
+    except Exception:  # noqa: BLE001 — an unreadable queue reads as "unknown"
+        logger.warning("clarify status read failed", exc_info=True)
+        return None
+    if row is None:
+        return None
+    return row.status, row.answer
 
 
 def expire_sweep() -> int:

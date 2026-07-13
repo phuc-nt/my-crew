@@ -134,6 +134,16 @@ class TeamTaskStore:
             self._conn.execute("ALTER TABLE team_tasks ADD COLUMN room_id TEXT NOT NULL DEFAULT ''")
         except sqlite3.OperationalError:
             pass  # column already exists
+        # v34 P3: follow-up ladder bookkeeping (cooldown + escalation level) — read and
+        # written ONLY by `follow_up_sweep`; never part of the plan hash.
+        for ddl in (
+            "ALTER TABLE team_tasks ADD COLUMN last_follow_up_at TEXT",
+            "ALTER TABLE team_tasks ADD COLUMN follow_up_level INTEGER NOT NULL DEFAULT 0",
+        ):
+            try:
+                self._conn.execute(ddl)
+            except sqlite3.OperationalError:
+                pass  # column already exists
         _steps.create_schema(self._conn)
         _amend.create_schema(self._conn)
         self._conn.commit()
@@ -441,6 +451,22 @@ class TeamTaskStore:
         updated = _steps.set_step_status(
             self._conn, task_id, step_id, "awaiting_approval", attempt_id=attempt_id,
             approval_id=approval_id,
+        )
+        self._conn.commit()
+        return updated
+
+    def mark_waiting_clarify(self, task_id: str, step_id: str, *,
+                             attempt_id: str | None = None,
+                             clarify_id: int | None = None) -> bool:
+        """v34 P2: mark a step paused mid-graph on a CEO clarify interrupt. Mirrors
+        `mark_awaiting_approval` exactly: worker-only write (holds + passes its own
+        attempt_id), `clarify_id` persisted so the ticker can poll the ClarifyStore
+        and resume once the CEO answers (or the question expires). A row without a
+        clarify_id is never auto-resumed — same un-pollable contract as an
+        awaiting_approval row without an approval_id."""
+        updated = _steps.set_step_status(
+            self._conn, task_id, step_id, "waiting_clarify", attempt_id=attempt_id,
+            clarify_id=clarify_id,
         )
         self._conn.commit()
         return updated

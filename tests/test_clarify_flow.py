@@ -79,11 +79,11 @@ def test_ask_ceo_sanitizes_stores_and_notifies(wired, monkeypatch):
     monkeypatch.setattr(
         "src.runtime.operator_notify.notify_operator_best_effort", _notify
     )
-    note = clarify_service.ask_ceo(
+    note, clarify_id = clarify_service.ask_ceo(
         agent_id="nghien-cuu", task_id="t1",
         question="Ưu tiên\x00 chi phí   hay tốc độ?", options=["Chi phí", "Tốc độ"],
     )
-    assert "Đã gửi câu hỏi cho CEO" in note
+    assert "Đã gửi câu hỏi cho CEO" in note and clarify_id is not None
     assert "\x00" not in sent["text"] and "Ưu tiên chi phí hay tốc độ?" in sent["text"]
     assert [b["text"] for b in sent["buttons"]] == ["Chi phí", "Tốc độ"]
     assert sent["buttons"][0]["callback_data"].startswith("clarify:")
@@ -96,8 +96,8 @@ def test_ask_ceo_cap_returns_safe_note_never_raises(wired, monkeypatch):
     )
     for _ in range(MAX_PENDING_PER_AGENT):
         clarify_service.ask_ceo(agent_id="a", task_id="t", question="q")
-    note = clarify_service.ask_ceo(agent_id="a", task_id="t", question="q-thừa")
-    assert "an toàn" in note  # degraded note, not an exception
+    note, clarify_id = clarify_service.ask_ceo(agent_id="a", task_id="t", question="q-thừa")
+    assert "an toàn" in note and clarify_id is None  # degraded note, not an exception
 
 
 def test_answer_from_callback_landing_and_stale(wired, monkeypatch):
@@ -219,7 +219,7 @@ def test_work_node_routes_ceo_proposal_to_ask_ceo():
             ("ceo", "Ưu tiên gì?", ["Chi phí", "Tốc độ"]),
         ],
         ask_ceo=lambda q, opts: asked.update({"q": q, "opts": opts}) or
-        "Đã gửi câu hỏi cho CEO (mã #7).",
+        ("Đã gửi câu hỏi cho CEO (mã #7).", None),
         set_attempt_id=lambda a: None,
     )
     out = build_team_task_graph(deps=deps).invoke({"step_title": "Bước"})

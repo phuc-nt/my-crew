@@ -32,7 +32,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-STEP_STATUSES = ("pending", "running", "awaiting_approval", "done", "failed", "timeout")
+STEP_STATUSES = ("pending", "running", "awaiting_approval", "waiting_clarify", "done",
+                 "failed", "timeout")
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,10 @@ class TeamStep:
     # For a review row: which review round this is (0-indexed, capped at 2 rounds —
     # see `tick_actions`'s review-insert rule). 0 on every non-review row.
     review_round: int
+    # v34 P2: the ClarifyStore row this step paused on (status "waiting_clarify") —
+    # the correlation key the ticker polls to resume once the CEO answers/expires.
+    # None on every step that never interrupted on a CEO question.
+    clarify_id: int | None = None
 
 
 def create_schema(conn: sqlite3.Connection) -> None:
@@ -117,6 +122,10 @@ def create_schema(conn: sqlite3.Connection) -> None:
         pass
     try:
         conn.execute("ALTER TABLE team_steps ADD COLUMN acceptance TEXT NOT NULL DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE team_steps ADD COLUMN clarify_id INTEGER")
     except sqlite3.OperationalError:
         pass
     # P2 peer-review columns — same migrate-free ALTER pattern. Defaults reproduce v12
@@ -162,6 +171,7 @@ def _row_to_step(data: dict[str, Any]) -> TeamStep:
         system_inserted=bool(int(data.get("system_inserted") or 0)),
         parent_step_id=data.get("parent_step_id"),
         review_round=int(data.get("review_round") or 0),
+        clarify_id=data.get("clarify_id"),
     )
 
 
@@ -280,7 +290,7 @@ def reserve_step(conn: sqlite3.Connection, task_id: str, step_id: str, *, lease_
     # applied to the new attempt.
     cur = conn.execute(
         "UPDATE team_steps SET status = 'running', attempt_id = ?, spawned_at = ?, "
-        "last_seen = ?, lease_expires_at = ?, approval_id = NULL "
+        "last_seen = ?, lease_expires_at = ?, approval_id = NULL, clarify_id = NULL "
         "WHERE task_id = ? AND step_id = ?",
         (attempt_id, now, now, expires, task_id, step_id),
     )
@@ -336,6 +346,7 @@ def set_step_status(
     conn: sqlite3.Connection, task_id: str, step_id: str, status: str, *,
     outcome_ref: str | None = None, cost_usd: float | None = None,
     attempt_id: str | None = None, approval_id: int | None = None,
+    clarify_id: int | None = None,
 ) -> bool:
     """Write a step's status (+ optionally its outcome/cost/approval_id). Returns True
     iff a row was actually updated.
@@ -365,13 +376,15 @@ def set_step_status(
     if attempt_id is not None:
         where += " AND attempt_id = ?"
         params = (*params, attempt_id)
-    if outcome_ref is not None or cost_usd is not None or approval_id is not None:
+    if outcome_ref is not None or cost_usd is not None or approval_id is not None \
+            or clarify_id is not None:
         cur = conn.execute(
             "UPDATE team_steps SET status = ?, "
             "outcome_ref = COALESCE(?, outcome_ref), "
             "cost_usd = COALESCE(?, cost_usd), "
-            "approval_id = COALESCE(?, approval_id) " + where,
-            (status, outcome_ref, cost_usd, approval_id, *params),
+            "approval_id = COALESCE(?, approval_id), "
+            "clarify_id = COALESCE(?, clarify_id) " + where,
+            (status, outcome_ref, cost_usd, approval_id, clarify_id, *params),
         )
     else:
         cur = conn.execute("UPDATE team_steps SET status = ? " + where, (status, *params))
