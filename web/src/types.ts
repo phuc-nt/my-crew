@@ -644,3 +644,29 @@ export interface ClarifyQuestion {
 export interface ClarifyPendingPayload {
   questions: ClarifyQuestion[]
 }
+
+// v36 P3: template config version-pin.
+export interface TemplateStatusRow {
+  agent_id: string
+  role: string
+  applied_version: number
+  latest_version: number
+  upgradable: boolean
+}
+
+export interface TemplateStatusPayload {
+  agents: TemplateStatusRow[]
+}
+
+export interface TemplateUpgradePreview {
+  role: string
+  applied_version: number
+  latest_version: number
+  apply: Record<string, unknown>
+  keep: string[]
+  unchanged: string[]
+}
+
+export interface TemplateUpgradeResult extends TemplateUpgradePreview {
+  backup: string
+}

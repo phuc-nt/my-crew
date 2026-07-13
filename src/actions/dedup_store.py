@@ -52,5 +52,14 @@ class DedupStore:
         self._conn.execute("DELETE FROM seen_keys WHERE key = ?", (key,))
         self._conn.commit()
 
+    def delete_older_than(self, cutoff_iso: str) -> int:
+        """Purge idempotency keys older than `cutoff_iso`. Returns rows removed. The key
+        only needs to outlive the re-execution window it guards (a daily cron re-run); a
+        short retention keeps the per-agent store from growing without bound. No schema_meta
+        here — this is a per-agent store the project does not centrally version."""
+        cur = self._conn.execute("DELETE FROM seen_keys WHERE created_at < ?", (cutoff_iso,))
+        self._conn.commit()
+        return cur.rowcount
+
     def close(self) -> None:
         self._conn.close()

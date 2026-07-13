@@ -63,7 +63,17 @@ class CaptureStore:
             "  ts TEXT NOT NULL"
             ")"
         )
+        from src.runtime.store_schema_meta import ensure_schema_meta
+
+        ensure_schema_meta(self._conn)
         self._conn.commit()
+
+    def delete_older_than(self, cutoff_iso: str) -> int:
+        """Delete telemetry rows written before `cutoff_iso` (ISO-8601). Returns the row
+        count removed. Keyed on `ts` (row-write time, always set) so no NULL edge case."""
+        cur = self._conn.execute("DELETE FROM captures WHERE ts < ?", (cutoff_iso,))
+        self._conn.commit()
+        return cur.rowcount
 
     def record(
         self,

@@ -172,6 +172,9 @@ def _load_one_template(role_dir) -> dict | None:
         "schedule": {str(k): str(v) for k, v in (doc.get("schedule") or {}).items()}
         if isinstance(doc.get("schedule"), dict) else {},
         "has_skills": (role_dir / "skills").is_dir(),
+        # v36 P3: config version — an agent records the version it was created with so a
+        # later template bump surfaces an upgrade badge. Absent ⇒ 1 (the baseline).
+        "version": int(doc.get("version") or 1),
     }
 
 @router.post("/agents/create-from-template")
@@ -213,4 +216,41 @@ def post_crew_create() -> dict:
     try:
         return template_create.create_crew()
     except template_create.TemplateError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
+@router.get("/agents/template-status")
+def get_template_status() -> dict:
+    """v36 P3: per-agent template config version + whether a newer template exists.
+    Drives the Team-page "template có bản mới" badge."""
+    from src.server import template_upgrade
+
+    return {"agents": template_upgrade.agent_upgrade_status()}
+
+
+@router.get("/agents/{agent_id}/template-upgrade")
+def preview_template_upgrade(agent_id: str) -> dict:
+    """Preview which config fields an upgrade would apply vs keep (user-customized)."""
+    from src.server import template_upgrade
+
+    try:
+        return template_upgrade.preview_upgrade(agent_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
+@router.post("/agents/{agent_id}/template-upgrade")
+def apply_template_upgrade(agent_id: str) -> dict:
+    """Apply the config upgrade (backup first; user-customized fields kept). A template
+    whose config fails validation is rejected by the save door (RuntimeError → 400) AFTER
+    the backup was written, so the live profile is never left half-written."""
+    from src.server import template_upgrade
+
+    try:
+        return template_upgrade.apply_upgrade(agent_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None

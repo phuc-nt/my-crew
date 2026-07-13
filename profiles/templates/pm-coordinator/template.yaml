@@ -24,3 +24,7 @@ recommended_runtime: native
 schedule:
   daily: "0 8 * * *"
   weekly: "0 17 * * 5"
+
+# v36 P2: config version — bump when template CONFIG (reports/schedule/tools) changes
+# so agents of this role show an upgrade badge. Skills load live (no bump needed).
+version: 1

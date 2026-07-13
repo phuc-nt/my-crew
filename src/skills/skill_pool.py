@@ -29,17 +29,28 @@ def load_skill_pool(
     domain: str = "pm",
     profile_id: str | None = None,
     profiles_dir=None,
+    template_role: str | None = None,
 ) -> tuple[Skill, ...]:
-    """Load a profile's declared pack skills PLUS its own `profiles/<id>/skills/` (v19).
+    """Load a profile's declared pack skills, its role TEMPLATE skills (v36 live-load),
+    PLUS its own `profiles/<id>/skills/` (v19).
 
-    Pack skills (repo-vetted) load by their declared `skills:` names. Per-agent skills
-    (lower trust — body-wrapped, name-scrubbed in `load_agent_skills`) are ALWAYS included
-    when present. Collision rule (red-team M4): a per-agent skill whose name matches a pack
-    skill is NOT allowed to shadow it — it is re-exposed as `agent:<name>` so BOTH survive
-    and the vetted pack skill is never silently replaced.
+    Three sources, decreasing trust:
+      1. Pack skills — repo-vetted, loaded by declared `skills:` name.
+      2. Template skills (v36 P2) — when `template_role` is set, the role template's
+         `profiles/templates/<role>/skills/*.md` are loaded LIVE each run (repo-vetted =
+         committed data, so NOT body-scrubbed like agent-own). A template edit reaches
+         every agent of that role with no re-scaffold. Agents created before live-skills
+         (no `template_role`) skip this — their copied skills load as agent-own below.
+      3. Per-agent skills — lower trust (body-wrapped, name-scrubbed in
+         `load_agent_skills`), ALWAYS included when present.
 
-    Empty `skill_names` AND no agent skills ⇒ `()` with no LLM construction downstream. A
-    named-but-missing pack skill is warned and dropped (a typo must not crash a run).
+    Override rules: an agent-own skill whose name matches a TEMPLATE skill WINS (local
+    customization must beat the shared template) — the template copy is dropped. But a
+    per-agent skill matching a PACK skill is NOT allowed to shadow it (red-team M4): it is
+    re-exposed as `agent:<name>` so both survive.
+
+    Empty everything ⇒ `()` with no LLM construction downstream. A named-but-missing pack
+    skill is warned and dropped (a typo must not crash a run).
     """
     pack_by_name = {s.name: s for s in load_skills(domain=domain)} if skill_names else {}
     pool: list[Skill] = []
@@ -50,6 +61,11 @@ def load_skill_pool(
             continue
         pool.append(skill)
 
+    template_by_name: dict[str, Skill] = {}
+    if template_role:
+        template_by_name = _load_template_skills(template_role)
+
+    agent_own_names: set[str] = set()
     if profile_id is not None:
         from src.packs.registry import profile_skills_dir
         from src.skills.models import Skill as _Skill
@@ -58,6 +74,7 @@ def load_skill_pool(
         pack_names = set(pack_by_name)
         for skill in load_agent_skills(profile_skills_dir(profile_id, profiles_dir=profiles_dir)):
             name = skill.name
+            agent_own_names.add(skill.name)
             if name in pack_names:
                 name = f"agent:{skill.name}"
                 logger.info(
@@ -68,7 +85,34 @@ def load_skill_pool(
                                body=skill.body, applies_to=skill.applies_to)
             pool.append(skill)
 
+    # Template skills load AFTER agent-own so an agent-own skill of the same name wins:
+    # skip any template skill the agent has locally overridden. Also skip names already
+    # taken by a pack skill (pack is the higher-trust source of that name).
+    for name, skill in template_by_name.items():
+        if name in agent_own_names or name in pack_by_name:
+            logger.info("template skill %r overridden locally; using the local copy", name)
+            continue
+        pool.append(skill)
+
     return tuple(pool)
+
+
+def _load_template_skills(template_role: str) -> dict[str, Skill]:
+    """Role template skills loaded LIVE from `profiles/templates/<role>/skills/` (v36 P2).
+
+    Loaded as repo-vetted (via `load_skills`, NOT the scrubbed agent loader) because a
+    committed template is trusted code, ranking with pack skills. A missing/renamed
+    template dir ⇒ {} + WARNING (fail-open to fewer skills, never a crash)."""
+    from src.packs.registry import REPO_ROOT
+
+    skills_dir = REPO_ROOT / "profiles" / "templates" / template_role / "skills"
+    if not skills_dir.is_dir():
+        logger.warning(
+            "template_role %r has no skills dir at %s; no template skills loaded",
+            template_role, skills_dir,
+        )
+        return {}
+    return {s.name: s for s in load_skills(skills_dir=skills_dir)}
 
 
 def build_skill_context(
@@ -86,6 +130,7 @@ def build_skill_context(
         domain=getattr(loaded, "domain", "pm"),
         profile_id=getattr(loaded, "profile_id", None),
         profiles_dir=profiles_dir,
+        template_role=getattr(loaded, "template_role", None),
     )
     if not pool:
         return (), None

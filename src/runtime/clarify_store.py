@@ -69,7 +69,22 @@ class ClarifyStore:
             "  resume_token TEXT"
             ")"
         )
+        from src.runtime.store_schema_meta import ensure_schema_meta
+
+        ensure_schema_meta(self._conn)
         self._conn.commit()
+
+    def delete_older_than(self, cutoff_iso: str) -> int:
+        """Delete only SETTLED clarifications (answered/expired) older than `cutoff_iso`.
+        pending rows are never removed — an unanswered question must survive until settled.
+        Time key = answered_at (answered) or expires_at (expired)."""
+        cur = self._conn.execute(
+            "DELETE FROM clarifications WHERE status IN ('answered', 'expired') "
+            "AND COALESCE(answered_at, expires_at) < ?",
+            (cutoff_iso,),
+        )
+        self._conn.commit()
+        return cur.rowcount
 
     def close(self) -> None:
         self._conn.close()

@@ -112,6 +112,16 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
             run_follow_up_sweep(store)
         except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
             logger.warning("team-tick: follow-up sweep failed", exc_info=True)
+        # v36 P1: retention GC (captures/office_room/clarify/dedup grew unbounded) +
+        # a daily read-only integrity audit. Both best-effort; storage_hygiene guards
+        # each store internally, this wrapper is the final backstop for the tick.
+        try:
+            from src.runtime.storage_hygiene import run_integrity_audit, run_retention_sweep
+
+            run_retention_sweep()
+            run_integrity_audit()
+        except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
+            logger.warning("team-tick: storage hygiene failed", exc_info=True)
     finally:
         store.close()
 

@@ -146,6 +146,9 @@ class TeamTaskStore:
                 pass  # column already exists
         _steps.create_schema(self._conn)
         _amend.create_schema(self._conn)
+        from src.runtime.store_schema_meta import ensure_schema_meta
+
+        ensure_schema_meta(self._conn)
         self._conn.commit()
 
     def _now(self) -> str:

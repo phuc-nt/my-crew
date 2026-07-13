@@ -183,6 +183,22 @@ def _build_profile_doc(spec: dict, profiles_dir) -> tuple[str, dict, str | None]
         runtime_kind = runtime.strip()
         if runtime_kind and runtime_kind != "native":
             doc["agent_runtime"] = runtime_kind
+    # v36 P2: the role template this agent came from (one-click template path). Written
+    # as a clean single-segment string only — the loader turns it into a live skills
+    # source. A path-y value can't smuggle a traversal: it names a dir under templates/.
+    template_role = str(spec.get("template_role") or "").strip()
+    if template_role:
+        if "/" in template_role or "\\" in template_role or template_role in (".", ".."):
+            raise ValidationError(f"template_role {template_role!r} không hợp lệ")
+        doc["template_role"] = template_role
+        # v36 P3: the config version + snapshot applied at create (upgrade baseline).
+        # Only recorded alongside a valid template_role, and only as plain data.
+        version = spec.get("template_version")
+        if isinstance(version, int):
+            doc["template_version"] = version
+        applied = spec.get("template_config_applied")
+        if isinstance(applied, dict):
+            doc["template_config_applied"] = applied
     _apply_bindings(doc, spec.get("bindings") or {})
 
     # Run the real builders — the exact validation `load_profile` applies (incl. the

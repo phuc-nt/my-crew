@@ -83,7 +83,19 @@ class OfficeRoomStore:
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_messages_room_seq ON messages (room_id, seq)"
         )
+        from src.runtime.store_schema_meta import ensure_schema_meta
+
+        ensure_schema_meta(self._conn)
         self._conn.commit()
+
+    def delete_older_than(self, cutoff_iso: str) -> int:
+        """Delete room events older than `cutoff_iso`. Returns rows removed. Safe for the
+        feed: readers use `list(room_id, since_seq)` with `seq > since_seq` — an advancing
+        cursor, so removing low-seq rows only shifts where a fresh replay starts (the FE
+        dedups by seq and never assumes a contiguous-from-zero sequence)."""
+        cur = self._conn.execute("DELETE FROM messages WHERE ts < ?", (cutoff_iso,))
+        self._conn.commit()
+        return cur.rowcount
 
     def _now(self) -> str:
         return datetime.now(UTC).isoformat()

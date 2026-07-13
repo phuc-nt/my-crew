@@ -4,10 +4,11 @@ The wizard's templates were prefill-only; this module makes them EXECUTABLE whil
 keeping the single validated door: the spec is built SERVER-SIDE from the template
 files (the client sends only `role_id` + an optional id override — it cannot smuggle
 arbitrary profile config), then goes through the SAME `agent_create.create_agent` the
-wizard and ops-chat use. After a successful create, the template's `skills/` folder
-(if any) is copied into the new agent's per-agent skills dir — regular .md files only,
-no symlink following (the template dir is repo data; the copy must not be able to pull
-anything from outside it).
+wizard and ops-chat use. The created agent records `template_role` (v36 P2), so its
+skills load LIVE from `profiles/templates/<role>/skills/` at runtime — no copy — and a
+template skill edit reaches every agent of that role with no re-scaffold. It also records
+`template_version` + a config baseline (v36 P3) so a later template bump surfaces a
+config-upgrade with review (see `template_upgrade.py`).
 
 Crew bootstrap reads `profiles/templates/crew.yaml` (ONE default crew — CEO decision
 v32) and creates each member independently: an existing member is SKIPPED (reported,
@@ -39,9 +40,11 @@ def create_from_template(role_id: str, agent_id: str | None = None) -> dict:
     agent_create.ValidationError / agent_create.ConflictError (routes map them)."""
     template = _load_template_or_raise(role_id)
     final_id = (agent_id or role_id).strip().lower()
-    spec = _spec_from_template(template, final_id)
+    spec = _spec_from_template(template, final_id, role_id)
     created = agent_create.create_agent(spec)
-    _copy_template_skills(role_id, created["id"])
+    # v36 P2: skills are NOT copied — they load live from the template dir via the
+    # agent's `template_role` (see load_skill_pool). Editing a template skill now reaches
+    # every agent of this role with no re-scaffold.
     return {
         **created,
         "name": template["role"],
@@ -134,9 +137,18 @@ def _load_template_or_raise(role_id: str) -> dict:
     return template
 
 
-def _spec_from_template(template: dict, agent_id: str) -> dict:
+def _template_config_snapshot(template: dict) -> dict:
+    # Local import avoids an import cycle (template_upgrade imports routes_company, which
+    # imports template_create). The snapshot definition lives in one place.
+    from src.server.template_upgrade import config_snapshot
+
+    return config_snapshot(template)
+
+
+def _spec_from_template(template: dict, agent_id: str, role_id: str) -> dict:
     """Template → create_agent spec. Every field passes the SAME validation the wizard
-    hits — this function only selects, never invents config."""
+    hits — this function only selects, never invents config. `role_id` is the template
+    dir name, recorded as `template_role` so skills load live from it (v36 P2)."""
     spec: dict = {
         "id": agent_id,
         "name": template["role"],
@@ -146,6 +158,14 @@ def _spec_from_template(template: dict, agent_id: str) -> dict:
         # Plan invariant (v32): one-click creates land DISABLED — .env tokens first,
         # then one click on the Team page turns the agent on.
         "enabled": False,
+        # v36 P2: bind the agent to its role template so skills load LIVE from the
+        # template dir at runtime (no copy) — a template skill edit reaches this agent.
+        "template_role": role_id,
+        # v36 P3: record the template's config version + the exact config snapshot applied
+        # at create, so a later config-upgrade can tell "user never touched this field"
+        # (safe to re-apply) from "user customized it" (keep, just report).
+        "template_version": int(template.get("version") or 1),
+        "template_config_applied": _template_config_snapshot(template),
     }
     if template.get("schedule"):
         spec["schedule"] = template["schedule"]
@@ -164,35 +184,6 @@ def _spec_from_template(template: dict, agent_id: str) -> dict:
             if runtime == "deep_agent" else runtime
         )
     return spec
-
-
-def _copy_template_skills(role_id: str, agent_id: str) -> None:
-    """Copy the template's skills/ into the new agent's per-agent skills dir.
-
-    Best-effort AFTER a successful create (a skill-copy hiccup must not roll back the
-    agent). Only regular files under the template dir are copied — `resolve()` guards
-    against a symlink pointing outside the templates tree.
-    """
-    src_dir = (_TEMPLATES_DIR / role_id / "skills")
-    if not src_dir.is_dir():
-        return
-    from src.packs.registry import profile_skills_dir
-
-    # Same profiles root create_agent just wrote to (module attr — tests repoint it).
-    dest = profile_skills_dir(agent_id, profiles_dir=agent_create._PROFILES_DIR)
-    try:
-        root = _TEMPLATES_DIR.resolve()
-        for path in sorted(src_dir.rglob("*.md")):
-            resolved = path.resolve()
-            if not resolved.is_relative_to(root) or not resolved.is_file():
-                continue
-            rel = path.relative_to(src_dir)
-            target = dest / rel
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(resolved.read_bytes())
-    except OSError:
-        logger.warning("template %r: skills copy to %r failed", role_id, agent_id,
-                       exc_info=True)
 
 
 def _wire_coordinator(coordinator_role: str, available: list[str]) -> str | None:

@@ -39,6 +39,9 @@ import type {
   OfficeRoomsPayload,
   OpsChatAvailable,
   OutputsPayload,
+  TemplateStatusPayload,
+  TemplateUpgradePreview,
+  TemplateUpgradeResult,
   TeamBoardPayload,
   OpsChatCommand,
   OpsChatReply,
@@ -165,6 +168,12 @@ export const api = {
   registerExistingProfile: (id: string) =>
     post<{ id: string; registered: boolean }>(`/api/agents/${id}/register`, {}),
   getIntegrationHealth: () => request<IntegrationHealthPayload>('/api/health/integrations'),
+  // v36 P3: template config version-pin — badge + review-then-apply upgrade.
+  getTemplateStatus: () => request<TemplateStatusPayload>('/api/agents/template-status'),
+  previewTemplateUpgrade: (id: string) =>
+    request<TemplateUpgradePreview>(`/api/agents/${id}/template-upgrade`),
+  applyTemplateUpgrade: (id: string) =>
+    post<TemplateUpgradeResult>(`/api/agents/${id}/template-upgrade`, {}),
   // v33 P1: Connections screen — presence-only reads, whitelisted key writes, restart.
   getConnections: () => request<ConnectionsPayload>('/api/connections'),
   putConnectionKeys: (updates: Record<string, string>) =>

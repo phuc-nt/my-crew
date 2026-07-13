@@ -87,31 +87,18 @@ def test_create_from_template_lands_disabled(tmp_world):
     assert _profile_doc(profiles, "wiz")["enabled"] is True
 
 
-def test_skills_copy_ignores_symlink_out_of_templates(tmp_world, monkeypatch):
-    """A symlink inside a template's skills/ pointing outside the templates tree must
-    not be followed into the created agent."""
-    import src.server.template_create as tc
+def test_create_from_template_records_template_role_and_no_copy(tmp_world):
+    """v36 P2: skills are NOT copied — the agent records `template_role` and loads skills
+    live from the template dir (verified in test_template_live_skills.py)."""
+    import yaml
 
-    templates = Path(str(tmp_world[1])) / "templates-sandbox"
-    (templates / "vai-thu" / "skills").mkdir(parents=True)
-    (templates / "vai-thu" / "template.yaml").write_text(
-        "role: Thử\ndomain: office\nreports: []\n", encoding="utf-8")
-    (templates / "vai-thu" / "skills" / "ok.md").write_text("ok", encoding="utf-8")
-    outside = Path(str(tmp_world[1])).parent / "secret.md"
-    outside.write_text("secret", encoding="utf-8")
-    (templates / "vai-thu" / "skills" / "leak.md").symlink_to(outside)
-    monkeypatch.setattr(tc, "_TEMPLATES_DIR", templates)
-    monkeypatch.setattr(tc, "_CREW_MANIFEST", templates / "crew.yaml")
-    tc.create_from_template("vai-thu")
-    copied = {f.name for f in (tmp_world[1] / "vai-thu" / "skills").glob("*.md")}
-    assert copied == {"ok.md"}  # the out-of-tree symlink was never followed
-
-
-def test_create_from_template_copies_skills(tmp_world):
     _, profiles, _ = tmp_world
     template_create.create_from_template("nghien-cuu")
-    copied = list((profiles / "nghien-cuu" / "skills").glob("*.md"))
-    assert copied, "template skills/ must be copied into the created agent"
+    # No skills copied into the created agent's own dir.
+    assert not list((profiles / "nghien-cuu" / "skills").glob("*.md"))
+    # profile.yaml records the role so load_skill_pool loads template skills live.
+    doc = yaml.safe_load((profiles / "nghien-cuu" / "profile.yaml").read_text(encoding="utf-8"))
+    assert doc["template_role"] == "nghien-cuu"
 
 
 def test_create_from_template_id_override_and_conflict(tmp_world):

@@ -90,6 +90,12 @@ class LoadedProfile:
     # synthesized (schedule byte-identical). Each entry: {id, source, target, prompt} —
     # validated at load by `_parse_watchers`.
     watchers: tuple[dict, ...] = ()
+    # v36 P2 template live-skills: the role template this agent was created from. None ⇒
+    # agent predates live-skills (its skills were COPIED into profiles/<id>/skills/ once at
+    # create — byte-identical old behavior). When set, `load_skill_pool` ALSO loads the
+    # template's skills/ dir live at runtime, so a template skill edit reaches every agent
+    # of that role without re-scaffolding.
+    template_role: str | None = None
 
 
 def _read_md(profile_dir: Path, name: str) -> str:
@@ -179,6 +185,7 @@ def load_profile(
         agent_runtime=agent_runtime,
         team_step_egress=team_step_egress,
         watchers=watchers,
+        template_role=(str(yaml_doc.get("template_role") or "").strip() or None),
     )
 
 

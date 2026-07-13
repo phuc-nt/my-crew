@@ -418,6 +418,8 @@ button:disabled { cursor: default; opacity: 0.6; }
 .health-dot-ok { background: var(--color-ok-solid); }
 .health-dot-fail { background: var(--color-danger-solid); }
 .health-detail { margin-left: var(--space-4); }
+/* v36 P3: "template có bản mới" badge on a Team-page agent row. */
+.template-upgrade-badge { margin-left: var(--space-3); font-size: 0.85em; padding: 2px 8px; }
 /* Copy-paste shell command inside a remediation hint (v10 M26). */
 .health-fix-cmd { font-family: ui-monospace, monospace; font-size: 0.85em; background: var(--color-bg-soft); border: 1px solid var(--color-border-soft); border-radius: 4px; padding: 0.05rem 0.35rem; user-select: all; }
 

@@ -9,7 +9,14 @@ import { ApiError, api } from '../api/client'
 import { IntegrationHealthPanel } from '../components/IntegrationHealthPanel'
 import { KIND_LABEL, RUN_STATUS_LABEL, labelFor } from '../labels'
 import { useUiMode } from '../ui-mode-context'
-import type { AgentStatus, AgentSummary, TeamAlert, UnregisteredProfile } from '../types'
+import type {
+  AgentStatus,
+  AgentSummary,
+  TeamAlert,
+  TemplateStatusRow,
+  TemplateUpgradePreview,
+  UnregisteredProfile,
+} from '../types'
 
 // 1-click coordinator bootstrap ("Tạo trưởng phòng"): scaffolds an agent from the
 // `truong-phong` staff template (role_id) and points `company.yaml::coordinator_id` at
@@ -31,6 +38,12 @@ export function Team() {
   const [opError, setOpError] = useState<string | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null)
   const [deletedNote, setDeletedNote] = useState<string | null>(null)
+  // v36 P3: template config version-pin — status per agent + the open upgrade preview.
+  const [templateStatus, setTemplateStatus] = useState<Record<string, TemplateStatusRow>>({})
+  const [upgradePreview, setUpgradePreview] = useState<
+    { id: string; preview: TemplateUpgradePreview } | null
+  >(null)
+  const [upgradeNote, setUpgradeNote] = useState<string | null>(null)
   // agent id -> "profile still disables it" notice after a Resume the profile vetoes
   // (PATCH .../enabled returns effective_enabled=false even though enabled=true).
   const [profileDisabledNotice, setProfileDisabledNotice] = useState<Record<string, boolean>>({})
@@ -77,6 +90,11 @@ export function Team() {
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'không tải được danh sách agent'))
       .finally(() => setLoading(false))
+    // v36 P3: which agents have a newer template config (badge overlay; failure is silent).
+    api
+      .getTemplateStatus()
+      .then((p) => setTemplateStatus(Object.fromEntries(p.agents.map((r) => [r.agent_id, r]))))
+      .catch(() => undefined)
   }, [])
 
   const loadCompany = useCallback(() => {
@@ -144,6 +162,39 @@ export function Team() {
   async function refreshAgentsOnly() {
     const list = await api.getAgents()
     setAgents(list)
+  }
+
+  // v36 P3: open the review dialog (which config fields an upgrade would apply vs keep).
+  async function openUpgrade(id: string) {
+    setOpError(null)
+    try {
+      const preview = await api.previewTemplateUpgrade(id)
+      setUpgradePreview({ id, preview })
+    } catch (e: unknown) {
+      setOpError(e instanceof Error ? e.message : 'không xem được nâng cấp')
+    }
+  }
+
+  async function applyUpgrade(id: string) {
+    setBusyId(id)
+    setOpError(null)
+    try {
+      const res = await api.applyTemplateUpgrade(id)
+      const n = Object.keys(res.apply).length
+      setUpgradeNote(
+        n > 0
+          ? `Đã nâng cấp ${id}: áp ${n} mục, sao lưu ${res.backup}. Giữ nguyên mục bạn đã tự chỉnh.`
+          : `Đã cập nhật phiên bản ${id} (không có mục nào cần áp).`,
+      )
+      setUpgradePreview(null)
+      // Refresh the badge state so the upgraded row loses its badge.
+      const p = await api.getTemplateStatus()
+      setTemplateStatus(Object.fromEntries(p.agents.map((r) => [r.agent_id, r])))
+    } catch (e: unknown) {
+      setOpError(e instanceof Error ? e.message : 'nâng cấp thất bại')
+    } finally {
+      setBusyId(null)
+    }
   }
 
   async function confirmDelete(id: string) {
@@ -252,7 +303,19 @@ export function Team() {
                   <td data-label="Mã">
                     <Link to={`/agents/${a.id}`}>{a.id}</Link>
                   </td>
-                  <td data-label="Tên">{a.name}</td>
+                  <td data-label="Tên">
+                    {a.name}
+                    {templateStatus[a.id]?.upgradable && (
+                      <button
+                        type="button"
+                        className="btn-link template-upgrade-badge"
+                        title="Template có bản cấu hình mới — bấm để xem và nâng cấp"
+                        onClick={() => openUpgrade(a.id)}
+                      >
+                        ⬆ bản mới v{templateStatus[a.id].latest_version}
+                      </button>
+                    )}
+                  </td>
                   <td data-label="Trạng thái">
                     {a.enabled ? '✓ bật' : '— tắt'}
                     {profileDisabledNotice[a.id] && (
@@ -353,6 +416,46 @@ export function Team() {
             {busyId === confirmingDelete ? 'Đang xoá…' : 'Xoá'}
           </button>{' '}
           <button type="button" className="btn" disabled={busyId === confirmingDelete} onClick={() => setConfirmingDelete(null)}>
+            Huỷ
+          </button>
+        </div>
+      )}
+      {upgradeNote && (
+        <div className="ok health-detail" role="status">
+          {upgradeNote}{' '}
+          <button type="button" className="btn-link" onClick={() => setUpgradeNote(null)}>
+            đóng
+          </button>
+        </div>
+      )}
+      {upgradePreview && (
+        <div className="confirm-dialog" role="dialog" aria-modal="true" aria-label="Nâng cấp template">
+          <h3>
+            Nâng cấp cấu hình {upgradePreview.id} (v{upgradePreview.preview.applied_version} → v
+            {upgradePreview.preview.latest_version})
+          </h3>
+          {Object.keys(upgradePreview.preview.apply).length > 0 ? (
+            <p>
+              Sẽ áp: <strong>{Object.keys(upgradePreview.preview.apply).join(', ')}</strong>.
+            </p>
+          ) : (
+            <p>Không có mục nào cần áp (bạn đã tự chỉnh hoặc đã mới nhất).</p>
+          )}
+          {upgradePreview.preview.keep.length > 0 && (
+            <p className="muted">
+              Giữ nguyên (bạn đã tự chỉnh): {upgradePreview.preview.keep.join(', ')}
+            </p>
+          )}
+          <p className="muted">Hồ sơ hiện tại được sao lưu trước khi ghi.</p>
+          <button
+            type="button"
+            className="btn"
+            disabled={busyId === upgradePreview.id}
+            onClick={() => applyUpgrade(upgradePreview.id)}
+          >
+            {busyId === upgradePreview.id ? 'Đang nâng cấp…' : 'Nâng cấp'}
+          </button>{' '}
+          <button type="button" className="btn" onClick={() => setUpgradePreview(null)}>
             Huỷ
           </button>
         </div>

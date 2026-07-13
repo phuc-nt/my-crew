@@ -7,3 +7,7 @@ bindings_hint: []
 
 # v20.5: runtime backend gợi ý (wizard prefill; user override được).
 recommended_runtime: native
+
+# v36 P2: config version — bump when template CONFIG (reports/schedule/tools) changes
+# so agents of this role show an upgrade badge. Skills load live (no bump needed).
+version: 1

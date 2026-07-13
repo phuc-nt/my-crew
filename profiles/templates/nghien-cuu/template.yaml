@@ -15,3 +15,7 @@ recommended_runtime: deep_agent
 
 # v32: tool gắn sẵn — OpenAlex tra cứu paper (không cần key; flag là cổng duy nhất).
 academic_search: true
+
+# v36 P2: config version — bump when template CONFIG (reports/schedule/tools) changes
+# so agents of this role show an upgrade badge. Skills load live (no bump needed).
+version: 1
