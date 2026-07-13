@@ -22,7 +22,7 @@ Atlassian (Jira+Confluence), Slack (xoxc+xoxd), GitHub (qua `gh`). Tùy chọn: 
 ## 2. Cài một lệnh (production, macOS/launchd)
 
 ```bash
-git clone <repo> && cd my-project-manager
+git clone <repo> && cd my-crew
 ./deploy/install.sh
 ```
 

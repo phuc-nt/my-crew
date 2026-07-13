@@ -42,8 +42,8 @@ gõ vào terminal):
 ## A.2. Cài bằng 1 lệnh
 
 ```bash
-git clone https://github.com/phuc-nt/my-project-manager.git
-cd my-project-manager
+git clone https://github.com/phuc-nt/my-crew.git
+cd my-crew
 ./deploy/install.sh
 ```
 

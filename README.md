@@ -51,12 +51,12 @@ A "harness" (the reins) is the whole environment around the model that keeps the
 
 ```bash
 # 1. Clone + install (uses uv; Python 3.12)
-git clone git@github.com:phuc-nt/my-project-manager.git
-cd my-project-manager
+git clone git@github.com:phuc-nt/my-crew.git
+cd my-crew
 uv sync
 
 # 2. Verify the install (no network, no secrets needed)
-uv run pytest            # 776 tests should pass
+uv run pytest            # 2105 BE + 200 FE tests should pass
 uv run ruff check src tests
 
 # 3. Configure (see docs/deployment-guide.md for each value)
@@ -123,6 +123,15 @@ The [journals](docs/journals/) are the best learning material here: each phase r
 - **v6–v7**: each virtual staffer gets its own Telegram identity; CEO chat-ops; assign work in three shapes; a browser setup wizard; knowledge-as-a-form; a Company Docs library; a 4-item CEO-first nav.
 - **v8**: CEO-observability (a silently-dead agent pings the CEO on Telegram), multi-project rollup, an opt-in trust ladder (auto-approve Lớp B with a per-day cap — the invariant stays intact).
 - **v9–v10**: full Vietnamese UI + a readable trust surface; light/dark theme with a self-hosted VN font (WCAG AA both themes); a low/high-tech dual-mode toggle; a hardened one-command installer + a live system-health panel. Backend at 1206 tests; every version E2E-verified (browser + real integrations).
+
+**v11–v34 COMPLETE** (2026-07-08 → 07-13) — multi-runtime tiers + virtual 3D office + autonomy-first pivot:
+- **v11**: 3 MCP server suite with adapter sync (Jira/Confluence/Slack) + npm publish + session-pool cache (2ms warm).
+- **v12–v18**: **virtual office** — r3f/three.js 3D coordinator + team-task dispatcher + workroom-based rooms + artifact viewer + command-center UI + registry as user-data (persistent, no data loss).
+- **v19–v20.5**: **agent-harness** — memory seam + AgentRuntime abstraction (Native/ToolCalling/DeepAgent) + Docker sandbox for deep agents + community socket extensibility.
+- **v26–v28**: telemetry capture + DRY loop consolidation + langchain.agents migration + cost unification.
+- **v30–v32**: **autonomy-first pivot** — Lớp B split into autonomous (default, chạy ngay audit rationale) vs guarded (opt-in, duyệt trước) + one-click staff templates + crew bootstrap + office 3D low-poly redesign (solid flat pastel theme).
+- **v33**: connections panel (visual .env edit) + output hub (kanban team-task read-only) + clarify buttons (CEO can answer mid-execution) + history FTS5 search.
+- **v34**: **autonomy core** — checkpointer resume after crash + interrupt() for pause-ask-resume flow + proactive follow-up sweep (8h cooldown, SQL-only) + per-criterion review scoring + fan-out parallelization (1 step → N subtasks in parallel + gather results). **2105 BE tests + 200 FE tests**, live E2E verified (kill-9 resume, fan-out parallelism, per-criterion review on live service daemon).
 
 See [docs/project-roadmap.md](docs/project-roadmap.md) and the [journals](docs/journals/) for each phase's decisions, bugs caught, and lessons learned. New users: start with the **[hướng dẫn tiếng Việt](docs/huong-dan-su-dung.md)**.
 
