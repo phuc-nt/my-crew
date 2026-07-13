@@ -129,6 +129,9 @@ Trang wizard hiện **bộ template nhân sự có sẵn** (6 vai trò: Trưởn
 
 - Nhân sự mới sẽ **TẮT** theo mặc định. Điền token `.env` cho vai trò (nếu cần) rồi bấm **bật** ở trang **Đội**.
 - Wizard **tuỳ-chỉnh** (chọn "Tạo tuỳ chỉnh") vẫn nguyên: full form nếu muốn đổi tên, báo cáo, hoặc cấu hình riêng.
+- **(v36) Skill của template nạp TRỰC TIẾP lúc chạy**, không copy một lần lúc tạo — sửa skill trong
+  file template thì **mọi nhân sự cùng vai nhận ngay**, không cần xoá-tạo lại. (Nhân sự tạo từ
+  trước v36 vẫn dùng skill đã copy lúc tạo, không tự đổi theo template.)
 
 ### B.2b. Tạo cả đội — tạo crew (v32, ≤3 click)
 
@@ -143,6 +146,18 @@ Trang wizard hiện **bộ template nhân sự có sẵn** (6 vai trò: Trưởn
 Nút dẫn vào **Trợ lý**, trợ lý hỏi bạn từng bước (loại nhân sự, tên, dự án, báo cáo nào, lịch chạy) rồi tạo giúp (lịch sử wizard, nhân sự **được bật** ngay).
 
 Nhân sự ảo có thể thuộc nhiều "chuyên môn" (pack): PM, HR, Office… mỗi loại làm các báo cáo khác nhau.
+
+### B.2d. Nâng cấp cấu hình khi template có bản mới (v36)
+
+Khi bạn (hoặc bản cập nhật hệ thống) cải tiến **cấu hình** của một template (báo cáo/lịch/tool)
+và tăng số phiên bản, trang **Đội** hiện huy hiệu **"⬆ bản mới vN"** cạnh tên các nhân sự đang
+dùng template đó. Bấm huy hiệu → hộp thoại hiện:
+
+- **Sẽ áp**: những trường chưa bị bạn tự chỉnh (an toàn cập nhật theo template mới).
+- **Giữ nguyên**: những trường bạn đã tự tay sửa cho nhân sự đó — KHÔNG bị ghi đè.
+- Hồ sơ hiện tại được **sao lưu tự động** trước khi ghi (có thể phục hồi tay nếu cần).
+
+Bấm **"Nâng cấp"** để áp, hoặc **"Huỷ"** để bỏ qua lần này (huy hiệu vẫn còn, có thể nâng cấp sau).
 
 ## B.3. Giao việc cho đội
 

@@ -48,6 +48,17 @@ việc gửi ra ngoài công ty **chạy ngay** (mặc định) hoặc **chờ C
   trong đội (N)"* → bấm **"Thêm vào đội"** → agent vào bảng + **giao việc được ngay** (không
   cần khởi động lại); hồ sơ lỗi hiện ghi chú, không cho thêm.
 
+### US-1.4 — Nâng cấp cấu hình template mà không mất tuỳ chỉnh (v36)
+> **Là** CEO, **tôi muốn** cải tiến cấu hình một mẫu vai trò và cập nhật nó cho nhân sự đang
+> dùng, **để** cả đội hưởng lợi mà không mất phần tôi đã tự tay chỉnh riêng cho từng người.
+
+- [ ] Sửa cấu hình (báo cáo/lịch/tool) của một template, tăng phiên bản → trang **Đội** hiện
+  huy hiệu **"⬆ bản mới vN"** cạnh tên các nhân sự dùng template đó.
+- [ ] Bấm huy hiệu → hộp thoại hiện rõ trường **sẽ áp** vs trường **giữ nguyên** (đã tự chỉnh
+  tay) → bấm **"Nâng cấp"** → trường tự chỉnh KHÔNG bị ghi đè, hồ sơ cũ được sao lưu tự động.
+- [ ] Sửa skill của template (không phải config) → nhân sự **dùng skill mới ngay lần chạy kế
+  tiếp**, không cần tạo lại hay nâng cấp (chỉ áp dụng nhân sự tạo từ v36 trở đi).
+
 ---
 
 ## EPIC 2 — Giao việc cho đội
@@ -166,6 +177,8 @@ việc gửi ra ngoài công ty **chạy ngay** (mặc định) hoặc **chờ C
 - [ ] Khi cần, nhân sự **hỏi ý kiến đồng nghiệp** (thấy trên feed + 2 avatar 3D đi lại gần nhau).
 - [ ] Bước gặp lỗi tạm thời → hiện *"nhờ trợ giúp"*, tự hỏi đồng nghiệp và **thử lại một lần**
   trước khi báo thất bại.
+- [ ] (v35) Tool đọc dữ liệu (Jira/Confluence/web) lỗi giữa bước → agent **không dừng việc**,
+  nhận thông báo lỗi ngắn và tự làm tiếp hoặc kết luận bằng dữ liệu đã có.
 
 ### US-5.3 — Song song có kiểm soát (v13)
 > **Là** CEO, **tôi muốn** việc chạy nhanh mà không quá tải, **để** hiệu quả và an toàn chi phí.

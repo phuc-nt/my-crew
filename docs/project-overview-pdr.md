@@ -1,7 +1,7 @@
 # Project Overview & PDR — my-crew
 
 > Product definition + requirements. Đọc file này TRƯỚC khi plan hay code.
-> Cập nhật: 2026-07-13 (v34). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified**.
+> Cập nhật: 2026-07-13 (v37). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified**.
 > Liên quan: [system-architecture](system-architecture.md) · [action-gateway-explainer](action-gateway-explainer.md) · [uat-theo-user-story](uat-theo-user-story.md).
 
 ## 1. Vấn đề
@@ -69,7 +69,9 @@ Xem [action-gateway-explainer.md](action-gateway-explainer.md) cho mô hình đ�
 
 ## 8. Trạng thái & lộ trình
 
-Đã ship tới **v34** (checkpointer + interrupt + follow-up sweep + fan-out parallelization, 2105 BE + 200 FE tests, live E2E verified).
+Đã ship tới **v37** (v34 checkpointer/interrupt/follow-up/fan-out · v35 tool-error resilience +
+memory consolidation · v36 template live-skills + config-upgrade badge + storage GC · v37 UI
+design-system sync), **2149 BE + 200 FE tests**, live E2E verified.
 Lộ trình + việc tiếp: [project-roadmap.md](project-roadmap.md).
 
 ## Câu hỏi mở

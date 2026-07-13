@@ -1,11 +1,11 @@
 # Project Roadmap — my-crew
 
 > Lộ trình + trạng thái. Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-07-12.
+> Cập nhật: 2026-07-13.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v34.** 2105 backend + 200 FE test, ruff/tsc
+**Production-usable, single-user autonomy-first. Đã ship tới v37.** 2149 backend + 200 FE test, ruff/tsc
 sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out parallelism).
 
 ## Đã hoàn thành (gọn — chi tiết ở journals/plans)
@@ -32,7 +32,10 @@ sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật (live daemon, 
 | **Agent-tools capability wave (v31)** | Hậu kiểm fleet-wide (2 surface: web + ops-chat) · 4 native action types (schedule_update, team_task_create/move, gws_write) · wake-gate hồi sinh (perceive-only, no-LLM khi không đổi, CEO alert on fail/stale) · OpenAlex academic search tool. |
 | **Staff templates + crew, office-3D refactor, UI/UX audit (v32)** | One-click template create (agent TẮT → token → bật ở trang Đội) + crew bootstrap từ `profiles/templates/crew.yaml` (per-member independent, skip-existing, coordinator auto-wire) · office-3D visual overhaul (flat low-poly solid pastel theme per light/dark, state hue on monitor, desk click→room/page, hover tooltip, panel 38vh) · error boundary + 12s watchdog cho lazy-office chunk · chat /commands listing "Trợ lý làm được gì?" · AgentPage profile-error recovery · office activity filter note. |
 | **Connections + output hub + clarify + search (v33)** | Màn Kết nối = UI của .env (catalog presence-only) · hub Kết quả cross-task kanban · clarify buttons (CEO answer mid-execution) · history FTS5 search. |
-| **Autonomy core: checkpointer + interrupt + follow-up (v34)** | Checkpointer resume after crash (attempt adopt tiến độ) · interrupt() pause-ask-resume · proactive follow-up sweep (SQL 8h cooldown) · per-criterion review scoring · fan-out parallelization (1 step → N parallel subtasks + gather). 2105 BE + 200 FE tests, live E2E verified. |
+| **Autonomy core: checkpointer + interrupt + follow-up (v34)** | Checkpointer resume after crash (attempt adopt tiến độ) · interrupt() pause-ask-resume · proactive follow-up sweep (SQL 8h cooldown) · per-criterion review scoring · fan-out parallelization (1 step → N parallel subtasks + gather). Live E2E verified. |
+| **Tool-error resilience + memory consolidation (v35)** | `tool_error_guard` bọc mọi read-tool (Jira/Confluence/web) — lỗi thân tool trả "⚠️ tool lỗi" cho LLM thay vì làm nổ cả step · nightly (03:00) memory consolidation rút gọn `MEMORY.md` khi vượt ngưỡng, archive bản gốc trước khi ghi. |
+| **Storage hygiene + template hybrid (v36)** | Template skill nạp LIVE lúc chạy (không copy-once) → sửa skill template lan mọi agent cùng vai ngay · template config version-pin: badge "⬆ bản mới vN" ở trang Đội, review dialog áp/giữ theo trường tự-chỉnh, backup `profile.yaml.bak-<ts>` trước khi ghi · GC nền (captures 180d/office_room 90d/clarify 90d đã trả lời/dedup 7d) + daily integrity audit. 2149 BE + 200 FE tests. |
+| **UI design-system sync (v37)** | Văn phòng 3 cột canh cùng baseline · phân cấp size rõ ở cột Kết quả · input/button đồng nhất kích cỡ toàn app. Thuần CSS, không đổi hành vi. |
 
 ## Việc nên làm tiếp (từ UAT + nợ kỹ thuật)
 
