@@ -76,7 +76,7 @@ def test_run_graph_wires_self_id_to_the_assigned_agent(monkeypatch, tmp_path):
     captured: dict = {}
 
     class _FakeGraph:
-        def stream(self, _initial_state, stream_mode=None):  # noqa: ARG002
+        def stream(self, _initial_state, _config=None, stream_mode=None):  # noqa: ARG002
             return iter(())  # no nodes to run — we only care about the build call
 
     def _fake_build_team_task_graph(**kwargs):

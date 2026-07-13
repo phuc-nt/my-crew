@@ -104,6 +104,28 @@ def run_team_step(
                 loaded, settings, task_id=task_id, step=step, attempt_id=attempt_id,
                 task_title=task.title, on_node=_touch, telemetry=telemetry,
             )
+        if result.get("status") == "waiting_clarify":
+            # v34 P2: the graph paused on a CEO question. Persist the correlation id;
+            # the ticker polls the ClarifyStore and re-dispatches on answer/expiry —
+            # the worker then RESUMES the saved thread (Command(resume=...)).
+            store.mark_waiting_clarify(
+                task_id, step_id, attempt_id=attempt_id,
+                clarify_id=result.get("clarify_id"),
+            )
+            _record_capture(
+                attempt_id=attempt_id, task_id=task_id, step=step, engine=engine,
+                status="waiting_clarify", telemetry=telemetry,
+                cost_usd=result.get("cost_usd"),
+                started_at=started_at, t0=t0, error=None,
+            )
+            _append_step_event(
+                task_id, author=step.assigned_to, task_title=task.title,
+                step_title=step.title, kind="step_status", status="waiting_clarify",
+                message="Đang chờ CEO trả lời câu hỏi làm rõ.",
+            )
+            return {"status": STATUS_PAUSED, "pause_reason": "clarify",
+                    "cost_usd": result.get("cost_usd"),
+                    "delivered": False, "room_message": ""}
         if result.get("status") == "awaiting_approval":
             store.mark_awaiting_approval(task_id, step_id, attempt_id=attempt_id)
             _record_capture(
@@ -111,7 +133,8 @@ def run_team_step(
                 status="awaiting_approval", telemetry=telemetry, cost_usd=result.get("cost_usd"),
                 started_at=started_at, t0=t0, error=None,
             )
-            return {"status": STATUS_PAUSED, "cost_usd": result.get("cost_usd"),
+            return {"status": STATUS_PAUSED, "pause_reason": "approval",
+                     "cost_usd": result.get("cost_usd"),
                      "delivered": False, "room_message": ""}
         cost = result.get("cost_usd")
         store.mark_done(
@@ -130,6 +153,7 @@ def run_team_step(
                 task_id, author=step.assigned_to, task_title=task.title,
                 step_title=step.title, passed=result.get("passed"),
                 failures=result.get("failures") or [],
+                criteria=result.get("criteria") or [],
             )
         else:
             _append_step_event(
@@ -194,7 +218,7 @@ def _record_capture(
         cs = CaptureStore(capture_db_path())
         try:
             cs.record(
-                attempt_id=attempt_id, task_id=task_id, step_id=step.step_id,
+                attempt_id=attempt_id, task_id=task_id, step_id=getattr(step, "step_id", "") or str(step.seq),
                 agent_id=step.assigned_to, engine=engine, status=status,
                 step_type=step.step_type, review_round=step.review_round,
                 cost_usd=cost_usd, cost_source=telemetry.cost_source,
@@ -236,7 +260,7 @@ def _append_step_event(
 
 def _append_review_event(
     task_id: str, *, author: str, task_title: str, step_title: str, passed: bool | None,
-    failures: list[str],
+    failures: list[str], criteria: list | None = None,
 ) -> None:
     """try/degrade room-event append for a review-step's own verdict (M32) — never
     raises, matching `office_room_append.append_office_event`'s own contract.
@@ -258,6 +282,11 @@ def _append_review_event(
         "verdict": "passed" if passed else "needs_rework",
         "failure_count": len(failures), "assigned_to": author,
     }
+    # v34 P5: per-criterion COUNTS only (never the criterion text — same
+    # no-content-echo posture as failure_count vs the failures list).
+    if criteria:
+        body["criteria_total"] = len(criteria)
+        body["criteria_passed"] = sum(1 for c in criteria if (c or {}).get("passed"))
     append_office_event(room_for_task(task_id), author=author, kind="review", body=body,
                         also_office=True)
 
@@ -314,9 +343,25 @@ def _run_graph(
     loaded: Any, settings: Any, *, task_id: str, step, attempt_id: str = "",
     task_title: str = "", on_node: Callable[[], None] | None = None, telemetry=None,
 ) -> dict:
-    """Build + invoke the team_task_graph for one step (no checkpointer — a single
-    step is a one-shot invoke, not a resumable multi-turn conversation like a report
-    graph; resumability across steps is the store's job, not the graph's).
+    """Build + invoke the team_task_graph for one step, checkpointed (v34 P1).
+
+    Checkpoint semantics: thread_id is `team:<task_id>:<step_id>` — attempt-AGNOSTIC,
+    because the whole point is that a NEW attempt (minted after a crash/kill) adopts
+    the previous attempt's mid-step progress instead of re-paying completed nodes.
+    On dispatch:
+      - a mid-run checkpoint exists → adopt it: `update_state` stamps the CURRENT
+        `attempt_id` into the saved state (terminal store writes must match the
+        current lease, never the dead attempt's), then stream(None) resumes at the
+        next node;
+      - a FINISHED checkpoint exists (crash landed between graph-END and the store's
+        `mark_done`) → return the saved state without re-running anything — deliver
+        already wrote the artifact, re-running would double-deliver;
+      - no checkpoint (the overwhelmingly common case) → fresh run, byte-identical
+        to the pre-v34 path.
+    ANY checkpoint failure (open/read/schema drift after a code change) degrades to a
+    fresh un-checkpointed run — resume is an optimization, never a gate. The thread is
+    deleted eagerly once the graph reaches END; the ticker sweeps leftovers of tasks
+    that ended without a clean delete.
 
     `on_node`, when given, is called after EACH `updates`-mode chunk (one per node
     finishing) — the heartbeat hook that keeps a genuinely-still-working step's lease
@@ -382,6 +427,9 @@ def _run_graph(
     remember_node = (
         build_team_step_remember_node(step.assigned_to, settings) if loaded is not None else None
     )
+    checkpointer = _team_checkpointer_best_effort()
+    if checkpointer is not None:
+        _extra["checkpointer"] = checkpointer
     graph = resolve_runtime(loaded).build_task(
         settings=settings, context=context, step_title=step.title,
         data_dir=team_tasks_root(), task_id=task_id, step_seq=step.seq,
@@ -392,9 +440,35 @@ def _run_graph(
         "step_title": step.title, "acceptance": step.acceptance,
         "attempt_id": attempt_id, "version": attempt_id,
     }
+    thread_id = f"team:{task_id}:{getattr(step, 'step_id', '') or step.seq}"
+    config = {"configurable": {"thread_id": thread_id}} if checkpointer is not None else None
+
+    stream_input: dict[str, Any] | None = initial_state
     state: dict[str, Any] = dict(initial_state)
-    for mode, chunk in graph.stream(initial_state, stream_mode=["updates", "custom"]):
+    if checkpointer is not None:
+        stream_input, state, finished = _load_resume_state(
+            graph, config, initial_state, attempt_id=attempt_id,
+            task_id=task_id, step_id=getattr(step, "step_id", "") or str(step.seq),
+        )
+        if finished is not None:
+            if finished.get("status") != "waiting_clarify":
+                # A still-pending clarify "finished" is a REPORT, not an end-state —
+                # its thread IS the resume state; deleting it would wedge the step
+                # (review H2).
+                _delete_thread_best_effort(checkpointer, thread_id)
+            return finished
+
+    for mode, chunk in graph.stream(stream_input, config, stream_mode=["updates", "custom"]):
         if mode == "updates":
+            # v34 P2: an interrupt chunk means await_clarify paused the graph on a
+            # pending CEO question — surface it as the step outcome instead of a
+            # completed state. The payload carries the clarify_id the ticker polls.
+            if isinstance(chunk, dict) and "__interrupt__" in chunk:
+                intr = chunk["__interrupt__"]
+                payload = getattr(intr[0], "value", {}) if intr else {}
+                state["status"] = "waiting_clarify"
+                state["clarify_id"] = (payload or {}).get("clarify_id")
+                continue
             for node_output in chunk.values():
                 if isinstance(node_output, dict):
                     state.update(node_output)
@@ -407,7 +481,140 @@ def _run_graph(
                     task_id, author=step.assigned_to, task_title=task_title,
                     step_title=step.title, phase=str(phase), attempt_id=attempt_id,
                 )
+    if checkpointer is not None and state.get("status") != "waiting_clarify":
+        # ONLY waiting_clarify keeps its thread (the mid-run interrupt IS the resume
+        # state). Everything else — including an awaiting_approval END-state — is
+        # deleted here: post-approval the step re-runs deliver fresh (see
+        # _load_resume_state), so a kept thread would only mislead the next attempt
+        # into short-circuiting.
+        # The graph reached END (or raised out of this function before we get here —
+        # in which case the thread stays for the NEXT attempt to resume). A paused
+        # (awaiting_approval) step keeps its thread too: that is a legitimate mid-step
+        # stop the resume path exists for.
+        _delete_thread_best_effort(checkpointer, thread_id)
     return state
+
+
+def _team_checkpointer_best_effort():
+    """Open the shared team checkpointer, or None — resume is an optimization; a
+    broken/locked checkpoint DB must never stop a step from running fresh."""
+    try:
+        from src.agent.checkpoint import get_team_checkpointer
+
+        return get_team_checkpointer()
+    except Exception:  # noqa: BLE001 — degrade to un-checkpointed, exactly pre-v34
+        logger.warning("team checkpointer unavailable — running un-checkpointed",
+                       exc_info=True)
+        return None
+
+
+def _load_resume_state(
+    graph, config, initial_state: dict[str, Any], *, attempt_id: str,
+    task_id: str, step_id: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any], dict[str, Any] | None]:
+    """(stream_input, state_seed, finished_state) for a possibly-resumable thread.
+
+    - no checkpoint → (initial_state, initial_state, None): fresh run.
+    - mid-run checkpoint → (None, adopted_state, None): stream(None) resumes; the
+      saved state is stamped with the CURRENT attempt_id first (update_state), so
+      every downstream artifact/store write matches the live lease.
+    - finished checkpoint → (None, values, values): caller returns it directly —
+      deliver already ran; re-running would double-deliver.
+    ANY error → fresh run (resume must never become a gate).
+    """
+    try:
+        snapshot = graph.get_state(config)
+        if snapshot is None or not snapshot.values:
+            return initial_state, dict(initial_state), None
+        if not snapshot.next:  # graph previously reached END
+            finished = dict(snapshot.values)
+            finished.setdefault("status", "")
+            if finished.get("status") == "awaiting_approval":
+                # The graph COMPLETED but deliver stopped short at the Lớp B gate —
+                # after approval the step must actually re-run deliver, so this
+                # end-state is NOT reusable. Fresh run (same thread id gets fresh
+                # checkpoints; the gateway's dedup keeps the external write single).
+                return initial_state, dict(initial_state), None
+            logger.info("team-step %s/%s: found FINISHED checkpoint — skipping re-run",
+                        task_id, step_id)
+            return None, finished, finished
+        adopt = {"attempt_id": attempt_id, "version": attempt_id}
+        state = dict(snapshot.values)
+        state.update(adopt)
+        pending_interrupt = any(
+            getattr(t, "interrupts", ()) for t in (snapshot.tasks or ())
+        )
+        # NOTE: update_state happens ONLY on a real resume (below) — touching an
+        # interrupted thread's state while the clarify is still pending would consume
+        # the interrupt and wedge the eventual resume (review H2 follow-on).
+        if pending_interrupt:
+            # v34 P2: the thread paused on await_clarify. Resolve the CEO's answer
+            # from the clarify store: answered → resume with it; expired → resume
+            # with "" (safe default — the draft ships as-is); still pending → the
+            # dispatch was premature, report waiting_clarify again without running.
+            resume_input, still_waiting = _clarify_resume_input(snapshot)
+            if still_waiting:
+                # Carry the clarify_id OUT of the interrupt payload (review H2): the
+                # snapshot's `values` never contain it, and the caller re-marks the
+                # step waiting_clarify with this id — a None here would produce an
+                # un-pollable row after a crash in the interrupt→mark window.
+                waiting = dict(state)
+                waiting["status"] = "waiting_clarify"
+                waiting["clarify_id"] = _interrupt_clarify_id(snapshot)
+                return None, waiting, waiting
+            graph.update_state(config, adopt)
+            logger.info("team-step %s/%s: resuming clarify interrupt", task_id, step_id)
+            return resume_input, state, None
+        graph.update_state(config, adopt)
+        logger.info("team-step %s/%s: resuming checkpoint at %s (attempt adopted)",
+                    task_id, step_id, ",".join(snapshot.next))
+        return None, state, None
+    except Exception:  # noqa: BLE001 — schema drift / tampered DB: run fresh
+        logger.warning("team-step %s/%s: checkpoint unusable — running fresh",
+                       task_id, step_id, exc_info=True)
+        return initial_state, dict(initial_state), None
+
+
+def _interrupt_clarify_id(snapshot) -> int | None:
+    """The clarify_id riding a paused thread's interrupt payload, or None."""
+    for t in getattr(snapshot, "tasks", ()) or ():
+        for intr in getattr(t, "interrupts", ()) or ():
+            value = getattr(intr, "value", None)
+            if isinstance(value, dict) and value.get("clarify_id") is not None:
+                return value["clarify_id"]
+    return None
+
+
+def _clarify_resume_input(snapshot):
+    """(stream_input, still_waiting) for a thread paused on a clarify interrupt.
+
+    Reads the interrupt payload's clarify_id and asks the ClarifyStore:
+    answered → Command(resume=answer); expired/unknown → Command(resume="") (safe
+    default, never wedge); pending → (None, True) — do not run, stay paused."""
+    from langgraph.types import Command
+
+    clarify_id = _interrupt_clarify_id(snapshot)
+    if clarify_id is None:
+        return Command(resume=""), False  # unpollable — proceed on the safe default
+    from src.runtime.clarify_service import clarify_status
+
+    status = clarify_status(int(clarify_id))
+    if status is None:
+        return Command(resume=""), False
+    st, answer = status
+    if st == "answered":
+        return Command(resume=answer), False
+    if st == "expired":
+        return Command(resume=""), False
+    return None, True  # pending — stay paused
+
+
+def _delete_thread_best_effort(checkpointer, thread_id: str) -> None:
+    try:
+        checkpointer.delete_thread(thread_id)
+    except Exception:  # noqa: BLE001 — cleanup is hygiene; the ticker sweep catches leftovers
+        logger.warning("team-step: checkpoint thread cleanup failed for %s", thread_id,
+                       exc_info=True)
 
 
 def _append_step_phase_event(

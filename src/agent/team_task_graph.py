@@ -51,26 +51,29 @@ artifact(s) (`team_task_artifact`) written by this step's DEPENDENCIES.
     its result instead of completing; the CALLER (`team_step_runner.run_team_step`)
     maps this to the worker's exit-3 / `awaiting_approval` step status.
 
-No LangGraph checkpointer on this graph (`build_team_task_graph` compiles with
-`checkpointer=None` — deliberate, see the module's design note below): each step's
-graph run is a single in-process `.stream()` call, start to finish, within one
-attempt. There is therefore no resumable in-flight state to restore mid-graph: the
-coordinator ticker POLLS the step's stored `approval_id` against `ApprovalStore`
-every tick (`coordinator_nodes.tick_actions.poll_awaiting_approval_step`) — once the
-CEO resolves it out-of-band (`mpm approve`/`mpm reject`), the very next tick
-re-reserves the SAME step (a FRESH `attempt_id`) and it re-runs
-`perceive → work → self_check → ... → deliver` from scratch (approve) or marks it
-`failed` + escalates (reject). Rework/self-check counters live only in this one
-attempt's in-memory state (`total=False` TypedDict, primitives only) and are NOT
-persisted across attempts — a retried step starts its rework budget fresh, matching
-"retry = fresh attempt re-run" (there is no production caller that resumes the SAME
-attempt_id mid-graph: every re-spawn mints a new one, `reserve_step`
-`team_task_steps.py`). `deliver`'s external write MUST therefore be idempotent/
-safe-to-retry from the gateway's own dedup, exactly like every other scheduled
-report's external delivery.
+Checkpointing (v34 P1): `team_step_runner._run_graph` compiles this graph WITH the
+shared team checkpointer (thread `team:<task_id>:<step_id>`), so a step killed
+mid-run resumes at its last completed node under the NEXT attempt (adopted
+attempt_id — see `_load_resume_state`), and a FINISHED-but-unrecorded run
+short-circuits instead of double-delivering. The coordinator ticker still POLLS
+paused steps every tick: `approval_id` against `ApprovalStore`
+(`poll_awaiting_approval_step`) and, since v34 P2, `clarify_id` against the
+ClarifyStore (`poll_waiting_clarify_step`) — a resolved gate re-reserves the SAME
+step (fresh `attempt_id`) whose worker then RESUMES the saved thread rather than
+re-running from scratch. `deliver`'s external write stays idempotent through the
+gateway's own dedup regardless (a lost checkpoint degrades to a fresh re-run).
 
-State holds only primitives (checkpoint-safe shape, even though nothing is actually
-checkpointed here), matching every other report graph's state discipline.
+  - `await_clarify` (v34 P2, checkpointed graphs only): sits between `work` and
+    `self_check`. When work's consult raised a CEO question (`ceo_question` in
+    state), this node calls `interrupt(...)` — the graph pauses, the worker exits
+    with `waiting_clarify`, and the CEO's answer arrives later as
+    `Command(resume=<answer>)`. A non-empty answer routes to `rework` (the draft is
+    updated to honor it); an empty answer (expired/safe-default) proceeds straight
+    to `self_check`. Un-checkpointed builds keep the v33 fire-and-forget semantics
+    (the node passes through without interrupting).
+
+State holds only primitives + one small dict (`ceo_question`) — checkpoint-safe by
+construction, matching every other report graph's state discipline.
 """
 
 from __future__ import annotations
@@ -166,6 +169,13 @@ class TeamStepState(TypedDict, total=False):
     work_error: str  # truncated failure text from the last work call, "" once handled
     recover_count: int  # how many recover passes this attempt has burned (<= MAX_RECOVER)
     recover_hint: str  # colleague's unblock advice, folded into the retry's handoff
+    # --- CEO clarify interrupt (v34 P2) ---
+    # The pending CEO question this attempt raised: {"id": <clarify_id>, "question": str}.
+    # Set by work's "ceo" consult branch; consumed (cleared) by await_clarify.
+    ceo_question: dict | None
+    # The CEO's answer delivered through Command(resume=...) — "" = no answer/expired
+    # (the step proceeds on the safe default it already drafted).
+    clarify_answer: str
 
 
 @dataclass
@@ -205,11 +215,14 @@ class TeamTaskDeps:
     # (v33 P4: each proposal is (agent_id, question, options) — `options` non-empty
     # only for the "ceo" target, rendered as the CEO's answer buttons.)
     propose_consults: Callable[[str, str], list[tuple[str, str, list[str]]]] | None = None
-    # v33 P4: optional CEO-question hook — (question, options) -> note for the step's
-    # own context ("đã gửi, làm tiếp phương án an toàn"). The CEO answers LATER (web
-    # or Telegram buttons); the answer reaches the task's NEXT step via read_handoff's
-    # clarify enrichment. None (default): the "ceo" propose target is skipped.
-    ask_ceo: Callable[[str, list[str]], str] | None = None
+    # v33 P4 / v34 P2: optional CEO-question hook — (question, options) ->
+    # (note, clarify_id). The note folds into the step's own context ("đã gửi, làm
+    # tiếp phương án an toàn"); the id (None on refusal) is what the checkpointed
+    # graph's await_clarify node interrupts on so THIS step can incorporate the
+    # answer via a rework pass. Un-checkpointed graphs keep the v33 fire-and-forget
+    # semantics (answer reaches the NEXT step via read_handoff enrichment).
+    # None (default): the "ceo" propose target is skipped.
+    ask_ceo: Callable[[str, list[str]], tuple[str, int | None]] | None = None
     # M33: optional per-attempt context setter — `work` calls this ONCE, before any
     # `ask_colleague` call, with the current attempt's `attempt_id` (state carries it,
     # but `ask_colleague`'s own signature is fixed to `(agent_id, question)`, matching
@@ -370,7 +383,7 @@ def default_team_task_deps(
 
     ask_colleague_hook: AskColleagueHook | None = None
     propose_consults_hook: Callable[[str, str], list[tuple[str, str, list[str]]]] | None = None
-    ask_ceo_hook: Callable[[str, list[str]], str] | None = None
+    ask_ceo_hook: Callable[[str, list[str]], tuple[str, int | None]] | None = None
     set_attempt_id_hook: Callable[[str], None] | None = None
     if self_id:
         # Single-slot mutable box for the CURRENT attempt's `attempt_id` (same
@@ -408,7 +421,7 @@ def default_team_task_deps(
                 project=context.project, memory=context.memory, allow_ceo=True,
             )
 
-        def _ask_ceo(question: str, options: list[str]) -> str:
+        def _ask_ceo(question: str, options: list[str]) -> tuple[str, int | None]:
             from src.runtime.clarify_service import ask_ceo
 
             return ask_ceo(
@@ -490,7 +503,7 @@ def _room_message(step_title: str, result_text: str) -> str:
     return f"[{step_title}] {snippet}" if snippet else f"[{step_title}] (không có nội dung)"
 
 
-def _make_team_task_nodes(deps: TeamTaskDeps):
+def _make_team_task_nodes(deps: TeamTaskDeps, *, interrupt_on_clarify: bool = False):
     def perceive(state: TeamStepState) -> dict:
         handoff = deps.read_handoff()
         return {"handoff_context": handoff}
@@ -506,6 +519,7 @@ def _make_team_task_nodes(deps: TeamTaskDeps):
         consult_log = list(state.get("consult_log", ()))
         consult_context = state.get("consult_context", "")
         consult_cost = 0.0
+        pending_ceo: dict | None = state.get("ceo_question")
         # Pre-work consult (M33): a bounded, OPTIONAL heuristic hook — never a full
         # tool-calling loop (KISS v1, see module docstring). Off entirely unless both
         # `ask_colleague` and `propose_consults` are wired (`self_id` was passed to
@@ -541,7 +555,7 @@ def _make_team_task_nodes(deps: TeamTaskDeps):
                         if deps.ask_ceo is None:
                             continue
                         try:
-                            note = deps.ask_ceo(question, ceo_options)
+                            note, clarify_id = deps.ask_ceo(question, ceo_options)
                         except Exception as exc:  # noqa: BLE001 — advisory contract
                             logger.warning("team-step ask_ceo failed, skipping: %s", exc)
                             continue
@@ -550,6 +564,11 @@ def _make_team_task_nodes(deps: TeamTaskDeps):
                             block = f"[Đã hỏi CEO] {question}\n{note}"
                             consult_context = f"{consult_context}\n\n{block}" \
                                 if consult_context else block
+                        if clarify_id is not None:
+                            # v34 P2: remember the pending question so await_clarify
+                            # (checkpointed graphs only) can pause on it after the
+                            # safe-default draft is produced.
+                            pending_ceo = {"id": clarify_id, "question": question}
                         continue
                     try:
                         answer, cost = deps.ask_colleague(agent_id, question)
@@ -601,8 +620,36 @@ def _make_team_task_nodes(deps: TeamTaskDeps):
             "result_text": result_text, "cost_usd": total if total else None,
             "consult_count": consult_count, "consult_log": consult_log,
             "consult_context": consult_context,
-            "work_error": "",
+            "work_error": "", "ceo_question": pending_ceo,
         }
+
+    def await_clarify(state: TeamStepState) -> dict:
+        """v34 P2: pause on a pending CEO question (checkpointed graphs only).
+
+        `interrupt()` re-executes its node from the top on resume — this node is
+        deliberately TINY (no LLM calls, no I/O) so the re-execution costs nothing.
+        Un-checkpointed builds (tests, legacy callers) pass through: the v33
+        fire-and-forget contract ("answer reaches the NEXT step") still holds there.
+        The resume value is the CEO's answer; "" (expired / safe default) means
+        "proceed with the draft as-is". A non-empty answer is staged as a rework
+        instruction (`check_failures`) so the EXISTING rework machinery updates the
+        draft — one more rework_count is the accepted price of a mid-step answer.
+        """
+        question = state.get("ceo_question") or {}
+        if not interrupt_on_clarify or not question.get("id"):
+            return {}
+        from langgraph.types import interrupt
+
+        answer = str(interrupt(
+            {"clarify_id": question.get("id"), "question": question.get("question", "")}
+        ) or "").strip()
+        out: dict = {"clarify_answer": answer, "ceo_question": None}
+        if answer:
+            out["check_failures"] = [
+                f"CEO đã trả lời câu hỏi \"{question.get('question', '')}\": {answer} "
+                f"— cập nhật kết quả theo đúng câu trả lời này."
+            ]
+        return out
 
     def self_check(state: TeamStepState) -> dict:
         writer = get_stream_writer()
@@ -700,7 +747,7 @@ def _make_team_task_nodes(deps: TeamTaskDeps):
         delivered, room_message = deps.deliver_step(result_text, version, self_check_failed)
         return {"status": "done", "delivered": delivered, "room_message": room_message}
 
-    return perceive, work, self_check, rework, recover, deliver
+    return perceive, work, await_clarify, self_check, rework, recover, deliver
 
 
 def route_after_work(state: TeamStepState) -> str:
@@ -724,6 +771,14 @@ def route_after_check(state: TeamStepState) -> str:
     if state.get("rework_count", 0) < max_rework:
         return "rework"
     return "deliver"
+
+
+def route_after_clarify(state: TeamStepState) -> str:
+    """A CEO answer (staged as a rework instruction by await_clarify) routes to
+    `rework`; no answer/pass-through goes straight to `self_check`."""
+    if state.get("clarify_answer"):
+        return "rework"
+    return "self_check"
 
 
 def build_team_task_graph(
@@ -753,14 +808,11 @@ def build_team_task_graph(
     docstring). A caller that injects `deps` directly controls `ask_colleague` itself
     and does not need this parameter.
 
-    `checkpointer` is always `None` in production (`team_step_runner._run_graph` never
-    passes one) — this graph is deliberately NOT checkpointed (see the module
-    docstring's design note): every step attempt is a fresh, self-contained
-    `.stream()` call, and retries mint a fresh `attempt_id` rather than resuming a
-    saved one. The parameter stays (rather than being removed) only because
-    `CompiledStateGraph.compile()` itself accepts it and a future caller with a
-    genuine resumability need (none exists today) should not require a signature
-    change to add one.
+    `checkpointer` (v34 P1): `team_step_runner._run_graph` passes the shared team
+    checkpointer so a step killed mid-run resumes at its last completed node instead
+    of re-paying the work — thread ids are `team:<task_id>:<step_id>` and a NEW
+    attempt adopts the saved state (see `_load_resume_state`). `None` (tests/legacy
+    callers) compiles un-checkpointed, byte-identical to pre-v34.
     """
     if deps is None:
         if settings is None or data_dir is None or not task_id:
@@ -773,11 +825,16 @@ def build_team_task_graph(
             task_id=task_id, step_seq=step_seq, step_deps=step_deps, search_hook=search_hook,
             self_id=self_id, work_override=work_override, telemetry=telemetry,
         )
-    perceive, work, self_check, rework, recover, deliver = _make_team_task_nodes(deps)
+    perceive, work, await_clarify, self_check, rework, recover, deliver = \
+        _make_team_task_nodes(deps, interrupt_on_clarify=checkpointer is not None)
 
     builder = StateGraph(TeamStepState)
     builder.add_node("perceive", perceive)
     builder.add_node("work", work)
+    # v34 P2: between work and self_check — pauses on a pending CEO question when the
+    # graph is checkpointed; a pure pass-through otherwise (route mapping redirects
+    # work's "self_check" verdict here, the route FUNCTION itself is unchanged).
+    builder.add_node("await_clarify", await_clarify)
     builder.add_node("self_check", self_check)
     builder.add_node("rework", rework)
     builder.add_node("recover", recover)
@@ -785,7 +842,11 @@ def build_team_task_graph(
     builder.add_edge(START, "perceive")
     builder.add_edge("perceive", "work")
     builder.add_conditional_edges(
-        "work", route_after_work, {"self_check": "self_check", "recover": "recover"},
+        "work", route_after_work, {"self_check": "await_clarify", "recover": "recover"},
+    )
+    builder.add_conditional_edges(
+        "await_clarify", route_after_clarify,
+        {"rework": "rework", "self_check": "self_check"},
     )
     builder.add_conditional_edges(
         "self_check", route_after_check, {"deliver": "deliver", "rework": "rework"},

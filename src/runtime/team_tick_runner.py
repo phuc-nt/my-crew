@@ -59,6 +59,7 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
             pid_alive=_pid_alive,
             kill_pid=_kill_pid,
             approval_status=_approval_status,
+            clarify_status=_clarify_status,
             roster_ok=_roster_ok,
             aggregate=make_aggregate(loaded, settings),
             deliver_room=make_deliver_room(),
@@ -94,6 +95,23 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
                 _idx.close()
         except Exception:  # noqa: BLE001 — index hygiene must never break the tick
             logger.warning("team-tick: history index sweep failed", exc_info=True)
+        # v34 P1: sweep orphaned step-graph checkpoint threads. Steps delete their
+        # thread on completion; what's left belongs to tasks that ended sideways
+        # (cancelled mid-run, worker never resumed). Keep threads of LIVE tasks —
+        # they are exactly the resume state P1 exists for.
+        try:
+            _sweep_team_checkpoints(store)
+        except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
+            logger.warning("team-tick: checkpoint sweep failed", exc_info=True)
+        # v34 P3: the coordinator ĐEO BÁM stuck work — pure-SQL detect + a bounded
+        # escalation ladder (office event → clarify question → Telegram notice),
+        # cooldown-gated per task. Never LLM, never a status write.
+        try:
+            from src.runtime.follow_up_sweep import run_follow_up_sweep
+
+            run_follow_up_sweep(store)
+        except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
+            logger.warning("team-tick: follow-up sweep failed", exc_info=True)
     finally:
         store.close()
 
@@ -103,6 +121,58 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
                 result.task_id, result.action, result.detail)
     return {"status": result.action, "checked": checked, "cost_usd": None,
             "delivered": delivered}
+
+
+def _sweep_team_checkpoints(store: TeamTaskStore) -> None:
+    """Delete step-graph checkpoint threads whose task is gone or terminal.
+
+    Reads the checkpointer's own SQLite file directly (any table carrying a
+    `thread_id` column — table names are the saver library's internals, so introspect
+    rather than hard-code). Thread ids are `team:<task_id>:<step_id>`.
+    """
+    import sqlite3
+
+    from src.runtime.team_task_paths import team_checkpoints_db_path
+
+    path = team_checkpoints_db_path()
+    if not path.exists():
+        return
+    conn = sqlite3.connect(str(path))
+    try:
+        conn.execute("PRAGMA busy_timeout=3000")
+        tables = [
+            r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        ]
+        def _q(name: str) -> str:
+            return '"' + name.replace('"', '""') + '"'  # quoted identifier (review M4)
+
+        threaded_tables = [
+            t for t in tables
+            if any(c[1] == "thread_id" for c in conn.execute(f"PRAGMA table_info({_q(t)})"))
+        ]
+        if not threaded_tables:
+            return
+        threads: set[str] = set()
+        for t in threaded_tables:
+            threads.update(
+                r[0] for r in conn.execute(
+                    f"SELECT DISTINCT thread_id FROM {_q(t)} WHERE thread_id LIKE 'team:%'"
+                )
+            )
+        removed = 0
+        for thread_id in threads:
+            parts = thread_id.split(":")
+            task = store.get(parts[1]) if len(parts) >= 3 and parts[1] else None
+            if task is not None and task.status not in ("done", "cancelled"):
+                continue  # live task — this thread may be resume state
+            for t in threaded_tables:
+                conn.execute(f"DELETE FROM {_q(t)} WHERE thread_id = ?", (thread_id,))
+            removed += 1
+        if removed:
+            conn.commit()
+            logger.info("team-tick: swept %d orphaned checkpoint thread(s)", removed)
+    finally:
+        conn.close()
 
 
 # ---- collaborator factories -------------------------------------------------------
@@ -227,6 +297,14 @@ def _kill_pid(pid: int, attempt_id: str, *, ps_command_line=_ps_command_line) ->
         os.kill(pid, 9)
     except (ProcessLookupError, PermissionError):
         pass
+
+
+def _clarify_status(clarify_id: int) -> tuple[str, str] | None:
+    """Read-only poll against the shared ClarifyStore (v34 P2) — the same rows the
+    web answer route and the Telegram button path write to."""
+    from src.runtime.clarify_service import clarify_status
+
+    return clarify_status(clarify_id)
 
 
 def _approval_status(approval_id: int) -> str | None:

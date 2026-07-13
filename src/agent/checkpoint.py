@@ -73,3 +73,29 @@ def _postgres_checkpointer(settings: Settings) -> BaseCheckpointSaver:
     saver = PostgresSaver(conn)
     saver.setup()
     return saver
+
+
+def get_team_checkpointer() -> BaseCheckpointSaver:
+    """Checkpointer for TEAM-TASK step graphs (v34 P1) — a SEPARATE SQLite file at
+    the shared cross-agent root, NOT any agent's per-agent `checkpoints.db`.
+
+    Separate because: (a) a team step is cross-agent by design (same reasoning as the
+    team-task store living at the shared root), and (b) the ticker and several worker
+    processes all touch it — sharing a file with the report-graph checkpointer would
+    couple their lock behavior for zero gain. WAL + busy_timeout for the same
+    multi-process reality the team-task store handles.
+
+    Threads are cleaned up eagerly (delete on step completion) plus swept by the
+    ticker for tasks that ended without a clean delete — see
+    `team_step_runner`/`team_tick_runner`.
+    """
+    from src.runtime.team_task_paths import team_checkpoints_db_path
+
+    db_path = team_checkpoints_db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    saver = SqliteSaver(conn)
+    saver.setup()
+    return saver

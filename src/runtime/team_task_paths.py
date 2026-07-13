@@ -34,6 +34,13 @@ def capture_db_path() -> Path:
     return team_tasks_root() / "captures.sqlite3"
 
 
+def team_checkpoints_db_path() -> Path:
+    """`<team_tasks_root()>/team_checkpoints.sqlite3` — LangGraph checkpoints for
+    team-task step graphs (v34 P1). Its OWN file (not any agent's `checkpoints.db`,
+    not the store DB) so multi-process lock behavior stays decoupled."""
+    return team_tasks_root() / "team_checkpoints.sqlite3"
+
+
 def clarify_db_path() -> Path:
     """`<team_tasks_root()>/clarify.sqlite3` — CEO clarification questions (v33 P4).
 
