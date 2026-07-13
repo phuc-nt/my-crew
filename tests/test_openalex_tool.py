@@ -136,7 +136,9 @@ def test_toolset_default_has_no_academic_search():
     tools = build_read_toolset(_FakeConfig(), audience="internal")
     assert "academic.search" not in tools
     # the pre-existing exact read set is untouched by the flag's default
-    assert set(tools) == {"jira.issues", "github.prs", "linear.issues", "confluence.page"}
+    # (history.search is always-on since v33 P5 — internal read, no key)
+    assert set(tools) == {"jira.issues", "github.prs", "linear.issues",
+                          "confluence.page", "history.search"}
 
 
 def test_toolset_flag_adds_academic_search_both_audiences():

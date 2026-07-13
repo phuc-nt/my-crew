@@ -33,7 +33,9 @@ class ToolPolicyError(RuntimeError):
 
 #: Read tools whose output is INTERNAL-only (per-person workload, headcount, issue detail).
 #: Withheld from external-audience runs so summarize/compose cannot leak them outward.
-_INTERNAL_ONLY_READS = frozenset({"jira.issues", "linear.issues", "confluence.page"})
+_INTERNAL_ONLY_READS = frozenset(
+    {"jira.issues", "linear.issues", "confluence.page", "history.search"}
+)
 
 
 def _classify_ok(tool_name: str, args: dict) -> None:
@@ -124,6 +126,45 @@ def _openalex_tool() -> Callable[[dict], Any]:
     return _search
 
 
+def _history_search_tool() -> Callable[[dict], Any]:
+    """A `history.search` callable over the team's own past work (v33 P5).
+
+    args: {query, days?, agent?}. Returns cited excerpts (task:seq / audit ts) for
+    the LLM to summarize WITH sources — never a raw dump (results are capped at the
+    index layer). Failures degrade to a short message string, like every read tool.
+    """
+
+    def _search(args: dict) -> str:
+        query = str((args or {}).get("query") or "")
+        if not query.strip():
+            return "(history.search cần tham số query)"
+        from src.runtime.history_search_index import HistorySearchIndex
+        from src.tools.search_result_formatter import format_internal_content
+
+        try:
+            idx = HistorySearchIndex()
+            try:
+                idx.sweep()  # opportunistic freshness — incremental, cheap when idle
+                hits = idx.search(
+                    query,
+                    days=int((args or {}).get("days") or 0),
+                    agent=str((args or {}).get("agent") or ""),
+                )
+            finally:
+                idx.close()
+        except Exception as exc:  # noqa: BLE001 — search best-effort, never crash the loop
+            return f"(tìm lịch sử lỗi: {exc})"
+        if not hits:
+            return "(không tìm thấy gì trong lịch sử làm việc)"
+        lines = [
+            f"- [{h['source']} {h['ref']} · {h['agent_id']} · {h['ts'][:10]}] {h['excerpt']}"
+            for h in hits
+        ]
+        return format_internal_content("\n".join(lines), label="kết quả tìm lịch sử")
+
+    return _search
+
+
 def build_read_toolset(
     config: ReportingConfig, audience: str = "internal", settings: Any = None,
     academic_search: bool = False,
@@ -157,6 +198,10 @@ def build_read_toolset(
     # v31 P6: OpenAlex paper search — public academic data, both audiences, flag-gated.
     if academic_search:
         raw["academic.search"] = _openalex_tool()
+    # v33 P5: history search over the team's own past work (steps + audit). Internal
+    # company data by nature → listed in _INTERNAL_ONLY_READS; always on for internal
+    # audiences (read-only, no key, no network).
+    raw["history.search"] = _history_search_tool()
     if audience != "internal":
         raw = {name: fn for name, fn in raw.items() if name not in _INTERNAL_ONLY_READS}
     return {name: _shim(name, fn) for name, fn in raw.items()}

@@ -146,6 +146,31 @@ def _run_get_status(slots: dict[str, str]) -> str:
     return "\n".join(lines)
 
 
+def _run_search_history(slots: dict[str, str]) -> str:
+    """v33 P5: read-only search over the team's past work (steps + audit) with cited
+    sources — the CEO's "tuần trước team làm/quyết gì?" answer path."""
+    from src.runtime.history_search_index import HistorySearchIndex
+
+    query = (slots.get("query") or "").strip()
+    if not query:
+        return "Cần từ khoá để tìm."
+    idx = HistorySearchIndex()
+    try:
+        idx.sweep()
+        hits = idx.search(query)
+    finally:
+        idx.close()
+    if not hits:
+        return f"Không tìm thấy gì về “{query}” trong lịch sử làm việc."
+    lines = [f"Tìm thấy {len(hits)} kết quả về “{query}”:"]
+    for h in hits:
+        where = (f"việc {h['ref'].split(':')[0][:12]}" if h["source"] == "step"
+                 else "nhật ký hành động")
+        lines.append(f"- [{h['ts'][:10]} · {h['agent_id']} · {where}] {h['excerpt'][:220]}")
+    lines.append("Xem đầy đủ trong trang Kết quả.")
+    return "\n".join(lines)
+
+
 def _task_store_for(agent_id: str):
     """Open the assigned-task store for one agent. Raises ValueError if the agent is
     unknown, so the ops reply is a clean message rather than a 500."""
@@ -377,6 +402,16 @@ OPS_COMMANDS: dict[str, dict] = {
         "readonly": True,
         "slots": {},
         "run": _run_get_cost,
+    },
+    "search_history": {
+        "description": "Tìm trong lịch sử làm việc của đội (kết quả bàn giao + hành động)"
+                       " — vd 'tuần trước quyết gì về agenda'",
+        "readonly": True,
+        "slots": {
+            "query": {"prompt": "Tìm gì trong lịch sử làm việc?", "required": True,
+                      "max_len": 120},
+        },
+        "run": _run_search_history,
     },
     "company_activity": {
         "description": "Tóm tắt hoạt động cả công ty (mọi agent đã tự làm gì) trong N ngày qua",

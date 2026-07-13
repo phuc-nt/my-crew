@@ -36,12 +36,15 @@ def test_create_agent_resolves_tool_calling_runtime():
 
 def test_read_toolset_is_positive_allowlist():
     tools = build_read_toolset(_FakeConfig(), audience="internal")
-    # Only the 4 known read tools — never a write/delete tool.
-    assert set(tools) == {"jira.issues", "github.prs", "linear.issues", "confluence.page"}
+    # Only the known read tools — never a write/delete tool. (history.search is the
+    # always-on internal history read added in v33 P5.)
+    assert set(tools) == {"jira.issues", "github.prs", "linear.issues",
+                          "confluence.page", "history.search"}
 
 
 def test_none_config_yields_empty_toolset():
-    assert build_read_toolset(None) == {}
+    # No reporting config ⇒ no external reads; only the internal history search stays.
+    assert set(build_read_toolset(None)) == {"history.search"}
 
 
 def test_external_audience_drops_internal_only_reads():
