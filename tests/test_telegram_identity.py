@@ -226,8 +226,8 @@ def test_fetch_empty_keeps_offset(monkeypatch):
 
 def _poller_env(tmp_path, monkeypatch, messages, next_offset):
     monkeypatch.setattr(
-        "src.tools.telegram_read.fetch_new_messages",
-        lambda telegram, offset: (messages, next_offset),
+        "src.tools.telegram_read.fetch_new_updates",
+        lambda telegram, offset: (messages, [], next_offset),
     )
     return _loaded(tmp_path, telegram={"bot_token_env": _TOKEN_ENV, "chat_ids": ["111"]})
 
@@ -241,9 +241,9 @@ def test_poller_bootstrap_acks_backlog_without_answering(tmp_path, monkeypatch):
         seen["offset"] = offset
         return ([dict(ts="tg:111:20", text="old question", channel="111", user="42",
                       transport="telegram", message_id=20, chat_type="private",
-                      update_id=20)], 21)
+                      update_id=20)], [], 21)
 
-    monkeypatch.setattr("src.tools.telegram_read.fetch_new_messages", _fetch)
+    monkeypatch.setattr("src.tools.telegram_read.fetch_new_updates", _fetch)
     loaded = _loaded(tmp_path, telegram={"bot_token_env": _TOKEN_ENV, "chat_ids": ["111"]})
     monkeypatch.setattr(
         "src.agent.qa_answer.answer_mention",
@@ -336,7 +336,7 @@ def test_poller_unreachable_api_holds_offset(tmp_path, monkeypatch):
     def _down(telegram, offset):
         raise RuntimeError("telegram API getUpdates failed: 502")
 
-    monkeypatch.setattr("src.tools.telegram_read.fetch_new_messages", _down)
+    monkeypatch.setattr("src.tools.telegram_read.fetch_new_updates", _down)
     out = run_telegram_inbox(loaded, loaded.settings)
     assert out["status"] == "telegram_unreachable"
     assert load_offset(loaded.settings.data_dir) == 70
@@ -351,8 +351,8 @@ def test_poller_write_disabled_holds_offset(tmp_path, monkeypatch):
     loaded = LoadedProfile(**{**loaded.__dict__, "settings": settings})
     save_offset(tmp_path, 80)
     monkeypatch.setattr(
-        "src.tools.telegram_read.fetch_new_messages",
-        lambda telegram, offset: ([_msg(80, "hỏi")], 81),
+        "src.tools.telegram_read.fetch_new_updates",
+        lambda telegram, offset: ([_msg(80, "hỏi")], [], 81),
     )
     out = run_telegram_inbox(loaded, settings)
     assert out["status"] == "writes_disabled"

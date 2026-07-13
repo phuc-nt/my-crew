@@ -76,6 +76,24 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
             store.cleanup_stale_amendment_drafts()
         except Exception:
             logger.warning("team-tick: cleanup_stale_amendment_drafts failed", exc_info=True)
+        # v33 P4: same hygiene posture — overdue CEO questions flip to expired so an
+        # unanswered clarify can never wedge anything (the asking step already moved
+        # on with its safe default; expiry just closes the queue entry).
+        from src.runtime.clarify_service import expire_sweep
+
+        expire_sweep()
+        # v33 P5: keep the history index warm (incremental, cheap when idle) so a
+        # search never has to backfill a cold index in the CEO's request path.
+        try:
+            from src.runtime.history_search_index import HistorySearchIndex
+
+            _idx = HistorySearchIndex()
+            try:
+                _idx.sweep()
+            finally:
+                _idx.close()
+        except Exception:  # noqa: BLE001 — index hygiene must never break the tick
+            logger.warning("team-tick: history index sweep failed", exc_info=True)
     finally:
         store.close()
 

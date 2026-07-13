@@ -31,7 +31,7 @@ def test_telegram_inbox_gateway_gets_auto_approve(monkeypatch, tmp_path):
     # One message so the poll reaches the gateway construction, then answer_mention is stubbed.
     msg = {"transport": "telegram", "user": "555", "channel": "555", "text": "hi", "ts": "1",
            "update_id": 8}
-    monkeypatch.setattr("src.tools.telegram_read.fetch_new_messages", lambda *a, **k: ([msg], 9))
+    monkeypatch.setattr("src.tools.telegram_read.fetch_new_updates", lambda *a, **k: ([msg], [], 9))
     monkeypatch.setattr("src.runtime.telegram_inbox.load_offset", lambda d: 1)
     monkeypatch.setattr("src.runtime.telegram_inbox.save_offset", lambda d, o: None)
     monkeypatch.setattr("src.runtime.telegram_inbox._is_for_agent", lambda m, pid: True)

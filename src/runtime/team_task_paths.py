@@ -32,3 +32,12 @@ def capture_db_path() -> Path:
     concurrent workers) but a SEPARATE DB so telemetry stays decoupled from task/step state.
     """
     return team_tasks_root() / "captures.sqlite3"
+
+
+def clarify_db_path() -> Path:
+    """`<team_tasks_root()>/clarify.sqlite3` — CEO clarification questions (v33 P4).
+
+    Cross-agent by nature (any agent may ask; the CEO answers from web or Telegram),
+    so it lives at the shared root like the team-task store, in its own file so the
+    Q&A queue stays decoupled from task/step state."""
+    return team_tasks_root() / "clarify.sqlite3"

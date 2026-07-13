@@ -202,7 +202,14 @@ class TeamTaskDeps:
     # `team_task_consult_propose.propose_consult_targets`). None (default, no-op): no
     # targets are ever proposed, so `ask_colleague` (even if wired) is never invoked —
     # matches `ask_colleague=None`'s "consult off" contract.
-    propose_consults: Callable[[str, str], list[tuple[str, str]]] | None = None
+    # (v33 P4: each proposal is (agent_id, question, options) — `options` non-empty
+    # only for the "ceo" target, rendered as the CEO's answer buttons.)
+    propose_consults: Callable[[str, str], list[tuple[str, str, list[str]]]] | None = None
+    # v33 P4: optional CEO-question hook — (question, options) -> note for the step's
+    # own context ("đã gửi, làm tiếp phương án an toàn"). The CEO answers LATER (web
+    # or Telegram buttons); the answer reaches the task's NEXT step via read_handoff's
+    # clarify enrichment. None (default): the "ceo" propose target is skipped.
+    ask_ceo: Callable[[str, list[str]], str] | None = None
     # M33: optional per-attempt context setter — `work` calls this ONCE, before any
     # `ask_colleague` call, with the current attempt's `attempt_id` (state carries it,
     # but `ask_colleague`'s own signature is fixed to `(agent_id, question)`, matching
@@ -260,7 +267,20 @@ def default_team_task_deps(
         return llm
 
     def _read_handoff() -> str:
-        return _read_deps_handoff(data_dir, task_id, step_deps)
+        handoff = _read_deps_handoff(data_dir, task_id, step_deps)
+        # v33 P4: answered CEO clarifications for THIS task ride into every later
+        # step's context — that is the whole delivery contract of the standalone
+        # clarify flow ("câu trả lời sẽ được đưa vào bước sau"). Best-effort: a broken
+        # clarify store must never fail perceive.
+        try:
+            from src.runtime.clarify_service import answered_context_for_task
+
+            extra = answered_context_for_task(task_id)
+        except Exception:  # noqa: BLE001 — enrichment only
+            extra = ""
+        if extra:
+            handoff = f"{handoff}\n\n{extra}" if handoff else extra
+        return handoff
 
     def _run_work(
         title: str, handoff: str, hook: SearchHook | None
@@ -349,7 +369,8 @@ def default_team_task_deps(
         return True, room_message
 
     ask_colleague_hook: AskColleagueHook | None = None
-    propose_consults_hook: Callable[[str, str], list[tuple[str, str]]] | None = None
+    propose_consults_hook: Callable[[str, str], list[tuple[str, str, list[str]]]] | None = None
+    ask_ceo_hook: Callable[[str, list[str]], str] | None = None
     set_attempt_id_hook: Callable[[str], None] | None = None
     if self_id:
         # Single-slot mutable box for the CURRENT attempt's `attempt_id` (same
@@ -373,7 +394,7 @@ def default_team_task_deps(
                 room_id=room_for_task(task_id), attempt_id=attempt_box["attempt_id"],
             )
 
-        def _propose_consults(title: str, handoff: str) -> list[tuple[str, str]]:
+        def _propose_consults(title: str, handoff: str) -> list[tuple[str, str, list[str]]]:
             from src.agent.team_task_consult_propose import propose_consult_targets
             from src.agent.team_task_roster import assignable_staff, roster_with_role_hints
 
@@ -384,11 +405,19 @@ def default_team_task_deps(
             )
             return propose_consult_targets(
                 title, handoff, roster, settings=settings, persona=context.persona,
-                project=context.project, memory=context.memory,
+                project=context.project, memory=context.memory, allow_ceo=True,
+            )
+
+        def _ask_ceo(question: str, options: list[str]) -> str:
+            from src.runtime.clarify_service import ask_ceo
+
+            return ask_ceo(
+                agent_id=self_id, task_id=task_id, question=question, options=options,
             )
 
         ask_colleague_hook = _ask_colleague
         propose_consults_hook = _propose_consults
+        ask_ceo_hook = _ask_ceo
         set_attempt_id_hook = _set_attempt_id
 
     # v20: a tool-calling runtime swaps ONLY the work loop (`run_work`); perceive, self_check,
@@ -399,7 +428,7 @@ def default_team_task_deps(
         read_handoff=_read_handoff, run_work=run_work_fn, run_self_check=_run_self_check,
         run_rework=_run_rework, deliver_step=_deliver, search_hook=search_hook,
         ask_colleague=ask_colleague_hook, propose_consults=propose_consults_hook,
-        set_attempt_id=set_attempt_id_hook,
+        ask_ceo=ask_ceo_hook, set_attempt_id=set_attempt_id_hook,
     )
 
 
@@ -496,7 +525,32 @@ def _make_team_task_nodes(deps: TeamTaskDeps):
                 except Exception as exc:  # noqa: BLE001 — consult is advisory, never fatal
                     logger.warning("team-step propose_consults failed, skipping: %s", exc)
                     proposals = []
-                for agent_id, question in proposals[:remaining]:
+                for proposal in proposals[:remaining]:
+                    # v33 P4: proposals are (agent_id, question, options) triples;
+                    # tolerate the historical 2-tuple shape from a test-injected hook.
+                    agent_id, question = proposal[0], proposal[1]
+                    ceo_options = list(proposal[2]) if len(proposal) > 2 else []
+                    if agent_id == "ceo":
+                        # "ceo" is a virtual target, never a roster colleague — an
+                        # operator must not register a real agent under this id (the
+                        # propose validator only admits it via allow_ceo, but a real
+                        # `ceo` agent would shadow colleague consults here).
+                        # A CEO question is fire-and-forget: record + notify, fold the
+                        # "đã hỏi, làm tiếp phương án an toàn" note into context, and
+                        # keep working — the answer reaches the NEXT step's handoff.
+                        if deps.ask_ceo is None:
+                            continue
+                        try:
+                            note = deps.ask_ceo(question, ceo_options)
+                        except Exception as exc:  # noqa: BLE001 — advisory contract
+                            logger.warning("team-step ask_ceo failed, skipping: %s", exc)
+                            continue
+                        if note:
+                            consult_log.append(f"Hỏi CEO: {question} -> {note}")
+                            block = f"[Đã hỏi CEO] {question}\n{note}"
+                            consult_context = f"{consult_context}\n\n{block}" \
+                                if consult_context else block
+                        continue
                     try:
                         answer, cost = deps.ask_colleague(agent_id, question)
                     except Exception as exc:  # noqa: BLE001 — same advisory contract

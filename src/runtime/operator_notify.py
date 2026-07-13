@@ -16,11 +16,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def notify_operator_best_effort(text: str, *, dedup_hint: str, rationale: str) -> bool:
+def notify_operator_best_effort(
+    text: str, *, dedup_hint: str, rationale: str,
+    buttons: list[dict[str, str]] | None = None,
+) -> bool:
     """DM the CEO via the admin ops agent's gateway. Returns True when handed off.
 
     False means "no admin ops agent configured" or the send failed — both logged,
-    neither raised.
+    neither raised. `buttons` (v33 P4) rides through to the telegram send as inline
+    answer buttons — same gateway, same audit.
     """
     try:
         from src.actions.action_gateway import ActionGateway
@@ -44,7 +48,7 @@ def notify_operator_best_effort(text: str, *, dedup_hint: str, rationale: str) -
             try:
                 result = send_telegram_message(
                     text, gateway=gw, telegram=telegram, chat_id=operator,
-                    dedup_hint=dedup_hint, rationale=rationale,
+                    dedup_hint=dedup_hint, rationale=rationale, buttons=buttons,
                 )
             finally:
                 gw.close()

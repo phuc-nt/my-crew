@@ -36,6 +36,10 @@ Handler = Callable[[dict[str, Any]], str]
 _API_BASE = "https://api.telegram.org"
 #: Telegram hard-caps messages at 4096 chars; truncate below it so the marker fits.
 _MAX_TEXT_CHARS = 3900
+#: v33 P4 inline-keyboard bounds: at most 4 answer buttons, and callback_data must be
+#: our own `clarify:<id>:<n>` shape (Telegram caps callback_data at 64 bytes anyway).
+_MAX_BUTTONS = 4
+_CALLBACK_DATA_MAX = 64
 
 
 def api_call(token: str, method: str, payload: dict[str, Any] | None = None) -> Any:
@@ -86,6 +90,17 @@ def make_telegram_send_handler(telegram: TelegramConfig) -> Handler:
                 "message_id": int(reply_to),
                 "allow_sending_without_reply": True,  # original deleted ⇒ still deliver
             }
+        # v33 P4: optional inline answer buttons (one per row — thumb-friendly). The
+        # shape was validated in send_telegram_message; re-bound here because the
+        # handler is the real execution path (same posture as the chat allowlist).
+        buttons = action.get("buttons") or []
+        if buttons:
+            payload["reply_markup"] = {
+                "inline_keyboard": [
+                    [{"text": str(b["text"])[:64], "callback_data": str(b["callback_data"])}]
+                    for b in buttons[:_MAX_BUTTONS]
+                ]
+            }
         result = api_call(token, "sendMessage", payload)
         message_id = result.get("message_id") if isinstance(result, dict) else None
         return f"telegram message {message_id} → chat {chat_id}"
@@ -102,11 +117,17 @@ def send_telegram_message(
     dedup_hint: str,
     reply_to_message_id: int | None = None,
     rationale: str = "",
+    buttons: list[dict[str, str]] | None = None,
 ) -> GatewayResult:
     """Send one message through the gateway. Refuses empty text BEFORE the gateway.
 
     Long content is truncated under Telegram's 4096-char cap with an explicit marker —
     a silently split/failed report is worse than a visibly shortened one.
+
+    `buttons` (v33 P4): optional inline answer buttons, each
+    `{"text": ..., "callback_data": ...}`. Bounded to `_MAX_BUTTONS`; callback_data
+    must fit Telegram's 64-byte cap — validated here so a malformed shape never
+    reaches the gateway as a half-legal action.
     """
     if not text.strip():
         raise ValueError("Refusing to send an empty telegram message.")
@@ -118,6 +139,16 @@ def send_telegram_message(
         "text": text,
         "dedup_hint": dedup_hint,
     }
+    if buttons:
+        if len(buttons) > _MAX_BUTTONS:
+            raise ValueError(f"Tối đa {_MAX_BUTTONS} nút bấm mỗi tin nhắn.")
+        for b in buttons:
+            data = str(b.get("callback_data") or "")
+            if not b.get("text") or not data or len(data.encode()) > _CALLBACK_DATA_MAX:
+                raise ValueError("Nút bấm không hợp lệ (thiếu text/callback_data hoặc quá dài).")
+        action["buttons"] = [
+            {"text": str(b["text"]), "callback_data": str(b["callback_data"])} for b in buttons
+        ]
     if reply_to_message_id is not None:
         action["reply_to_message_id"] = int(reply_to_message_id)
     return gateway.execute(

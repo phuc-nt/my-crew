@@ -77,14 +77,14 @@ def run_telegram_inbox(loaded: LoadedProfile, settings: Any) -> dict:
     data_dir = Path(settings.data_dir)
     offset = load_offset(data_dir)
 
-    from src.tools.telegram_read import fetch_new_messages
+    from src.tools.telegram_read import fetch_new_updates
 
     try:
         # Bootstrap fetches with offset=-1: Telegram then returns ONLY the newest pending
         # update, so acking `newest+1` confirms the ENTIRE backlog in one page — a plain
         # unbounded fetch caps at 100 and would leak backlog messages >100 into later
         # polls as "new" (review M2).
-        messages, next_offset = fetch_new_messages(
+        messages, callbacks, next_offset = fetch_new_updates(
             telegram, offset=offset if offset is not None else -1
         )
     except (urllib.error.URLError, TimeoutError, RuntimeError) as exc:
@@ -102,10 +102,18 @@ def run_telegram_inbox(loaded: LoadedProfile, settings: Any) -> dict:
                     loaded.profile_id)
         return {"status": "bootstrapped", "replied": 0, "cost_usd": None, "delivered": False}
 
+    # v33 P4: button taps (clarify answers) are handled BEFORE the message flow and
+    # regardless of it — a tap is the CEO acting, not the agent speaking, so it costs
+    # no LLM money and does not count against the reply cap. The chat allowlist was
+    # already enforced at fetch; first-answer-wins is enforced by the store.
+    for cb in callbacks:
+        _handle_callback(telegram, cb)
+
     if not messages:
         if next_offset is not None:
-            save_offset(data_dir, next_offset)  # ack junk updates (non-text, foreign chats)
-        return {"status": "no_mentions", "replied": 0, "cost_usd": None, "delivered": False}
+            save_offset(data_dir, next_offset)  # ack junk/callback-only pages
+        status = "callback_answered" if callbacks else "no_mentions"
+        return {"status": status, "replied": 0, "cost_usd": None, "delivered": False}
 
     if settings.write_disabled:
         # Kill switch: answering would burn LLM money only for the gateway to refuse the
@@ -171,3 +179,50 @@ def run_telegram_inbox(loaded: LoadedProfile, settings: Any) -> dict:
         "cost_usd": total_cost if have_cost else None,
         "delivered": replied > 0,
     }
+
+
+def _handle_callback(telegram: Any, callback: dict[str, Any]) -> None:
+    """One button tap → clarify answer + a toast ack. Never raises.
+
+    Identity (review M2): a clarify answer steers agent decisions, so the tap must
+    come from the OPERATOR, not merely from an allowlisted chat — in a group chat any
+    member could tap. When the agent has `ops_operator_id` (the admin ops bot — the
+    one that sends clarify questions), only that user may answer; without one, the
+    tap must come from the user's own DM (in a private chat, chat id == user id).
+
+    A tap may be processed twice when the offset was held by a message-flow failure
+    in the same page — harmless: `apply_answer` is first-answer-wins, and the second
+    toast just says the question was already handled. The `answerCallbackQuery` ack
+    publishes no content beyond dismissing the CEO's own tap spinner, so it goes
+    straight to the Bot API (same tier as the getUpdates read-ack), not the gateway.
+    """
+    from src.runtime.clarify_service import answer_from_callback
+
+    user = str(callback.get("user") or "")
+    operator = str(getattr(telegram, "ops_operator_id", "") or "")
+    if operator:
+        allowed_user = user == operator
+    else:
+        allowed_user = user and user == str(callback.get("channel") or "")
+    if not allowed_user:
+        logger.warning("telegram inbox: clarify tap from non-operator user %s ignored", user)
+        return
+
+    try:
+        landed, toast = answer_from_callback(str(callback.get("data") or ""))
+    except Exception:  # noqa: BLE001 — a broken tap must not break the poll
+        logger.warning("telegram inbox: callback handling failed", exc_info=True)
+        return
+    logger.info("telegram inbox: clarify callback %s → landed=%s",
+                callback.get("data"), landed)
+    cq_id = str(callback.get("callback_query_id") or "")
+    if not cq_id:
+        return
+    try:
+        from src.actions.telegram_write import api_call
+        from src.config.telegram_token import resolve_bot_token
+
+        api_call(resolve_bot_token(telegram), "answerCallbackQuery",
+                 {"callback_query_id": cq_id, "text": toast[:180]})
+    except Exception:  # noqa: BLE001 — the answer landed; a failed toast is cosmetic
+        logger.info("telegram inbox: answerCallbackQuery failed (ignored)", exc_info=True)

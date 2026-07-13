@@ -53,7 +53,7 @@ def test_propose_consult_targets_happy_path(tmp_path, monkeypatch):
     result = propose_consult_targets(
         "step title", "handoff", [("colleague-1", "pm")], settings=_settings(tmp_path),
     )
-    assert result == [("colleague-1", "Ưu tiên gì?")]
+    assert result == [("colleague-1", "Ưu tiên gì?", [])]
 
 
 def test_propose_consult_targets_empty_roster_skips_llm_call(tmp_path, monkeypatch):

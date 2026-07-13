@@ -111,6 +111,12 @@ def _build_profile_doc(spec: dict, profiles_dir) -> tuple[str, dict, str | None]
         agent_id = _validate_agent_id(str(spec.get("id") or ""))
     except ValueError as exc:
         raise ValidationError(str(exc)) from None
+    if agent_id == "ceo":
+        # v33 P4: "ceo" is the virtual consult-propose target that routes a question
+        # to the human operator — a REAL agent under this id would shadow colleague
+        # consults into the clarify path. Reserved at the create door only (read
+        # paths must keep working even for hypothetical legacy data).
+        raise ValidationError("mã 'ceo' là mã dành riêng (kênh hỏi CEO) — chọn mã khác")
 
     domain = str(spec.get("domain") or "pm").strip() or "pm"
     known = discover_domains()
