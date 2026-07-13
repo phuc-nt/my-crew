@@ -35,9 +35,21 @@ def ready_pending_steps(task: TeamTask) -> list[TeamStep]:
     parallel-cap dispatcher needs the whole ready set for one tick so it can spawn up
     to `concurrency - running_count` of them, not just one."""
     done_ids = {s.step_id for s in task.steps if s.status == "done"}
+    # v34 P4: a dep that fanned out is only REALLY done once its subs+gather are done
+    # and the gather's merged result replaced the parent's "Đã chia bước" notice —
+    # until then a dependent must not dispatch (it would read the notice as content).
+    # Review/rework children (step_type != 'work') deliberately do NOT gate here:
+    # pre-P4 review timing semantics stay byte-identical.
+    fanout_blocked = {
+        c.parent_step_id for c in task.steps
+        if c.system_inserted and c.step_type == "work" and c.parent_step_id
+        and c.status != "done"
+    }
     return [
         s for s in task.steps
-        if s.status == "pending" and all(dep in done_ids for dep in s.deps)
+        if s.status == "pending"
+        and all(dep in done_ids for dep in s.deps)
+        and not (set(s.deps) & fanout_blocked)
     ]
 
 

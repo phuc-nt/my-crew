@@ -88,6 +88,11 @@ class TeamStep:
     # the correlation key the ticker polls to resume once the CEO answers/expires.
     # None on every step that never interrupted on a CEO question.
     clarify_id: int | None = None
+    # v34 P4: JSON list [{"title","assigned_to"}] the step proposed instead of doing
+    # the work itself ("Đã chia bước"). Set at mark_done; the ticker's fanout-insert
+    # rule reads it, mints the sub/gather rows, and the children's existence is the
+    # idempotency guard. None on every step that never proposed a split.
+    split_proposal_json: str | None = None
 
 
 def create_schema(conn: sqlite3.Connection) -> None:
@@ -126,6 +131,10 @@ def create_schema(conn: sqlite3.Connection) -> None:
         pass
     try:
         conn.execute("ALTER TABLE team_steps ADD COLUMN clarify_id INTEGER")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("ALTER TABLE team_steps ADD COLUMN split_proposal_json TEXT")
     except sqlite3.OperationalError:
         pass
     # P2 peer-review columns — same migrate-free ALTER pattern. Defaults reproduce v12
@@ -172,6 +181,7 @@ def _row_to_step(data: dict[str, Any]) -> TeamStep:
         parent_step_id=data.get("parent_step_id"),
         review_round=int(data.get("review_round") or 0),
         clarify_id=data.get("clarify_id"),
+        split_proposal_json=data.get("split_proposal_json"),
     )
 
 
@@ -208,15 +218,18 @@ def replace_steps(conn: sqlite3.Connection, task_id: str, steps: list[dict[str, 
         )
 
 
-def insert_step(conn: sqlite3.Connection, task_id: str, step: dict[str, Any]) -> None:
+def insert_step(conn: sqlite3.Connection, task_id: str, step: dict[str, Any], *,
+                needs_review: bool = False) -> None:
     """Append ONE dynamically-minted row (review/rework) AFTER the task's confirmed DAG
     is already open — the AUTOINCREMENT `seq` continues from wherever it left off, so
     this row always sorts after every existing step in `steps_for_task`/`next_pending_step`.
 
-    `system_inserted=1` and `needs_review=0` are ALWAYS forced here (never read off the
-    caller's dict, even if present) — Finding fail-F: a caller must never accidentally
-    copy `needs_review=True` from the REVIEWED step onto the new review/rework row,
-    which would make the ticker try to review-the-review forever. `step` must carry
+    `system_inserted=1` is ALWAYS forced here, and `needs_review` is NEVER read off the
+    caller's dict (Finding fail-F: a caller must never accidentally copy
+    `needs_review=True` from the REVIEWED step onto a new review/rework row, which
+    would make the ticker review-the-review forever). It IS settable via the explicit
+    keyword-only parameter — v34 P4's GATHER row consciously inherits its parent's
+    flag so the merged output gets the quality gate the parent would have had. `step` must carry
     `step_id`/`title`/`assigned_to`/`deps`/`step_type`/`parent_step_id`/`review_round`;
     `acceptance` defaults to "" (a review/rework row has no self-check rubric of its
     own — its rubric IS the parent content step's `acceptance`, read directly by
@@ -226,15 +239,24 @@ def insert_step(conn: sqlite3.Connection, task_id: str, step: dict[str, Any]) ->
         "INSERT INTO team_steps "
         "(task_id, step_id, title, assigned_to, deps_json, status, acceptance, "
         " step_type, needs_review, system_inserted, parent_step_id, review_round) "
-        "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, 0, 1, ?, ?)",
+        "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, 1, ?, ?)",
         (
             task_id, step["step_id"], step.get("title", ""), step.get("assigned_to", ""),
             json.dumps(list(step.get("deps", ())), ensure_ascii=False),
             step.get("acceptance", ""),
             step.get("step_type") or "review",
+            int(bool(needs_review)),
             step.get("parent_step_id"),
             int(step.get("review_round") or 0),
         ),
+    )
+
+
+def clear_split_proposal(conn: sqlite3.Connection, task_id: str, step_id: str) -> None:
+    """NULL one step's split_proposal_json (see `TeamTaskStore.consume_split_proposal`)."""
+    conn.execute(
+        "UPDATE team_steps SET split_proposal_json = NULL "
+        "WHERE task_id = ? AND step_id = ?", (task_id, step_id),
     )
 
 
@@ -290,7 +312,8 @@ def reserve_step(conn: sqlite3.Connection, task_id: str, step_id: str, *, lease_
     # applied to the new attempt.
     cur = conn.execute(
         "UPDATE team_steps SET status = 'running', attempt_id = ?, spawned_at = ?, "
-        "last_seen = ?, lease_expires_at = ?, approval_id = NULL, clarify_id = NULL "
+        "last_seen = ?, lease_expires_at = ?, approval_id = NULL, clarify_id = NULL, "
+        "split_proposal_json = NULL "
         "WHERE task_id = ? AND step_id = ?",
         (attempt_id, now, now, expires, task_id, step_id),
     )
@@ -346,7 +369,7 @@ def set_step_status(
     conn: sqlite3.Connection, task_id: str, step_id: str, status: str, *,
     outcome_ref: str | None = None, cost_usd: float | None = None,
     attempt_id: str | None = None, approval_id: int | None = None,
-    clarify_id: int | None = None,
+    clarify_id: int | None = None, split_proposal_json: str | None = None,
 ) -> bool:
     """Write a step's status (+ optionally its outcome/cost/approval_id). Returns True
     iff a row was actually updated.
@@ -377,14 +400,16 @@ def set_step_status(
         where += " AND attempt_id = ?"
         params = (*params, attempt_id)
     if outcome_ref is not None or cost_usd is not None or approval_id is not None \
-            or clarify_id is not None:
+            or clarify_id is not None or split_proposal_json is not None:
         cur = conn.execute(
             "UPDATE team_steps SET status = ?, "
             "outcome_ref = COALESCE(?, outcome_ref), "
             "cost_usd = COALESCE(?, cost_usd), "
             "approval_id = COALESCE(?, approval_id), "
-            "clarify_id = COALESCE(?, clarify_id) " + where,
-            (status, outcome_ref, cost_usd, approval_id, clarify_id, *params),
+            "clarify_id = COALESCE(?, clarify_id), "
+            "split_proposal_json = COALESCE(?, split_proposal_json) " + where,
+            (status, outcome_ref, cost_usd, approval_id, clarify_id,
+             split_proposal_json, *params),
         )
     else:
         cur = conn.execute("UPDATE team_steps SET status = ? " + where, (status, *params))

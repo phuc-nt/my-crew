@@ -177,8 +177,8 @@ def _fire(level: int, item: dict, now: _dt.datetime) -> bool:
 
         append_office_event(
             room_for_task(task_id), author="coordinator", kind="milestone",
-            body={"task_id": task_id, "task_title": title,
-                  "summary": f"⏰ Nhắc việc: {reason}."},
+            body={"task_id": task_id, "task_title": title, "milestone": "follow_up",
+                  "message": f"⏰ Nhắc việc: {reason}."},
             also_office=True,
         )
         return True

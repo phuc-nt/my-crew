@@ -75,6 +75,11 @@ def maybe_insert_review(deps: CoordinatorDeps, task: TeamTask, done_step: TeamSt
     """
     if done_step.step_type != "work" or not done_step.needs_review:
         return False
+    if done_step.split_proposal_json:
+        # v34 P4: a split parent delivered only the "Đã chia bước" notice — reviewing
+        # a notice is noise; its quality gate moved to the GATHER row, which inherited
+        # this step's needs_review at mint time (fanout_insert).
+        return False
     if _review_child(task, done_step.step_id, "review") is not None:
         return False
 

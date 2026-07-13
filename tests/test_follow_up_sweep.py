@@ -68,7 +68,7 @@ def test_stalled_task_climbs_ladder_one_rung_per_firing(store, fired):
     _mk_task(store, "t1", "stalled")
 
     assert fus.run_follow_up_sweep(store, now=_NOW) == 1
-    assert len(fired["event"]) == 1 and "Nhắc việc" in fired["event"][0]["summary"]
+    assert len(fired["event"]) == 1 and "Nhắc việc" in fired["event"][0]["message"]
 
     # within cooldown: nothing fires
     soon = _NOW + _dt.timedelta(hours=1)
@@ -103,7 +103,7 @@ def test_no_progress_task_detected_after_threshold(store, fired):
     _mk_task(store, "t3", "open", created_at=old)
     # no step was ever touched (spawned_at/last_seen NULL) → created_at is the anchor
     assert fus.run_follow_up_sweep(store, now=_NOW) == 1
-    assert "tiến triển" in fired["event"][0]["summary"]
+    assert "tiến triển" in fired["event"][0]["message"]
 
 
 def test_waiting_on_ceo_uses_shorter_threshold(store, fired):
@@ -114,7 +114,7 @@ def test_waiting_on_ceo_uses_shorter_threshold(store, fired):
         (stale,))
     store._conn.commit()
     assert fus.run_follow_up_sweep(store, now=_NOW) == 1
-    assert "chờ CEO" in fired["event"][0]["summary"]
+    assert "chờ CEO" in fired["event"][0]["message"]
 
 
 def test_recovered_task_resets_ladder(store, fired):

@@ -136,11 +136,15 @@ def run_team_step(
             return {"status": STATUS_PAUSED, "pause_reason": "approval",
                      "cost_usd": result.get("cost_usd"),
                      "delivered": False, "room_message": ""}
+        import json as _json
+
         cost = result.get("cost_usd")
+        split = result.get("split_proposal") or None
         store.mark_done(
             task_id, step_id,
             outcome_ref=f"team-tasks/{task_id}/step-{step.seq}.json", cost_usd=cost,
             attempt_id=attempt_id,
+            split_proposal_json=_json.dumps(split, ensure_ascii=False) if split else None,
         )
         _record_capture(
             attempt_id=attempt_id, task_id=task_id, step=step, engine=engine,
@@ -430,6 +434,13 @@ def _run_graph(
     checkpointer = _team_checkpointer_best_effort()
     if checkpointer is not None:
         _extra["checkpointer"] = checkpointer
+    # v34 P4 depth-1 guard at the cheapest spot: only an ORIGINAL confirmed work step
+    # may propose a runtime split — sub/gather/review/rework rows never re-split.
+    _extra["allow_split"] = (
+        getattr(step, "parent_step_id", None) is None
+        and not getattr(step, "system_inserted", False)
+        and getattr(step, "step_type", "work") == "work"
+    )
     graph = resolve_runtime(loaded).build_task(
         settings=settings, context=context, step_title=step.title,
         data_dir=team_tasks_root(), task_id=task_id, step_seq=step.seq,

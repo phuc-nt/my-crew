@@ -63,6 +63,10 @@ from src.agent.coordinator_nodes.review_insert import (
     maybe_insert_review,
     maybe_insert_review_after_rework,
 )
+from src.agent.coordinator_nodes.fanout_insert import (
+    maybe_copy_gather_results,
+    maybe_insert_fanout,
+)
 from src.agent.coordinator_nodes.tick_actions import (
     aggregate_and_deliver,
     dispatch_ready_steps,
@@ -248,6 +252,17 @@ def _act_on_task(deps: CoordinatorDeps, task: TeamTask) -> TickResult:
         return TickResult(task_id=task.id, action="cap_exceeded",
                           detail=f"${cap.spent_usd:.4f} > ${cap.cap_usd:.2f}")
     _maybe_warn_cost_cap(deps, task, cap)
+
+    # v34 P4: runtime fan-out — mint sub/gather rows for a done step that proposed a
+    # split, BEFORE the review rule (a split parent's notice must never get its own
+    # review row) and before dispatch (so downstream never dispatches this tick
+    # against a not-yet-expanded parent).
+    fanout_result = maybe_insert_fanout(deps, task)
+    if fanout_result is not None:
+        return fanout_result
+    # Hygiene, never consumes the tick: a DONE gather's merged result is copied onto
+    # its parent's artifact seq so confirmed dep edges read real content.
+    maybe_copy_gather_results(deps, task)
 
     review_result = _maybe_insert_review_rows(deps, task)
     if review_result is not None:

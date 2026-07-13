@@ -176,6 +176,11 @@ class TeamStepState(TypedDict, total=False):
     # The CEO's answer delivered through Command(resume=...) — "" = no answer/expired
     # (the step proceeds on the safe default it already drafted).
     clarify_answer: str
+    # --- runtime fan-out (v34 P4) ---
+    # [{"title","assigned_to"}] the step proposed INSTEAD of doing the work — deliver
+    # completes normally with a "Đã chia bước" notice; the ticker mints the sub/gather
+    # rows from the store column the runner sets off this value.
+    split_proposal: list
 
 
 @dataclass
@@ -223,6 +228,11 @@ class TeamTaskDeps:
     # semantics (answer reaches the NEXT step via read_handoff enrichment).
     # None (default): the "ceo" propose target is skipped.
     ask_ceo: Callable[[str, list[str]], tuple[str, int | None]] | None = None
+    # v34 P4: optional runtime-split reader — () -> [{"title","assigned_to"}] from the
+    # SAME propose call the consult block already paid for (propose_consults_and_split
+    # fills a box; this drains it). None ⇒ splitting is off for this step (sub/gather/
+    # review/rework rows, or a caller that never wired it) — work always runs.
+    take_split: Callable[[], list[dict]] | None = None
     # M33: optional per-attempt context setter — `work` calls this ONCE, before any
     # `ask_colleague` call, with the current attempt's `attempt_id` (state carries it,
     # but `ask_colleague`'s own signature is fixed to `(agent_id, question)`, matching
@@ -244,6 +254,7 @@ def default_team_task_deps(
     self_id: str = "",
     work_override: Callable[[str, str, SearchHook | None], tuple[str, float | None]] | None = None,
     telemetry=None,
+    allow_split: bool = False,
 ) -> TeamTaskDeps:
     """Wire the real collaborators. Lazy imports keep graph-build network-free.
 
@@ -384,6 +395,7 @@ def default_team_task_deps(
     ask_colleague_hook: AskColleagueHook | None = None
     propose_consults_hook: Callable[[str, str], list[tuple[str, str, list[str]]]] | None = None
     ask_ceo_hook: Callable[[str, list[str]], tuple[str, int | None]] | None = None
+    take_split_hook: Callable[[], list[dict]] | None = None
     set_attempt_id_hook: Callable[[str], None] | None = None
     if self_id:
         # Single-slot mutable box for the CURRENT attempt's `attempt_id` (same
@@ -407,8 +419,13 @@ def default_team_task_deps(
                 room_id=room_for_task(task_id), attempt_id=attempt_box["attempt_id"],
             )
 
+        # v34 P4: single-slot box the propose call fills with a split proposal (same
+        # lazy idiom as `attempt_box`) — `take_split` drains it so a rework/recover
+        # pass can never re-consume a stale proposal.
+        split_box: dict[str, list] = {"split": []}
+
         def _propose_consults(title: str, handoff: str) -> list[tuple[str, str, list[str]]]:
-            from src.agent.team_task_consult_propose import propose_consult_targets
+            from src.agent.team_task_consult_propose import propose_consults_and_split
             from src.agent.team_task_roster import assignable_staff, roster_with_role_hints
 
             # v14: each roster entry carries a short role hint (SOUL.md first line, RO)
@@ -416,10 +433,18 @@ def default_team_task_deps(
             roster = roster_with_role_hints(
                 [(a, d) for a, d in assignable_staff() if a != self_id]
             )
-            return propose_consult_targets(
+            consults, split = propose_consults_and_split(
                 title, handoff, roster, settings=settings, persona=context.persona,
                 project=context.project, memory=context.memory, allow_ceo=True,
+                allow_split=allow_split,
             )
+            split_box["split"] = split
+            return consults
+
+        def _take_split() -> list[dict]:
+            split = split_box["split"]
+            split_box["split"] = []
+            return split
 
         def _ask_ceo(question: str, options: list[str]) -> tuple[str, int | None]:
             from src.runtime.clarify_service import ask_ceo
@@ -431,6 +456,7 @@ def default_team_task_deps(
         ask_colleague_hook = _ask_colleague
         propose_consults_hook = _propose_consults
         ask_ceo_hook = _ask_ceo
+        take_split_hook = _take_split if allow_split else None
         set_attempt_id_hook = _set_attempt_id
 
     # v20: a tool-calling runtime swaps ONLY the work loop (`run_work`); perceive, self_check,
@@ -441,7 +467,8 @@ def default_team_task_deps(
         read_handoff=_read_handoff, run_work=run_work_fn, run_self_check=_run_self_check,
         run_rework=_run_rework, deliver_step=_deliver, search_hook=search_hook,
         ask_colleague=ask_colleague_hook, propose_consults=propose_consults_hook,
-        ask_ceo=ask_ceo_hook, set_attempt_id=set_attempt_id_hook,
+        ask_ceo=ask_ceo_hook, take_split=take_split_hook,
+        set_attempt_id=set_attempt_id_hook,
     )
 
 
@@ -584,6 +611,25 @@ def _make_team_task_nodes(deps: TeamTaskDeps, *, interrupt_on_clarify: bool = Fa
                         block = f"[Tham vấn {agent_id}] {answer}"
                         consult_context = f"{consult_context}\n\n{block}" \
                             if consult_context else block
+
+        # v34 P4: the propose call may have proposed a runtime SPLIT — this step then
+        # delivers a notice instead of doing the work; the ticker mints the sub/gather
+        # rows. Checked only on the first pass (recover retry skipped the propose
+        # call, so the box is empty there) and only when the runner allowed it.
+        if deps.take_split is not None:
+            split = deps.take_split() or []
+            if split:
+                titles = "; ".join(str(it.get("title", "")) for it in split)
+                spent = (state.get("cost_usd") or 0.0) + consult_cost
+                return {
+                    "result_text": f"Đã chia bước thành {len(split)} việc con: {titles}. "
+                                   "Kết quả sẽ do bước tổng hợp bàn giao.",
+                    "split_proposal": list(split),
+                    "cost_usd": spent if spent else None,
+                    "consult_count": consult_count, "consult_log": consult_log,
+                    "consult_context": consult_context,
+                    "work_error": "", "ceo_question": pending_ceo,
+                }
 
         # Fold the STATE-persisted consult context (this pass's answers AND a prior
         # failed pass's — paid-for advice must survive the recovery retry, review
@@ -757,6 +803,12 @@ def route_after_work(state: TeamStepState) -> str:
     path -> `self_check`, exactly the edge that was unconditional before v14."""
     if state.get("work_error"):
         return "recover"
+    if state.get("split_proposal"):
+        # v34 P4: a split notice is not content — grading it against the step's
+        # acceptance criteria would always fail into a pointless rework loop, so it
+        # skips self_check (and await_clarify) and delivers directly; quality gating
+        # moves to the GATHER row, which inherits this step's needs_review.
+        return "deliver"
     return "self_check"
 
 
@@ -797,6 +849,7 @@ def build_team_task_graph(
     work_override: Callable[[str, str, SearchHook | None], tuple[str, float | None]] | None = None,
     telemetry=None,
     remember_node=None,
+    allow_split: bool = False,
 ) -> CompiledStateGraph:
     """Build + compile the team-task step graph. `deps` defaults to real wiring.
 
@@ -824,6 +877,7 @@ def build_team_task_graph(
             settings=settings, context=context, step_title=step_title, data_dir=data_dir,
             task_id=task_id, step_seq=step_seq, step_deps=step_deps, search_hook=search_hook,
             self_id=self_id, work_override=work_override, telemetry=telemetry,
+            allow_split=allow_split,
         )
     perceive, work, await_clarify, self_check, rework, recover, deliver = \
         _make_team_task_nodes(deps, interrupt_on_clarify=checkpointer is not None)
@@ -842,7 +896,8 @@ def build_team_task_graph(
     builder.add_edge(START, "perceive")
     builder.add_edge("perceive", "work")
     builder.add_conditional_edges(
-        "work", route_after_work, {"self_check": "await_clarify", "recover": "recover"},
+        "work", route_after_work,
+        {"self_check": "await_clarify", "recover": "recover", "deliver": "deliver"},
     )
     builder.add_conditional_edges(
         "await_clarify", route_after_clarify,

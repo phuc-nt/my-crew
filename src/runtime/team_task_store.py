@@ -472,13 +472,16 @@ class TeamTaskStore:
         return updated
 
     def mark_done(self, task_id: str, step_id: str, *, outcome_ref: str | None = None,
-                  cost_usd: float | None = None, attempt_id: str | None = None) -> bool:
+                  cost_usd: float | None = None, attempt_id: str | None = None,
+                  split_proposal_json: str | None = None) -> bool:
         """Mark a step done. When `attempt_id` is given, the write only applies if that
         is still the step's CURRENT lease (see `team_task_steps.set_step_status`) —
-        returns False (no-op) if a newer attempt has since reserved the step."""
+        returns False (no-op) if a newer attempt has since reserved the step.
+        `split_proposal_json` (v34 P4): the fan-out proposal this step delivered
+        instead of content — the ticker's fanout-insert rule consumes it."""
         updated = _steps.set_step_status(
             self._conn, task_id, step_id, "done", outcome_ref=outcome_ref, cost_usd=cost_usd,
-            attempt_id=attempt_id,
+            attempt_id=attempt_id, split_proposal_json=split_proposal_json,
         )
         self._conn.commit()
         return updated
@@ -510,10 +513,34 @@ class TeamTaskStore:
         _steps.append_outcome(self._conn, task_id, step_id, outcome_ref)
         self._conn.commit()
 
-    def insert_step(self, task_id: str, step: dict[str, Any]) -> None:
-        """Append one ticker-minted row (review/rework) — see `team_task_steps
-        .insert_step`'s docstring for the `system_inserted`/`needs_review` forcing."""
-        _steps.insert_step(self._conn, task_id, step)
+    def insert_step(self, task_id: str, step: dict[str, Any], *,
+                    needs_review: bool = False) -> None:
+        """Append one ticker-minted row (review/rework/sub/gather) — see
+        `team_task_steps.insert_step`'s docstring for the `system_inserted` forcing
+        and the explicit `needs_review` opt-in (gather rows only)."""
+        _steps.insert_step(self._conn, task_id, step, needs_review=needs_review)
+        self._conn.commit()
+
+    def insert_steps_atomic(self, task_id: str,
+                            rows: list[tuple[dict[str, Any], bool]]) -> None:
+        """Append SEVERAL ticker-minted rows in ONE transaction (v34 P4 fan-out mints
+        N subs + 1 gather together — a crash between per-row commits would strand
+        subs without their gather forever, since the children-exist idempotency guard
+        then refuses a re-mint). `rows` = [(step_dict, needs_review)]. All-or-nothing:
+        any failure rolls the whole mint back."""
+        try:
+            for step, needs_review in rows:
+                _steps.insert_step(self._conn, task_id, step, needs_review=needs_review)
+        except Exception:
+            self._conn.rollback()
+            raise
+        self._conn.commit()
+
+    def consume_split_proposal(self, task_id: str, step_id: str) -> None:
+        """NULL a step's split proposal (v34 P4: an invalid proposal is consumed so
+        the fanout rule never re-fires for it). Dedicated method because
+        `set_step_status`'s COALESCE writes can never express NULL."""
+        _steps.clear_split_proposal(self._conn, task_id, step_id)
         self._conn.commit()
 
     # ---- amendment drafts (delegates to team_task_amend) ---------------------
@@ -530,6 +557,21 @@ class TeamTaskStore:
         one of these is STILL `pending` at confirm time (see `team_task_amend
         .set_amendment_draft`'s docstring for why `base_plan_hash` alone can't catch a
         bare status race)."""
+        # v34 P4 (review M2): an amend swaps ALL pending rows — pending subs/gather
+        # included. That would orphan a split parent forever on its "Đã chia bước"
+        # notice (the gather that was to replace it is gone), so drafting is refused
+        # while any fan-out child is still un-done. The CEO can amend again once the
+        # split finishes (or cancel the task).
+        unfinished_fanout = self._conn.execute(
+            "SELECT COUNT(*) FROM team_steps WHERE task_id = ? AND system_inserted = 1 "
+            "AND step_type = 'work' AND parent_step_id IS NOT NULL AND status != 'done'",
+            (task_id,),
+        ).fetchone()[0]
+        if unfinished_fanout:
+            raise ValueError(
+                "việc này đang có bước được chia nhỏ chạy song song — đợi các việc con "
+                "xong (hoặc huỷ việc) rồi mới chỉnh kế hoạch được"
+            )
         amendment_id = _amend.set_amendment_draft(
             self._conn, task_id, base_plan_hash=base_plan_hash, new_plan_hash=new_plan_hash,
             new_pending_steps=new_pending_steps, old_pending_step_ids=old_pending_step_ids,
