@@ -55,6 +55,22 @@ _FAIL_ALERT_THRESHOLD = 3
 _STALE_HOURS = 24.0
 
 
+def _wake_plan_hash(steps: list[dict[str, Any]]) -> str:
+    """Content hash of a wake plan, computed the SAME way the ticker recomputes it
+    (`coordinator_graph._verify_plan_hash` → `decomposition_content_hash` over
+    step_id/title/assigned_to/deps). Using the shared function guarantees the stored
+    hash matches the recompute exactly, so a wake task passes the plan-hash gate."""
+    from types import SimpleNamespace
+
+    from src.agent.task_decomposition import decomposition_content_hash
+
+    return decomposition_content_hash(SimpleNamespace(steps=[
+        SimpleNamespace(step_id=s["step_id"], title=s["title"],
+                        assigned_to=s["assigned_to"], deps=tuple(s.get("deps", ())))
+        for s in steps
+    ]))
+
+
 def run_watchers(
     loaded: Any, settings: Any, *,
     poll_fn: Callable[[dict, Any, Any], Any] | None = None,
@@ -179,6 +195,12 @@ def _wake_via_team_task(loaded: Any, watcher: dict) -> bool:
         from src.runtime.team_task_store import TeamTaskStore
 
         task_id = uuid.uuid4().hex[:12]
+        # The 1-step wake plan must carry the REAL content hash the ticker recomputes
+        # every tick (`coordinator_graph._verify_plan_hash`, over the system_inserted=0
+        # rows) — a random "watch-…" token never matches that recompute, so the task
+        # would stall on tick ONE and the wake would never dispatch (live-UAT finding).
+        steps = [{"step_id": "s1", "title": prompt, "assigned_to": loaded.profile_id,
+                  "deps": [], "needs_review": False}]
         store = TeamTaskStore(team_tasks_db_path())
         try:
             store.create_task(
@@ -188,12 +210,7 @@ def _wake_via_team_task(loaded: Any, watcher: dict) -> bool:
                 assigned_by=f"watcher:{wid}",
                 pic_id=loaded.profile_id,
             )
-            store.set_plan(
-                task_id,
-                [{"step_id": "s1", "title": prompt, "assigned_to": loaded.profile_id,
-                  "deps": [], "needs_review": False}],
-                plan_hash=f"watch-{uuid.uuid4().hex[:8]}",
-            )
+            store.set_plan(task_id, steps, plan_hash=_wake_plan_hash(steps))
         finally:
             store.close()
 

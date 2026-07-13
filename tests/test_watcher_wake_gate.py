@@ -242,6 +242,20 @@ def test_wake_enqueues_single_step_task(tmp_path, monkeypatch):
         assert task.assigned_by == "watcher:w1"
         assert len(task.steps) == 1 and task.steps[0].assigned_to == "acme"
         assert task.steps[0].title == _W["prompt"]  # agent-owned prompt, no source text
+        # v34 live-UAT fix: the stored plan_hash must equal what the ticker recomputes
+        # (over system_inserted=0 rows) — a random "watch-…" token stalled the wake on
+        # tick one and it never dispatched.
+        assert not task.plan_hash.startswith("watch-")
+        from types import SimpleNamespace
+
+        from src.agent.task_decomposition import decomposition_content_hash
+
+        recomputed = decomposition_content_hash(SimpleNamespace(steps=[
+            SimpleNamespace(step_id=s.step_id, title=s.title,
+                            assigned_to=s.assigned_to, deps=s.deps)
+            for s in task.steps if not s.system_inserted
+        ]))
+        assert recomputed == task.plan_hash
     finally:
         store.close()
     assert events == ["assignment"]
@@ -255,6 +269,49 @@ def test_wake_refuses_non_assignable_agent(tmp_path, monkeypatch):
     monkeypatch.setattr("src.agent.team_task_roster.is_assignable", lambda a: False)
     loaded = _loaded(tmp_path, [_W])
     assert _wake_via_team_task(loaded, _W) is False  # → hash not advanced upstream
+
+
+def test_wake_task_passes_ticker_hash_gate(tmp_path, monkeypatch):
+    """End-to-end guard for the live-UAT finding: a wake task run through the REAL
+    ticker must dispatch (spawn), NOT stall on the plan-hash gate."""
+    from datetime import UTC, datetime
+
+    from src.agent.coordinator_graph import (
+        CoordinatorDeps,
+        in_memory_retry_tracker,
+        run_one_tick,
+    )
+    from src.runtime.watcher_runner import _wake_via_team_task
+
+    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path / ".data")
+    (tmp_path / ".data").mkdir()
+    monkeypatch.setattr("src.agent.team_task_roster.is_assignable", lambda a: a == "acme")
+    monkeypatch.setattr(
+        "src.runtime.office_room_append.append_office_event",
+        lambda *a, **k: None,
+    )
+    assert _wake_via_team_task(_loaded(tmp_path, [_W]), _W) is True
+
+    from src.runtime.team_task_paths import team_tasks_db_path
+    from src.runtime.team_task_store import TeamTaskStore
+
+    store = TeamTaskStore(team_tasks_db_path())
+    spawned = []
+    deps = CoordinatorDeps(
+        store=store, retry_tracker=in_memory_retry_tracker(), cost_cap_usd=2.0,
+        spawn_step=lambda task, step, attempt_id: spawned.append(step.step_id) or 999,
+        pid_alive=lambda pid: True, kill_pid=lambda pid, attempt_id: None,
+        roster_ok=lambda a: a == "acme",
+        aggregate=lambda task: ("ok", 0.0), deliver_room=lambda task, summary: None,
+        escalate=lambda task, step, kind, msg: spawned.append(f"STALL:{kind}"),
+        now=lambda: datetime.now(UTC),
+    )
+    try:
+        result = run_one_tick(deps)
+    finally:
+        store.close()
+    assert result.action == "spawned"  # NOT "stalled" — the hash gate passed
+    assert spawned == ["s1"] and not any(str(x).startswith("STALL") for x in spawned)
 
 
 # --- loader + scheduler wiring ---
