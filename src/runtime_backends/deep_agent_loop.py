@@ -97,8 +97,51 @@ def run_deep_agent_work(
             [SystemMessage(content=system), HumanMessage(content=user)],
             recursion_limit=max(2, loop_limit * 2),  # bounded loop
         )
-        return record_loop_result(
+        text, cost = record_loop_result(
             result, model_name=settings.openrouter_model, telemetry=telemetry
         )
+        # v41: the agent often writes its report to a /work/*.md file instead of (or as well
+        # as) the reply text. Read those back BEFORE teardown removes the container, appending
+        # any content not already in the reply — else the report is lost with the container.
+        text = _merge_sandbox_artifacts(backend, text)
+        return text, cost
     finally:
         teardown_sandbox(backend)  # C6: best-effort container teardown on the normal path
+
+
+#: Cap on total artifact text appended to the reply — keep the delivered/audited result bounded.
+_ARTIFACT_MERGE_MAX_CHARS = 256_000
+
+
+def _merge_sandbox_artifacts(backend, text: str) -> str:
+    """Append `/work/*.md` artifacts the agent wrote to `text` (before teardown), skipping any
+    already present in the reply. Best-effort: any failure leaves `text` unchanged — the reply
+    is the primary result, the file read-back is a supplement."""
+    try:
+        listing = backend.execute("ls /work/*.md 2>/dev/null")
+        names = [n.strip() for n in (getattr(listing, "output", "") or "").split() if n.strip()]
+        if not names:
+            return text
+        pieces: list[str] = []
+        budget = _ARTIFACT_MERGE_MAX_CHARS - len(text)
+        for name in names:
+            if budget <= 0:
+                break
+            got = backend.download_files([name])
+            if not got or got[0].error is not None or got[0].content is None:
+                continue
+            try:
+                body = got[0].content.decode("utf-8")
+            except UnicodeDecodeError:
+                continue
+            # Skip a file whose content is already substantially in the reply.
+            if body.strip() and body.strip()[:200] not in text:
+                header = f"\n\n### Artifact: {name}\n"
+                snippet = body[: max(0, budget - len(header))]
+                block = header + snippet
+                pieces.append(block)
+                budget -= len(block)
+        return text + "".join(pieces) if pieces else text
+    except Exception:  # noqa: BLE001 — read-back is a supplement; never fail the run
+        logger.warning("deep_agent artifact read-back failed (ignored)", exc_info=True)
+        return text

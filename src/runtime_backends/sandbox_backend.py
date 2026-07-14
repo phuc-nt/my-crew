@@ -42,6 +42,23 @@ if TYPE_CHECKING:
 #: interpolates the path into a `sh -c` command, so this is the injection guard.
 _SAFE_PATH_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*$")
 
+#: How long a deep-agent sandbox container lives before it self-terminates (`sleep N`).
+#: v41: deep_agent + a slow model runs 565-612s — the old hard 600s auto-removed the
+#: container mid-run (→ 404 on the next exec). 1800s (30 min) clears that with headroom;
+#: a hard ceiling (SANDBOX_LEASE_MAX_S) stops a wedged run from holding a container forever.
+#: The sandbox reaper's orphan threshold accounts for this so a valid long run is never
+#: reaped (see sandbox_reaper._orphan_threshold_s).
+SANDBOX_LEASE_S = 1800
+SANDBOX_LEASE_MAX_S = 3600
+_SANDBOX_LEASE_MIN_S = 60
+
+
+def _clamp_lease(seconds: int | None) -> int:
+    """A configured lease clamped to [min, max]; None ⇒ the default."""
+    if seconds is None:
+        return SANDBOX_LEASE_S
+    return max(_SANDBOX_LEASE_MIN_S, min(int(seconds), SANDBOX_LEASE_MAX_S))
+
 #: The one directory in-sandbox files may live in. A path outside it is refused (never
 #: written to the host) — the moat: the sandbox is scratch, not a host-write channel.
 _SANDBOX_ROOT = "/work"
@@ -116,7 +133,11 @@ def build_sandbox_backend(cfg: dict | None):
         # A deep_agent's shell has no legitimate need for the internet (research scraping goes
         # through the read-only tool-calling engine), so an open network is pure exfil surface.
         network = bool(cfg.get("network"))
-        return DockerSandboxBackend(image=cfg.get("image", "python:3.12-slim"), network=network)
+        # v41: optional per-agent lease override (clamped to [min, max] in the backend).
+        return DockerSandboxBackend(
+            image=cfg.get("image", "python:3.12-slim"), network=network,
+            lease_s=cfg.get("lease_seconds"),
+        )
     raise SandboxDenied(
         f"sandbox provider {provider!r} không được phép (chỉ fake|docker; "
         f"local/localshell/unknown bị từ chối để không đọc .env host)."
@@ -219,22 +240,24 @@ def _make_docker():
         than run an unsafe container.
         """
 
-        def __init__(self, image: str, network: bool = False):
+        def __init__(self, image: str, network: bool = False, lease_s: int | None = None):
             import docker  # optional dep
 
             self._image = image
+            self._lease_s = _clamp_lease(lease_s)
             self._client = docker.from_env()  # raises if Docker daemon unavailable
             # HOME is set on the container's OWN env only (not the shared scrubbed-env helper,
             # which the fake backend runs as a host subprocess): a non-root read-only container
             # needs a writable HOME (=/work, a tmpfs) for pip/tools; the host must not get it.
             container_env = {**_scrubbed_sandbox_env(), "HOME": "/work"}
             # HARD group — present in every run attempt, never dropped. No host mount (C3).
-            # `sleep 600` + auto_remove: the container self-terminates within the lease window and
-            # Docker removes it, so a self-exited/normally-exited container needs no reaper. The
+            # `sleep {lease}` + auto_remove: the container self-terminates within the lease window
+            # and Docker removes it, so a self-exited/normally-exited container needs no reaper. The
             # label lets the reaper find a STILL-RUNNING orphan (SIGKILL'd worker) by our own tag.
             from src.runtime_backends.sandbox_reaper import SANDBOX_LABEL, SANDBOX_LABEL_VALUE
             base_kwargs = {
-                "command": "sleep 600", "detach": True, "network_disabled": not network,
+                "command": f"sleep {self._lease_s}", "detach": True,
+                "network_disabled": not network,
                 "environment": container_env, "working_dir": "/work", "tty": False,
                 "cap_drop": ["ALL"], "user": "nobody", "security_opt": ["no-new-privileges"],
                 "labels": {SANDBOX_LABEL: SANDBOX_LABEL_VALUE}, "auto_remove": True,
@@ -359,14 +382,17 @@ def FakeSandboxBackend():  # noqa: N802 — factory reads as a class to callers
     return _make_fake()()
 
 
-def DockerSandboxBackend(image: str = "python:3.12-slim", network: bool = False):  # noqa: N802
+def DockerSandboxBackend(  # noqa: N802
+    image: str = "python:3.12-slim", network: bool = False, lease_s: int | None = None,
+):
     """Construct the Docker (self-hosted) sandbox backend. Raises if Docker is unavailable.
 
     `network` is off by default; the caller passes True only when the agent opted in via the
     sandbox config (and, in the deep_agent path, only when input sanitization succeeded).
+    `lease_s` sets the container's self-terminate window (clamped; None ⇒ SANDBOX_LEASE_S).
     """
     try:
-        return _make_docker()(image, network)
+        return _make_docker()(image, network, lease_s)
     except SandboxDenied:
         raise  # a rejected HARD guardrail already fails closed with a precise message
     except Exception as exc:  # noqa: BLE001 — Docker daemon missing / unreachable

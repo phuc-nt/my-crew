@@ -56,15 +56,30 @@ def _parse_docker_created(created: str) -> datetime:
     return datetime.fromisoformat(s).astimezone(UTC)
 
 
+def _default_ttl_s() -> int:
+    """The orphan threshold: a container is a dead-worker orphan only once it exceeds BOTH the
+    team-step worker lease AND its own sandbox lease. v41: the sandbox lease (1800s) is longer
+    than the step lease (600s), so a valid long-running deep_agent container (>600s but within
+    its sandbox lease) must NOT be reaped — take the max so the reaper waits out the longer of
+    the two before deeming a still-running container dead."""
+    from src.runtime_backends.sandbox_backend import SANDBOX_LEASE_S
+
+    return max(DEFAULT_LEASE_TTL_S, SANDBOX_LEASE_S)
+
+
 def reap_orphaned_sandboxes(
-    *, ttl_s: int = DEFAULT_LEASE_TTL_S, grace_s: int = _DEFAULT_GRACE_S, client=None
+    *, ttl_s: int | None = None, grace_s: int = _DEFAULT_GRACE_S, client=None
 ) -> int:
     """Remove still-running sandbox containers older than `ttl_s + grace_s`. Returns count reaped.
+    `ttl_s` defaults to `max(step-lease, sandbox-lease)` so a valid long deep_agent run is never
+    reaped mid-exec (v41).
 
     Only containers carrying our label AND older than the threshold are touched (label + age
     double-gate against false-killing a live worker's fresh sandbox). Never raises: Docker
     unavailable → 0; a per-container failure is isolated and skips that container.
     """
+    if ttl_s is None:
+        ttl_s = _default_ttl_s()
     try:
         if client is None:
             import docker  # optional dep

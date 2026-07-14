@@ -154,7 +154,10 @@ def test_docker_hardening_kwargs_present(monkeypatch):
     assert run["read_only"] is True
     # tmpfs is world-writable (1777) so the non-root `nobody` can write its workdir/home.
     assert run["tmpfs"] == {"/tmp": "rw,mode=1777", "/work": "rw,mode=1777"}
-    assert run["command"] == "sleep 600"
+    # v41: lease is configurable (default 1800s) — was a hard 600 that killed slow deep_agent runs.
+    from src.runtime_backends.sandbox_backend import SANDBOX_LEASE_S
+
+    assert run["command"] == f"sleep {SANDBOX_LEASE_S}"
     # HOME is on the container env only; token-free preserved.
     assert run["environment"]["HOME"] == "/work"
 

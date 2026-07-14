@@ -103,6 +103,36 @@ demo — minimax fail deep loop). `uv sync` cài base deps (tất cả 3 engine 
 > **v18**: `registry.yaml` KHÔNG còn trong git. Fresh checkout tự bootstrap từ
 > `registry.example.yaml`. Đừng bao giờ `git checkout registry.yaml`.
 
+### 6a. Chọn runtime engine cho một agent (`agent_runtime`)
+
+**Mặc định là `native`** (graph cố định `perceive → analyze → compose → deliver`) — rẻ,
+xác định, đúng cho báo cáo template (daily/weekly/okr). **Giữ native cho các agent báo cáo
+định kỳ.** Chỉ bật engine khác cho agent cần **suy luận mở** (research, phân tích ad-hoc):
+
+```yaml
+# profiles/<id>/profile.yaml
+
+# LLM tự chọn tool trong vòng lặp (read-only toolset: jira/github/confluence/linear +
+# web.scrape + academic.search + history.search; bật gws_context để thêm Gmail/Calendar/Drive).
+agent_runtime: create_agent
+# hoặc chỉnh cap vòng lặp cho task phức tạp:
+agent_runtime:
+  kind: create_agent
+  runtime_loop_limit: 12          # mặc định 8
+
+# Tự chủ cao nhất: agent tự viết shell/python trong Docker sandbox cách ly. Chậm hơn (vài phút),
+# cần Docker + model tool-calling mạnh. File agent ghi vào /work được đọc lại kèm kết quả (v41).
+agent_runtime:
+  kind: deep_agent
+  sandbox:
+    provider: docker
+    lease_seconds: 1800           # tuỳ chọn: cửa sổ sống của container (mặc định 1800, tối đa 3600)
+```
+
+- **`create_agent`** — LLM-tự-chọn-tool, read-only (không ghi ra ngoài, mọi write vẫn qua Gateway ở tầng deliver).
+- **`deep_agent`** — shell tự chủ trong sandbox; file trong `/work` (tmpfs, không chạm host). Kết quả trả về text; nếu agent ghi report ra `/work/*.md` thì được đọc lại gắn vào kết quả trước khi container bị dọn.
+- Toolset read-only KHÔNG có web-search generic (cố ý) — dùng `web.scrape` có kiểm; nếu nghề cần search thì thêm tool có-kiểm (như `academic.search`), không mở egress rộng.
+
 ## 7. Backup & khôi phục
 
 ```bash
