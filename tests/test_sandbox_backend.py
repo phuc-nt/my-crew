@@ -140,6 +140,27 @@ def test_docker_network_opt_in(monkeypatch):
     assert client.runs[-1]["network_disabled"] is False  # opt-in flips it on
 
 
+def test_docker_execute_degrades_on_transient_exec_error(monkeypatch):
+    """v43: a Docker exec error (e.g. 404 when the container was concurrently removed while
+    parallel subagent execs race it) must degrade to a non-zero ExecuteResponse, NOT raise and
+    abort the whole run — mirrors upload/download per-call guards."""
+    from src.runtime_backends import sandbox_backend as sb
+
+    class _BoomContainer(_FakeContainer):
+        def exec_run(self, *a, **k):
+            raise RuntimeError("404 Client Error: No such container")
+
+    client = _FakeDockerClient()
+    # swap the container the run() returns for one whose exec_run raises
+    client.containers.run = lambda image, **kw: _BoomContainer()  # type: ignore[assignment]
+    _patch_docker(monkeypatch, client)
+
+    backend = sb.build_sandbox_backend({"provider": "docker"})
+    res = backend.execute("ls /work")
+    assert res.exit_code == 1
+    assert "sandbox exec error" in res.output  # degraded, not raised
+
+
 def test_docker_hardening_kwargs_present(monkeypatch):
     from src.runtime_backends import sandbox_backend as sb
 

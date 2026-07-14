@@ -304,7 +304,17 @@ def _make_docker():
 
         def execute(self, command: str, *, timeout: int | None = None) -> Any:
             # exec inside the container; env already scrubbed at container creation.
-            res = self._container.exec_run(["sh", "-c", command], workdir="/work", demux=False)
+            # Guard the exec: a transient Docker API error (e.g. a 404 if the container was
+            # concurrently removed while parallel subagent `task` calls race execs against it)
+            # must degrade to a non-zero ExecuteResponse the agent can react to, NOT raise and
+            # abort the whole run. This mirrors upload_files/download_files' per-call guards and
+            # keeps a flaky container-exec resilient (v43: deep_team subagents run parallel execs).
+            try:
+                res = self._container.exec_run(
+                    ["sh", "-c", command], workdir="/work", demux=False)
+            except Exception as exc:  # noqa: BLE001 — Docker API/transport error → degrade, not crash
+                logger.warning("sandbox execute failed (degraded to error result): %s", exc)
+                return ExecuteResponse(output=f"[sandbox exec error] {exc}"[:500], exit_code=1)
             out = res.output.decode("utf-8", errors="replace") if res.output else ""
             return ExecuteResponse(output=out, exit_code=res.exit_code)
 

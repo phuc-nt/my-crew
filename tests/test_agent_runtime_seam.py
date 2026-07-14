@@ -73,6 +73,35 @@ def test_deep_agent_resolves_deep_runtime():
     assert isinstance(resolve_runtime(_LP("deep_agent")), DeepAgentRuntime)
 
 
+def test_deep_agent_build_task_tolerates_full_extra_kwargs():
+    """Regression (v43): the step runner threads gws_context + deep_team into every non-native
+    runtime's build_task. DeepAgentRuntime must POP both, not leak them into build_team_task_graph
+    (which has a fixed signature and would TypeError). Pre-v43 this leaked `gws_context` — a real
+    deep_agent team-step crashed. We assert build_task gets past the pop/validate and fails ONLY at
+    the sandbox provider check (a clean, expected failure) rather than on an unexpected-kwarg error.
+    """
+    import importlib.util
+
+    if importlib.util.find_spec("deepagents") is None:
+        import pytest as _pytest
+
+        _pytest.skip("deepagents optional dep not installed")
+
+    from src.runtime_backends.config import AgentRuntimeConfig
+    from src.runtime_backends.deep_agent_runtime import DeepAgentRuntime
+
+    # No sandbox → the provider check raises RuntimeError. The point: it must reach that check,
+    # not raise TypeError on gws_context/deep_team first.
+    with pytest.raises(RuntimeError, match="sandbox provider"):
+        DeepAgentRuntime().build_task(
+            settings=None, context=None, step_title="t", data_dir="/tmp", task_id="x",
+            step_seq=1, step_deps=(), search_hook=None, self_id="a", telemetry=None,
+            remember_node=None, reporting_config=None,
+            runtime_config=AgentRuntimeConfig(kind="deep_agent"),
+            academic_search=False, gws_context=False, deep_team=True, allow_split=False,
+        )
+
+
 def test_force_native_killswitch(monkeypatch):
     monkeypatch.setenv("RUNTIME_FORCE_NATIVE", "1")
     # create_agent would raise, but the kill-switch forces native fleet-wide.

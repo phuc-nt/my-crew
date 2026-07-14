@@ -100,6 +100,16 @@ def test_memory_md_read_verbatim(clean_env, tmp_path):
     assert "Sprint 4 slipped due to Payment API" in loaded.memory
 
 
+def test_deep_team_flag_defaults_false(clean_env, tmp_path):
+    pdir, pid = _write_profile(tmp_path, "name: a\n")
+    assert load_profile(pid, profiles_dir=pdir).deep_team is False
+
+
+def test_deep_team_flag_round_trips(clean_env, tmp_path):
+    pdir, pid = _write_profile(tmp_path, "name: a\ndeep_team: true\n")
+    assert load_profile(pid, profiles_dir=pdir).deep_team is True
+
+
 # --- env-fallback rule: empty yaml scalar DEFERS to env (the load-bearing rule) ---
 
 

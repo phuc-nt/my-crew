@@ -80,6 +80,12 @@ class LoadedProfile:
     # runtimes. Default False ⇒ the gws.* tools are not offered (toolset byte-identical).
     # The gws CLI's OAuth is the credential; no key gate to lean on, so the flag IS the gate.
     gws_context: bool = False
+    # v43: opt-in in-sandbox subagent delegation for a deep_agent team-step. Default False ⇒ no
+    # curated `general-purpose` subagent spec is passed to create_deep_agent and no delegation-cap
+    # middleware is attached (byte-identical to today; the deepagents-default subagent, if it fires,
+    # is unchanged). When True, run_deep_agent_work wires a compose-early subagent + a hard cap on
+    # the number of `task` delegations. deep_agent tier only (others have no sandbox/subagents).
+    deep_team: bool = False
     # v19 memory seam: which provider serves the injectable memory text. Absent ⇒ static
     # (MEMORY.md, byte-identical pre-v19). Consumed by `src/memory.resolve_memory_text`.
     memory_config: MemoryConfig = field(default_factory=MemoryConfig)
@@ -164,6 +170,7 @@ def load_profile(
     web_search = bool(yaml_doc.get("web_search", False))
     academic_search = bool(yaml_doc.get("academic_search", False))
     gws_context = bool(yaml_doc.get("gws_context", False))
+    deep_team = bool(yaml_doc.get("deep_team", False))
     memory_config = parse_memory_config(yaml_doc.get("memory"))
     agent_runtime = parse_agent_runtime_config(yaml_doc.get("agent_runtime"))
     watchers = _parse_watchers(yaml_doc.get("watchers"))
@@ -187,6 +194,7 @@ def load_profile(
         web_search=web_search,
         academic_search=academic_search,
         gws_context=gws_context,
+        deep_team=deep_team,
         memory_config=memory_config,
         agent_runtime=agent_runtime,
         team_step_egress=team_step_egress,
