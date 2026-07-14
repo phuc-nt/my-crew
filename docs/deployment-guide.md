@@ -1,8 +1,8 @@
 # Deployment & Setup Guide — my-crew
 
-> Cách cài, chạy, cấu hình, backup. As-built v18, mọi lệnh chạy thật. Chi tiết vận hành
+> Cách cài, chạy, cấu hình, backup. As-built v45, mọi lệnh chạy thật. Chi tiết vận hành
 > hằng ngày cho người dùng cuối: [huong-dan-su-dung.md](huong-dan-su-dung.md) (tiếng Việt).
-> Cập nhật: 2026-07-11.
+> Cập nhật: 2026-07-15.
 
 ## 1. Yêu cầu
 
@@ -105,6 +105,11 @@ demo — minimax fail deep loop). `uv sync` cài base deps (tất cả 3 engine 
 
 ### 6a. Chọn runtime engine cho một agent (`agent_runtime`)
 
+> **v45 — định tuyến PER-STEP:** với TEAM-TASK, mỗi bước tự chọn tier: mặc định chạy `create_agent`
+> (nhanh, KHÔNG Docker); chỉ bước khai báo `needs_shell` mới leo lên `deep_agent` (Docker). Nghĩa là
+> một agent `deep_agent` KHÔNG còn spin container cho mọi bước — chỉ bước cần shell mới trả giá đó.
+> `agent_runtime:` dưới đây vẫn là cấu hình per-agent (nền + fallback + đường report). Xem §6b.
+
 **Mặc định là `native`** (graph cố định `perceive → analyze → compose → deliver`) — rẻ,
 xác định, đúng cho báo cáo template (daily/weekly/okr). **Giữ native cho các agent báo cáo
 định kỳ.** Chỉ bật engine khác cho agent cần **suy luận mở** (research, phân tích ad-hoc):
@@ -129,11 +134,17 @@ agent_runtime:
     lease_seconds: 1800           # tuỳ chọn: cửa sổ sống của container (mặc định 1800, tối đa 3600)
 ```
 
-- **`create_agent`** — LLM-tự-chọn-tool, read-only (không ghi ra ngoài, mọi write vẫn qua Gateway ở tầng deliver).
-- **`deep_agent`** — shell tự chủ trong sandbox; file trong `/work` (tmpfs, không chạm host). Kết quả trả về text; nếu agent ghi report ra `/work/*.md` thì được đọc lại gắn vào kết quả trước khi container bị dọn.
+- **`create_agent`** — LLM-tự-chọn-tool, read-only. **v45**: thêm file-scratch trong graph-state (ghi/đọc file .md để soạn báo cáo, KHÔNG shell, KHÔNG host FS, KHÔNG Docker) — nên một bước no-shell tự viết-tinh-chỉnh báo cáo mà không cần container. Mọi write ra ngoài vẫn qua Gateway ở tầng deliver.
+- **`deep_agent`** — shell tự chủ trong sandbox; file trong `/work` (tmpfs, không chạm host). Kết quả trả về text; report ghi ra `/work/*.md` được đọc lại gắn vào kết quả. **Chỉ dùng khi bước THẬT cần chạy shell/code** (v45 routing tự leo lên đây qua `needs_shell`).
 - Toolset read-only KHÔNG có web-search generic (cố ý) — dùng `web.scrape` có kiểm; nếu nghề cần search thì thêm tool có-kiểm (như `academic.search`), không mở egress rộng.
 
 ### 6b. Định tuyến: chọn runtime tier + cơ chế multi-agent nào
+
+> **v45 — team-task tự định tuyến per-step:** với một team-task, bạn KHÔNG phải chọn tier cho từng
+> bước bằng tay. Decompose-LLM đặt `needs_shell` cho mỗi bước; hệ thống tự cho bước no-shell chạy
+> `create_agent` (0 Docker) và chỉ bước cần shell leo lên `deep_agent`. Bảng dưới mô tả *hình dạng
+> việc → tier phù hợp* để hiểu bản chất; team-task áp nó tự động, còn agent-report vẫn theo
+> `agent_runtime` per-agent.
 
 Benchmark cho thấy điều dễ nhầm nhất KHÔNG phải chọn sai config mà là **dùng sai công cụ cho hình dạng việc**. Bảng quyết định:
 
@@ -148,7 +159,7 @@ Benchmark cho thấy điều dễ nhầm nhất KHÔNG phải chọn sai config 
 **Nguyên tắc cốt lõi:**
 - **native team** = fan-out RỘNG: nhiều vai, nhiều deliverable, chạy đa tiến trình thật (đây là lợi thế cấu trúc). Cap: 7 step/DAG, concurrency 2 (chỉnh per-company qua `team_task_concurrency` trong `company.yaml`).
 - **deep_team** (in-sandbox subagent) = siloing HẸP-SÂU: 2-3 ngữ cảnh lớn mỗi cái cần tóm tách bạch, gộp về MỘT deliverable. **KHÔNG dùng cho fan-out rộng** — benchmark cho thấy 5 nhánh vs cap 3 → gộp, đắt 3-7× mà không tốt hơn. Cap mặc định 3.
-- `deep_agent` **chậm hơn mỗi step** vì mỗi step nhận một container sandbox mới, cách ly, tự-hủy — **cách ly đó là mục đích, không phải lỗi**. Việc no-shell cần nhanh → dùng `create_agent`/`native`.
+- `deep_agent` **chậm hơn khi CẦN shell** vì bước đó nhận một container sandbox mới, cách ly, tự-hủy — **cách ly đó là mục đích, không phải lỗi**; **shell thật CHỈ chạy trong sandbox** (bác host-exec: fleet autonomous không ai duyệt lệnh real-time + input injectable). v45: bước no-shell KHÔNG còn spin container (tự route sang `create_agent`), nên chỉ việc thật cần shell mới trả giá đó. Docker cold-start đo ~0.4s/step — không phải nút thắt tốc độ.
 
 **Knob per-company/agent (v41/v44) — chỉ nâng khi có nhu cầu nặng cụ thể; mặc định bảo vệ ca thường + giới hạn blast-radius:**
 
@@ -162,6 +173,11 @@ agent_runtime:
 deep_team: true            # v43: bật điều phối trợ lý con in-sandbox
 deep_team_max_calls: 3     # v44: trần số lần giao trợ lý con (mặc định 3, kẹp [1,8])
 ```
+
+> **v45 `needs_shell`** KHÔNG phải knob trong `profile.yaml` — nó là cờ per-BƯỚC do decompose-LLM đặt
+> lúc phân rã team-task (mặc định false → create_agent 0-Docker; true → deep_agent). Bind vào CEO-confirm
+> hash. Một bước cần shell mà agent-nhận không có `sandbox` config → task FAIL LOUD (fail-closed), nên
+> hãy giao bước cần shell cho agent đã cấu hình `agent_runtime: deep_agent` + sandbox.
 
 ## 7. Backup & khôi phục
 

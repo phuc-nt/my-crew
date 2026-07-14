@@ -1,6 +1,6 @@
 # System Architecture — my-crew
 
-> Kiến trúc kỹ thuật (as-built, v27). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
+> Kiến trúc kỹ thuật (as-built, v45). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
 > (vì sao) + [action-gateway-explainer](action-gateway-explainer.md) (mô hình an toàn) +
 > [codebase-summary](codebase-summary.md) (cái gì ở file nào).
 > Cập nhật: 2026-07-12.
@@ -102,24 +102,27 @@ chọn nay raise rõ). Memory tiếp tục vào INTERNAL user-msg qua `build_con
 + `skills/` (per-agent, body wrap `format_internal_content`, không shadow pack skill).
 Capability block auto-gen (`capability_block.py`) cũng INTERNAL-only cùng path.
 
-### 3.9 AgentRuntime backends (`src/runtime_backends/`, v20–v28)
-Tách agent-LOOP khỏi điều phối + an toàn. `resolve_runtime(loaded)` chọn backend theo
-`agent_runtime:` (native|create_agent|deep_agent; default native, kill-switch
-`RUNTIME_FORCE_NATIVE`). `NativeGraphRuntime` = graph hiện tại byte-identical.
+### 3.9 AgentRuntime backends (`src/runtime_backends/`, v20–v45)
+Tách agent-LOOP khỏi điều phối + an toàn. Backend được chọn PER-STEP qua
+`resolve_step_runtime(loaded, step)` (v45 — xem "Định tuyến per-step" cuối §3.9); `resolve_runtime(loaded)`
+(chọn theo `agent_runtime:` của cả agent — native|create_agent|deep_agent; default native, kill-switch
+`RUNTIME_FORCE_NATIVE`) vẫn là nền cho report + fallback. `NativeGraphRuntime` = graph hiện tại byte-identical.
 `ToolCallingRuntime` = tool-calling loop (`create_agent` từ langchain.agents, v28 migrate từ
 `langgraph.prebuilt.create_react_agent`) NHƯNG swaps chỉ `run_work` nên deliver (ghi artifact
 nội bộ) giữ native; toolset positive read-allowlist + classify shim mọi tool + audience-aware.
+**v45**: tier này thêm **file-scratch trong graph-state** (deepagents `StateBackend` +
+`FilesystemMiddleware`, tool `execute` bị STRIP + fail-loud guard → tuyệt đối no-shell, KHÔNG host FS,
+KHÔNG Docker) để một bước no-shell tự viết/tinh chỉnh báo cáo .md rồi read-back vào kết quả — chạy nhanh,
+không cần container.
 **v28 DRY**: `community_loop_core.py` tách `record_loop_result` (post-invoke tail: text +
 `sum_usage_metadata` + `estimate_cost` + telemetry.record) + `invoke_capped` (cap recursion +
 catch `GraphRecursionError`→degrade empty + `_tracing_off()` context manager tắt LangSmith
 tracing bằng env-blank, không `callbacks=[]`).
 
-**Ghi chú egress team-step (đính chính, 2026-07-11)**: team-step deliver hiện CHỈ ghi artifact
-nội bộ (`step-<n>.json`) — hook `external_write` để step ghi ra ngoài công ty (Slack/Jira) đã
-thiết kế nhưng CHƯA nối (`deps.external_write=None`). Egress công ty ĐANG đi qua **report graph**
-(daily/weekly/okr/resource) vốn wire ActionGateway đầy đủ. Vậy ToolCalling/Native team-step KHÔNG
-egress → "invariant #1 giữ" đúng theo nghĩa team-step không có đường ra ngoài, KHÔNG phải "output
-đi qua gateway". Nối `external_write→gateway` là tính năng để step tự egress (kế hoạch v20.5).
+**Ghi chú egress team-step (v20.5)**: team-step deliver ghi artifact nội bộ (`step-<n>.json`); hook
+`external_write` để step tự ghi ra ngoài công ty (Slack/Jira) ĐÃ nối qua Action Gateway khi agent bật
+`team_step_egress` (mặc định None ⇒ chỉ ghi artifact nội bộ, không egress). Mọi egress công ty — team-step
+lẫn report graph — đều đi qua ActionGateway (Lớp A/B + audit); không module nào gọi write-API trực tiếp.
 
 **DeepAgentRuntime (v20.5–v27)**: `create_deep_agent` chạy shell CHỈ trong sandbox (`fake` test |
 `docker` self-hosted, token-free, không mount host). Loop cap `runtime_loop_limit` per-runtime.
@@ -132,10 +135,36 @@ read_only/tmpfs (HARD group fail-closed, DEGRADABLE group với warning). (3) **
 + grace. (4) **Cost robustness** — `estimate_cost` reject nan/inf prices (→None, never poison budget
 cap). Sanitizer là trust boundary cho network-safe deep_agent; wizard emits `{kind, sandbox:{provider}}`.
 
-**Guardrail phân tầng (v20.5–v27)**: độ-tự-do LLM ↔ độ-cách-ly nghịch nhau — Native (0 tool, chặt
-nhất) < ToolCalling (read-only loop + classify shim) < DeepAgent (shell tự do nhưng trong Docker
-sandbox cách ly + SANITIZE). Team-step egress công ty qua `external_write → ActionGateway` (Lớp A/B).
-User chọn runtime khi tạo agent; role template có `recommended_runtime` prefill.
+**Guardrail phân tầng**: độ-tự-do LLM ↔ độ-cách-ly nghịch nhau — Native (0 tool, chặt nhất) <
+ToolCalling (read-only loop + classify shim + graph-state scratch, KHÔNG shell) < DeepAgent (shell
+tự do NHƯNG chỉ trong Docker sandbox cách ly + SANITIZE). Role template có `recommended_runtime` prefill.
+
+**Định tuyến per-step (v45) — Docker chỉ khi CẦN shell**: một team-step mặc định chạy
+**create_agent** (nhanh, 0 Docker); CHỈ bước khai báo `needs_shell=true` mới leo lên **deep_agent**
+(Docker sandbox). `resolve_step_runtime(loaded, step)`:
+- `needs_shell=true` → deep_agent; nếu agent không có sandbox config → raise `SandboxUnavailableForShellStep`
+  (fail-closed, KHÔNG chạy shell-less ngầm, KHÔNG bao giờ chạy shell trên host).
+- `needs_shell=false` trên agent deep_agent-pinned → DROP xuống create_agent (không trả giá container
+  cho việc không cần shell).
+- còn lại → giữ kind của agent; `None`/kill-switch → native.
+- **Fail-closed 2 chiều**: tier nhẹ KHÔNG có shell, nên `needs_shell` do decompose-LLM đặt (như
+  `needs_review`) mà bị injection lật: ép `false` chỉ làm một bước-cần-shell FAIL (không RCE); ép `true`
+  chỉ leo lên sandbox (an toàn). Không đường nào cấp shell/host mà bước đó chưa được định tuyến tới.
+  `needs_shell` được bind vào `decomposition_content_hash` (có điều kiện — chỉ emit khi True → DAG
+  all-no-shell hash byte-identical pre-v45) nên CEO-confirm phủ luôn tư thế shell của kế hoạch.
+
+**Triết lý moat (chốt qua research v45)**: **shell thật CHỈ chạy trong Docker sandbox**; việc no-shell
+(đại đa số: suy luận + đọc + viết báo cáo) chạy **Docker-free** trên create_agent. **Bác host-exec +
+shell-approval** (mô hình Hermes/OpenClaw/Claude Code): 3 harness kia an toàn vì CÓ NGƯỜI duyệt lệnh
+real-time (con người = sandbox); MPM là fleet **autonomous** (chạy nền, không ai duyệt lúc 3h sáng) +
+input **injectable** (web-scrape/handoff) → approval-cho-shell là category-error (write LEGIBLE nên duyệt
+được; shell KHÔNG legible). Đo thật: Docker cold-start ~0.4s/step (rẻ, KHÔNG phải nút thắt) → bỏ Docker =
+all-cost-no-speed. Egress công ty vẫn CHỈ qua `external_write → ActionGateway` (Lớp A/B).
+
+**deep_team (v43, opt-in)**: trong 1 step deep_agent, agent có thể giao trợ lý con IN-SANDBOX qua tool
+`task` (`deep_team: true`, cap `deep_team_max_calls` mặc định 3) cho các sub-câu-hỏi ngữ cảnh lớn riêng
+biệt; trợ lý con kế thừa CÙNG sandbox backend (không thoát host), token gộp đủ vào chi phí step. Fan-out
+RỘNG (nhiều nhánh độc lập) thì dùng native team (decompose→DAG→PIC→review), không phải deep_team.
 
 ### 3.9b Watcher (wake-gate, v31, perceive-only)
 **Không LLM poll — chỉ khi nội dung đổi:** `watchers:` block trong profile.yaml (jira/github/sheets sources). Service mỗi 5 phút poll → normalize → hash. Nội dung KHÔNG đổi = 0 LLM (measured capture store). Đổi → wake 1 lần: dispatcher tạo 1 step team-task pre-built (không LLM phân rã), assigned agent chính nó. **Alerts**: fail ×3 → CEO Telegram báo; no-change >24h → stale alert. Modules: `src/runtime/watcher_store.py`, `watcher_normalize.py`, `watcher_runner.py`, `operator_notify.py`.

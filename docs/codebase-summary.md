@@ -1,13 +1,22 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-07-13 — v32 COMPLETE.** ~2032 backend + 186 FE tests, ruff/tsc clean.
-> Product usable single-user tới v26 (agent office, team-task, màn 3D, registry user-data,
-> memory seam, AgentRuntime multi-runtime + community sockets, runtime-tiers, **telemetry
-> capture + unified cost across 3 engines + remember-node extension**). Bản đồ code +
-> quyết định kiến trúc theo mốc bên dưới. Đọc cùng
-> [system-architecture](system-architecture.md), [project-overview-pdr](project-overview-pdr.md),
-> [project-roadmap](project-roadmap.md).
+> Status: **2026-07-15 — v45 COMPLETE.** ~2312 backend tests, ruff/tsc clean.
+> Product usable single-user (agent office, team-task, màn 3D, registry user-data,
+> memory seam, AgentRuntime 3-tier + per-step routing, telemetry capture + unified cost,
+> deep_team in-sandbox subagent, benchmark-hardened robustness). Bản đồ code +
+> quyết định kiến trúc theo mốc bên dưới. **Triết lý runtime-tier + routing xem
+> [system-architecture](system-architecture.md) §3.9** (nguồn chuẩn). Đọc cùng
+> [project-overview-pdr](project-overview-pdr.md), [project-roadmap](project-roadmap.md).
+>
+> **Mốc v40–v45 (tóm tắt — chi tiết ở `docs/journals/`):** v40 deep_agent file-write fix ·
+> v41 sandbox lease config + artifact read-back · v42 compose-early contract (step-budget) ·
+> v43 deep_team in-sandbox subagent (`deep_team`/`deep_team_max_calls`, cost-fold, TaskCapMiddleware) ·
+> v44 benchmark-hardening (429 exp-backoff, `sandbox.mem_limit` config, routing doc) ·
+> **v45 tier-0 routing**: `needs_shell` step field + `resolve_step_runtime` per-step (no-shell→create_agent
+> 0-Docker, needs_shell→deep_agent fail-closed) + create_agent StateBackend graph-state scratch
+> (`react_loop._state_scratch_middleware`, execute-stripped). Modules mới: `runtime_backends/protocol.py`
+> (`resolve_step_runtime`), `deep_team_task_cap.py`; field mới: `TeamStep.needs_shell`.
 
 ## Trạng thái hiện tại (v2 COMPLETE: M1+M2+M3)
 
