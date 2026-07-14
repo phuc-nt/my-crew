@@ -18,7 +18,8 @@ _DECOMPOSE_SYSTEM = (
     "và danh sách nhân sự (mã + vai trò) có thể giao việc, hãy trả về DUY NHẤT một JSON "
     '(không markdown) đúng dạng: {"steps":[{"step_id":"...","title":"...",'
     '"assigned_to":"<mã nhân sự>","deps":["..."],"acceptance":"...",'
-    '"needs_review":true}],"pic_id":"<mã nhân sự>","requires_approval":true}. '
+    '"needs_review":true,"needs_shell":false}],"pic_id":"<mã nhân sự>",'
+    '"requires_approval":true}. '
     "Tối đa 7 bước. `assigned_to` PHẢI là một mã trong danh sách nhân sự được cung cấp — "
     "không tự bịa mã. `deps` liệt kê step_id của các bước phải xong TRƯỚC bước này (rỗng "
     "nếu không phụ thuộc gì). `acceptance` = 1-5 tiêu chí nghiệm thu NGẮN cho bước, mỗi tiêu chí một dòng bắt đầu "
@@ -26,7 +27,10 @@ _DECOMPOSE_SYSTEM = (
     "nhất 1 tiêu chí cho mọi bước tạo nội dung. Nếu CEO nêu tiêu chí trong yêu cầu, PHẢI "
     "đưa nguyên những tiêu chí đó vào `acceptance` của các bước liên quan. `needs_review` = true cho các bước TẠO RA nội dung/kết quả "
     "cần soát chất lượng (viết, phân tích, thiết kế); false cho bước thuần thu thập/tra cứu "
-    "hoặc bước nhỏ không đáng soát. `pic_id` = mã nhân sự CHỊU TRÁCH NHIỆM CHÍNH (PIC) cho "
+    "hoặc bước nhỏ không đáng soát. `needs_shell` = true CHỈ KHI bước bắt buộc phải CHẠY "
+    "shell/mã thật (cài gói pip, curl, thực thi script/code); MẶC ĐỊNH false cho mọi bước "
+    "chỉ suy luận + đọc dữ liệu + viết báo cáo (đại đa số bước). Đặt true không cần thiết "
+    "chỉ làm bước chậm hơn. `pic_id` = mã nhân sự CHỊU TRÁCH NHIỆM CHÍNH (PIC) cho "
     "cả việc: nếu yêu cầu có dòng 'PIC CHỈ ĐỊNH: <mã>' thì pic_id PHẢI đúng mã đó; nếu "
     "không có, hãy tự chọn người có vai trò khớp nhất với trọng tâm của việc. QUY TẮC "
     "CỨNG: kế hoạch phải có ĐÚNG MỘT bước chốt cuối không bước nào phụ thuộc vào — bước "

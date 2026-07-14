@@ -403,15 +403,23 @@ def _run_graph(
     # (a step whose profile failed to load still runs with EMPTY context) — resolve_runtime
     # degrades that to native. NativeGraphRuntime.build_task delegates to build_team_task_graph
     # unchanged, so native output is byte-identical.
-    from src.runtime_backends import resolve_runtime
+    from src.runtime_backends.protocol import resolve_step_runtime
+
+    # v45: resolve the runtime PER STEP — a no-shell step on a deep_agent-pinned agent drops to
+    # the fast, Docker-free create_agent tier; a needs_shell step escalates to deep_agent (or fails
+    # loud if the agent has no sandbox). The `_extra` wiring below is gated on the EFFECTIVE kind,
+    # not the profile kind, so a dropped step feeds the tool-calling runtime the right kwargs (each
+    # runtime already pops what it doesn't use — v43/v44). `loaded=None` → native (degrade path).
+    runtime = resolve_step_runtime(loaded, step)
+    effective_kind = type(runtime).__name__
+    _is_non_native = effective_kind != "NativeGraphRuntime"
 
     # `reporting_config` is consumed only by a tool-calling runtime (read toolset); the native
     # runtime ignores it. NativeGraphRuntime.build_task passes **kwargs straight to
     # build_team_task_graph, which does not accept reporting_config — so pop-or-ignore lives in
     # the ToolCallingRuntime; native must not receive it. Only pass it for non-native.
     _extra = {}
-    if loaded is not None and getattr(loaded, "agent_runtime", None) is not None \
-            and loaded.agent_runtime.kind != "native":
+    if loaded is not None and _is_non_native:
         _extra["reporting_config"] = loaded.config
         # v20.5: thread the per-runtime caps (loop limit / sandbox) to the runtime.
         _extra["runtime_config"] = loaded.agent_runtime
@@ -448,7 +456,7 @@ def _run_graph(
         and not getattr(step, "system_inserted", False)
         and getattr(step, "step_type", "work") == "work"
     )
-    graph = resolve_runtime(loaded).build_task(
+    graph = runtime.build_task(
         settings=settings, context=context, step_title=step.title,
         data_dir=team_tasks_root(), task_id=task_id, step_seq=step.seq,
         step_deps=step.deps, search_hook=_resolve_search_hook(loaded, settings),

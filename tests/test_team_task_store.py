@@ -42,7 +42,7 @@ def _content_hash(steps: list[dict]) -> str:
     return decomposition_content_hash(SimpleNamespace(steps=[
         SimpleNamespace(
             step_id=s["step_id"], title=s["title"], assigned_to=s["assigned_to"],
-            deps=tuple(s.get("deps", ())),
+            deps=tuple(s.get("deps", ())), needs_shell=bool(s.get("needs_shell", False)),
         )
         for s in steps
     ]))
@@ -74,6 +74,23 @@ def test_create_task_and_set_plan_round_trip(tmp_path):
     ])
     assert [s.step_id for s in task.steps] == ["s1", "s2", "s3"]
     assert task.steps[2].deps == ("s2",)
+    store.close()
+
+
+def test_needs_shell_round_trips(tmp_path):
+    """v45: needs_shell persists + round-trips (default False; True honored)."""
+    store = _store(tmp_path)
+    steps = [
+        {"step_id": "s1", "title": "read", "assigned_to": "agent-a", "deps": []},
+        {"step_id": "s2", "title": "run", "assigned_to": "agent-a", "deps": ["s1"],
+         "needs_shell": True},
+    ]
+    store.create_task(task_id="tsh", title="demo", original_request="x")
+    store.set_plan("tsh", steps, plan_hash=_content_hash(steps))
+    task = store.get("tsh")
+    by_id = {s.step_id: s for s in task.steps}
+    assert by_id["s1"].needs_shell is False  # default
+    assert by_id["s2"].needs_shell is True   # honored
     store.close()
 
 

@@ -88,6 +88,12 @@ class TeamStep:
     # the correlation key the ticker polls to resume once the CEO answers/expires.
     # None on every step that never interrupted on a CEO question.
     clarify_id: int | None = None
+    # v45 tier-0 routing: True iff the step must run real shell/code → escalates to the deep_agent
+    # Docker sandbox; False (default) → runs on the fast, Docker-free create_agent tier. Read by
+    # `resolve_step_runtime` (v45) + bound into `decomposition_content_hash` (conditionally, only
+    # when True) so the CEO's confirm covers the step's shell posture. Defaulted (not positional)
+    # so pre-v45 `TeamStep(...)` constructions and fixtures stay valid.
+    needs_shell: bool = False
     # v34 P4: JSON list [{"title","assigned_to"}] the step proposed instead of doing
     # the work itself ("Đã chia bước"). Set at mark_done; the ticker's fanout-insert
     # rule reads it, mints the sub/gather rows, and the children's existence is the
@@ -146,6 +152,10 @@ def create_schema(conn: sqlite3.Connection) -> None:
         "ALTER TABLE team_steps ADD COLUMN system_inserted INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE team_steps ADD COLUMN parent_step_id TEXT",
         "ALTER TABLE team_steps ADD COLUMN review_round INTEGER NOT NULL DEFAULT 0",
+        # v45 tier-0 routing: default 0 reproduces pre-v45 behavior (no-shell → create_agent)
+        # and, because `decomposition_content_hash` emits needs_shell only when True, an old
+        # row (all 0) hashes byte-identical to before — no plan-hash-mismatch stall on migrate.
+        "ALTER TABLE team_steps ADD COLUMN needs_shell INTEGER NOT NULL DEFAULT 0",
     ):
         try:
             conn.execute(ddl)
@@ -172,11 +182,12 @@ def _row_to_step(data: dict[str, Any]) -> TeamStep:
         escalated_at=data["escalated_at"], approval_id=data.get("approval_id"),
         acceptance=data.get("acceptance") or "",
         # P2: stored as SQLite INTEGER (0/1) — coerce explicitly to `bool` here so
-        # callers never need to know the on-disk representation. `acceptance`/these two
-        # fields deliberately do NOT enter `decomposition_content_hash`, so this
-        # int->bool round-trip can never desync the confirmed-plan hash either way.
+        # callers never need to know the on-disk representation. `acceptance`/`step_type`/
+        # `needs_review` do NOT enter `decomposition_content_hash`; `needs_shell` (v45) DOES
+        # (conditionally, only when True), so its int->bool round-trip must be exact — it is.
         step_type=data.get("step_type") or "work",
         needs_review=bool(int(data.get("needs_review") or 0)),
+        needs_shell=bool(int(data.get("needs_shell") or 0)),
         system_inserted=bool(int(data.get("system_inserted") or 0)),
         parent_step_id=data.get("parent_step_id"),
         review_round=int(data.get("review_round") or 0),
@@ -206,14 +217,15 @@ def replace_steps(conn: sqlite3.Connection, task_id: str, steps: list[dict[str, 
         conn.execute(
             "INSERT INTO team_steps "
             "(task_id, step_id, title, assigned_to, deps_json, status, acceptance, "
-            " step_type, needs_review, system_inserted) "
-            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, 0)",
+            " step_type, needs_review, needs_shell, system_inserted) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, 0)",
             (
                 task_id, step["step_id"], step.get("title", ""), step.get("assigned_to", ""),
                 json.dumps(list(step.get("deps", ())), ensure_ascii=False),
                 step.get("acceptance", ""),
                 step.get("step_type") or "work",
                 1 if step.get("needs_review") else 0,
+                1 if step.get("needs_shell") else 0,  # v45: default 0 (no-shell → create_agent)
             ),
         )
 
@@ -233,7 +245,10 @@ def insert_step(conn: sqlite3.Connection, task_id: str, step: dict[str, Any], *,
     `step_id`/`title`/`assigned_to`/`deps`/`step_type`/`parent_step_id`/`review_round`;
     `acceptance` defaults to "" (a review/rework row has no self-check rubric of its
     own — its rubric IS the parent content step's `acceptance`, read directly by
-    `review_graph.py`).
+    `review_graph.py`). v45 `needs_shell` is deliberately NOT settable here: these
+    ticker-minted rows (review/rework/gather) are system_inserted, excluded from the confirm
+    hash, and their text-only work never needs a shell — they take the schema DEFAULT 0 →
+    create_agent tier, matching the `needs_review`-not-copied guard-rail above.
     """
     conn.execute(
         "INSERT INTO team_steps "
@@ -492,14 +507,15 @@ def swap_pending_steps(
         conn.execute(
             "INSERT INTO team_steps "
             "(task_id, step_id, title, assigned_to, deps_json, status, acceptance, "
-            " step_type, needs_review, system_inserted) "
-            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, 0)",
+            " step_type, needs_review, needs_shell, system_inserted) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, 0)",
             (
                 task_id, step["step_id"], step.get("title", ""), step.get("assigned_to", ""),
                 json.dumps(list(step.get("deps", ())), ensure_ascii=False),
                 step.get("acceptance", ""),
                 step.get("step_type") or "work",
                 1 if step.get("needs_review") else 0,
+                1 if step.get("needs_shell") else 0,  # v45 tier-0 routing
             ),
         )
     return []

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -60,6 +61,14 @@ class TeamStepPlan(BaseModel):
     # trigger the ticker's peer-review insert rule. Defaults False (v12-compatible —
     # a step without this field set never gets a review inserted).
     needs_review: bool = False
+    # v45 tier-0 routing: LLM-settable, True ONLY when the step must run real shell/code
+    # (pip/curl/execute a script). Default False ⇒ the step runs on the fast, Docker-free
+    # create_agent tier; True ⇒ it escalates to the deep_agent Docker sandbox. It IS part of
+    # `decomposition_content_hash` (unlike `acceptance`): it selects the RUNTIME + trust
+    # boundary the step runs on, so the CEO's confirm must bind it — a task cannot silently
+    # change its shell posture post-confirm. Fail-closed: the light tier has no shell, so
+    # mis-setting this False only fails a shell task; it can never grant unsafe shell access.
+    needs_shell: bool = False
 
     @field_validator("step_id", "assigned_to")
     @classmethod
@@ -274,22 +283,30 @@ def decomposition_content_hash(task: DecomposedTask) -> str:
     hashes the same, and any mutation (added/removed/reassigned step) changes the hash
     — confirm re-verifies this hash before dispatch is ever allowed.
 
-    Deliberately reads ONLY `step_id`/`title`/`assigned_to`/`deps` — `acceptance` (a
-    per-step self-check rubric, metadata not DAG structure) is NOT included, so a task
-    with acceptance text hashes byte-identical to the same DAG without it. This also
-    makes `_verify_plan_hash`'s recompute (`coordinator_graph.py`, over `TeamStep` rows)
-    work unmodified: `TeamStep` carries an `acceptance` column this function never
-    reads, so neither side needs to agree on how to serialize it."""
+    Reads `step_id`/`title`/`assigned_to`/`deps` always, plus `needs_shell` (v45) ONLY on
+    steps where it is True — `acceptance` (a per-step self-check rubric) is never included.
+
+    `needs_shell` binds into the hash because it selects a step's RUNTIME + trust boundary
+    (create_agent vs the deep_agent Docker sandbox), so the CEO's confirm must cover it.
+    But it is emitted CONDITIONALLY (key present only when True) so a DAG with no shell steps
+    — every pre-v45 task, and every all-no-shell task — hashes BYTE-IDENTICAL to before v45.
+    That keeps existing confirmed tasks' stored `plan_hash` valid (no false plan-hash-mismatch
+    stall on migration), mirroring the same back-compat carve-out `_verify_plan_hash` uses for
+    `system_inserted`. Both hash sides stay in sync through this one function: `_verify_plan_hash`
+    (`coordinator_graph.py`) and `full_dag_plan_hash` (`team_task_amend.py`) recompute over
+    `TeamStep` rows, and `getattr(s, "needs_shell", False)` resolves on both `TeamStepPlan` and
+    the persisted `TeamStep`."""
     import hashlib
 
+    def _step_dict(s: Any) -> dict:
+        d = {"step_id": s.step_id, "title": s.title, "assigned_to": s.assigned_to,
+             "deps": list(s.deps)}
+        if bool(getattr(s, "needs_shell", False)):
+            d["needs_shell"] = True  # present only when True → all-False DAG hashes as pre-v45
+        return d
+
     canonical = json.dumps(
-        {
-            "steps": [
-                {"step_id": s.step_id, "title": s.title, "assigned_to": s.assigned_to,
-                 "deps": list(s.deps)}
-                for s in task.steps
-            ],
-        },
+        {"steps": [_step_dict(s) for s in task.steps]},
         sort_keys=True, ensure_ascii=True, separators=(",", ":"),
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

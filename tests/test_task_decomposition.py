@@ -146,6 +146,41 @@ def test_hash_changes_when_a_step_is_added():
     assert decomposition_content_hash(task_a) != decomposition_content_hash(task_b)
 
 
+def test_needs_shell_defaults_false():
+    task = parse_decomposed_task(_raw([_step("s1")]))
+    assert task.steps[0].needs_shell is False
+
+
+def test_needs_shell_parses_true():
+    raw = _raw([{**_step("s1"), "needs_shell": True}])
+    assert parse_decomposed_task(raw).steps[0].needs_shell is True
+
+
+def test_hash_changes_when_needs_shell_set():
+    """needs_shell selects the runtime/trust boundary → it must bind the CEO confirm."""
+    task_a = parse_decomposed_task(_raw([_step("s1")]))
+    task_b = parse_decomposed_task(_raw([{**_step("s1"), "needs_shell": True}]))
+    assert decomposition_content_hash(task_a) != decomposition_content_hash(task_b)
+
+
+def test_hash_all_false_needs_shell_is_migration_identical():
+    """A DAG where every step is needs_shell=False MUST hash byte-identical to a pre-v45 DAG
+    (needs_shell emitted only when True) — so existing confirmed tasks don't false-stall on
+    plan-hash-mismatch after the field was added."""
+    import json as _json
+
+    task = parse_decomposed_task(_raw([_step("s1"), _step("s2", deps=["s1"])]))
+    # Reconstruct the pre-v45 canonical form (no needs_shell key at all) and hash it the same way.
+    import hashlib
+
+    pre_v45 = _json.dumps(
+        {"steps": [{"step_id": s.step_id, "title": s.title, "assigned_to": s.assigned_to,
+                    "deps": list(s.deps)} for s in task.steps]},
+        sort_keys=True, ensure_ascii=True, separators=(",", ":"),
+    )
+    assert decomposition_content_hash(task) == hashlib.sha256(pre_v45.encode()).hexdigest()
+
+
 def test_hash_is_independent_of_step_input_order_when_content_equal():
     # Same two steps, same final tuple order (pydantic preserves list order) —
     # confirms the hash is a pure function of the parsed steps, not of dict key order

@@ -243,7 +243,8 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
     step_dicts = [
         {"step_id": s.step_id, "title": s.title, "assigned_to": s.assigned_to,
          "deps": list(s.deps), "acceptance": s.acceptance,
-         "step_type": s.step_type, "needs_review": s.needs_review}
+         "step_type": s.step_type, "needs_review": s.needs_review,
+         "needs_shell": s.needs_shell}  # v45 tier-0 routing
         for s in task.steps
     ]
 
