@@ -187,12 +187,12 @@ lịch sử hoạt động. Lưu ý: câu trả lời "hỏi tiến độ" chỉ
 
 ![Banner đỏ khi bộ điều phối chưa chạy](images/van-phong-banner-dieu-phoi.png)
 
-![Giao việc @PIC — xem kế hoạch trước khi xác nhận](images/van-phong-giao-viec-pic-preview.png)
+![Ô giao việc — gõ @tên-nhân-sự để chỉ định PIC (hoặc bỏ trống để đội tự chọn)](images/van-phong-giao-viec-pic-preview.png)
 
 Muốn bỏ luôn bước bấm xác nhận? Bật **Cài đặt → "Tự xác nhận kế hoạch khi giao việc"** —
 giao là chạy ngay (mọi việc gửi RA NGOÀI công ty vẫn chờ duyệt riêng như cũ):
 
-![Tự xác nhận đang bật — giao là chạy](images/van-phong-giao-viec-tu-xac-nhan.png)
+![Văn phòng — hoạt động trực tiếp của cả đội + ô giao việc ở cuối](images/van-phong-giao-viec-tu-xac-nhan.png)
 
 Vẫn giao được qua **Trợ lý** (gõ "giao việc …", hỏi-đáp từng bước) — cùng một đường xử lý.
 Tiến trình hiển thị ngay cột phải màn Văn phòng; Telegram cũng nhận cột mốc (nhận việc /
@@ -331,13 +331,12 @@ Hệ thống **mỗi 5 phút kiểm tra** (không LLM, chỉ so sánh nội dung
     *đang sửa*, và V14 thêm *nhờ trợ giúp* (khi bước gặp lỗi, nhân sự tự hỏi đồng nghiệp và
     thử lại một lần trước khi báo thất bại).
 
-    ![Văn phòng 3D — toàn cảnh văn phòng sống: nội thất, avatar tay chân, bong bóng giai đoạn](images/van-phong-3d-toan-canh.png)
+    ![Văn phòng 3D — mỗi nhân sự một bàn, màu avatar riêng, bàn PIC có ⭐, camera tự xoay chậm](images/van-phong-3d-toan-canh.png)
 
-    ![Văn phòng 3D — noi-dung và kiem-dinh rời bàn đi lại gần nhau khi tham vấn (💬 hai phía)](images/van-phong-3d-tham-van-di-lai-gan.png)
+    Khi hai nhân sự tham vấn nhau, avatar **rời bàn đi lại gần nhau** rồi tự về chỗ; bàn của
+    người đang chạy sáng lên. Mọi chuyển động đều từ sự kiện thật — không có hoạt cảnh giả.
 
-    ![Văn phòng 3D — bước gặp lỗi: bong bóng noi-dung hiện "nhờ trợ giúp", hai nhân sự đã tự về bàn](images/van-phong-3d-nho-tro-giup.png)
-
-    ![Văn phòng 3D — kiem-dinh soát chéo, nghien-cuu tự soát, phan-tich đang làm cùng lúc](images/van-phong-3d-tu-soat-review.png)
+    ![Văn phòng 3D — cả đội đang làm việc: nhân sự tại bàn, phòng việc + hoạt động trực tiếp + kết quả bên dưới](images/van-phong-3d-tham-van-di-lai-gan.png)
 - Nếu một agent **chết ngầm** (quá hạn không chạy), hệ thống tự nhắn cảnh báo cho bạn qua Telegram.
 
 ## B.6. Đổi giao diện (sáng / tối)
