@@ -23,6 +23,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+#: Appended to the deep_agent system prompt so a research-heavy run writes its report to a file
+#: EARLY (as soon as it has one pass of sources) and refines in place, instead of researching
+#: until the bounded recursion loop is exhausted and never reaching the final write. The read-back
+#: (`_merge_sandbox_artifacts`) then always finds a report even if the loop is cut mid-refine.
+_DEEP_AGENT_COMPOSE_CONTRACT = (
+    "\n\nQUY TẮC VIẾT BÁO CÁO (bắt buộc): NGAY khi bạn đã có một vòng thu thập nguồn đủ dùng, "
+    "hãy viết BẢN NHÁP báo cáo ra một file .md trong /work TRƯỚC (dùng write_file), rồi mới bổ "
+    "sung/tinh chỉnh file đó ở các vòng sau. TUYỆT ĐỐI không dồn hết các vòng cho việc tra cứu rồi "
+    "mới viết ở cuối — vòng lặp có giới hạn, nếu để tới cuối bạn có thể hết lượt trước khi kịp ghi "
+    "báo cáo. Luôn đảm bảo /work có một file .md chứa báo cáo hiện tại ở mọi thời điểm."
+)
+
 
 def run_deep_agent_work(
     *, title: str, handoff: str, context, settings, sandbox_cfg, loop_limit: int,
@@ -81,6 +93,14 @@ def run_deep_agent_work(
         memory=bundle.memory, capability=bundle.capability,
     )
     system = next((m["content"] for m in msgs if m["role"] == "system"), "")
+    # Step-budget contract (deep_agent only): research tasks that fetch many sources can
+    # exhaust the bounded recursion loop BEFORE reaching the final write_file, losing the
+    # report entirely (~25% of benchmark runs stalled at "Let me compile the report"). Bind
+    # a compose-early discipline so the report exists as a file well before the loop cap —
+    # cheaper and safer than raising the cap (the bounded loop stays a red-team guardrail).
+    # deep_agent-only: it is the sole tier with a sandbox + write_file; native/create_agent
+    # have no file to write, so this rides here rather than in the shared team-step prompt.
+    system = system + _DEEP_AGENT_COMPOSE_CONTRACT
     user = next((m["content"] for m in msgs if m["role"] == "user"), title)
 
     model = ChatOpenAI(
