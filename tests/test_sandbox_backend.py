@@ -190,6 +190,47 @@ def test_docker_shared_scrubbed_env_has_no_home(monkeypatch):
     assert "HOME" not in _scrubbed_sandbox_env()
 
 
+def test_docker_mem_limit_default_and_override(monkeypatch):
+    """v44: mem_limit is a per-company sandbox override; absent ⇒ 512m default (unchanged)."""
+    from src.runtime_backends import sandbox_backend as sb
+
+    client = _FakeDockerClient()
+    _patch_docker(monkeypatch, client)
+    sb.build_sandbox_backend({"provider": "docker"})  # no override
+    assert client.runs[-1]["mem_limit"] == "512m"
+
+    sb.build_sandbox_backend({"provider": "docker", "mem_limit": "1g"})
+    assert client.runs[-1]["mem_limit"] == "1024m"  # normalized to MiB
+
+
+def test_docker_mem_limit_clamps(monkeypatch):
+    """Huge value clamped to ceiling; garbage falls back to default (never unbounded)."""
+    from src.runtime_backends import sandbox_backend as sb
+
+    client = _FakeDockerClient()
+    _patch_docker(monkeypatch, client)
+    sb.build_sandbox_backend({"provider": "docker", "mem_limit": "999g"})
+    assert client.runs[-1]["mem_limit"] == "4096m"  # 4g ceiling
+
+    sb.build_sandbox_backend({"provider": "docker", "mem_limit": "nonsense"})
+    assert client.runs[-1]["mem_limit"] == "512m"  # garbage → default
+
+    sb.build_sandbox_backend({"provider": "docker", "mem_limit": "1m"})
+    assert client.runs[-1]["mem_limit"] == "256m"  # 256m floor
+
+
+def test_docker_mem_limit_rides_degradable_group(monkeypatch):
+    """mem_limit is degradable — dropped WITH the group when the daemon rejects a degradable one."""
+    from src.runtime_backends import sandbox_backend as sb
+
+    client = _FakeDockerClient(raise_on={"pids_limit"})  # reject a degradable kwarg
+    _patch_docker(monkeypatch, client)
+    sb.build_sandbox_backend({"provider": "docker", "mem_limit": "1g"})
+    # first run (full set, rejected) then base-only retry → mem_limit gone with the group
+    assert "mem_limit" not in client.runs[-1]
+    assert client.runs[-1]["cap_drop"] == ["ALL"]  # HARD group survives
+
+
 def test_docker_degrade_keeps_privilege_and_network(monkeypatch):
     # A daemon that rejects a resource/fs kwarg (pids_limit) → retry drops ONLY resource/fs;
     # privilege + network survive.

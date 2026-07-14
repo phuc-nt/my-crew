@@ -59,9 +59,10 @@ class ToolCallingRuntime:
         academic_search = bool(kwargs.pop("academic_search", False))
         # v39 #1: the agent's Google-Workspace-read opt-in (threaded from the loaded profile).
         gws_context = bool(kwargs.pop("gws_context", False))
-        # v43: deep_team is a deep_agent-only opt-in; the tools tier has no sandbox/subagents, so
-        # pop-and-ignore it here (else it would ride **kwargs into build_team_task_graph and raise).
+        # v43/v44: deep_team + its cap override are deep_agent-only opt-ins; the tools tier has no
+        # sandbox/subagents, so pop-and-ignore (else they'd ride **kwargs into the graph and raise).
         kwargs.pop("deep_team", None)
+        kwargs.pop("deep_team_max_calls", None)
         work = self._make_work_override(settings, context, config, loop_limit, telemetry,
                                         academic_search, gws_context)
         return build_team_task_graph(work_override=work, **kwargs)

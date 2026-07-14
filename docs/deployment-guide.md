@@ -133,6 +133,36 @@ agent_runtime:
 - **`deep_agent`** — shell tự chủ trong sandbox; file trong `/work` (tmpfs, không chạm host). Kết quả trả về text; nếu agent ghi report ra `/work/*.md` thì được đọc lại gắn vào kết quả trước khi container bị dọn.
 - Toolset read-only KHÔNG có web-search generic (cố ý) — dùng `web.scrape` có kiểm; nếu nghề cần search thì thêm tool có-kiểm (như `academic.search`), không mở egress rộng.
 
+### 6b. Định tuyến: chọn runtime tier + cơ chế multi-agent nào
+
+Benchmark cho thấy điều dễ nhầm nhất KHÔNG phải chọn sai config mà là **dùng sai công cụ cho hình dạng việc**. Bảng quyết định:
+
+| Hình dạng việc | Runtime tier | Cơ chế multi-agent |
+|---|---|---|
+| Báo cáo template / việc nhiều-vai có cấu trúc | `native` (mặc định) | **native team** (decompose→DAG→PIC→review) |
+| Suy luận trên dữ liệu ĐỌC, không cần shell | `create_agent` | — (1 agent) |
+| 1 báo cáo, vài nhánh ngữ cảnh LỚN cần tóm riêng biệt | `deep_agent` | **deep_team** (≤3 trợ lý con in-sandbox, v43) |
+| Nhiều nhánh ĐỘC LẬP / nhiều deliverable | `native` | **native team** (KHÔNG deep_team) |
+| Thật sự cần chạy shell / ghi file | `deep_agent` | — (hoặc deep_team nếu cần siloing) |
+
+**Nguyên tắc cốt lõi:**
+- **native team** = fan-out RỘNG: nhiều vai, nhiều deliverable, chạy đa tiến trình thật (đây là lợi thế cấu trúc). Cap: 7 step/DAG, concurrency 2 (chỉnh per-company qua `team_task_concurrency` trong `company.yaml`).
+- **deep_team** (in-sandbox subagent) = siloing HẸP-SÂU: 2-3 ngữ cảnh lớn mỗi cái cần tóm tách bạch, gộp về MỘT deliverable. **KHÔNG dùng cho fan-out rộng** — benchmark cho thấy 5 nhánh vs cap 3 → gộp, đắt 3-7× mà không tốt hơn. Cap mặc định 3.
+- `deep_agent` **chậm hơn mỗi step** vì mỗi step nhận một container sandbox mới, cách ly, tự-hủy — **cách ly đó là mục đích, không phải lỗi**. Việc no-shell cần nhanh → dùng `create_agent`/`native`.
+
+**Knob per-company/agent (v41/v44) — chỉ nâng khi có nhu cầu nặng cụ thể; mặc định bảo vệ ca thường + giới hạn blast-radius:**
+
+```yaml
+agent_runtime:
+  kind: deep_agent
+  sandbox:
+    provider: docker
+    lease_seconds: 1800    # v41: cửa sổ sống container (mặc định 1800, tối đa 3600)
+    mem_limit: 512m        # v44: trần RAM container (mặc định 512m, tối đa 4g) — nâng cho research nặng
+deep_team: true            # v43: bật điều phối trợ lý con in-sandbox
+deep_team_max_calls: 3     # v44: trần số lần giao trợ lý con (mặc định 3, kẹp [1,8])
+```
+
 ## 7. Backup & khôi phục
 
 ```bash

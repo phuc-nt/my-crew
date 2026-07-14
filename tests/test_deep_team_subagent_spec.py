@@ -63,7 +63,7 @@ class _Settings:
     openrouter_api_key = "k"
 
 
-def _run(monkeypatch, *, deep_team):
+def _run(monkeypatch, *, deep_team, deep_team_max_calls=None):
     capture: dict = {}
     _install_fakes(monkeypatch, capture)
     from src.runtime_backends.deep_agent_loop import run_deep_agent_work
@@ -71,7 +71,7 @@ def _run(monkeypatch, *, deep_team):
     run_deep_agent_work(
         title="t", handoff="", context=_Ctx(), settings=_Settings(),
         sandbox_cfg={"provider": "docker", "network": False}, loop_limit=16,
-        sanitize=lambda s: s, deep_team=deep_team,
+        sanitize=lambda s: s, deep_team=deep_team, deep_team_max_calls=deep_team_max_calls,
     )
     return capture
 
@@ -110,14 +110,52 @@ def test_deep_team_true_attaches_task_cap_middleware(monkeypatch):
 
 
 def test_deep_team_true_appends_delegation_clause_to_prompt(monkeypatch):
-    from src.runtime_backends.deep_agent_loop import _DEEP_TEAM_DELEGATION_CLAUSE
+    from src.runtime_backends.deep_agent_loop import _deep_team_delegation_clause
 
     cap = _run(monkeypatch, deep_team=True)
-    assert _DEEP_TEAM_DELEGATION_CLAUSE in cap["system_prompt"]
+    # default cap 3 → the clause built at cap 3 must be present
+    assert _deep_team_delegation_clause(3) in cap["system_prompt"]
 
 
 def test_deep_team_false_omits_delegation_clause(monkeypatch):
-    from src.runtime_backends.deep_agent_loop import _DEEP_TEAM_DELEGATION_CLAUSE
+    from src.runtime_backends.deep_agent_loop import _deep_team_delegation_clause
 
     cap = _run(monkeypatch, deep_team=False)
-    assert _DEEP_TEAM_DELEGATION_CLAUSE not in cap["system_prompt"]
+    assert _deep_team_delegation_clause(3) not in cap["system_prompt"]
+
+
+# --- v44: deep_team_max_calls override ---------------------------------------------------
+
+def test_default_cap_is_3_backward_compat(monkeypatch):
+    """`deep_team: true` with no override → cap 3 in BOTH middleware and prompt (v43 behavior)."""
+    cap = _run(monkeypatch, deep_team=True)  # no override
+    assert cap["kwargs"]["middleware"][0]._max_calls == 3
+    from src.runtime_backends.deep_agent_loop import _deep_team_delegation_clause
+
+    assert _deep_team_delegation_clause(3) in cap["system_prompt"]
+
+
+def test_override_syncs_middleware_and_prompt(monkeypatch):
+    """deep_team_max_calls=5 → middleware AND the prompt clause both say 5 (never drift)."""
+    cap = _run(monkeypatch, deep_team=True, deep_team_max_calls=5)
+    assert cap["kwargs"]["middleware"][0]._max_calls == 5
+    from src.runtime_backends.deep_agent_loop import _deep_team_delegation_clause
+
+    assert _deep_team_delegation_clause(5) in cap["system_prompt"]
+    assert _deep_team_delegation_clause(3) not in cap["system_prompt"]
+
+
+def test_override_clamped(monkeypatch):
+    """A huge/tiny override is clamped so wall-time can't blow the lease."""
+    from src.runtime_backends.deep_agent_loop import _MAX_TASK_CALLS_CEILING, _MIN_TASK_CALLS
+
+    hi = _run(monkeypatch, deep_team=True, deep_team_max_calls=99)
+    assert hi["kwargs"]["middleware"][0]._max_calls == _MAX_TASK_CALLS_CEILING
+    lo = _run(monkeypatch, deep_team=True, deep_team_max_calls=0)
+    assert lo["kwargs"]["middleware"][0]._max_calls == _MIN_TASK_CALLS
+
+
+def test_override_ignored_when_deep_team_off(monkeypatch):
+    """deep_team=False → no middleware regardless of the cap field."""
+    cap = _run(monkeypatch, deep_team=False, deep_team_max_calls=7)
+    assert "middleware" not in cap["kwargs"]

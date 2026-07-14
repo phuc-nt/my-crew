@@ -59,6 +59,45 @@ def _clamp_lease(seconds: int | None) -> int:
         return SANDBOX_LEASE_S
     return max(_SANDBOX_LEASE_MIN_S, min(int(seconds), SANDBOX_LEASE_MAX_S))
 
+
+#: Container memory ceiling (a Docker `mem_limit` string). Default keeps the resource-safety
+#: posture — a runaway deep_agent shell can't exhaust host RAM. v44: configurable per-company so a
+#: known-heavy research profile can opt UP (e.g. "1g"), but the default stays capped. Stays in the
+#: DEGRADABLE kwargs group (dropped whole-set if the daemon rejects it — e.g. Docker Desktop/macoS).
+SANDBOX_MEM_LIMIT = "512m"
+_SANDBOX_MEM_MIN_BYTES = 256 * 1024 * 1024   # 256m floor — below this the interpreter starves
+_SANDBOX_MEM_MAX_BYTES = 4 * 1024 * 1024 * 1024  # 4g ceiling — bound blast radius even when raised
+_MEM_UNIT_BYTES = {"b": 1, "k": 1024, "m": 1024 ** 2, "g": 1024 ** 3}
+
+
+def _mem_to_bytes(value: str) -> int | None:
+    """Parse a Docker mem string ("512m"/"1g"/"1073741824"/"512M") → bytes; None if unparseable."""
+    s = str(value).strip().lower()
+    if not s:
+        return None
+    unit = s[-1]
+    try:
+        if unit in _MEM_UNIT_BYTES:
+            return int(float(s[:-1]) * _MEM_UNIT_BYTES[unit])
+        return int(s)  # bare bytes
+    except (TypeError, ValueError):
+        return None
+
+
+def _clamp_mem(value: str | None) -> str:
+    """A configured mem_limit clamped to [min, max]; None/garbage ⇒ the default 512m.
+
+    Returned as a Docker-friendly `<N>m` string (bytes rounded to whole MiB). Clamping bounds the
+    OOM blast radius even when an operator sets a huge value, and keeps a typo from disabling the
+    ceiling entirely (garbage ⇒ default, never unbounded)."""
+    if value is None:
+        return SANDBOX_MEM_LIMIT
+    b = _mem_to_bytes(value)
+    if b is None:
+        return SANDBOX_MEM_LIMIT
+    b = max(_SANDBOX_MEM_MIN_BYTES, min(b, _SANDBOX_MEM_MAX_BYTES))
+    return f"{b // (1024 ** 2)}m"
+
 #: The one directory in-sandbox files may live in. A path outside it is refused (never
 #: written to the host) — the moat: the sandbox is scratch, not a host-write channel.
 _SANDBOX_ROOT = "/work"
@@ -133,10 +172,11 @@ def build_sandbox_backend(cfg: dict | None):
         # A deep_agent's shell has no legitimate need for the internet (research scraping goes
         # through the read-only tool-calling engine), so an open network is pure exfil surface.
         network = bool(cfg.get("network"))
-        # v41: optional per-agent lease override (clamped to [min, max] in the backend).
+        # v41: optional per-agent lease override; v44: optional mem_limit override (both clamped
+        # to [min, max] in the backend; absent ⇒ the safe default).
         return DockerSandboxBackend(
             image=cfg.get("image", "python:3.12-slim"), network=network,
-            lease_s=cfg.get("lease_seconds"),
+            lease_s=cfg.get("lease_seconds"), mem_limit=cfg.get("mem_limit"),
         )
     raise SandboxDenied(
         f"sandbox provider {provider!r} không được phép (chỉ fake|docker; "
@@ -240,11 +280,13 @@ def _make_docker():
         than run an unsafe container.
         """
 
-        def __init__(self, image: str, network: bool = False, lease_s: int | None = None):
+        def __init__(self, image: str, network: bool = False, lease_s: int | None = None,
+                     mem_limit: str | None = None):
             import docker  # optional dep
 
             self._image = image
             self._lease_s = _clamp_lease(lease_s)
+            self._mem_limit = _clamp_mem(mem_limit)
             self._client = docker.from_env()  # raises if Docker daemon unavailable
             # HOME is set on the container's OWN env only (not the shared scrubbed-env helper,
             # which the fake backend runs as a host subprocess): a non-root read-only container
@@ -268,7 +310,7 @@ def _make_docker():
             # workdir/home. 1777 (sticky, world-writable) lets `nobody` write while read_only keeps
             # the rest of the root filesystem immutable.
             degradable_kwargs = {
-                "mem_limit": "512m", "pids_limit": 256, "read_only": True,
+                "mem_limit": self._mem_limit, "pids_limit": 256, "read_only": True,
                 "tmpfs": {"/tmp": "rw,mode=1777", "/work": "rw,mode=1777"},
             }
             self._container = self._run_hardened(base_kwargs, degradable_kwargs)
@@ -394,15 +436,17 @@ def FakeSandboxBackend():  # noqa: N802 — factory reads as a class to callers
 
 def DockerSandboxBackend(  # noqa: N802
     image: str = "python:3.12-slim", network: bool = False, lease_s: int | None = None,
+    mem_limit: str | None = None,
 ):
     """Construct the Docker (self-hosted) sandbox backend. Raises if Docker is unavailable.
 
     `network` is off by default; the caller passes True only when the agent opted in via the
     sandbox config (and, in the deep_agent path, only when input sanitization succeeded).
     `lease_s` sets the container's self-terminate window (clamped; None ⇒ SANDBOX_LEASE_S).
+    `mem_limit` sets the container memory ceiling (clamped; None ⇒ SANDBOX_MEM_LIMIT).
     """
     try:
-        return _make_docker()(image, network, lease_s)
+        return _make_docker()(image, network, lease_s, mem_limit)
     except SandboxDenied:
         raise  # a rejected HARD guardrail already fails closed with a precise message
     except Exception as exc:  # noqa: BLE001 — Docker daemon missing / unreachable

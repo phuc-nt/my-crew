@@ -67,6 +67,7 @@ class DeepAgentRuntime:
         # compose-early subagent spec + a hard delegation cap; when False (default), the call is
         # byte-identical to pre-v43.
         deep_team = bool(kwargs.pop("deep_team", False))
+        deep_team_max_calls = kwargs.pop("deep_team_max_calls", None)  # v44: None ⇒ default cap
         runtime_config = kwargs.pop("runtime_config", None)
         caps = runtime_config.caps() if runtime_config is not None else None
         # Fail-closed UP-FRONT: no sandbox config / local / unknown → refuse before building the
@@ -87,12 +88,13 @@ class DeepAgentRuntime:
         # (build_team_task_graph accepts it, but only the native deps path consumes it).
         telemetry = kwargs.pop("telemetry", None)
         work = self._make_work_override(
-            settings, context, sandbox_cfg, loop_limit, telemetry, deep_team
+            settings, context, sandbox_cfg, loop_limit, telemetry, deep_team, deep_team_max_calls
         )
         return build_team_task_graph(work_override=work, **kwargs)
 
     def _make_work_override(
-        self, settings, context, sandbox_cfg, loop_limit, telemetry=None, deep_team=False
+        self, settings, context, sandbox_cfg, loop_limit, telemetry=None, deep_team=False,
+        deep_team_max_calls=None,
     ):
         """run_work replacement: a deepagents loop whose shell runs inside a token-free sandbox."""
 
@@ -102,7 +104,7 @@ class DeepAgentRuntime:
             return run_deep_agent_work(
                 title=title, handoff=handoff, context=context, settings=settings,
                 sandbox_cfg=sandbox_cfg, loop_limit=loop_limit, telemetry=telemetry,
-                deep_team=deep_team,
+                deep_team=deep_team, deep_team_max_calls=deep_team_max_calls,
             )
 
         return _run_work

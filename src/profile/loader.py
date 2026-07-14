@@ -86,6 +86,10 @@ class LoadedProfile:
     # is unchanged). When True, run_deep_agent_work wires a compose-early subagent + a hard cap on
     # the number of `task` delegations. deep_agent tier only (others have no sandbox/subagents).
     deep_team: bool = False
+    # v44: optional per-agent override of the deep_team delegation cap (default _MAX_TASK_CALLS=3,
+    # clamped in the loop). None ⇒ default. Kept as a SEPARATE int (not a bool→int widening of
+    # deep_team) so the ON/OFF gate stays a clean bool and `int 0` can't accidentally read as off.
+    deep_team_max_calls: int | None = None
     # v19 memory seam: which provider serves the injectable memory text. Absent ⇒ static
     # (MEMORY.md, byte-identical pre-v19). Consumed by `src/memory.resolve_memory_text`.
     memory_config: MemoryConfig = field(default_factory=MemoryConfig)
@@ -171,6 +175,7 @@ def load_profile(
     academic_search = bool(yaml_doc.get("academic_search", False))
     gws_context = bool(yaml_doc.get("gws_context", False))
     deep_team = bool(yaml_doc.get("deep_team", False))
+    deep_team_max_calls = _parse_deep_team_max_calls(yaml_doc.get("deep_team_max_calls"))
     memory_config = parse_memory_config(yaml_doc.get("memory"))
     agent_runtime = parse_agent_runtime_config(yaml_doc.get("agent_runtime"))
     watchers = _parse_watchers(yaml_doc.get("watchers"))
@@ -195,6 +200,7 @@ def load_profile(
         academic_search=academic_search,
         gws_context=gws_context,
         deep_team=deep_team,
+        deep_team_max_calls=deep_team_max_calls,
         memory_config=memory_config,
         agent_runtime=agent_runtime,
         team_step_egress=team_step_egress,
@@ -244,6 +250,19 @@ def _parse_watchers(raw: object) -> tuple[dict, ...]:
         seen.add(wid)
         out.append({"id": wid, "source": source, "target": target, "prompt": prompt})
     return tuple(out)
+
+
+def _parse_deep_team_max_calls(raw: object) -> int | None:
+    """Validate the optional `deep_team_max_calls:` (v44). Absent ⇒ None (default cap in the loop).
+
+    Fail LOUD on a bad type — matching the loader's posture for other typed numeric fields
+    (auto_approve.max_per_day) — so a quoted "5" or a `true` typo surfaces to the operator instead
+    of silently reverting to the default. `bool` is rejected explicitly (it is an int subclass)."""
+    if raw is None:
+        return None
+    if not isinstance(raw, int) or isinstance(raw, bool):
+        raise RuntimeError("deep_team_max_calls must be an int (clamped to [1,8] at runtime).")
+    return raw
 
 
 def _parse_auto_approve(raw: object) -> dict | None:

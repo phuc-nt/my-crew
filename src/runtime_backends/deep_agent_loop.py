@@ -37,22 +37,34 @@ _DEEP_AGENT_COMPOSE_CONTRACT = (
 
 #: v43: hard cap on how many `task` delegations one deep_team run may make. deepagents has no
 #: built-in delegation-count knob, so `TaskCapMiddleware` enforces it in code; the prompt clause
-#: below advises the SAME number so the model rarely hits the hard refusal. Bounds wall-time: each
+#: advises the SAME number so the model rarely hits the hard refusal. Bounds wall-time: each
 #: subagent runs its own fresh recursion budget, so N unbounded delegations could exceed the
 #: sandbox container lease (SANDBOX_LEASE_S) and be SIGKILL'd mid-compose.
+#: v44: this is the DEFAULT; a profile may override it via `deep_team_max_calls` (clamped below).
 _MAX_TASK_CALLS = 3
+_MIN_TASK_CALLS = 1
+_MAX_TASK_CALLS_CEILING = 8  # clamp: a typo can't unbound wall-time vs the lease
 
-#: v43: appended to the TOP-LEVEL deep_agent prompt only when deep_team is on. Tells the agent it
-#: MAY delegate independent, context-heavy sub-questions to the `task` tool — bounded to
-#: `_MAX_TASK_CALLS` — and that each subagent must leave its output in /work/<name>.md so the
-#: parent's read-back (`_merge_sandbox_artifacts`) captures it even if the run is cut short.
-_DEEP_TEAM_DELEGATION_CLAUSE = (
-    "\n\nPHỐI HỢP TRỢ LÝ CON (tùy chọn): với các câu hỏi con ĐỘC LẬP cần ngữ cảnh lớn riêng biệt "
-    f"(ví dụ mỗi nguồn phân tích tách bạch), bạn CÓ THỂ giao cho công cụ `task` — tối đa "
-    f"{_MAX_TASK_CALLS} lần. Mỗi trợ lý con PHẢI ghi kết quả ra một file /work/<tên-riêng>.md "
-    "(tên khác nhau, tránh ghi đè) rồi bạn tự tổng hợp báo cáo cuối. Nếu việc đơn giản, cứ tự "
-    "làm — đừng giao khi không cần."
-)
+
+def _resolve_task_cap(override: int | None) -> int:
+    """The effective delegation cap: an override clamped to [min, ceiling], else the default."""
+    if override is None:
+        return _MAX_TASK_CALLS
+    return max(_MIN_TASK_CALLS, min(int(override), _MAX_TASK_CALLS_CEILING))
+
+
+def _deep_team_delegation_clause(cap: int) -> str:
+    """v43/v44: appended to the TOP-LEVEL deep_agent prompt only when deep_team is on. Tells the
+    agent it MAY delegate independent, context-heavy sub-questions to the `task` tool — bounded to
+    `cap` (the same number `TaskCapMiddleware` enforces) — and that each subagent must leave its
+    output in /work/<name>.md so the parent's read-back captures it even if the run is cut short."""
+    return (
+        "\n\nPHỐI HỢP TRỢ LÝ CON (tùy chọn): với các câu hỏi con ĐỘC LẬP cần ngữ cảnh lớn riêng "
+        "biệt (ví dụ mỗi nguồn phân tích tách bạch), bạn CÓ THỂ giao cho công cụ `task` — tối đa "
+        f"{cap} lần. Mỗi trợ lý con PHẢI ghi kết quả ra một file /work/<tên-riêng>.md "
+        "(tên khác nhau, tránh ghi đè) rồi bạn tự tổng hợp báo cáo cuối. Nếu việc đơn giản, cứ tự "
+        "làm — đừng giao khi không cần."
+    )
 
 #: v43: system prompt for the curated `general-purpose` subagent. Carries the SAME compose-early
 #: discipline as the parent (v42), one level down: a subagent that researches into its own loop cap
@@ -91,6 +103,7 @@ def _deep_team_subagents() -> list[dict]:
 def run_deep_agent_work(
     *, title: str, handoff: str, context, settings, sandbox_cfg, loop_limit: int,
     telemetry=None, sanitize=None, deep_team: bool = False,
+    deep_team_max_calls: int | None = None,
 ) -> tuple[str, float | None]:
     """Run one team-step's work as a deepagents loop inside a hardened sandbox.
 
@@ -163,8 +176,11 @@ def run_deep_agent_work(
     system = system + _DEEP_AGENT_COMPOSE_CONTRACT
     # v43: when deep_team is on, tell the top-level agent it may delegate independent sub-questions
     # to the `task` tool (bounded), and each subagent must write /work/<name>.md.
+    # v44: the bound is `deep_team_max_calls` (clamped), advised in the clause AND enforced by the
+    # middleware below — both from the ONE resolved `task_cap` so they never drift.
+    task_cap = _resolve_task_cap(deep_team_max_calls)
     if deep_team:
-        system = system + _DEEP_TEAM_DELEGATION_CLAUSE
+        system = system + _deep_team_delegation_clause(task_cap)
     user = next((m["content"] for m in msgs if m["role"] == "user"), title)
 
     model = ChatOpenAI(
@@ -185,7 +201,7 @@ def run_deep_agent_work(
         from src.runtime_backends.deep_team_task_cap import TaskCapMiddleware
 
         extra_agent_kwargs["subagents"] = _deep_team_subagents()
-        extra_agent_kwargs["middleware"] = [TaskCapMiddleware(max_calls=_MAX_TASK_CALLS)]
+        extra_agent_kwargs["middleware"] = [TaskCapMiddleware(max_calls=task_cap)]
         usage_handler = UsageMetadataCallbackHandler()
     try:
         # Shell tier binds the system prompt on the agent AND sends it as a SystemMessage (its

@@ -422,6 +422,8 @@ def _run_graph(
         # v43: per-agent in-sandbox subagent delegation opt-in (deep_agent tier reads it; other
         # non-native runtimes ignore the kwarg — see DeepAgentRuntime.build_task pop).
         _extra["deep_team"] = bool(getattr(loaded, "deep_team", False))
+        # v44: optional per-agent delegation-cap override (None ⇒ default in the loop).
+        _extra["deep_team_max_calls"] = getattr(loaded, "deep_team_max_calls", None)
     # v20.5 Phase 0: wire the team-step external_write hook to the per-agent Action Gateway when
     # the agent opted into step egress. Absent ⇒ external_write stays None (deliver writes only
     # the internal artifact — byte-identical pre-v20.5).

@@ -110,6 +110,26 @@ def test_deep_team_flag_round_trips(clean_env, tmp_path):
     assert load_profile(pid, profiles_dir=pdir).deep_team is True
 
 
+def test_deep_team_max_calls_defaults_none(clean_env, tmp_path):
+    pdir, pid = _write_profile(tmp_path, "name: a\ndeep_team: true\n")
+    assert load_profile(pid, profiles_dir=pdir).deep_team_max_calls is None
+
+
+def test_deep_team_max_calls_round_trips(clean_env, tmp_path):
+    pdir, pid = _write_profile(tmp_path, "name: a\ndeep_team: true\ndeep_team_max_calls: 5\n")
+    assert load_profile(pid, profiles_dir=pdir).deep_team_max_calls == 5
+
+
+def test_deep_team_max_calls_rejects_bad_type(clean_env, tmp_path):
+    import pytest
+
+    # quoted string and a bool typo must fail loud, not silently default (loader posture).
+    for i, bad in enumerate(('deep_team_max_calls: "5"\n', "deep_team_max_calls: true\n")):
+        pdir, pid = _write_profile(tmp_path / str(i), "name: a\ndeep_team: true\n" + bad)
+        with pytest.raises(RuntimeError, match="deep_team_max_calls"):
+            load_profile(pid, profiles_dir=pdir)
+
+
 # --- env-fallback rule: empty yaml scalar DEFERS to env (the load-bearing rule) ---
 
 
