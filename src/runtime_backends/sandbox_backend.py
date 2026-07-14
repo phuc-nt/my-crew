@@ -11,25 +11,68 @@ a positive allowlist (red-team C3 — never `local`/`localshell`, which run host
   in its env, NO mount of the host home/.env, and the workdir isolated. No third-party service,
   no data egress to a provider. Requires Docker (Desktop/colima) on the host.
 
-deepagents' `BaseSandbox` needs only 4 sync abstracts implemented (`id`, `execute`,
-`download_files`, `upload_files`); the async filesystem methods derive from them. We keep files
-in-sandbox (download/upload minimal) — the deep-agent's job is to produce a text result that
-goes back through `deliver → external_write → gateway` (Phase 0), not to write host files.
+deepagents' `BaseSandbox` needs 4 sync abstracts (`id`, `execute`, `download_files`,
+`upload_files`); the async filesystem methods derive from them. `upload_files`/`download_files`
+back deepagents' `write_file`/`read_file` tools — they MUST return one response per input
+(v40: a `[]` stub crashed the middleware's per-file assert whenever the agent wrote a file).
+Files stay IN-SANDBOX, confined to `/work`: a path escaping `/work` (absolute-elsewhere, `..`,
+symlink) is refused with an error-response, never written to the host. The deep-agent's final
+result still goes back as TEXT through `deliver → external_write → gateway` (Phase 0); the
+sandbox filesystem is scratch space for the agent's own read/write during a run.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     pass
+
+#: A safe in-sandbox filename: letters/digits/`._-` segments joined by `/`. Anything with a
+#: shell metacharacter (`; $ ` | & ( ) < >` space …) is rejected — the docker backend
+#: interpolates the path into a `sh -c` command, so this is the injection guard.
+_SAFE_PATH_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*$")
+
+#: The one directory in-sandbox files may live in. A path outside it is refused (never
+#: written to the host) — the moat: the sandbox is scratch, not a host-write channel.
+_SANDBOX_ROOT = "/work"
+#: Cap on a single uploaded file (bytes) — a runaway write must not OOM the tar buffer.
+_MAX_FILE_BYTES = 8 * 1024 * 1024
+
+
+def _confined_rel(path: str) -> str | None:
+    """Return the path relative to /work if it is safely inside it, else None.
+
+    Accepts `/work/x`, `x`, `./sub/x`; refuses `/etc/x`, `../x`, or anything resolving
+    outside /work. Purely lexical (PurePosixPath) — no filesystem access, so it is the
+    same check for the fake and docker backends."""
+    p = PurePosixPath(path)
+    if p.is_absolute():
+        try:
+            rel = p.relative_to(_SANDBOX_ROOT)
+        except ValueError:
+            return None
+    else:
+        rel = p
+    parts = rel.parts
+    if any(part == ".." for part in parts) or not parts:
+        return None
+    result = str(PurePosixPath(*parts))
+    # Reject shell-unsafe characters: the docker backend interpolates this into a
+    # `sh -c` command, so a path like `a; rm -rf /` must never pass. Allow only a plain
+    # filename charset (letters/digits/`._-/`) — deep-agent scratch files don't need more.
+    if not _SAFE_PATH_RE.match(result):
+        return None
+    return result
 
 
 class SandboxDenied(RuntimeError):
@@ -115,10 +158,42 @@ def _make_fake():
                 return ExecuteResponse(output="(timeout)", exit_code=124)
 
         def download_files(self, paths: list[str]) -> list:
-            return []
+            from deepagents.backends.protocol import FileDownloadResponse
+
+            out = []
+            for path in paths:
+                rel = _confined_rel(path)
+                if rel is None:
+                    out.append(FileDownloadResponse(path=path, content=None,
+                                                    error="path_outside_work"))
+                    continue
+                target = os.path.join(self._dir, rel)
+                try:
+                    with open(target, "rb") as f:
+                        out.append(FileDownloadResponse(path=path, content=f.read(), error=None))
+                except OSError:
+                    out.append(FileDownloadResponse(path=path, content=None,
+                                                    error="file_not_found"))
+            return out
 
         def upload_files(self, files: list[tuple[str, bytes]]) -> list:
-            return []
+            from deepagents.backends.protocol import FileUploadResponse
+
+            out = []
+            for path, data in files:
+                rel = _confined_rel(path)
+                if rel is None:
+                    out.append(FileUploadResponse(path=path, error="path_outside_work"))
+                    continue
+                if len(data) > _MAX_FILE_BYTES:
+                    out.append(FileUploadResponse(path=path, error="file_too_large"))
+                    continue
+                target = os.path.join(self._dir, rel)
+                os.makedirs(os.path.dirname(target) or self._dir, exist_ok=True)
+                with open(target, "wb") as f:
+                    f.write(data)
+                out.append(FileUploadResponse(path=path, error=None))
+            return out
 
         def teardown(self) -> None:
             shutil.rmtree(self._dir, ignore_errors=True)
@@ -211,10 +286,64 @@ def _make_docker():
             return ExecuteResponse(output=out, exit_code=res.exit_code)
 
         def download_files(self, paths: list[str]) -> list:
-            return []
+            from deepagents.backends.protocol import FileDownloadResponse
+
+            out = []
+            for path in paths:
+                rel = _confined_rel(path)
+                if rel is None:
+                    out.append(FileDownloadResponse(path=path, content=None,
+                                                    error="path_outside_work"))
+                    continue
+                # Read via exec+base64 (get_archive can't read the /work tmpfs mount over a
+                # read-only rootfs). base64-encode in-container so binary content survives.
+                import base64
+
+                res = self._container.exec_run(
+                    ["sh", "-c", f"base64 {_SANDBOX_ROOT}/{rel}"], workdir="/work")
+                if res.exit_code != 0:
+                    out.append(FileDownloadResponse(path=path, content=None,
+                                                    error="file_not_found"))
+                    continue
+                try:
+                    data = base64.b64decode((res.output or b"").strip())
+                    out.append(FileDownloadResponse(path=path, content=data, error=None))
+                except Exception:  # noqa: BLE001 — decode error → per-file error, never crash
+                    out.append(FileDownloadResponse(path=path, content=None,
+                                                    error="decode_failed"))
+            return out
 
         def upload_files(self, files: list[tuple[str, bytes]]) -> list:
-            return []
+            from deepagents.backends.protocol import FileUploadResponse
+
+            out = []
+            for path, data in files:
+                rel = _confined_rel(path)
+                if rel is None:
+                    out.append(FileUploadResponse(path=path, error="path_outside_work"))
+                    continue
+                if len(data) > _MAX_FILE_BYTES:
+                    out.append(FileUploadResponse(path=path, error="file_too_large"))
+                    continue
+                try:
+                    # /work is a tmpfs mount over a READ-ONLY rootfs (moat hardening), so
+                    # docker put_archive (which targets the container FS layer) is refused.
+                    # Write via exec instead: base64-pipe the bytes into the file so they
+                    # land in the writable tmpfs. mkdir -p handles nested paths.
+                    import base64
+
+                    b64 = base64.b64encode(data).decode("ascii")
+                    parent = str(PurePosixPath(rel).parent)
+                    mk = f"mkdir -p {_SANDBOX_ROOT}/{parent} && " if parent not in (".", "") else ""
+                    cmd = f"{mk}printf %s '{b64}' | base64 -d > {_SANDBOX_ROOT}/{rel}"
+                    res = self._container.exec_run(["sh", "-c", cmd], workdir="/work")
+                    if res.exit_code != 0:
+                        raise RuntimeError((res.output or b"").decode("utf-8", "replace")[:120])
+                    out.append(FileUploadResponse(path=path, error=None))
+                except Exception as exc:  # noqa: BLE001 — per-file error, never crash the run
+                    logger.warning("sandbox upload %r failed: %s", path, exc)
+                    out.append(FileUploadResponse(path=path, error="upload_failed"))
+            return out
 
         def teardown(self) -> None:
             try:
