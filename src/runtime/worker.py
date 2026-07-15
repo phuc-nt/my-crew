@@ -449,8 +449,13 @@ def _run_team_step_kind(args: list[str], *, agent_id: str, loaded: LoadedProfile
                             task_id, step_id, exc)
 
     try:
-        result = run_team_step(
-            loaded, settings, task_id=task_id, step_id=step_id, attempt_id=attempt_id,
+        # v48: run under the MCP session pool so every call_tool during the step (graph run AND
+        # the in-step review, both under run_team_step) reuses one subprocess per server instead
+        # of spawning per call — mirrors the report/inbox/tasks branches.
+        result = _run_with_mcp_pool(
+            lambda: run_team_step(
+                loaded, settings, task_id=task_id, step_id=step_id, attempt_id=attempt_id,
+            )
         )
     except Exception as exc:  # noqa: BLE001 — record the failure, never crash
         logger.exception("worker %s/team-step %s/%s failed", agent_id, task_id, step_id)
