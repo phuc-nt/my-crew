@@ -58,14 +58,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from src.agent.coordinator_nodes.fanout_insert import (
+    maybe_copy_gather_results,
+    maybe_insert_fanout,
+)
 from src.agent.coordinator_nodes.review_insert import (
     maybe_handle_review_done,
     maybe_insert_review,
     maybe_insert_review_after_rework,
-)
-from src.agent.coordinator_nodes.fanout_insert import (
-    maybe_copy_gather_results,
-    maybe_insert_fanout,
 )
 from src.agent.coordinator_nodes.tick_actions import (
     aggregate_and_deliver,

@@ -222,7 +222,8 @@ def _record_capture(
         cs = CaptureStore(capture_db_path())
         try:
             cs.record(
-                attempt_id=attempt_id, task_id=task_id, step_id=getattr(step, "step_id", "") or str(step.seq),
+                attempt_id=attempt_id, task_id=task_id,
+                step_id=getattr(step, "step_id", "") or str(step.seq),
                 agent_id=step.assigned_to, engine=engine, status=status,
                 step_type=step.step_type, review_round=step.review_round,
                 cost_usd=cost_usd, cost_source=telemetry.cost_source,

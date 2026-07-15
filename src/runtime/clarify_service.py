@@ -17,9 +17,9 @@ import logging
 import re
 
 from src.runtime.clarify_store import (
+    Clarification,
     ClarifyCapError,
     ClarifyStore,
-    Clarification,
 )
 from src.runtime.team_task_paths import clarify_db_path
 

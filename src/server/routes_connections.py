@@ -88,7 +88,8 @@ _CATALOG: tuple[dict, ...] = (
         "id": "telegram", "label": "Telegram (bot theo từng nhân sự)",
         "check_ids": (),
         "keys": (),
-        "note": "Token bot khai theo từng nhân sự ở trang nhân sự đó (Đội → chọn nhân sự → Telegram).",
+        "note": "Token bot khai theo từng nhân sự ở trang nhân sự đó "
+                "(Đội → chọn nhân sự → Telegram).",
     },
     {
         "id": "nokey", "label": "Firecrawl / OpenAlex",
@@ -128,7 +129,7 @@ def get_connections() -> dict:
 
 
 @router.put("/keys")
-def put_connection_keys(updates: dict[str, str] = Body(..., embed=True)) -> dict:
+def put_connection_keys(updates: dict[str, str] = Body(..., embed=True)) -> dict:  # noqa: B008
     """Write key values into `.env` through the ONE whitelisted merge path. Blank
     values are skipped by merge_env (never blank out a set key); an unknown key name
     is refused all-or-nothing."""
