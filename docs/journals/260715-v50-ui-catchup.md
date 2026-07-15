@@ -24,6 +24,10 @@ Audit FE lộ backend v40-49 tiến nhưng nhiều capability không có UI. Vá
 - **Card refactor rơi CSS (review HIGH):** đổi kanban card từ 1 `<Link>` sang div-wrapper+Link+cost-sibling (để nút cost không nằm trong anchor) → class `.team-kanban-card-link`/`.team-kanban-sandbox` KHÔNG có rule → title render link xanh gạch chân. **jsdom test không bắt CSS** ("test pass" che regression style). Vá: thêm rule + rebuild.
 - Kiểm route collision `/team-tasks/board` vs `/{id}/cost` — Starlette phân biệt theo số segment, OK.
 
+## UAT browser thật (2026-07-15)
+5/5 pattern PASS trên browser THẬT + data THẬT + kết nối THẬT (OpenRouter/gateway/MCP Slack+Telegram live, fleet 8 agent). P1 verify cả empty ("—") lẫn non-empty (giao 1 team-task thật → 39 audit row `actor='admin'` live). P3 cost endpoint trả breakdown thật ($0.0124/4 step, 2 engine). **Bài học: server đang chạy là code CŨ pre-v50 → phải restart web+coordinator trước UAT** (routes v50 mới xuất hiện). Puppeteer headed+session-reuse treo macOS → headless tự-launch. Chi tiết: `plans/reports/uat-v50-ui-patterns-real-browser-260715-1505-report.md`.
+
 ## Mở / sang sau
 - P2 chỉ aggregate — nếu cần per-step tier phải có task-detail view.
 - P3 cost breakdown trên card; chưa gộp vào Cost.tsx (per-agent). Cân nhắc drill-down sau.
+- Tag `[bởi X]` (actor≠owner) chưa thấy live — cần action điều phối/PIC (agent A thay B); logic verify code+unit.

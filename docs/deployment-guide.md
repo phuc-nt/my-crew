@@ -235,3 +235,4 @@ tắt/offline → in thông báo rõ, không crash).
 | Bind LAN bị từ chối lúc khởi động | web-auth chưa bật | đặt `WEB_AUTH_PASSWORD_HASH` + `WEB_SESSION_SECRET` |
 | deep_agent lỗi "Docker sandbox không khả dụng" | Docker daemon không chạy | Chạy Docker Desktop hoặc `colima start`; kiểm ở panel Sức khỏe (§8). Chỉ cần cho agent deep_agent (chạy shell) |
 | Bước deep_agent đầu tiên chậm | image sandbox chưa có, phải pull | Warm trước: `python -m src.entrypoints.mpm sandbox prepull` (§8) |
+| Tính năng/route mới không xuất hiện sau `git pull` | server dev chạy tay không tự nạp code mới (launchd tự reload khi đổi; chạy tay thì không) | Khởi động lại web + coordinator (kill rồi chạy lại §4), hoặc `./deploy/install.sh` nếu dùng launchd |
