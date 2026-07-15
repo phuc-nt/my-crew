@@ -47,6 +47,27 @@ test('renders one row per item across all three sources + skipped notice', async
   expect(screen.getByText(/Không đọc được dữ liệu của: broken/)).toBeInTheDocument()
 })
 
+test('shows the actor tag when the acting agent differs from the log owner (v46)', async () => {
+  vi.spyOn(api, 'getCompanyActivity').mockResolvedValue({
+    agents: ['pm'], skipped: [],
+    items: [
+      {
+        ts: '2026-07-12T08:00:00+00:00', agent_id: 'pm', source: 'audit',
+        action_type: 'mcp_tool', tool: 'slack:post_message', verdict: 'allow', reason: '',
+        actor: 'nghien-cuu', // acted under pm's context → tag surfaces the real actor
+      },
+      {
+        ts: '2026-07-12T07:00:00+00:00', agent_id: 'pm', source: 'audit',
+        action_type: 'mcp_tool', tool: 'jira:search', verdict: 'allow', reason: '',
+        actor: 'pm', // same as owner → no tag
+      },
+    ],
+  })
+  render(<CompanyActivity />)
+  await waitFor(() => expect(screen.getByText(/\[bởi nghien-cuu\]/)).toBeInTheDocument())
+  expect(screen.queryByText(/\[bởi pm\]/)).not.toBeInTheDocument()
+})
+
 test('changing the agent filter refetches with agent param', async () => {
   const spy = vi.spyOn(api, 'getCompanyActivity').mockResolvedValue(ROWS)
   render(<CompanyActivity />)

@@ -83,6 +83,18 @@ export function IdentityStep({
         {state.agentRuntime === 'deep_agent' &&
           'Tự do nhất: tự chạy lệnh shell trong hộp cát cách ly (không đụng máy thật). Hợp nghiên cứu sâu. Cần cài Docker.'}
       </p>
+      {/* v50: deep_team (v43) — only meaningful for deep_agent, so gate the toggle on it. */}
+      {state.agentRuntime === 'deep_agent' && (
+        <label className="wizard-inline-check">
+          <input
+            type="checkbox"
+            checked={state.deepTeam}
+            onChange={(e) => update('deepTeam', e.target.checked)}
+          />{' '}
+          Điều phối trợ lý con trong hộp cát (deep_team) — chia ngữ cảnh lớn cho ≤3 trợ lý con.
+          Mặc định tắt; chỉ bật khi việc cần siloing sâu.
+        </label>
+      )}
       <h4>Chế độ hành động</h4>
       <label>
         Mức tin cậy:{' '}

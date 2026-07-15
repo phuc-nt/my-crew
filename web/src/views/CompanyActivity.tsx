@@ -29,7 +29,10 @@ function sinceIso(days: number): string {
 function describe(it: CompanyActivityItem): string {
   if (it.source === 'audit') {
     const head = [it.action_type, it.tool].filter(Boolean).join(':')
-    return it.reason ? `${head} — ${it.reason}` : head
+    // v46: show the actor when it differs from the log owner (agent_id) — e.g. a coordinated
+    // or deep_team action performed by another agent under this agent's context.
+    const who = it.actor && it.actor !== it.agent_id ? ` [bởi ${it.actor}]` : ''
+    return (it.reason ? `${head} — ${it.reason}` : head) + who
   }
   if (it.source === 'run') {
     const head = `chạy '${it.kind ?? '?'}' (${it.audience ?? '?'})`

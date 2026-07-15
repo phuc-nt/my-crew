@@ -1,6 +1,11 @@
 // v16: the "task giao xong kẹt im lặng" fix — a red banner whenever the dispatch
 // engine (src.runtime.service ticker) is not heartbeating. Polls /api/health/coordinator
 // every 30s; renders nothing while alive.
+//
+// v50: mounted on both /office (office-unified) and /team (Team.tsx, so a freshly created crew
+// sees the coordinator state). These are distinct routes — only one is mounted at a time, so
+// there is no simultaneous double-poll; a shared poll-context would be over-engineering for a
+// single 30s GET. Keep the two mount points; this component is the single source.
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import type { CoordinatorHealthPayload } from '../../types'

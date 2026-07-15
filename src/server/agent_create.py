@@ -183,6 +183,14 @@ def _build_profile_doc(spec: dict, profiles_dir) -> tuple[str, dict, str | None]
         runtime_kind = runtime.strip()
         if runtime_kind and runtime_kind != "native":
             doc["agent_runtime"] = runtime_kind
+    # v50: deep_team opt-in (v43) — in-sandbox subagent coordination, only meaningful for a
+    # deep_agent runtime. Written as a clean bool (+ optional positive int cap) so a spec can't
+    # smuggle arbitrary values; absent/false ⇒ nothing written (default off).
+    if spec.get("deep_team") is True:
+        doc["deep_team"] = True
+        cap = spec.get("deep_team_max_calls")
+        if isinstance(cap, int) and not isinstance(cap, bool) and cap > 0:
+            doc["deep_team_max_calls"] = cap
     # v36 P2: the role template this agent came from (one-click template path). Written
     # as a clean single-segment string only — the loader turns it into a live skills
     # source. A path-y value can't smuggle a traversal: it names a dir under templates/.

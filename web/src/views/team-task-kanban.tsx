@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../api/client'
+import { TeamTaskCost } from '../components/TeamTaskCost'
 import type { TeamBoardLane } from '../types'
 
 const LANE_LABEL: Record<string, string> = {
@@ -44,21 +45,31 @@ export function TeamTaskKanban() {
                   {LANE_LABEL[lane.id] ?? lane.id} ({lane.cards.length})
                 </p>
                 {lane.cards.map((c) => (
-                  <Link
-                    key={c.task_id}
-                    className="team-kanban-card"
-                    to={`/office?room=${encodeURIComponent(c.room_id)}`}
-                  >
-                    <span className="team-kanban-title">{c.title}</span>
-                    <span className="team-kanban-meta">
-                      {c.pic_id && <span className="outputs-agent">@{c.pic_id}</span>}
-                      {c.steps_total > 0 && (
-                        <span className="muted">
-                          {c.steps_done}/{c.steps_total} bước
-                        </span>
-                      )}
-                    </span>
-                  </Link>
+                  <div key={c.task_id} className="team-kanban-card">
+                    <Link
+                      className="team-kanban-card-link"
+                      to={`/office?room=${encodeURIComponent(c.room_id)}`}
+                    >
+                      <span className="team-kanban-title">{c.title}</span>
+                      <span className="team-kanban-meta">
+                        {c.pic_id && <span className="outputs-agent">@{c.pic_id}</span>}
+                        {c.steps_total > 0 && (
+                          <span className="muted">
+                            {c.steps_done}/{c.steps_total} bước
+                          </span>
+                        )}
+                        {/* v50: flag tasks with steps that escalate to the deep_agent (Docker
+                            sandbox) tier — the rest run create_agent with no Docker. */}
+                        {(c.steps_needs_shell ?? 0) > 0 && (
+                          <span className="team-kanban-sandbox" title="Bước cần chạy shell trong hộp cát Docker (deep_agent)">
+                            🔒 {c.steps_needs_shell} sandbox
+                          </span>
+                        )}
+                      </span>
+                    </Link>
+                    {/* v50: per-task cost breakdown, sibling to the Link so its toggle doesn't navigate. */}
+                    <TeamTaskCost taskId={c.task_id} />
+                  </div>
                 ))}
               </div>
             ),

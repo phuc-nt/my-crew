@@ -196,6 +196,26 @@ def test_create_writes_deep_agent_runtime_mapping(client, tmp_world):
     assert doc["agent_runtime"] == {"kind": "deep_agent", "sandbox": {"provider": "docker"}}
 
 
+def test_create_writes_deep_team_opt_in(client, tmp_world):
+    # v50: deep_team (v43) is written to profile.yaml only when the spec sets it True; a bad cap is
+    # dropped, and deep_team absent/false writes nothing (default off).
+    _, profiles = tmp_world
+    import yaml
+
+    spec = {**_GOOD_SPEC, "id": "dteam", "reports": [], "schedule": {},
+            "agent_runtime": {"kind": "deep_agent", "sandbox": {"provider": "docker"}},
+            "deep_team": True, "deep_team_max_calls": 2}
+    assert client.post("/api/agents/create", json=spec).status_code == 201
+    doc = yaml.safe_load((profiles / "dteam" / "profile.yaml").read_text(encoding="utf-8"))
+    assert doc["deep_team"] is True and doc["deep_team_max_calls"] == 2
+
+    spec2 = {**_GOOD_SPEC, "id": "noteam", "reports": [], "schedule": {},
+             "agent_runtime": {"kind": "deep_agent", "sandbox": {"provider": "docker"}}}
+    assert client.post("/api/agents/create", json=spec2).status_code == 201
+    doc2 = yaml.safe_load((profiles / "noteam" / "profile.yaml").read_text(encoding="utf-8"))
+    assert "deep_team" not in doc2  # absent ⇒ default off, nothing written
+
+
 @pytest.mark.parametrize(
     ("patch", "fragment"),
     [

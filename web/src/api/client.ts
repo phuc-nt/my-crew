@@ -43,6 +43,7 @@ import type {
   TemplateUpgradePreview,
   TemplateUpgradeResult,
   TeamBoardPayload,
+  TeamTaskCostPayload,
   OpsChatCommand,
   OpsChatReply,
   PacksPayload,
@@ -188,6 +189,9 @@ export const api = {
     return request<OutputsPayload>(`/api/outputs${qs ? `?${qs}` : ''}`)
   },
   getTeamTaskBoard: () => request<TeamBoardPayload>('/api/team-tasks/board'),
+  // v50: per-step cost + token breakdown for one task (read-only, allowlisted).
+  getTeamTaskCost: (taskId: string) =>
+    request<TeamTaskCostPayload>(`/api/team-tasks/${encodeURIComponent(taskId)}/cost`),
   // v33 P4: clarify — agent questions the CEO answers (buttons or free text).
   getClarifyPending: () => request<ClarifyPendingPayload>('/api/clarify/pending'),
   answerClarify: (id: number, answer: string) =>

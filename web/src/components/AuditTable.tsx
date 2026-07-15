@@ -10,6 +10,7 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
       <thead>
         <tr>
           <th>Thời gian</th>
+          <th>Ai thực hiện</th>
           <th>Loại</th>
           <th>Công cụ</th>
           <th>Kết quả</th>
@@ -20,6 +21,8 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
         {rows.map((r, i) => (
           <tr key={`${r.timestamp}-${i}`}>
             <td>{formatDateTime(r.timestamp) || r.timestamp}</td>
+            {/* v46: actor = agent that acted; operator/CLI actions store "" → render "—" */}
+            <td>{r.actor || '—'}</td>
             <td>{r.action_type}</td>
             <td>{r.tool}</td>
             <td className={`verdict verdict-${r.verdict}`}>{labelFor(VERDICT_LABEL, r.verdict)}</td>

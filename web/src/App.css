@@ -688,12 +688,20 @@ input, textarea, select { font-size: var(--fs-body); }
 .team-kanban { margin: var(--space-4) 0; }
 .team-kanban-lanes { display: flex; gap: var(--space-3); overflow-x: auto; align-items: flex-start; }
 .team-kanban-lane { flex: 1 1 0; min-width: 180px; }
-.team-kanban-card { display: flex; flex-direction: column; gap: 0.15rem; padding: var(--space-2) var(--space-3);
+/* v50: the card is now a container div holding the Link + a per-task cost toggle sibling
+   (the toggle can't live inside an anchor). Card chrome stays on the div; the Link owns the
+   text styling that used to be on the card anchor. */
+.team-kanban-card { padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border); border-radius: var(--radius); margin-bottom: var(--space-2);
-  text-decoration: none; color: var(--color-text); background: var(--color-bg); }
+  background: var(--color-bg); }
 .team-kanban-card:hover { border-color: var(--color-border-strong); }
+.team-kanban-card-link { display: flex; flex-direction: column; gap: 0.15rem;
+  text-decoration: none; color: var(--color-text); }
 .team-kanban-title { font-size: var(--fs-sm); }
-.team-kanban-meta { display: flex; gap: var(--space-2); font-size: var(--fs-xs); }
+.team-kanban-meta { display: flex; gap: var(--space-2); font-size: var(--fs-xs); flex-wrap: wrap; }
+.team-kanban-sandbox { font-size: var(--fs-xs); color: var(--color-subtle); }
+.team-task-cost { margin-top: 0.25rem; font-size: var(--fs-xs); }
+.team-task-cost-body { margin-top: 0.25rem; }
 
 /* v33 P4: clarify section on the Duyệt page. */
 .clarify-section { margin-bottom: var(--space-4); }

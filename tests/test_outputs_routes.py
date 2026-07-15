@@ -143,3 +143,58 @@ def test_board_lanes_group_by_status(client, tmp_path):
     assert [c["task_id"] for c in lanes["khac"]] == ["t3"]
     card = lanes["open"][0]
     assert card["steps_done"] == 1 and card["steps_total"] == 2
+    assert card["steps_needs_shell"] == 0  # v50: default no-shell (create_agent tier)
+
+
+def test_board_card_counts_needs_shell_steps(client, tmp_path):
+    """v50: a task with a needs_shell step reports steps_needs_shell so the FE can flag the
+    deep_agent (Docker sandbox) tier."""
+    from src.runtime.team_task_paths import team_tasks_db_path
+
+    store = TeamTaskStore(team_tasks_db_path())
+    store.create_task(task_id="tsh", title="Có shell", pic_id="noi-dung")
+    store.set_plan("tsh", [
+        {"step_id": "tsh1", "title": "Đọc", "assigned_to": "noi-dung", "deps": []},
+        {"step_id": "tsh2", "title": "Chạy code", "assigned_to": "nghien-cuu",
+         "deps": ["tsh1"], "needs_shell": True},
+    ], "hsh")
+    store._conn.execute("UPDATE team_tasks SET status='open' WHERE id='tsh'")
+    store._conn.commit()
+    store.close()
+
+    lanes = {l["id"]: l["cards"] for l in client.get("/api/team-tasks/board").json()["lanes"]}
+    card = next(c for c in lanes["open"] if c["task_id"] == "tsh")
+    assert card["steps_needs_shell"] == 1 and card["steps_total"] == 2
+
+
+def test_task_cost_no_captures_returns_zero_totals(client):
+    """v50: a task with no capture rows (or no store yet) returns empty steps + zero totals,
+    never a 500."""
+    body = client.get("/api/team-tasks/nope/cost").json()
+    assert body["steps"] == [] and body["total_cost_usd"] == 0.0
+
+
+def test_task_cost_projects_steps_and_sums_totals(client):
+    """v50: per-step-attempt telemetry is projected (allowlisted) + totals summed; None cost
+    contributes 0 to the total."""
+    from src.runtime.capture_store import CaptureStore
+    from src.runtime.team_task_paths import capture_db_path
+
+    store = CaptureStore(capture_db_path())
+    store.record(attempt_id="a1", task_id="tc", step_id="s1", agent_id="noi-dung",
+                 engine="create_agent", status="done", cost_usd=0.02,
+                 input_tokens=100, output_tokens=40)
+    store.record(attempt_id="a2", task_id="tc", step_id="s2", agent_id="nghien-cuu",
+                 engine="deep_agent", status="done", cost_usd=None,  # dry-run → None
+                 input_tokens=None, output_tokens=None)
+    store.close()
+
+    body = client.get("/api/team-tasks/tc/cost").json()
+    assert body["task_id"] == "tc"
+    assert len(body["steps"]) == 2
+    assert body["total_cost_usd"] == 0.02  # None contributes 0
+    assert body["total_input_tokens"] == 100 and body["total_output_tokens"] == 40
+    # allowlist: only projected fields, no raw internal columns like attempt_id/started_at/error
+    # (error could carry a stack trace or internal path — must never leak to the cost view).
+    leaked = {"attempt_id", "started_at", "ended_at", "error"} & set(body["steps"][0])
+    assert not leaked

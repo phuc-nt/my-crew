@@ -29,6 +29,7 @@ export interface WizardState {
   personaEdited: boolean
   webSearch: boolean // opt-in profile flag; only meaningful for research-style roles
   agentRuntime: string // v20.5: 'native' | 'create_agent' | 'deep_agent'; prefilled from template
+  deepTeam: boolean // v50 (v43 feature): in-sandbox subagent coordination; only for deep_agent
   // v30: '' = theo mặc định công ty (TRUST_MODE env); 'autonomous' | 'guarded' ghi tường minh
   // vào safety.trust_mode của profile.yaml.
   trustMode: '' | 'autonomous' | 'guarded'
@@ -83,6 +84,7 @@ const INITIAL: WizardState = {
   personaEdited: false,
   webSearch: false,
   agentRuntime: 'native', // safe default; template prefills a recommendation
+  deepTeam: false, // off by default (YAGNI); only meaningful for deep_agent
   trustMode: '', // inherit the company-wide default unless the CEO picks explicitly
   ...PACK_SCOPED_RESET,
 }
@@ -197,6 +199,8 @@ export function useCreateAgentWizard() {
       ...(state.webSearch ? { web_search: true } : {}),
       ...(state.trustMode ? { trust_mode: state.trustMode } : {}),
       ...runtimeSpec(state.agentRuntime),
+      // v50: deep_team only applies to deep_agent — never send it for other runtimes.
+      ...(state.agentRuntime === 'deep_agent' && state.deepTeam ? { deep_team: true } : {}),
     }
   }
 

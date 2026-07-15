@@ -90,6 +90,7 @@ export interface AuditRow {
   tool?: string
   verdict?: string
   reason?: string
+  actor?: string // v46: the agent (profile_id) that performed the action; "" for operator/CLI
   rationale?: string // v8 M23: carries the "auto_approve:*" marker for auto-approved actions
 }
 
@@ -212,6 +213,7 @@ export interface CreateAgentSpec {
   // required sandbox block ('native' omitted = default). A bare 'deep_agent' string would be DOA
   // (missing sandbox), so the wizard emits the mapping form for it.
   agent_runtime?: string | { kind: string; sandbox: { provider: string } }
+  deep_team?: boolean // v50 (v43): in-sandbox subagent coordination; only sent for deep_agent
 }
 
 export interface CreateAgentResult {
@@ -537,6 +539,7 @@ export interface CompanyActivityItem {
   tool?: string | null
   verdict?: string | null
   reason?: string | null
+  actor?: string | null // v46: agent that performed the action (may differ from agent_id log owner)
   // run
   kind?: string | null
   audience?: string | null
@@ -619,11 +622,34 @@ export interface TeamBoardCard {
   created_at: string
   steps_done: number
   steps_total: number
+  steps_needs_shell?: number // v50: count of steps needing the deep_agent (Docker sandbox) tier
 }
 
 export interface TeamBoardLane {
   id: string
   cards: TeamBoardCard[]
+}
+
+// v50: per-task cost breakdown — one entry per step-attempt + task totals.
+export interface TeamTaskCostStep {
+  step_id?: string
+  agent_id?: string
+  engine?: string
+  status?: string
+  step_type?: string
+  cost_usd?: number | null
+  cost_source?: string
+  input_tokens?: number | null
+  output_tokens?: number | null
+  duration_ms?: number | null
+}
+
+export interface TeamTaskCostPayload {
+  task_id: string
+  steps: TeamTaskCostStep[]
+  total_cost_usd: number
+  total_input_tokens: number
+  total_output_tokens: number
 }
 
 export interface TeamBoardPayload {

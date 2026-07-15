@@ -173,12 +173,55 @@ def team_task_board() -> dict:
     lanes: dict[str, list[dict]] = {lane: [] for lane in _BOARD_LANES}
     for t in tasks:
         done = sum(1 for s in t.steps if s.status == "done")
+        # v50: how many steps declared needs_shell (v45) — those escalate to the deep_agent
+        # (Docker sandbox) tier; the rest run create_agent (no Docker). Surfaces which tasks
+        # depend on the sandbox at a glance.
+        needs_shell = sum(1 for s in t.steps if getattr(s, "needs_shell", False))
         card = {
             "task_id": t.id, "title": t.title, "pic_id": t.pic_id,
             "room_id": t.room_id or t.id, "status": t.status,
             "created_at": t.created_at,
             "steps_done": done, "steps_total": len(t.steps),
+            "steps_needs_shell": needs_shell,
         }
         lane = t.status if t.status in lanes else "khac"
         lanes[lane].append(card)
     return {"lanes": [{"id": lane, "cards": lanes[lane]} for lane in _BOARD_LANES]}
+
+
+#: v50: the per-step-attempt telemetry fields safe to surface for a task cost breakdown — an
+#: explicit allowlist (the visualize_views discipline: select fields, never echo the raw row).
+_COST_FIELDS = (
+    "step_id", "agent_id", "engine", "status", "step_type",
+    "cost_usd", "cost_source", "input_tokens", "output_tokens", "duration_ms",
+)
+
+
+@router.get("/team-tasks/{task_id}/cost")
+def team_task_cost(task_id: str) -> dict:
+    """v50: per-step cost + token breakdown for one team task (read-only, allowlisted).
+
+    Wraps `CaptureStore.list_for_task` (one row per step-attempt) into a projected list plus
+    task totals, so the FE can attribute cost to a specific task/step instead of only the
+    monthly-per-agent view. Cost may be None (dry-run) — totals sum the known values only.
+    """
+    from src.runtime.capture_store import CaptureStore
+    from src.runtime.team_task_paths import capture_db_path
+
+    path = capture_db_path()
+    if not path.exists():
+        return {"task_id": task_id, "steps": [], "total_cost_usd": 0.0,
+                "total_input_tokens": 0, "total_output_tokens": 0}
+    store = CaptureStore(path)
+    try:
+        rows = store.list_for_task(task_id)
+    finally:
+        store.close()
+    steps = [{k: r.get(k) for k in _COST_FIELDS} for r in rows]
+    return {
+        "task_id": task_id,
+        "steps": steps,
+        "total_cost_usd": round(sum(r.get("cost_usd") or 0.0 for r in rows), 6),
+        "total_input_tokens": sum(r.get("input_tokens") or 0 for r in rows),
+        "total_output_tokens": sum(r.get("output_tokens") or 0 for r in rows),
+    }
