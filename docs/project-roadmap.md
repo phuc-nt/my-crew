@@ -1,16 +1,17 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái. Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Lộ trình + trạng thái (as-built v49). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
 > Cập nhật: 2026-07-15.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v45.** ~2312 backend test, ruff/tsc
+**Production-usable, single-user autonomy-first. Đã ship tới v49.** ~2312 backend test, ruff/tsc
 sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out parallelism).
 
-**v40–v45 (deep_agent + runtime-tier):** v40–v42 deep_agent hardening (file-write/lease/compose-early) ·
-v43 deep_team in-sandbox subagent · v44 benchmark-hardening (429 backoff, mem_limit config) ·
-**v45 tier-0 routing** (no-shell step Docker-free create_agent, needs_shell→deep_agent, fail-closed).
+**v40–v49 (deep_agent + runtime-tier + governance + onboarding):** v40–v42 deep_agent hardening ·
+v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-shell→create_agent) ·
+**v46 audit actor** (attribution end-to-end) · **v47 Docker UX** (health probe, prepull) ·
+**v48 MCP pool** (team-step reuse) · **v49 quickstart** (OpenRouter-only first report).
 
 ## Đã hoàn thành (gọn — chi tiết ở journals/plans)
 

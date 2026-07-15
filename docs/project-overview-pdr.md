@@ -1,7 +1,7 @@
 # Project Overview & PDR — my-crew
 
 > Product definition + requirements. Đọc file này TRƯỚC khi plan hay code.
-> Cập nhật: 2026-07-15 (v45). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified**.
+> Cập nhật: 2026-07-15 (v49). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified**.
 > Liên quan: [system-architecture](system-architecture.md) · [action-gateway-explainer](action-gateway-explainer.md) · [uat-theo-user-story](uat-theo-user-story.md).
 
 ## 1. Vấn đề
@@ -69,11 +69,11 @@ Xem [action-gateway-explainer.md](action-gateway-explainer.md) cho mô hình đ�
 
 ## 8. Trạng thái & lộ trình
 
-Đã ship tới **v45** (…v39 Google Workspace context/SMTP/Calendar-create · v40–v42 deep_agent
-file-write/lease/compose-early · v43 deep_team in-sandbox subagent · v44 benchmark-hardening ·
-**v45 tier-0 routing** — no-shell step chạy Docker-free create_agent, chỉ bước cần shell mới vào
-Docker sandbox), **~2312 BE tests**, live E2E verified. Kiến trúc runtime-tier + moat: xem
-[system-architecture](system-architecture.md) §3.9.
+Đã ship tới **v49** (…v40–v42 deep_agent hardening · v43 deep_team in-sandbox · v44 benchmark ·
+v45 tier-0 routing · **v46 audit actor** (governance: every action stamped agent) ·
+**v47 Docker UX** (health check, prepull) · **v48 MCP pool** (team-step reuse) ·
+**v49 quickstart** (OpenRouter-only dry-run)), **~2312 BE tests**, live E2E verified.
+Kiến trúc runtime-tier + moat: xem [system-architecture](system-architecture.md) §3.9.
 Lộ trình + việc tiếp: [project-roadmap.md](project-roadmap.md).
 
 ## Câu hỏi mở

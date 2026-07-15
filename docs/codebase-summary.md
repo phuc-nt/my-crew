@@ -1,22 +1,20 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-07-15 — v45 COMPLETE.** ~2312 backend tests, ruff/tsc clean.
+> Status: **2026-07-15 — v49 COMPLETE.** ~2340 backend tests + 200 frontend, ruff/tsc clean.
 > Product usable single-user (agent office, team-task, màn 3D, registry user-data,
 > memory seam, AgentRuntime 3-tier + per-step routing, telemetry capture + unified cost,
-> deep_team in-sandbox subagent, benchmark-hardened robustness). Bản đồ code +
-> quyết định kiến trúc theo mốc bên dưới. **Triết lý runtime-tier + routing xem
-> [system-architecture](system-architecture.md) §3.9** (nguồn chuẩn). Đọc cùng
-> [project-overview-pdr](project-overview-pdr.md), [project-roadmap](project-roadmap.md).
+> deep_team in-sandbox subagent, benchmark-hardened robustness, governance-audit actor,
+> quickstart onboarding). Bản đồ code + quyết định kiến trúc theo mốc bên dưới.
+> **Triết lý runtime-tier + routing xem [system-architecture](system-architecture.md) §3.9** (nguồn chuẩn).
+> Đọc cùng [project-overview-pdr](project-overview-pdr.md), [project-roadmap](project-roadmap.md).
 >
-> **Mốc v40–v45 (tóm tắt — chi tiết ở `docs/journals/`):** v40 deep_agent file-write fix ·
-> v41 sandbox lease config + artifact read-back · v42 compose-early contract (step-budget) ·
-> v43 deep_team in-sandbox subagent (`deep_team`/`deep_team_max_calls`, cost-fold, TaskCapMiddleware) ·
-> v44 benchmark-hardening (429 exp-backoff, `sandbox.mem_limit` config, routing doc) ·
-> **v45 tier-0 routing**: `needs_shell` step field + `resolve_step_runtime` per-step (no-shell→create_agent
-> 0-Docker, needs_shell→deep_agent fail-closed) + create_agent StateBackend graph-state scratch
-> (`react_loop._state_scratch_middleware`, execute-stripped). Modules mới: `runtime_backends/protocol.py`
-> (`resolve_step_runtime`), `deep_team_task_cap.py`; field mới: `TeamStep.needs_shell`.
+> **Mốc v40–v49 (tóm tắt — chi tiết ở `docs/journals/`):** v40–v42 deep_agent hardening · v43 deep_team
+> in-sandbox subagent · v44 benchmark-hardening · **v45 tier-0 routing** (no-shell→create_agent 0-Docker) ·
+> **v46 central-audit actor** (`AuditEntry.actor`, 1 choke point `_record`, migrate-free) ·
+> **v47 Docker-UX** (health probe, `prepull_sandbox_image`, `SANDBOX_DEFAULT_IMAGE`) ·
+> **v48 team-step MCP pool** (reuse session→faster) ·
+> **v49 barrier-to-entry** (`mpm quickstart`, `mpm crew init`, CoordinatorHealthBanner ở Đội).
 
 ## Trạng thái hiện tại (v2 COMPLETE: M1+M2+M3)
 
@@ -449,6 +447,23 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 | **[v31] Watcher normalize** | `src/runtime/watcher_normalize.py` — normalize Jira/GitHub/Sheets content (dedup rows, stable order). |
 | **[v31] Watcher runner** | `src/runtime/watcher_runner.py` — service pseudo-kind poll + dispatcher (team-task create + set_plan 1 step assigned self). |
 
+### v46: Central-audit actor attribution (2026-07-15)
+- **Audit actor field** (`src/actions/audit.py::AuditEntry.actor`): every gateway outcome (allow/deny/dry/dedup/kill/pending/reject/rate-limit) stamped w/ agent `profile_id` via 1 choke point `_record()` — migrate-free JSONL (old rows read absent) + sqlite ALTER for `approvals.actor`. Query filter `AuditLog.query(actor=...)` exact, fleet/agent view project field REAL vs reconstruct-from-path.
+- **2 CLI entry points** (`src/entrypoints/cli.py`, `src/entrypoints/mpm_manage.py`): actor="" with comment (human command, not agent action) — distinct attribution.
+
+### v47: Docker UX — health check + prepull + constants (2026-07-15)
+- **Integration health Docker probe** (`src/server/integration_health.py::_docker_check`): bounded 5s probe `docker info`, degrade ✓/✗ cleanly (FileNotFoundError/TimeoutExpired/returncode≠0) — health panel alerts daemon-off BEFORE task dispatch (vs wait for SandboxDenied at runtime).
+- **Sandbox image prepull** (`src/runtime_backends/sandbox_backend.py::prepull_sandbox_image`): `mpm sandbox prepull [image]` presence-check no-op → else pull, return dict `{ok,pulled,image,message}` NEVER raise (daemon-off→message clean, no crash caller). Opt-in (not auto at startup) per team Docker-free skip.
+- **DRY constant** (`SANDBOX_DEFAULT_IMAGE = "python:3.12-slim"`): health/prepull/backend reference same image, colima-compatible docs added.
+
+### v48: Team-step MCP session-pool reuse (2026-07-15)
+- **MCP pool wrapping team-step** (`src/runtime/worker.py::_run_team_step_kind`): wrap `run_team_step(...)` call in existing `_run_with_mcp_pool` helper — all `call_tool` MCP within one team-step reuse 1 subprocess/server (mirrors report/inbox/tasks branches). Eliminates spawn-per-call overhead → office cross-synth faster. Test seam ✓: stub catches `current_pool()` mid-step.
+
+### v49: Barrier-to-entry — quickstart + crew init + coordinator banner (2026-07-15)
+- **`mpm quickstart`** (`src/entrypoints/mpm_onboarding_cmds.py::run_quickstart`): OpenRouter-only dry-run first report in 1 command (`mpm quickstart`). Ép `--dry-run` cứng (safe taste, never external write). Thiếu key → hint + exit 2.
+- **`mpm crew init`** (`src/entrypoints/mpm_onboarding_cmds.py::run_crew`): scaffold shipped starter crew thực giữ lại (reuse v32 `create_crew` idempotent skip-existing) vs demo-mode swap tạm. Print summary + next-step.
+- **CoordinatorHealthBanner on Team view** (v49): surface coordinator status + startup hint after crew init (reuse office-unified banner, poll `/health/coordinator` existing). Compose pattern — 0 new components.
+
 ## Key v2 Changes vs v1
 
 | Aspek | v1 | v2 M1-P3 |
@@ -467,8 +482,8 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 
 ## Testing
 
-- **Unit tests**: `uv run pytest` — 1500 backend tests pass (M1–M6, M19, M27–M30 + coverage pack/dispatch/red-line/office/web-search injection).
-- **Frontend tests**: `vitest` — 146 tests (M30 3D/office views, M27 template-picker, M28 team components).
+- **Unit tests**: `uv run pytest` — ~2340 backend tests pass (M1–M6, M19, M27–M30 + v31–v49 coverage: pack/dispatch/red-line/office/web-search injection, per-step routing, audit actor, sandbox/prepull, MCP pool, onboarding).
+- **Frontend tests**: `vitest` — 200 tests (3D/office views, template-picker, team components).
 - **Linting**: `uv run ruff check src tests` — clean.
 - **Byte-identity**: pm-pack output (report text, Slack mrkdwn, Confluence XHTML) diff vs pre-v3 = empty (2026-06-30).
 - **E2E Red-line suite** (M5 verified live, 2026-06-30): pack allowlist loaded; Lớp A hard-deny refuses destructive unplugged tools; default-DENY preserves invariant. `default` profile (no domain field) routes to pm-pack; M1-style e2e (Jira read, Confluence create, Slack post) re-runs without code change.

@@ -1,6 +1,6 @@
 # Deployment & Setup Guide — my-crew
 
-> Cách cài, chạy, cấu hình, backup. As-built v45, mọi lệnh chạy thật. Chi tiết vận hành
+> Cách cài, chạy, cấu hình, backup. As-built v49, mọi lệnh chạy thật. Chi tiết vận hành
 > hằng ngày cho người dùng cuối: [huong-dan-su-dung.md](huong-dan-su-dung.md) (tiếng Việt).
 > Cập nhật: 2026-07-15.
 

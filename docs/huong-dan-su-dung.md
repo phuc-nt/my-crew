@@ -1,4 +1,4 @@
-# Hướng dẫn sử dụng — my-crew
+# Hướng dẫn sử dụng — my-crew (v49)
 
 Trợ lý ảo tự động làm công việc quản lý dự án (PM / Scrum Master): đọc Jira · GitHub · Confluence ·
 Slack, phân tích, rồi *tự hành động* (viết báo cáo, cảnh báo rủi ro, theo dõi OKR) như một PM thật.
@@ -92,6 +92,26 @@ Xong bước này là hệ thống chạy. Từ đây trở đi xem **Phần B**
 
 Bất cứ lúc nào, vào **Cài đặt → Sức khỏe hệ thống** trong web: bảng ✓/✗ từng kết nối. Mục nào lỗi sẽ
 hiện lệnh khắc phục copy-paste được. Đây là chỗ để trả lời "vì sao agent không chạy?".
+
+## A.6. Nhanh nhất: Thấy kết quả trong 30 giây (v49 — chỉ cần OpenRouter)
+
+Nếu chỉ muốn trải nghiệm tính năng NGAY, không cần dịch vụ tích hợp (Atlassian/Slack/GitHub):
+
+```bash
+echo 'OPENROUTER_API_KEY=sk-or-...' >> .env
+python -m src.entrypoints.mpm quickstart      # chạy báo cáo dry-run
+```
+
+`quickstart` chọn agent mặc định, soạn báo cáo **mà không ghi ra ngoài** (an toàn thử).
+
+Muốn dựng cả đội mẫu THẬT để giàn chứng năng:
+
+```bash
+python -m src.entrypoints.mpm crew init       # tạo 5 nhân sự ảo mẫu
+uv run python -m src.runtime.service &        # bật bộ điều phối
+```
+
+Rồi truy cập web, màn **Đội** sẽ hiện trạng thái bộ điều phối + lệnh khởi động nếu cần.
 
 ---
 
