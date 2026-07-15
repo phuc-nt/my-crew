@@ -19,7 +19,7 @@ import logging
 import sys
 
 _USAGE = (
-    "usage: python -m src.entrypoints.mpm agent "
+    "usage: python -m src.entrypoints.mpm quickstart | crew init | agent "
     "list | register <id> | run <id> --report <kind> [--audience ...] [--dry-run] | "
     "resume <id> <thread_id> --decision approve|reject | "
     "replay <id> <thread_id> [--checkpoint <id>] | "
@@ -53,6 +53,16 @@ def main(argv: list[str] | None = None) -> int:
         result = prepull_sandbox_image(args[2] if len(args) >= 3 else None)
         print(result["message"])
         return 0 if result["ok"] else 1
+    # v49: `mpm quickstart` — OpenRouter-only first report (dry-run) in one command.
+    if len(args) >= 1 and args[0] == "quickstart":
+        from src.entrypoints.mpm_onboarding_cmds import run_quickstart
+
+        return run_quickstart(args[1:])
+    # v49: `mpm crew init` — scaffold the shipped starter crew as real keepable profiles.
+    if len(args) >= 2 and args[0] == "crew":
+        from src.entrypoints.mpm_onboarding_cmds import run_crew
+
+        return run_crew(args[1], args[2:])
     if len(args) < 2 or args[0] != "agent":
         print(_USAGE, file=sys.stderr)
         return 2

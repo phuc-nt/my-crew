@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { ApiError, api } from '../api/client'
 import { IntegrationHealthPanel } from '../components/IntegrationHealthPanel'
+import { CoordinatorHealthBanner } from './office-unified/coordinator-health-banner'
 import { KIND_LABEL, RUN_STATUS_LABEL, labelFor } from '../labels'
 import { useUiMode } from '../ui-mode-context'
 import type {
@@ -233,6 +234,10 @@ export function Team() {
   return (
     <section>
       <IntegrationHealthPanel />
+      {/* v49: after creating a crew, the team does nothing until the coordinator daemon runs.
+          Surface its state here (same banner + start command as the Office view) so the
+          "created a crew but nothing happens" gap is visible, not silent. */}
+      <CoordinatorHealthBanner />
 
       <h2>Đội</h2>
       <div className="team-actions">

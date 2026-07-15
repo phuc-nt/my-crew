@@ -51,6 +51,25 @@ Lần đầu, trình duyệt tự mở **Setup Wizard**: điền OpenRouter → 
 (tùy chọn) web-search → đặt mật khẩu dashboard. Mỗi bước có "Kiểm tra kết nối". Bí mật CHỈ
 đi qua wizard (ghi `.env`), không qua terminal/URL. Wizard tự khóa sau khi xong.
 
+## 3b. Quick-start 30 giây (v49 — chỉ cần OpenRouter)
+
+Muốn thấy kết quả đầu tiên NGAY, không cần Atlassian/Slack/GitHub:
+
+```bash
+echo 'OPENROUTER_API_KEY=sk-or-...' >> .env
+python -m src.entrypoints.mpm quickstart      # chạy report 'daily' agent 'default', DRY-RUN
+```
+
+`quickstart` **ép dry-run** — chỉ đọc + soạn báo cáo, KHÔNG ghi ra ngoài (an toàn để thử). Thiếu key
+→ in hướng dẫn + thoát. Muốn dựng cả đội mẫu THẬT (giữ lại, khác demo-mode swap tạm):
+
+```bash
+python -m src.entrypoints.mpm crew init       # scaffold đội mẫu (idempotent, bỏ qua cái đã có)
+uv run python -m src.runtime.service          # khởi động điều phối để đội nhận việc
+```
+
+Sau `crew init`, màn **Đội** hiện trạng thái điều phối + lệnh khởi động nếu chưa chạy (v49).
+
 ## 4. Chạy thủ công (dev, không launchd)
 
 ```bash
