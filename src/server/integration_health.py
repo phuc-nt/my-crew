@@ -91,6 +91,7 @@ def _run_checks() -> list[dict]:
         )
 
     checks.append(_gh_check())
+    checks.append(_docker_check())  # v47: proactive deep_agent-sandbox daemon probe
     checks.append(_websearch_flag_check())
     checks.append(_smtp_check())
 
@@ -255,6 +256,33 @@ def _gh_check() -> dict:
     except subprocess.TimeoutExpired:
         ok, detail = False, "gh auth status timed out (5s)"
     return _check("github", "GitHub (gh CLI)", ok, detail, "Install gh and run `gh auth login`")
+
+
+def _docker_check() -> dict:
+    """`docker info` exit code — a bounded daemon-reachability probe (v47).
+
+    Surfaces "Docker not running" PROACTIVELY in the status panel instead of only at deep_agent run
+    time (a `SandboxDenied` mid-run). Bounded (5s) so a hung daemon degrades to ✗, never stalls the
+    panel; `docker` absent from PATH → ✗ cleanly. This is ONLY needed by agents on the deep_agent
+    runtime (which run shell in a Docker sandbox) — a Docker-free fleet can ignore a ✗ here, so the
+    hint says so. No token/secret is read.
+    """
+    try:
+        proc = subprocess.run(
+            ["docker", "info"], capture_output=True, timeout=5, check=False
+        )
+        ok, detail = proc.returncode == 0, (
+            "docker daemon reachable" if proc.returncode == 0
+            else f"docker info → exit {proc.returncode} (daemon not running?)"
+        )
+    except FileNotFoundError:
+        ok, detail = False, "docker not on PATH"
+    except subprocess.TimeoutExpired:
+        ok, detail = False, "docker info timed out (5s) — daemon hung?"
+    return _check(
+        "docker", "Docker (deep_agent sandbox)", ok, detail,
+        "Chỉ cần cho agent deep_agent (chạy shell). Chạy Docker Desktop hoặc `colima start`.",
+    )
 
 
 def _check(check_id: str, label: str, ok: bool, detail: str, hint: str) -> dict:

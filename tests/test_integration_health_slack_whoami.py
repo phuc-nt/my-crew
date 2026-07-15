@@ -104,3 +104,52 @@ def test_run_checks_includes_slack_and_does_not_crash(monkeypatch):
     ids = [c["id"] for c in checks]
     assert "slack" in ids
     assert ids.count("slack") == 1
+
+
+# --- v47: Docker daemon health check --------------------------------------------------
+
+
+def _fake_run(returncode=0, exc=None):
+    def _run(argv, **kw):
+        if exc is not None:
+            raise exc
+        return type("P", (), {"returncode": returncode})()
+    return _run
+
+
+def test_docker_check_ok_when_daemon_reachable(monkeypatch):
+    monkeypatch.setattr(health_mod.subprocess, "run", _fake_run(returncode=0))
+    c = health_mod._docker_check()
+    assert c["id"] == "docker" and c["ok"] is True
+
+
+def test_docker_check_not_ok_when_daemon_down(monkeypatch):
+    monkeypatch.setattr(health_mod.subprocess, "run", _fake_run(returncode=1))
+    c = health_mod._docker_check()
+    assert c["ok"] is False and "deep_agent" in c["hint"]  # hint says it's deep_agent-only
+
+
+def test_docker_check_not_on_path(monkeypatch):
+    monkeypatch.setattr(health_mod.subprocess, "run", _fake_run(exc=FileNotFoundError()))
+    c = health_mod._docker_check()
+    assert c["ok"] is False and "PATH" in c["detail"]
+
+
+def test_docker_check_bounded_on_hang(monkeypatch):
+    import subprocess as _sp
+
+    monkeypatch.setattr(
+        health_mod.subprocess, "run",
+        _fake_run(exc=_sp.TimeoutExpired(cmd="docker info", timeout=5)),
+    )
+    c = health_mod._docker_check()
+    assert c["ok"] is False and "timed out" in c["detail"]  # degrades, never hangs
+
+
+def test_run_checks_includes_docker(monkeypatch):
+    monkeypatch.setattr(
+        "src.adapters.mcp_adapter.call_tool",
+        lambda spec, tool, args: {"ok": True, "user": "x", "team": "y"},
+    )
+    ids = [c["id"] for c in health_mod._run_checks()]
+    assert "docker" in ids and ids.count("docker") == 1

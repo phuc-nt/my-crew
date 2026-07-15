@@ -52,6 +52,10 @@ SANDBOX_LEASE_S = 1800
 SANDBOX_LEASE_MAX_S = 3600
 _SANDBOX_LEASE_MIN_S = 60
 
+#: The default sandbox container image. v47: named so the health/pre-pull tooling references the
+#: same string the backend runs, instead of duplicating the literal.
+SANDBOX_DEFAULT_IMAGE = "python:3.12-slim"
+
 
 def _clamp_lease(seconds: int | None) -> int:
     """A configured lease clamped to [min, max]; None ⇒ the default."""
@@ -175,7 +179,7 @@ def build_sandbox_backend(cfg: dict | None):
         # v41: optional per-agent lease override; v44: optional mem_limit override (both clamped
         # to [min, max] in the backend; absent ⇒ the safe default).
         return DockerSandboxBackend(
-            image=cfg.get("image", "python:3.12-slim"), network=network,
+            image=cfg.get("image", SANDBOX_DEFAULT_IMAGE), network=network,
             lease_s=cfg.get("lease_seconds"), mem_limit=cfg.get("mem_limit"),
         )
     raise SandboxDenied(
@@ -435,7 +439,7 @@ def FakeSandboxBackend():  # noqa: N802 — factory reads as a class to callers
 
 
 def DockerSandboxBackend(  # noqa: N802
-    image: str = "python:3.12-slim", network: bool = False, lease_s: int | None = None,
+    image: str = SANDBOX_DEFAULT_IMAGE, network: bool = False, lease_s: int | None = None,
     mem_limit: str | None = None,
 ):
     """Construct the Docker (self-hosted) sandbox backend. Raises if Docker is unavailable.
@@ -454,6 +458,46 @@ def DockerSandboxBackend(  # noqa: N802
             f"Docker sandbox không khả dụng ({exc}). Cài + chạy Docker (Desktop/colima) hoặc "
             f"dùng agent_runtime khác."
         ) from exc
+
+
+_PREPULL_TIMEOUT_S = 10  # bounded client so a wedged daemon can't hang the warm step
+
+
+def prepull_sandbox_image(
+    image: str | None = None, *, client: Any = None
+) -> dict[str, Any]:
+    """Opt-in warm of the sandbox image so the FIRST deep_agent step doesn't pay the pull.
+
+    Idempotent + best-effort: image already present ⇒ no-op; absent + daemon up + online ⇒
+    pulls; daemon down / offline ⇒ a clear result dict, never an exception. Returns
+    ``{"ok", "pulled", "image", "message"}`` for a CLI/health surface to print. Not run on
+    startup — a Docker-free deployment must never be forced to pull.
+    """
+    img = image or SANDBOX_DEFAULT_IMAGE
+    try:
+        if client is None:
+            import docker  # optional dep
+
+            client = docker.from_env(timeout=_PREPULL_TIMEOUT_S)
+    except Exception as exc:  # noqa: BLE001 — Docker absent/unreachable is a clean skip
+        return {
+            "ok": False, "pulled": False, "image": img,
+            "message": f"Docker không khả dụng ({exc}). Cài + chạy Docker (Desktop/colima) "
+            f"nếu cần agent deep_agent.",
+        }
+    try:
+        client.images.get(img)  # present locally → fast no-op
+        return {"ok": True, "pulled": False, "image": img,
+                "message": f"Image {img} đã có sẵn."}
+    except Exception:  # noqa: BLE001 — not-found (or a transient) → try to pull
+        pass
+    try:
+        client.images.pull(img)
+        return {"ok": True, "pulled": True, "image": img,
+                "message": f"Đã pull image {img}."}
+    except Exception as exc:  # noqa: BLE001 — offline / pull error → best-effort, clear message
+        return {"ok": False, "pulled": False, "image": img,
+                "message": f"Pull {img} thất bại ({exc}). Kiểm tra mạng / Docker."}
 
 
 def assert_not_host_shell(backend: Any) -> None:

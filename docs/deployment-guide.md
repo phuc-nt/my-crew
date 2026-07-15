@@ -110,6 +110,12 @@ demo — minimax fail deep loop). `uv sync` cài base deps (tất cả 3 engine 
 > một agent `deep_agent` KHÔNG còn spin container cho mọi bước — chỉ bước cần shell mới trả giá đó.
 > `agent_runtime:` dưới đây vẫn là cấu hình per-agent (nền + fallback + đường report). Xem §6b.
 
+> **Container runtime cho `deep_agent`:** shell thật CHỈ chạy trong container cách ly — đây là
+> yêu cầu bảo mật, không phải hạn chế. Cần **Docker Desktop HOẶC `colima`** (nhẹ hơn, không GUI:
+> `brew install colima && colima start`). Việc no-shell chạy `create_agent` 0-Docker (v45), nên một
+> đội KHÔNG có agent deep_agent không cần Docker gì cả. Kiểm ở panel **Sức khỏe** (§8) — check
+> "Docker (deep_agent sandbox)" báo ✓/✗ trước khi giao việc, thay vì chờ lỗi lúc chạy.
+
 **Mặc định là `native`** (graph cố định `perceive → analyze → compose → deliver`) — rẻ,
 xác định, đúng cho báo cáo template (daily/weekly/okr). **Giữ native cho các agent báo cáo
 định kỳ.** Chỉ bật engine khác cho agent cần **suy luận mở** (research, phân tích ad-hoc):
@@ -192,7 +198,13 @@ tar về repo root, chạy lại `install.sh`.
 ## 8. Kiểm tra sức khỏe
 
 **Cài đặt → Sức khỏe hệ thống** trong web: bảng ✓/✗ từng tích hợp (OpenRouter, Atlassian,
-Slack, MCP builds, GitHub, gws) + cảnh báo web_search-thiếu-key (v18). Mục lỗi kèm lệnh sửa.
+Slack, MCP builds, GitHub, gws, **Docker** v47) + cảnh báo web_search-thiếu-key (v18). Mục lỗi
+kèm lệnh sửa. Check "Docker (deep_agent sandbox)" probe daemon có giới hạn thời gian (không treo
+panel); ✗ chỉ ảnh hưởng agent deep_agent — đội no-shell bỏ qua an toàn.
+
+**Warm image sandbox (tuỳ chọn):** để bước deep_agent ĐẦU tiên không phải chờ pull image, chạy
+trước `python -m src.entrypoints.mpm sandbox prepull` (idempotent; image đã có → no-op; daemon
+tắt/offline → in thông báo rõ, không crash).
 
 ## 9. Sự cố thường gặp
 
@@ -202,3 +214,5 @@ Slack, MCP builds, GitHub, gws) + cảnh báo web_search-thiếu-key (v18). Mụ
 | Văn phòng trống, giao việc không có ai | registry thiếu agent office | trang Đội → "Hồ sơ chưa trong đội" → Thêm |
 | Nghiên cứu trả "xin phép tra cứu web" | thiếu Tavily/Brave key | thêm key ở Setup, hoặc tắt web_search |
 | Bind LAN bị từ chối lúc khởi động | web-auth chưa bật | đặt `WEB_AUTH_PASSWORD_HASH` + `WEB_SESSION_SECRET` |
+| deep_agent lỗi "Docker sandbox không khả dụng" | Docker daemon không chạy | Chạy Docker Desktop hoặc `colima start`; kiểm ở panel Sức khỏe (§8). Chỉ cần cho agent deep_agent (chạy shell) |
+| Bước deep_agent đầu tiên chậm | image sandbox chưa có, phải pull | Warm trước: `python -m src.entrypoints.mpm sandbox prepull` (§8) |

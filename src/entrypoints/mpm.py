@@ -45,6 +45,14 @@ def main(argv: list[str] | None = None) -> int:
         from src.entrypoints.mpm_web_cmd import run_web
 
         return run_web(args[1], args[2:])
+    # v47: `mpm sandbox prepull [image]` — opt-in warm of the deep_agent sandbox image so the
+    # first shell step doesn't pay the pull. Daemon-safe: prints a clear line, never crashes.
+    if len(args) >= 2 and args[0] == "sandbox" and args[1] == "prepull":
+        from src.runtime_backends.sandbox_backend import prepull_sandbox_image
+
+        result = prepull_sandbox_image(args[2] if len(args) >= 3 else None)
+        print(result["message"])
+        return 0 if result["ok"] else 1
     if len(args) < 2 or args[0] != "agent":
         print(_USAGE, file=sys.stderr)
         return 2
