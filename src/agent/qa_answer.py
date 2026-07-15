@@ -128,6 +128,7 @@ def answer_mention(
         settings,
         external_channels=loaded.config.slack_external_channels,
         mcp_allowlist=pack.allowlist or None,
+        actor=getattr(loaded, "profile_id", ""),  # v46
         auto_approve=getattr(loaded, "auto_approve", None),  # v8 M23 trust ladder
     )
     client = llm or LlmClient(settings)

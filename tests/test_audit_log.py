@@ -17,6 +17,28 @@ def test_append_only_one_line_per_record(tmp_path):
         json.loads(line)  # each line is valid JSON
 
 
+def test_actor_defaults_empty_and_round_trips(tmp_path):
+    """v46 P1: actor defaults "" and serializes on the row."""
+    log = AuditLog(tmp_path / "audit.jsonl")
+    assert AuditEntry(action_type="x", tool="t", verdict="allow").actor == ""
+    log.record(AuditEntry(action_type="mcp_tool", tool="jira:create", verdict="allow", actor="hr"))
+    row = json.loads((tmp_path / "audit.jsonl").read_text().strip().splitlines()[0])
+    assert row["actor"] == "hr"
+
+
+def test_query_filters_by_actor(tmp_path):
+    """v46 P3: query(actor=...) selects only that agent's rows; no filter unchanged."""
+    log = AuditLog(tmp_path / "audit.jsonl")
+    log.record(AuditEntry(action_type="a", tool="t1", verdict="allow", actor="hr"))
+    log.record(AuditEntry(action_type="a", tool="t2", verdict="allow", actor="tp"))
+    log.record(AuditEntry(action_type="a", tool="t3", verdict="allow"))  # pre-v46-style, no actor
+    hr = log.query(actor="hr")
+    assert len(hr) == 1 and hr[0]["tool"] == "t1"
+    assert log.query(actor="tp")[0]["tool"] == "t2"
+    assert log.query(actor="nobody") == []  # actor filter excludes no-actor rows too
+    assert len(log.query()) == 3  # no filter unchanged
+
+
 def test_params_secret_redacted_on_write(tmp_path):
     log = AuditLog(tmp_path / "audit.jsonl")
     log.record(

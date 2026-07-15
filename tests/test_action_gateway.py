@@ -77,6 +77,42 @@ def test_dedup_not_claimed_on_handler_failure(settings_factory, tmp_path):
     assert gw.execute(POST, handler=lambda a: "POSTED").status == "executed"
 
 
+def _audit_rows(tmp_path):
+    import json as _json
+
+    p = tmp_path / "audit.jsonl"
+    if not p.exists():
+        return []
+    return [_json.loads(ln) for ln in p.read_text().strip().splitlines() if ln.strip()]
+
+
+def test_actor_recorded_on_allow(settings_factory, tmp_path):
+    """v46: the acting agent's actor is stamped on an allowed action's audit row."""
+    gw = ActionGateway(settings=settings_factory(dry_run=False),
+                       audit_log=AuditLog(tmp_path / "audit.jsonl"), actor="hr")
+    gw.execute(POST, handler=lambda a: "POSTED")
+    rows = _audit_rows(tmp_path)
+    assert rows and all(r.get("actor") == "hr" for r in rows)
+
+
+def test_actor_recorded_on_deny(settings_factory, tmp_path):
+    """v46: actor is stamped even on a Lớp A hard-deny (every outcome branch, one choke point)."""
+    gw = ActionGateway(settings=settings_factory(dry_run=False),
+                       audit_log=AuditLog(tmp_path / "audit.jsonl"), actor="tp")
+    with pytest.raises(HardBlockedError):
+        gw.execute({"type": "gh_cli", "argv": ["repo", "delete", "x"]}, handler=lambda a: None)
+    rows = _audit_rows(tmp_path)
+    assert rows and rows[-1].get("actor") == "tp" and rows[-1]["verdict"] == "deny"
+
+
+def test_actor_defaults_empty_when_not_passed(settings_factory, tmp_path):
+    """Back-compat: a gateway built without actor records "" (byte-identical to pre-v46)."""
+    gw = _gateway(settings_factory, tmp_path, dry_run=False)  # no actor
+    gw.execute(POST, handler=lambda a: "POSTED")
+    rows = _audit_rows(tmp_path)
+    assert rows and all(r.get("actor", "") == "" for r in rows)
+
+
 def test_no_handler_skips(settings_factory, tmp_path):
     gw = _gateway(settings_factory, tmp_path, dry_run=False)
     assert gw.execute(POST).status == "skipped"

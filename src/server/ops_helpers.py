@@ -36,5 +36,6 @@ def build_gateway(loaded):
     from src.actions.action_gateway import ActionGateway
 
     return ActionGateway(
-        loaded.settings, external_channels=loaded.config.slack_external_channels
+        loaded.settings, external_channels=loaded.config.slack_external_channels,
+        actor=getattr(loaded, "profile_id", ""),  # v46
     )

@@ -63,6 +63,7 @@ def run_tasks(loaded: LoadedProfile, settings: Any, *, now: datetime | None = No
         settings,
         external_channels=loaded.config.slack_external_channels,
         mcp_allowlist=pack.allowlist or None,
+        actor=getattr(loaded, "profile_id", ""),  # v46
     )
     checked, delivered = 0, False
     try:

@@ -66,7 +66,7 @@ def run_create_calendar_event(slots: dict) -> str:
         "argv": argv,
         "dedup_hint": f"calendar:{body['summary']}:{body['start']['dateTime']}",
     }
-    gateway = ActionGateway(loaded.settings)
+    gateway = ActionGateway(loaded.settings, actor=getattr(loaded, "profile_id", ""))  # v46
     from src.actions.approved_dispatch import dispatch_approved_action
 
     result = gateway.execute(

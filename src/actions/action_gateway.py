@@ -140,9 +140,14 @@ class ActionGateway:
         external_channels: frozenset[str] | None = None,
         mcp_allowlist: dict[str, frozenset[str]] | dict[str, tuple[str, ...]] | None = None,
         auto_approve: dict[str, Any] | None = None,
+        actor: str = "",
     ) -> None:
         self._settings = settings
         self._recent_calls: deque[float] = deque()
+        # v46: the agent that owns this gateway (its profile_id), stamped on every audit row +
+        # queued approval so a cross-agent dashboard can attribute actions. "" ⇒ unattributed
+        # (byte-identical to pre-v46 rows). Callers pass `actor=loaded.profile_id`.
+        self._actor = actor
         # v8 M23 trust ladder: the agent's auto_approve config (None ⇒ OFF, byte-identical
         # pre-M23). Consulted ONLY at the Lớp B enqueue points; it can never loosen Lớp A /
         # kill-switch / dry-run — an auto-approved action re-enters _execute(approved=True).
@@ -276,7 +281,7 @@ class ActionGateway:
                         return self._execute(action, handler=handler, rationale=auto,
                                              approved=True)
                 approval_id = self._approvals.enqueue(
-                    action, reason=interrupt.reason, rationale=rationale
+                    action, reason=interrupt.reason, rationale=rationale, actor=self._actor
                 )
                 self._record(
                     action_type, tool, "pending", interrupt.reason, action, rationale
@@ -435,7 +440,9 @@ class ActionGateway:
                                               transport=transport, chat_id=chat_id)
         if auto is not None:
             return self._execute(action, handler=auto_handler, rationale=auto, approved=True)
-        approval_id = self._approvals.enqueue(action, reason=reason, rationale=rationale)
+        approval_id = self._approvals.enqueue(
+            action, reason=reason, rationale=rationale, actor=self._actor
+        )
         self._record(action_type, tool, "pending", reason, action, rationale)
         return GatewayResult(
             status="pending_approval",
@@ -528,5 +535,6 @@ class ActionGateway:
                 result_summary=result,
                 dry_run=dry_run,
                 rationale=rationale,
+                actor=self._actor,  # v46: attribute every outcome branch to the acting agent
             )
         )

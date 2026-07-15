@@ -104,6 +104,7 @@ def default_report_deps(
         settings,
         external_channels=config.slack_external_channels,
         mcp_allowlist=allowlist,
+        actor=getattr(context, "agent_id", "") or "",  # v46
         auto_approve=getattr(context, "auto_approve", None),  # v8 M23: deliver posts auto too
     )
     llm = client

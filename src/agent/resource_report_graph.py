@@ -101,6 +101,7 @@ def default_resource_deps(
     # the daily/weekly report graph). Thread it like S4 does if that ever changes.
     gw = gateway or ActionGateway(
         settings, external_channels=config.slack_external_channels,
+        actor=getattr(context, "agent_id", "") or "",  # v46
         auto_approve=getattr(context, "auto_approve", None),  # v8 M23
     )
     llm_box: dict[str, object] = {}

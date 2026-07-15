@@ -124,6 +124,19 @@ def test_fleet_activity_agent_and_verdict_filters(monkeypatch, tmp_path):
     assert all(r["verdict"] == "deny" for r in out["items"])
 
 
+def test_fleet_activity_surfaces_recorded_actor(monkeypatch, tmp_path):
+    """v46 P3: the recorded `actor` field flows into the fleet item (not just the loop agent_id)."""
+    data_root = _patch(monkeypatch, tmp_path)
+    adir = data_root / "agents" / "hr" / "audit"
+    adir.mkdir(parents=True, exist_ok=True)
+    AuditLog(adir / "audit.jsonl").record(
+        AuditEntry(action_type="mcp_tool", tool="jira:create", verdict="allow", actor="hr")
+    )
+    out = fleet_activity.fleet_activity(limit=50, agent="hr")
+    audit_items = [r for r in out["items"] if r["source"] == "audit"]
+    assert audit_items and audit_items[0]["actor"] == "hr"  # recorded field projected
+
+
 # --- route ---
 
 

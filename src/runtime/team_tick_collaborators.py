@@ -144,7 +144,8 @@ def make_escalate(loaded: Any, settings: Any):
                 )
                 return
             gateway = ActionGateway(
-                settings, external_channels=loaded.config.slack_external_channels
+                settings, external_channels=loaded.config.slack_external_channels,
+                actor=getattr(loaded, "profile_id", ""),  # v46
             )
             try:
                 step_id = step.step_id if step is not None else ""

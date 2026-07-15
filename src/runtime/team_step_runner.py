@@ -722,6 +722,7 @@ def _resolve_external_write(loaded: Any, settings: Any) -> Callable[[str], bool]
         settings,
         external_channels=config.slack_external_channels,
         auto_approve=getattr(loaded, "auto_approve", None),
+        actor=getattr(loaded, "profile_id", ""),  # v46: attribute audit/approval to the agent
     )
     report_date = datetime.now(UTC).date().isoformat()
     return make_external_write(

@@ -63,7 +63,8 @@ def run_ops_alerts(loaded, settings, *, now: datetime | None = None) -> dict:
     # crash mid-send doesn't re-notify — acceptable: a missed push resurfaces tomorrow.
     dedup = DedupStore(Path(settings.data_dir) / "dedup.db")
     gateway = ActionGateway(
-        settings, external_channels=loaded.config.slack_external_channels
+        settings, external_channels=loaded.config.slack_external_channels,
+        actor=getattr(loaded, "profile_id", ""),  # v46
     )
     try:
         fresh = [a for a in alerts

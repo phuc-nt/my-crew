@@ -41,6 +41,10 @@ class AuditEntry:
     result_summary: str = ""
     dry_run: bool = False
     rationale: str = ""  # why the agent chose this action
+    # v46: the agent that performed the action (its profile_id). "" for pre-v46 rows / callers that
+    # do not set it. Recorded so a cross-agent governance dashboard can filter by the ACTOR field
+    # instead of reconstructing identity from the per-agent data_dir path the JSONL lives under.
+    actor: str = ""
     timestamp: str = field(default_factory=_utc_now_iso)
 
 
@@ -73,14 +77,16 @@ class AuditLog:
         tool: str | None = None,
         verdict: str | None = None,
         since: str | None = None,
+        actor: str | None = None,
         limit: int | None = None,
     ) -> list[dict[str, Any]]:
         """Read audit entries, newest first, with optional filters.
 
         Filters: `tool` (substring, case-insensitive), `verdict` (exact),
-        `since` (ISO date/datetime prefix — entries with timestamp >= it).
-        `limit` caps the result count. Returns already-redacted records (they
-        were redacted at write time).
+        `since` (ISO date/datetime prefix — entries with timestamp >= it),
+        `actor` (v46, exact agent id — only rows recorded with that actor; pre-v46 rows have no
+        actor and are excluded by this filter). `limit` caps the result count. Returns
+        already-redacted records (they were redacted at write time).
         """
         if not self._path.exists():
             return []
@@ -99,6 +105,8 @@ class AuditLog:
                 if verdict and entry.get("verdict") != verdict:
                     continue
                 if since and str(entry.get("timestamp", "")) < since:
+                    continue
+                if actor is not None and entry.get("actor", "") != actor:
                     continue
                 out.append(entry)
         out.reverse()  # newest first

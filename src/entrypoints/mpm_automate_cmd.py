@@ -125,6 +125,7 @@ def run_automate(args: list[str], *, gateway=None, read_tools=None, analyze_fn=N
 def _default_gateway(settings, config):
     from src.actions.action_gateway import ActionGateway
 
+    # v46: no `actor` — operator-run automate CLI (not an agent action); left "" by design.
     return ActionGateway(settings, external_channels=config.slack_external_channels)
 
 

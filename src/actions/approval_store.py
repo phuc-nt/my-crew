@@ -26,6 +26,7 @@ class PendingApproval:
     reason: str
     status: str  # pending | approved | rejected
     created_at: str
+    actor: str = ""  # v46: the agent (profile_id) that queued this approval; "" for pre-v46 rows
 
 
 class ApprovalStore:
@@ -45,46 +46,60 @@ class ApprovalStore:
             "  created_at TEXT NOT NULL"
             ")"
         )
+        # v46: attribute each queued approval to the agent that raised it. Migrate-free ALTER (house
+        # pattern) — an existing db gets the column once with DEFAULT '' for old rows.
+        try:
+            self._conn.execute("ALTER TABLE approvals ADD COLUMN actor TEXT NOT NULL DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         self._conn.commit()
 
-    def enqueue(self, action: dict[str, Any], *, reason: str, rationale: str = "") -> int:
+    def enqueue(
+        self, action: dict[str, Any], *, reason: str, rationale: str = "", actor: str = ""
+    ) -> int:
         """Add a pending approval; returns its id.
 
         The action is redacted before storage (same posture as the audit log) so
         a secret the Lớp A check missed does not sit unredacted in this parallel
         store. Lớp A blocks detectable secrets before they ever reach here.
+
+        `actor` (v46): the agent that raised this action (its profile_id); recorded so a dashboard
+        can attribute a queued approval. Default "" ⇒ unattributed (byte-identical to pre-v46).
         """
         from src.actions.secret_patterns import redact
 
         now = datetime.now(UTC).isoformat()
         safe_action = redact(action)
         cur = self._conn.execute(
-            "INSERT INTO approvals (action_json, reason, status, rationale, created_at) "
-            "VALUES (?, ?, 'pending', ?, ?)",
-            (json.dumps(safe_action, ensure_ascii=False, default=str), reason, rationale, now),
+            "INSERT INTO approvals (action_json, reason, status, rationale, created_at, actor) "
+            "VALUES (?, ?, 'pending', ?, ?, ?)",
+            (json.dumps(safe_action, ensure_ascii=False, default=str), reason, rationale, now,
+             actor),
         )
         self._conn.commit()
         return int(cur.lastrowid)
 
     def get(self, approval_id: int) -> PendingApproval | None:
         row = self._conn.execute(
-            "SELECT id, action_json, reason, status, created_at FROM approvals WHERE id = ?",
+            "SELECT id, action_json, reason, status, created_at, actor FROM approvals WHERE id = ?",
             (approval_id,),
         ).fetchone()
         if row is None:
             return None
         return PendingApproval(
-            id=row[0], action=json.loads(row[1]), reason=row[2], status=row[3], created_at=row[4]
+            id=row[0], action=json.loads(row[1]), reason=row[2], status=row[3], created_at=row[4],
+            actor=row[5] or "",
         )
 
     def list_pending(self) -> list[PendingApproval]:
         rows = self._conn.execute(
-            "SELECT id, action_json, reason, status, created_at FROM approvals "
+            "SELECT id, action_json, reason, status, created_at, actor FROM approvals "
             "WHERE status = 'pending' ORDER BY id"
         ).fetchall()
         return [
             PendingApproval(
-                id=r[0], action=json.loads(r[1]), reason=r[2], status=r[3], created_at=r[4]
+                id=r[0], action=json.loads(r[1]), reason=r[2], status=r[3], created_at=r[4],
+                actor=r[5] or "",
             )
             for r in rows
         ]

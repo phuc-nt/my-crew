@@ -43,7 +43,8 @@ def notify_operator_best_effort(
             if getattr(admin, "domain", "") != "admin" or not operator:
                 continue
             gw = ActionGateway(
-                admin.settings, external_channels=admin.config.slack_external_channels
+                admin.settings, external_channels=admin.config.slack_external_channels,
+                actor=getattr(admin, "profile_id", ""),  # v46
             )
             try:
                 result = send_telegram_message(

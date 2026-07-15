@@ -221,6 +221,8 @@ def _gateway(settings, config):
     """
     from src.actions.action_gateway import ActionGateway
 
+    # v46: no `actor` — this is the operator's own approval-management CLI (list/approve/reject),
+    # a human action, not an agent's. Attributing it to an agent would be wrong; left "" by design.
     return ActionGateway(settings, external_channels=config.slack_external_channels)
 
 

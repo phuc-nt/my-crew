@@ -42,7 +42,8 @@ def run_send_message(slots: dict[str, str]) -> str:
     report_date = datetime.now().astimezone().date().isoformat()  # noqa: DTZ005 — local, matches ops clock
 
     gateway = ActionGateway(
-        loaded.settings, external_channels=loaded.config.slack_external_channels
+        loaded.settings, external_channels=loaded.config.slack_external_channels,
+        actor=getattr(loaded, "profile_id", ""),  # v46
     )
     try:
         result = send_message(

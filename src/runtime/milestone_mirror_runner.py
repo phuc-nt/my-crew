@@ -115,7 +115,8 @@ def run_milestone_mirror(loaded: Any, settings: Any, *, now: datetime | None = N
         local_date = now.astimezone().date().isoformat()
         dedup = DedupStore(Path(settings.data_dir) / "dedup.db")
         gateway = ActionGateway(
-            settings, external_channels=loaded.config.slack_external_channels
+            settings, external_channels=loaded.config.slack_external_channels,
+            actor=getattr(loaded, "profile_id", ""),  # v46
         )
         try:
             fresh = [

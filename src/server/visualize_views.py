@@ -34,7 +34,7 @@ _RUN_FIELDS = ("ts", "kind", "audience", "status", "cost_usd", "delivered", "aut
 # Audit fields safe to expose (already redacted at write time; still select, don't echo).
 # `rationale`/`result_summary` stay EXCLUDED (a verified privacy decision) — the trust-ladder
 # "đã tự duyệt" view reads the run-event auto_approved flag instead, not the audit rationale.
-_AUDIT_FIELDS = ("timestamp", "action_type", "tool", "verdict", "reason")
+_AUDIT_FIELDS = ("timestamp", "action_type", "tool", "verdict", "reason", "actor")
 
 
 def _require_agent(agent_id: str) -> None:

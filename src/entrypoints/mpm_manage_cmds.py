@@ -31,7 +31,8 @@ def _gateway(loaded):
     """Build the Action Gateway at the agent's data dir (per-agent stores)."""
     from src.actions.action_gateway import ActionGateway
 
-    return ActionGateway(loaded.settings, external_channels=loaded.config.slack_external_channels)
+    return ActionGateway(loaded.settings, external_channels=loaded.config.slack_external_channels,
+                         actor=getattr(loaded, "profile_id", ""))  # v46
 
 
 def run_manage(sub: str, args: list[str]) -> int:
