@@ -1,17 +1,18 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v49). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-07-15.
+> Lộ trình + trạng thái (as-built v50). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Cập nhật: 2026-07-16.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v49.** ~2312 backend test, ruff/tsc
+**Production-usable, single-user autonomy-first. Đã ship tới v50.** ~2345 backend test, ruff/tsc
 sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out parallelism).
 
-**v40–v49 (deep_agent + runtime-tier + governance + onboarding):** v40–v42 deep_agent hardening ·
+**v40–v50 (deep_agent + runtime-tier + governance + onboarding + UI catch-up):** v40–v42 deep_agent hardening ·
 v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-shell→create_agent) ·
 **v46 audit actor** (attribution end-to-end) · **v47 Docker UX** (health probe, prepull) ·
-**v48 MCP pool** (team-step reuse) · **v49 quickstart** (OpenRouter-only first report).
+**v48 MCP pool** (team-step reuse) · **v49 quickstart** (OpenRouter-only first report) ·
+**v50 UI catch-up** (surface v43–v46 backend: actor column, tier badge, per-task cost, deep_team toggle).
 
 ## Đã hoàn thành (gọn — chi tiết ở journals/plans)
 
@@ -43,6 +44,7 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
 | **UI design-system sync (v37)** | Văn phòng 3 cột canh cùng baseline · phân cấp size rõ ở cột Kết quả · input/button đồng nhất kích cỡ toàn app. Thuần CSS, không đổi hành vi. |
 | **Harness wave 1: send_message + skill-curator (v38)** | `send_message` facade (slack/telegram/email) qua Action Gateway — agent chủ động gửi, thừa hưởng Lớp A/B + trust_mode + audit; surface chat-ops (không tool LLM ghi trong loop) · skill-curator: đếm skill được chọn + archive skill agent-own quá hạn (không xoá, không đụng template-role). 2177 BE + 200 FE tests. |
 | **Google Workspace context + SMTP + Calendar-create (v39)** | Agent bật `gws_context` đọc Gmail/Calendar/Drive (gws CLI, argv CODE-cố-định, internal-only, flag mặc định TẮT) · SMTP vào Connections UI · Calendar-create WRITE qua Gateway (`("calendar","events","insert")` allowlist, delete/acl = Lớp A). 2207 BE + 200 FE tests, live E2E OAuth thật. |
+| **UI catch-up: surface v43–v46 backend (v50)** | Audit actor column trên AuditTable (v46 data lộ UI) · tier badge "🔒 N sandbox" kanban card (v45 count steps_needs_shell) · GET `/api/team-tasks/{id}/cost` + TeamTaskCost component lazy-expand "Chi phí" (v26 telemetry bộ lộ) · create-wizard deep_team toggle (v43 feature YAML-only → UI, guarded passthrough). 2344 BE + 201 FE tests, E2E UAT browser 5/5. |
 
 ## Việc nên làm tiếp (từ UAT + nợ kỹ thuật)
 

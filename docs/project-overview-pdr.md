@@ -1,7 +1,7 @@
 # Project Overview & PDR — my-crew
 
 > Product definition + requirements. Đọc file này TRƯỚC khi plan hay code.
-> Cập nhật: 2026-07-15 (v49). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified**.
+> Cập nhật: 2026-07-16 (v50). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified**.
 > Liên quan: [system-architecture](system-architecture.md) · [action-gateway-explainer](action-gateway-explainer.md) · [uat-theo-user-story](uat-theo-user-story.md).
 
 ## 1. Vấn đề

@@ -1,7 +1,7 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-07-15 — v49 COMPLETE.** ~2340 backend tests + 200 frontend, ruff/tsc clean.
+> Status: **2026-07-16 — v50 COMPLETE.** ~2344 backend tests + 201 frontend, ruff/tsc clean.
 > Product usable single-user (agent office, team-task, màn 3D, registry user-data,
 > memory seam, AgentRuntime 3-tier + per-step routing, telemetry capture + unified cost,
 > deep_team in-sandbox subagent, benchmark-hardened robustness, governance-audit actor,
@@ -464,6 +464,12 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 - **`mpm crew init`** (`src/entrypoints/mpm_onboarding_cmds.py::run_crew`): scaffold shipped starter crew thực giữ lại (reuse v32 `create_crew` idempotent skip-existing) vs demo-mode swap tạm. Print summary + next-step.
 - **CoordinatorHealthBanner on Team view** (v49): surface coordinator status + startup hint after crew init (reuse office-unified banner, poll `/health/coordinator` existing). Compose pattern — 0 new components.
 
+### v50: UI catch-up — surface v43–v46 backend capability (2026-07-15)
+- **Audit actor column** (`web/src/components/AuditTable.tsx`): display `AuditEntry.actor` (v46 field) in UI; CompanyActivity tags "[bởi {actor}]" when actor≠owner. Backend data already emitted; FE surfaces it.
+- **Step tier badge** (`web/src/views/team-task-kanban.tsx`, `/api/team-tasks/board`): count `steps_needs_shell` (v45 routing), kanban card badges "🔒 N sandbox". Glance-view tier demand without drill-down.
+- **Per-task cost endpoint** (`src/server/routes_outputs.py::team_task_cost`, `web/src/components/TeamTaskCost.tsx`): GET `/api/team-tasks/{id}/cost` (allowlist-projected, CaptureStore.list_for_task) → lazy-expand "Chi phí" card. Per-step attempt + task total.
+- **deep_team wizard toggle** (`web/src/wizard/IdentityStep.tsx`, `src/server/agent_create.py`): create-wizard IdentityStep shows deep_team toggle (v43 feature) only when runtime=deep_agent; passes deep_team bool + deep_team_max_calls → agent_create guarded passthrough. Pre-v50 YAML-only edit now exposed.
+
 ## Key v2 Changes vs v1
 
 | Aspek | v1 | v2 M1-P3 |
@@ -482,7 +488,7 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 
 ## Testing
 
-- **Unit tests**: `uv run pytest` — ~2340 backend tests pass (M1–M6, M19, M27–M30 + v31–v49 coverage: pack/dispatch/red-line/office/web-search injection, per-step routing, audit actor, sandbox/prepull, MCP pool, onboarding).
+- **Unit tests**: `uv run pytest` — ~2344 backend tests pass (M1–M6, M19, M27–M30 + v31–v50 coverage: pack/dispatch/red-line/office/web-search injection, per-step routing, audit actor, sandbox/prepull, MCP pool, onboarding).
 - **Frontend tests**: `vitest` — 200 tests (3D/office views, template-picker, team components).
 - **Linting**: `uv run ruff check src tests` — clean.
 - **Byte-identity**: pm-pack output (report text, Slack mrkdwn, Confluence XHTML) diff vs pre-v3 = empty (2026-06-30).

@@ -1,4 +1,4 @@
-# Hướng dẫn sử dụng — my-crew (v49)
+# Hướng dẫn sử dụng — my-crew (v50)
 
 Trợ lý ảo tự động làm công việc quản lý dự án (PM / Scrum Master): đọc Jira · GitHub · Confluence ·
 Slack, phân tích, rồi *tự hành động* (viết báo cáo, cảnh báo rủi ro, theo dõi OKR) như một PM thật.
@@ -359,12 +359,25 @@ Hệ thống **mỗi 5 phút kiểm tra** (không LLM, chỉ so sánh nội dung
     ![Văn phòng 3D — cả đội đang làm việc: nhân sự tại bàn, phòng việc + hoạt động trực tiếp + kết quả bên dưới](images/van-phong-3d-tham-van-di-lai-gan.png)
 - Nếu một agent **chết ngầm** (quá hạn không chạy), hệ thống tự nhắn cảnh báo cho bạn qua Telegram.
 
-## B.6. Đổi giao diện (sáng / tối)
+## B.5g. Xem chi phí việc + cảnh báo tầng sandbox (v50 — UI catch-up)
+
+Trên bảng kanban (tab **Duyệt** hoặc xem chi tiết việc):
+- **Ai thực hiện**: cột "Ai thực hiện" trong **Hoạt động công ty** (v31) giờ hiển thị rõ tên agent đã làm hành động — nếu agent khác vào giải quyết vấn đề (ví dụ: coordinator A giao việc mà B đảm nhận), tag "[bởi B]" hiện bên cạnh để rõ ai chính thức làm.
+- **Mức độ sandbox cần thiết**: mỗi thẻ việc dán badge **"🔒 N sandbox"** (N = số bước cần chạy trong Docker sandbox) — giúp bạn nhìn nhanh việc nào phức tạp/tốn tài nguyên.
+- **Chi phí từng việc**: bấm nút **"Chi phí"** (v50) trên thẻ kanban → mở panel chi tiết: **mỗi bước** (engine + tokens) + **tổng việc**. Thuận tiện để theo dõi ngân sách và tránh việc chạy quá đắt.
+
+## B.6. Tạo agent với tính năng in-sandbox (deep_team — v50)
+
+Khi tạo agent ở trang **Đội** hoặc wizard, nếu bạn chọn **runtime = "Deep Agent"** (chạy trong Docker sandbox), wizard hiện thêm **tùy chọn "Điều phối trợ lý con"** — bật lên cho phép agent giao việc con TRONG hộp cát (chia ngữ cảnh lớn cho ≤3 trợ lý nhỏ chuyên môn, không cần tạo agent thật).
+
+Cài đặt mặc định: `deep_team: false` (agent chạy độc lập). Bật `deep_team: true` + đặt `deep_team_max_calls` (mặc định 3 lần) nếu muốn sử dụng tính năng này.
+
+## B.7. Đổi giao diện (sáng / tối)
 
 Góc phải trên cùng có nút **Sáng / Tối / Tự động**. "Tự động" theo cài đặt của máy. Lựa chọn được ghi
 nhớ cho lần sau.
 
-## B.7. Chế độ nâng cao (khi cần xem sâu)
+## B.8. Chế độ nâng cao (khi cần xem sâu)
 
 Vào **Cài đặt → Chế độ hiển thị** → bật **"Chế độ nâng cao"**. Thanh điều hướng hiện thêm các trang kỹ
 thuật (tất cả tiếng Việt):
@@ -382,7 +395,7 @@ thuật (tất cả tiếng Việt):
 
 Tắt lại để về giao diện gọn 4 mục. Chế độ này chỉ đổi *độ chi tiết hiển thị*, không đổi quyền hạn.
 
-## B.8. Chế độ demo (công ty mẫu, sẵn sàng cho khách xem)
+## B.9. Chế độ demo (công ty mẫu, sẵn sàng cho khách xem)
 
 Cần cho khách/đồng nghiệp xem sản phẩm mà không lộ dữ liệu thật? Bật **demo mode**:
 
