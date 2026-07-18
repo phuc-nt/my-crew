@@ -470,6 +470,17 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 - **Per-task cost endpoint** (`my_crew/server/routes_outputs.py::team_task_cost`, `web/my_crew/components/TeamTaskCost.tsx`): GET `/api/team-tasks/{id}/cost` (allowlist-projected, CaptureStore.list_for_task) → lazy-expand "Chi phí" card. Per-step attempt + task total.
 - **deep_team wizard toggle** (`web/my_crew/wizard/IdentityStep.tsx`, `my_crew/server/agent_create.py`): create-wizard IdentityStep shows deep_team toggle (v43 feature) only when runtime=deep_agent; passes deep_team bool + deep_team_max_calls → agent_create guarded passthrough. Pre-v50 YAML-only edit now exposed.
 
+### v51: Productize — installable my-crew 0.1.0 on PyPI (2026-07-18)
+- **Module rename** `src/` → `my_crew/` (a top-level "src" package cannot ship on PyPI); console script `[project.scripts] my-crew = my_crew.entrypoints.mpm:main` with argparse `--help`/`--version`.
+- **`MY_CREW_HOME` seam** (`my_crew/config/settings.py`): user state resolves env > git-checkout > `~/.my-crew`; `SHIPPED_ROOT` for wheel-bundled resources (`my_crew/_shipped/`); `home_seed.py` copies starter `default` profile into a fresh home.
+- **`my-crew serve`** (`entrypoints/serve_cmd.py`): foreground supervisor for web + coordinator (Docker Compose / systemd). `deploy/docker/` Dockerfile+compose. **`doctor`/`upgrade`** (`entrypoints/mpm_lifecycle_cmds.py`). CI `.github/workflows/` (ci + OIDC release). Published: `pip install my-crew`.
+
+### v52: Office dual-lens — one office, two lenses (2026-07-18)
+- **3D storytelling** (`web/src/views/office-3d/agent-office-state.ts`, `agent-desk.tsx`): failed step → `error` desk state (red pulse + ⚠ bubble) instead of silent idle; review verdict floor-ring flash (green/orange, fades by event ts); 🔒 sandbox badge (task-level, board `pic_id`/`room_id` join, high-mode).
+- **Header lens toggle** 👁/🔬 (`components/Layout.tsx`, `ui-mode-context`); high-mode office panels: **health strip** (`office-unified/office-health-strip.tsx`: coordinator beat + integration checks + budget chip), **Desk Inspector** (`desk-inspector.tsx`: step/tier/cost-so-far on desk click).
+- **Read-only observability** (`my_crew/server/routes_observability.py`, 3 GET behind auth, no Gateway): `/api/budget` (fleet spend vs cap), `/api/captures` (+`/{id}`, v26 per-attempt telemetry), `/api/search` (v33 FTS5, sweep-throttled 30s). UI: **Captures explorer** (`views/Captures.tsx`, ADVANCED_NAV), header search box.
+- **launchd PATH fix** (`deploy/launchd/*.plist`, `install.sh`): `EnvironmentVariables/PATH` via `__BIN_PATH__` so services find node/docker/gh/gws (v51 rename left them off the minimal launchd PATH).
+
 ## Key v2 Changes vs v1
 
 | Aspek | v1 | v2 M1-P3 |
