@@ -7,6 +7,41 @@ import json
 from my_crew.runtime import worker
 
 
+def _fake_loaded_profile(agent_id: str, **_kw):
+    """A fully in-memory LoadedProfile so the worker never reads the real profiles/
+    dir, .env, or MCP dist paths — the suite must pass on a clean CI runner. Mirrors
+    the module docstring's "offline, no MCP" intent (which the old real-load broke)."""
+
+    from my_crew.config.config_builders import (
+        build_reporting_config_from_dict,
+        build_settings_from_dict,
+    )
+    from my_crew.profile.loader import LoadedProfile
+
+    settings = build_settings_from_dict(
+        {
+            "openrouter_api_key": "sk-or-test",
+            "openrouter_model": "test/model",
+            "openrouter_referer": "http://test",
+            "openrouter_title": "test",
+            "dry_run": False,
+            "write_disabled": False,
+            "monthly_budget_usd": 50.0,
+            "budget_warn_ratio": 0.8,
+            "trust_mode": "guarded",
+            "data_dir": worker.agent_data_dir(agent_id),
+        }
+    )
+    config = build_reporting_config_from_dict(
+        {"jira_project_key": "X", "github_repo": "o/r", "slack_report_channel": "C",
+         "slack_stakeholder_channel": "", "slack_external_channels": ""}
+    )
+    return LoadedProfile(
+        profile_id=agent_id, name=agent_id, enabled=True, settings=settings,
+        config=config, soul="", project="", memory="", schedule={}, reports=(),
+    )
+
+
 def _fake_run(result):
     """A run_report stub that records its thread_id and returns a fixed result."""
     seen = {}
@@ -20,10 +55,12 @@ def _fake_run(result):
 
 
 def _patch_data_dir(monkeypatch, tmp_path):
-    """Redirect the per-agent data dir under tmp so the worker writes nowhere real."""
+    """Redirect the per-agent data dir under tmp so the worker writes nowhere real,
+    and inject an in-memory profile so no real profile/.env/MCP dist is touched."""
     monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
     # the worker also migrates on startup — point that DATA_DIR at the (empty) tmp too
     monkeypatch.setattr("my_crew.runtime.legacy_migration.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr(worker, "load_profile", _fake_loaded_profile)
 
 
 def test_happy_dry_run_exit_0_and_run_event(monkeypatch, tmp_path):
@@ -97,7 +134,11 @@ def test_run_report_raising_exit_1_with_error_event(monkeypatch, tmp_path):
 
 
 def test_bad_agent_id_exit_2_clean(monkeypatch, tmp_path, capsys):
-    _patch_data_dir(monkeypatch, tmp_path)
+    # Only redirect the data dir here — this test exercises the REAL load_profile
+    # raising for an unknown id, so it must not use the in-memory profile stub.
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.legacy_migration.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", tmp_path / "profiles")
     run, _ = _fake_run({"delivered": True})
     rc = worker.main(["--agent-id", "nope", "--report", "daily"], run_report=run)
     assert rc == 2

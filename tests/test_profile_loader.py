@@ -77,8 +77,15 @@ def test_token_env_resolves_from_env(clean_env, tmp_path, monkeypatch):
     assert loaded.config.confluence_server.env["CONFLUENCE_API_TOKEN"] == "secret-token"
 
 
-def test_missing_token_loads_but_validate_raises(clean_env, tmp_path):
+def test_missing_token_loads_but_validate_raises(clean_env, tmp_path, monkeypatch):
     # TEST_TOK is unset → load succeeds (lazy), validate() raises at spawn time.
+    # Point the Jira dist at a real file so validate() reaches the TOKEN check
+    # instead of failing earlier on a missing dist (which on a clean CI runner is
+    # the default ~/workspace path that does not exist).
+    fake_dist = tmp_path / "jira-dist" / "index.js"
+    fake_dist.parent.mkdir(parents=True)
+    fake_dist.write_text("// stub", encoding="utf-8")
+    monkeypatch.setenv("JIRA_MCP_DIST", str(fake_dist))
     pdir, pid = _write_profile(tmp_path, "bindings:\n  jira:\n    token_env: TEST_TOK\n")
     loaded = load_profile(pid, profiles_dir=pdir)  # no raise
     with pytest.raises(RuntimeError, match="ATLASSIAN_API_TOKEN"):
