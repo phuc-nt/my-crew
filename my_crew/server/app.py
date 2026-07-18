@@ -181,6 +181,9 @@ def main() -> None:
 
     import uvicorn
 
+    from my_crew.config.home_seed import ensure_home_seeded
+
+    ensure_home_seeded()
     host = os.environ.get("BIND_HOST", "127.0.0.1")
     auth.assert_bind_safe(host)
     port = int(os.environ.get("PORT", "8765"))

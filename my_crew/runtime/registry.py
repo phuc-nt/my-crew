@@ -17,14 +17,14 @@ from pathlib import Path
 
 import yaml
 
-from my_crew.config.settings import MY_CREW_HOME, REPO_ROOT
+from my_crew.config.settings import MY_CREW_HOME, SHIPPED_ROOT
 from my_crew.runtime.agent_paths import _validate_agent_id
 
 _REGISTRY_PATH = MY_CREW_HOME / "registry.yaml"
 
 #: Committed template a fresh checkout bootstraps `registry.yaml` from (v18 — the real
 #: registry is user data and no longer lives in git).
-_EXAMPLE_PATH = REPO_ROOT / "registry.example.yaml"
+_EXAMPLE_PATH = SHIPPED_ROOT / "registry.example.yaml"
 
 
 @dataclass(frozen=True)

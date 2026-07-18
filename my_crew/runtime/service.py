@@ -205,7 +205,14 @@ class Service:
         for entry in load_registry():
             if not entry.enabled:
                 continue
-            loaded = load_profile(entry.id)
+            # A registry entry whose profile dir is missing (e.g. the shipped example
+            # registers `admin` before the user created that profile) must not kill
+            # the whole fleet loop — skip loudly, the other agents keep running.
+            try:
+                loaded = load_profile(entry.id)
+            except FileNotFoundError as exc:
+                logger.warning("skipping agent %r: %s", entry.id, exc)
+                continue
             if not loaded.enabled:
                 continue
             schedule, _ = _effective_schedule(loaded)
@@ -222,7 +229,11 @@ class Service:
         for entry in load_registry():
             if not entry.enabled:
                 continue
-            loaded = load_profile(entry.id)
+            try:
+                loaded = load_profile(entry.id)
+            except FileNotFoundError as exc:
+                logger.warning("skipping agent %r: %s", entry.id, exc)
+                continue
             if not loaded.enabled:
                 continue
             schedule, reports = _effective_schedule(loaded)
@@ -285,6 +296,9 @@ def _write_coordinator_heartbeat() -> None:
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     args = argv if argv is not None else sys.argv[1:]
+    from my_crew.config.home_seed import ensure_home_seeded
+
+    ensure_home_seeded()
     service = Service()
     if "--once" in args:
         outcomes = service.run_tick(datetime.now())  # noqa: DTZ005 — local, matches cron intent

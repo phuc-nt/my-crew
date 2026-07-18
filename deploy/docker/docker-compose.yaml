@@ -1,0 +1,29 @@
+# my-crew via Docker Compose — the cross-platform run path (macOS + Linux + servers).
+#
+# First run (auth is REQUIRED before the container can bind 0.0.0.0 — same R3 rule
+# as a LAN deploy; the dashboard approves Lớp B actions and must never be open):
+#   1. cp my-crew.env.example my-crew.env
+#   2. docker compose run --rm --no-deps my-crew my-crew web hash-password
+#      → paste the hash into my-crew.env (WEB_AUTH_PASSWORD_HASH)
+#      → set WEB_SESSION_SECRET (e.g. `openssl rand -hex 32`) + OPENROUTER_API_KEY
+#   3. docker compose up -d   → http://127.0.0.1:8765 → log in → Setup Wizard
+#
+# All user state (wizard-written .env, registry.yaml, profiles/, .data/) lives on the
+# `my-crew-data` volume via MY_CREW_HOME=/data — `docker compose down` keeps it.
+services:
+  my-crew:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    ports:
+      # Published to loopback only by default; change to "8765:8765" for LAN access
+      # (auth is already mandatory inside, but review the exposure consciously).
+      - "127.0.0.1:8765:8765"
+    env_file:
+      - my-crew.env
+    volumes:
+      - my-crew-data:/data
+    restart: unless-stopped
+
+volumes:
+  my-crew-data:

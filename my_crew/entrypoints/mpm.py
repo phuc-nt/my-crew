@@ -70,6 +70,13 @@ def _build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("quickstart", help="run a first dry-run report with only an OpenRouter key")
     p.add_argument("rest", nargs=argparse.REMAINDER)
 
+    p = sub.add_parser(
+        "serve",
+        help="run web dashboard + coordinator in the foreground (compose/systemd/terminal)",
+    )
+    p.add_argument("--web-only", action="store_true", help="only the web dashboard")
+    p.add_argument("--scheduler-only", action="store_true", help="only the coordinator")
+
     p = sub.add_parser("crew", help="crew-level onboarding (init: scaffold the starter crew)")
     p.add_argument("action", metavar="init")
     p.add_argument("rest", nargs=argparse.REMAINDER)
@@ -135,10 +142,23 @@ def main(argv: list[str] | None = None) -> int:
         code = exc.code
         return code if isinstance(code, int) else 2
 
+    # Installed/container mode: make the shipped starter profiles loadable before any
+    # command touches the registry/profiles (no-op on a checkout).
+    from my_crew.config.home_seed import ensure_home_seeded
+
+    ensure_home_seeded()
+
     if ns.group == "quickstart":
         from my_crew.entrypoints.mpm_onboarding_cmds import run_quickstart
 
         return run_quickstart(ns.rest)
+    if ns.group == "serve":
+        from my_crew.entrypoints.serve_cmd import run_serve
+
+        flags = (["--web-only"] if ns.web_only else []) + (
+            ["--scheduler-only"] if ns.scheduler_only else []
+        )
+        return run_serve(flags)
     if ns.group == "crew":
         from my_crew.entrypoints.mpm_onboarding_cmds import run_crew
 

@@ -25,6 +25,9 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
+# launchd needs an absolute uv path baked into the plists; Apple-Silicon brew, Intel
+# brew and manual installs differ, so resolve it here instead of hardcoding.
+UV_BIN="$(command -v uv || echo /opt/homebrew/bin/uv)"
 
 # v18: registry.yaml là user data (gitignored) — lần cài đầu tạo từ template.
 # Idempotent: KHÔNG bao giờ đè registry đang có (đội thật của CEO).
@@ -275,7 +278,7 @@ mkdir -p "$DEST"
 reload_service() { # plist-name  force-reload(0/1)
   local name="$1" force="$2"
   local src="deploy/launchd/$name" dst="$DEST/$name"
-  local rendered; rendered="$(sed "s#__REPO_DIR__#$REPO_DIR#g" "$src")"
+  local rendered; rendered="$(sed -e "s#__REPO_DIR__#$REPO_DIR#g" -e "s#__UV_BIN__#$UV_BIN#g" "$src")"
   local changed=1
   if [ -f "$dst" ] && [ "$rendered" = "$(cat "$dst")" ]; then changed=0; fi
   if [ "$changed" -eq 0 ] && [ "$force" -eq 0 ]; then

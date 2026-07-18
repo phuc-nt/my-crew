@@ -34,6 +34,12 @@ def resolve_home(env_value: str | None, repo_root: Path) -> Path:
     return Path.home() / ".my-crew"
 
 
+# Root for SHIPPED resources (profiles/default, profiles/templates, domain-packs/,
+# registry.example.yaml, config/model_prices.yaml). Today that is the checkout/copy
+# the package runs from; when the wheel bundles these as package data (build plan
+# phase 03) only this constant changes.
+SHIPPED_ROOT = REPO_ROOT
+
 MY_CREW_HOME = resolve_home(os.environ.get("MY_CREW_HOME"), REPO_ROOT)
 # Installed-package mode needs the home to exist before the first flat-file write
 # (wizard .env, registry bootstrap, .setup-complete). No-op for a checkout — the

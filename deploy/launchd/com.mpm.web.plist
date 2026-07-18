@@ -10,7 +10,7 @@
          (assert_bind_safe), so a LAN deploy must have auth configured first. -->
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/uv</string>
+        <string>__UV_BIN__</string>
         <string>run</string>
         <string>python</string>
         <string>-m</string>

@@ -25,4 +25,5 @@ KIND="${1:---daily}"
 
 # DRY_RUN comes from .env (default true). To post for real on a schedule, set
 # DRY_RUN=false in .env. The app reads .env via python-dotenv.
-exec /opt/homebrew/bin/uv run python -m my_crew.entrypoints.cron "$KIND"
+UV_BIN="$(command -v uv || echo /opt/homebrew/bin/uv)"
+exec "$UV_BIN" run python -m my_crew.entrypoints.cron "$KIND"

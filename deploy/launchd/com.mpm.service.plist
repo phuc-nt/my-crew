@@ -12,7 +12,7 @@
          the same way as run-report.sh, instead of hardcoding .venv/bin/python. -->
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/uv</string>
+        <string>__UV_BIN__</string>
         <string>run</string>
         <string>python</string>
         <string>-m</string>

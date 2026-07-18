@@ -1,0 +1,28 @@
+# Build context = the repo; keep user data, secrets, and heavyweight dev dirs out.
+.git
+.venv
+.pytest_cache
+__pycache__
+*.pyc
+dist
+plans
+.data
+.demo-backup
+.mcp-servers
+node_modules
+web/node_modules
+web/dist
+
+# User data / secrets (never bake into an image)
+.env
+.env.*
+*.env
+!config.example.env
+!deploy/docker/my-crew.env.example
+registry.yaml
+company.yaml
+company-docs
+.setup-complete
+profiles/*
+!profiles/default
+!profiles/templates
