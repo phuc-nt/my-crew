@@ -1,5 +1,8 @@
 # my-crew
 
+[![ci](https://github.com/phuc-nt/my-crew/actions/workflows/ci.yml/badge.svg)](https://github.com/phuc-nt/my-crew/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/my-crew)](https://pypi.org/project/my-crew/)
+
 *[English](README.md)*
 
 Một **agent tự chủ trên LangGraph (Python)** làm phần việc **quản lý** lặp đi lặp lại (PM / Scrum Master / Trưởng nhóm) cho đội AI-native — nó đọc trạng thái dự án qua **Jira · GitHub · Confluence · Slack**, suy luận, rồi *hành động* (viết báo cáo, cảnh báo rủi ro, theo dõi OKR) theo lịch của chính nó. Không phải chatbot bạn hỏi — mà là agent tự làm.
@@ -47,14 +50,33 @@ Một agent PM (báo cáo ngày/tuần/OKR/nguồn lực) đã thành **công ty
 
 [Journals](docs/journals/) là tài liệu học tốt nhất ở đây — mỗi phase ghi lại quyết định thật và bug red-team bắt được (denylist→allowlist, lỗ JQL-injection, rò rỉ riêng tư qua artifact liên kết).
 
-## Thử ngay
+## Cài đặt & chạy lần đầu (5 phút)
+
+```bash
+uvx my-crew quickstart        # hoặc: pipx install my-crew && my-crew quickstart
+```
+
+`quickstart` chạy báo cáo hằng ngày của agent mặc định ở chế độ **dry-run** — chỉ cần
+`OPENROUTER_API_KEY` trong `.env` (để ở `~/.my-crew/`), không ghi ra ngoài. Sau đó:
+
+```bash
+my-crew serve                 # dashboard web + coordinator, foreground
+# → http://127.0.0.1:8765 — trình duyệt mở Setup Wizard (bí mật không qua terminal).
+#   Node.js cần thiết cho 3 MCP server (Jira / Confluence / Slack).
+```
+
+Thích dùng container? `deploy/docker/` có Docker Compose (auth-first, state trên volume).
+Operator macOS cài background service bằng `./deploy/install.sh`.
+Toàn bộ setup — tích hợp, cron, trust mode: **[docs/deployment-guide.vi.md](docs/deployment-guide.vi.md)**.
+
+## Đánh giá code
 
 ```bash
 git clone git@github.com:phuc-nt/my-crew.git && cd my-crew && uv sync
-uv run pytest    # 2207 BE + 200 FE test pass, không cần bí mật
+uv run pytest    # 2360 BE + 201 FE test pass, không cần bí mật
 ```
 
-`DRY_RUN=true` mặc định — chỉ ghi log việc nó *sẽ* làm, không đăng gì. Để chạy thật, theo **[docs/deployment-guide.md](docs/deployment-guide.md)**.
+`DRY_RUN=true` mặc định — agent log ý định mà không đăng gì. Để chạy thật, theo **[docs/deployment-guide.vi.md](docs/deployment-guide.vi.md)**.
 
 ## Giấy phép
 

@@ -1,238 +1,410 @@
-# Deployment & Setup Guide — my-crew
+# Deployment & Setup Guide
 
-> Cách cài, chạy, cấu hình, backup. As-built v50, mọi lệnh chạy thật. Chi tiết vận hành
-> hằng ngày cho người dùng cuối: [huong-dan-su-dung.md](huong-dan-su-dung.md) (tiếng Việt).
-> Cập nhật: 2026-07-16.
+> Full setup for installing, running, and configuring my-crew as a production system.
+> **For daily operations (CEO / team lead):** see [user-guide.md](user-guide.md).
+> **Updated:** 2026-07-18.
 
-## 1. Yêu cầu
+## 1. Prerequisites
 
-| Công cụ | Ghi chú |
+| Tool | Notes |
 |---|---|
-| Python 3.12+ | qua `uv` (venv pin 3.12); KHÔNG dùng global 3.14+ |
-| `uv` | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| Node.js + npm | build FE + MCP servers |
-| `git` | |
-| `gh` (GitHub CLI) | `gh auth login` (bước tương tác, không tự động được) |
-| `gws` (tùy chọn) | chỉ cho hr-pack (Google Sheets) |
+| Python 3.12+ | Installed via `uv` (manages venv pinning); do **not** use global 3.14+ |
+| `uv` | Install: `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| Node.js + npm | For building the web SPA and running 3 MCP servers |
+| `git` | For cloning the repo |
+| `gh` (GitHub CLI) | `brew install gh && gh auth login` (interactive; required for GitHub reads) |
+| `gws` (optional) | Only needed for the hr-pack to read Google Sheets |
 
-Tài khoản/token cần (điền trong trình duyệt, KHÔNG qua terminal): OpenRouter (LLM),
-Atlassian (Jira+Confluence), Slack (xoxc+xoxd), GitHub (qua `gh`). Tùy chọn: Tavily/Brave
-(web-search cho vai trò nghiên cứu), SMTP (email .xlsx), Telegram (điều hành di động).
+### Credentials & Tokens
 
-**3 MCP server** (Jira/Confluence/Slack — Node, stdio; GitHub dùng `gh` CLI). `install.sh`
-cài từ npm mặc định; nếu build từ source (`--mcp-dev`) thì clone + `npm install && npm run build`:
+Fill these **in the browser Setup Wizard** (never via terminal). Required:
 
-- Jira → [github.com/phuc-nt/jira-cloud-mcp-server](https://github.com/phuc-nt/jira-cloud-mcp-server)
-- Confluence → [github.com/phuc-nt/confluence-cloud-mcp-server](https://github.com/phuc-nt/confluence-cloud-mcp-server)
-- Slack (browser-token) → [github.com/phuc-nt/slack-browser-mcp-server](https://github.com/phuc-nt/slack-browser-mcp-server)
+- **OpenRouter** (LLM backbone): 1 API key. Supports $50/month budget cap per company, auto-stops.
+- **Atlassian** (Jira + Confluence): site URL, email, 1 API token (shared across both).
+- **Slack** (browser-token mode): xoxc token, xoxd token, workspace name, channel for reports.
+- **GitHub**: authenticated via `gh auth login` (CLI-stored, not in `.env`).
 
-Trỏ agent tới chúng bằng `JIRA_MCP_DIST` / `CONFLUENCE_MCP_DIST` / `SLACK_MCP_DIST` trong
-`.env` nếu không nằm ở mặc định `~/workspace/*-mcp-server`.
+Optional:
 
-## 2. Cài một lệnh (production, macOS/launchd)
+- **Tavily or Brave** (web search): only if using the research agent.
+- **SMTP**: only if exporting reports to email (`.xlsx` attachments).
+- **Telegram**: only if enabling mobile command/alerts per agent.
+
+### 3 MCP Servers
+
+Node.js stdio servers. `install.sh` installs them from npm by default; pass `--mcp-dev` to clone & build from source:
+
+- **Jira** → [github.com/phuc-nt/jira-cloud-mcp-server](https://github.com/phuc-nt/jira-cloud-mcp-server) (v4.2.0)
+- **Confluence** → [github.com/phuc-nt/confluence-cloud-mcp-server](https://github.com/phuc-nt/confluence-cloud-mcp-server) (v1.5.0)
+- **Slack** → [github.com/phuc-nt/slack-browser-mcp-server](https://github.com/phuc-nt/slack-browser-mcp-server) (v1.3.0)
+
+If they're not in the default location (`~/workspace/*-mcp-server`), point agents to them via `JIRA_MCP_DIST`, `CONFLUENCE_MCP_DIST`, `SLACK_MCP_DIST` in `.env`.
+
+---
+
+## 2. Install from PyPI (any OS — the shortest path)
 
 ```bash
-git clone <repo> && cd my-crew
+uvx my-crew quickstart          # zero-install trial run (dry-run, needs only an OpenRouter key)
+# or a persistent install:
+pipx install my-crew            # or: uv tool install my-crew
+my-crew doctor                  # diagnose the environment (node, keys, MCP builds)
+my-crew serve                   # web dashboard + coordinator in the foreground
+```
+
+Installed this way, all user state lives in `~/.my-crew/` (override with
+`MY_CREW_HOME`); the starter profiles seed themselves on first run. The web
+dashboard is bundled in the wheel — Node is needed only for the MCP servers.
+Upgrade later with `my-crew upgrade` (prints the exact command for your install
+mode; `--check` compares against PyPI).
+
+---
+
+## 2b. One-Command Install (macOS + launchd, production)
+
+```bash
+git clone git@github.com:phuc-nt/my-crew.git && cd my-crew
 ./deploy/install.sh
 ```
 
-7 bước tự động: [1] preflight (báo thiếu tool + lệnh cài, không tự cài) → [2] `uv sync` →
-[3] build web SPA → [4] cài 3 MCP server (npm mặc định; `--mcp-dev` để build từ source) →
-[5] tạo `.env`/`registry.yaml` (từ example nếu vắng — v18) → [6] cài **launchd services**
-(coordinator + web; reload CHỈ khi plist/SPA đổi — không làm chết agent đang chạy) →
-[7] health gate (✓/✗ từng phần trước khi mở trình duyệt).
+The script runs **7 automated steps**:
 
-**Chạy lại an toàn**: gọi lại `./deploy/install.sh` sau `git pull` — idempotent, không
-khởi động lại nếu không có gì đổi, không rớt phiên đăng nhập web.
+1. **Preflight** — checks required tools (`uv`, `node`, `git`, `gh`); prints exact fix commands if missing.
+2. **`uv sync`** — installs Python dependencies into a venv.
+3. **Build web SPA** — compiles React frontend to a temporary directory, then swaps atomically (never breaks live servers).
+4. **Install 3 MCP servers** — from npm (default) or clones+builds (with `--mcp-dev`).
+5. **`.env` bootstrap** — copies template on first run (v18); secrets only via browser wizard.
+6. **Install launchd services** — coordinator + web daemon. Reloads only when plist or build changes (idempotent; won't kill in-flight agent runs).
+7. **Health check** — reports ✓/✗ for each integration before opening the browser.
 
-## 3. Setup Wizard (điền bí mật)
+**Safe to re-run:** `./deploy/install.sh` after `git pull` is a no-op if nothing changed. Does **not** restart services unnecessarily and won't drop web sessions.
 
-Lần đầu, trình duyệt tự mở **Setup Wizard**: điền OpenRouter → Atlassian → Slack → GitHub →
-(tùy chọn) web-search → đặt mật khẩu dashboard. Mỗi bước có "Kiểm tra kết nối". Bí mật CHỈ
-đi qua wizard (ghi `.env`), không qua terminal/URL. Wizard tự khóa sau khi xong.
+---
 
-## 3b. Quick-start 30 giây (v49 — chỉ cần OpenRouter)
+## 3. Setup Wizard (Browser — Secrets Entry Path)
 
-Muốn thấy kết quả đầu tiên NGAY, không cần Atlassian/Slack/GitHub:
+On first run, the browser opens a **Setup Wizard** with interactive steps. Each step has a "Test Connection" button:
+
+1. **OpenRouter** — paste API key.
+2. **Atlassian** — site, email, token, Jira project code (e.g., `SCRUM`).
+3. **Slack** — xoxc token, xoxd token, workspace name, reports channel.
+4. **GitHub** — repo; verifies `gh auth login`.
+5. **(Optional) Web Search** — toggle Tavily or Brave and paste API key (skip if research agent won't use it).
+6. **Dashboard Password** — set a bcrypt-hashed login credential.
+
+> **Security model:** Secrets flow **only** through this wizard. They are written to `.env` (gitignored) and never appear in terminals or URLs. The wizard self-locks after completion; you cannot re-open it.
+
+---
+
+## 4. Quick Start (30 seconds, v49)
+
+Want to see results immediately without setting up all integrations?
 
 ```bash
 echo 'OPENROUTER_API_KEY=sk-or-...' >> .env
-python -m my_crew.entrypoints.mpm quickstart      # chạy report 'daily' agent 'default', DRY-RUN
+my-crew quickstart      # or: python -m my_crew.entrypoints.mpm quickstart
 ```
 
-`quickstart` **ép dry-run** — chỉ đọc + soạn báo cáo, KHÔNG ghi ra ngoài (an toàn để thử). Thiếu key
-→ in hướng dẫn + thoát. Muốn dựng cả đội mẫu THẬT (giữ lại, khác demo-mode swap tạm):
+This runs the default agent's daily report in **dry-run mode** (logs intended actions; makes no external writes). It's safe to try.
+
+### Scaffold the Starter Crew
+
+To create sample agents and keep the setup:
 
 ```bash
-python -m my_crew.entrypoints.mpm crew init       # scaffold đội mẫu (idempotent, bỏ qua cái đã có)
-uv run python -m my_crew.runtime.service          # khởi động điều phối để đội nhận việc
+my-crew crew init           # create 5 template agents
+my-crew serve               # foreground: web dashboard + coordinator
+# → http://127.0.0.1:8765
 ```
 
-Sau `crew init`, màn **Đội** hiện trạng thái điều phối + lệnh khởi động nếu chưa chạy (v49).
+After `crew init`, the **Đội** (Teams) page shows coordinator status and launch instructions.
 
-## 4. Chạy thủ công (dev, không launchd)
+---
+
+## 5. Manual Run (development, no launchd)
 
 ```bash
 uv sync
-cd web && npm install && npm run build && cd ..        # FE (dist đã commit)
-PORT=8765 uv run python -c "from my_crew.server.app import main; main()" &   # web
-uv run python -m my_crew.runtime.service &                                   # coordinator
-# http://127.0.0.1:8765
+cd web && npm install && npm run build && cd ..
+uv run my-crew serve            # both processes, foreground; Ctrl-C stops cleanly
+# → http://127.0.0.1:8765
+# or split them: `my-crew serve --web-only` / `my-crew serve --scheduler-only`
 ```
 
-- **Web**: host `BIND_HOST` (mặc định 127.0.0.1), port `PORT` (mặc định 8765). Bind LAN
-  bị TỪ CHỐI trừ khi bật web-auth (`WEB_AUTH_PASSWORD_HASH` + `WEB_SESSION_SECRET`).
-- **Coordinator daemon**: BẮT BUỘC chạy thì đội mới dispatch việc. Không chạy → màn Văn
-  phòng hiện banner đỏ "bộ điều phối chưa chạy".
+- **Web:** binds to `BIND_HOST` (default: 127.0.0.1) on `PORT` (default: 8765). LAN binding is blocked unless `WEB_AUTH_PASSWORD_HASH` + `WEB_SESSION_SECRET` are set.
+- **Coordinator daemon:** **required** for agents to dispatch work. Without it, the web dashboard shows a red banner warning that the scheduler is down.
 
-## 5. Đội mẫu để thử ngay (demo mode)
+---
+
+## 6. Docker Compose (cross-platform, auth-first)
 
 ```bash
-scripts/demo-mode.sh on      # công ty mẫu + đội đủ + coordinator demo cùng chạy
-scripts/demo-mode.sh off     # trả data thật NGUYÊN VẸN (byte-identical, đã kiểm)
-scripts/demo-mode.sh status  # đang ở chế độ nào + service demo + heartbeat
+cd deploy/docker/
+cp my-crew.env.example my-crew.env
 ```
 
-Lưu ý: demo REFUSE bật nếu đã có `my_crew.runtime.service` khác chạy (2 ticker tranh store) —
-tắt service thật trước.
+Generate auth credentials **before** starting (R3 rule: secrets must be set before binding 0.0.0.0):
 
-Preset demo đủ **3 runtime engine** để thử ngay (mỗi nhân sự 1 engine):
+```bash
+docker compose run --rm --no-deps my-crew my-crew web hash-password
+# → paste the bcrypt hash into my-crew.env (WEB_AUTH_PASSWORD_HASH)
+# → generate WEB_SESSION_SECRET: openssl rand -hex 32
+# → set OPENROUTER_API_KEY in my-crew.env
+```
 
-| Nhân sự | Engine | Đặc tính |
+Then start:
+
+```bash
+docker compose up -d
+# → http://127.0.0.1:8765 → log in → Setup Wizard
+```
+
+User state (`.env`, `registry.yaml`, `profiles/`, `.data/`) persists on the `my-crew-data` volume. `docker compose down` keeps data; `docker compose up` resumes it.
+
+---
+
+## 7. Configuration
+
+| File | Role | Git |
 |---|---|---|
-| kiem-dinh | `native` | graph tự build, chặt nhất, 0 tool tự do |
-| noi-dung | `create_agent` | tool-calling loop (langchain.agents, v28), read-only + `web.scrape` |
-| nghien-cuu | `deep_agent` | shell tự chủ trong **Docker sandbox** cách ly (token-free, no host mount) |
+| `.env` | Secrets (tokens, API keys) | ignored |
+| `registry.yaml` | Team roster (agent IDs, enabled/disabled) — **user data (v18)** | ignored (template: `registry.example.yaml`) |
+| `company.yaml` | Company name, coordinator selection, budget cap, auto-confirm rules | ignored |
+| `profiles/<id>/` | Agent profile (YAML + SOUL/PROJECT/MEMORY markdown files) | ignored (except default/ and templates/) |
+| `company-docs/` | Company documentation injected into agent context | ignored |
 
-**v28**: tools-tier migrate sang `langchain.agents.create_agent` (community-standard). deep_agent
-cần Docker daemon chạy + model tool-calling mạnh (`qwen/qwen3.7-max` đã pin sẵn trong profile
-demo — minimax fail deep loop). `uv sync` cài base deps (tất cả 3 engine sẵn sàng; deep extra
-`[deep]` chỉ cần nếu cài như devops độc lập).
+> **v18 Important:** `registry.yaml` is **not** in git. Fresh checkout auto-bootstraps from `registry.example.yaml`. **Never `git checkout registry.yaml`** — you will lose your team.
 
-## 6. Cấu hình
+### User State Root (`MY_CREW_HOME`)
 
-| File | Vai trò | Git |
-|---|---|---|
-| `.env` | Secrets (token/key) | ignored |
-| `registry.yaml` | Đội (agent ids + enabled) — **user-data v18** | ignored (template: `registry.example.yaml`) |
-| `company.yaml` | Tên công ty, coordinator, cap chi phí, auto-confirm | ignored |
-| `profiles/<id>/` | Hồ sơ agent (profile.yaml + SOUL/PROJECT/MEMORY.md) | ignored (trừ default/templates) |
-| `company-docs/` | Tài liệu công ty inject vào agent | ignored |
+Determines where `.env`, `registry.yaml`, profiles, and `.data/` live:
 
-> **v18**: `registry.yaml` KHÔNG còn trong git. Fresh checkout tự bootstrap từ
-> `registry.example.yaml`. Đừng bao giờ `git checkout registry.yaml`.
+**Resolution order:**
+1. `MY_CREW_HOME` env var (if set)
+2. Git checkout root (operator behavior unchanged; live data in repo for dev)
+3. `~/.my-crew/` (installed user, default)
 
-### 6a. Chọn runtime engine cho một agent (`agent_runtime`)
+### Runtime Tiers: Choosing an Agent's Engine
 
-> **v45 — định tuyến PER-STEP:** với TEAM-TASK, mỗi bước tự chọn tier: mặc định chạy `create_agent`
-> (nhanh, KHÔNG Docker); chỉ bước khai báo `needs_shell` mới leo lên `deep_agent` (Docker). Nghĩa là
-> một agent `deep_agent` KHÔNG còn spin container cho mọi bước — chỉ bước cần shell mới trả giá đó.
-> `agent_runtime:` dưới đây vẫn là cấu hình per-agent (nền + fallback + đường report). Xem §6b.
+**Default: `native`** — fixed DAG (perceive → analyze → compose → deliver). Cheap, deterministic, best for templated reports (daily/weekly/OKR). **Keep native agents for scheduled reports.**
 
-> **Container runtime cho `deep_agent`:** shell thật CHỈ chạy trong container cách ly — đây là
-> yêu cầu bảo mật, không phải hạn chế. Cần **Docker Desktop HOẶC `colima`** (nhẹ hơn, không GUI:
-> `brew install colima && colima start`). Việc no-shell chạy `create_agent` 0-Docker (v45), nên một
-> đội KHÔNG có agent deep_agent không cần Docker gì cả. Kiểm ở panel **Sức khỏe** (§8) — check
-> "Docker (deep_agent sandbox)" báo ✓/✗ trước khi giao việc, thay vì chờ lỗi lúc chạy.
-
-**Mặc định là `native`** (graph cố định `perceive → analyze → compose → deliver`) — rẻ,
-xác định, đúng cho báo cáo template (daily/weekly/okr). **Giữ native cho các agent báo cáo
-định kỳ.** Chỉ bật engine khác cho agent cần **suy luận mở** (research, phân tích ad-hoc):
+**For open-ended reasoning:** upgrade to `create_agent` (LLM-chosen tools, read-only) or `deep_agent` (shell in isolated Docker sandbox).
 
 ```yaml
 # profiles/<id>/profile.yaml
 
-# LLM tự chọn tool trong vòng lặp (read-only toolset: jira/github/confluence/linear +
-# web.scrape + academic.search + history.search; bật gws_context để thêm Gmail/Calendar/Drive).
+# Option 1: LLM self-directs across tools (Jira, GitHub, Confluence, web.scrape, etc.)
 agent_runtime: create_agent
-# hoặc chỉnh cap vòng lặp cho task phức tạp:
+# or with custom loop limit for complex tasks:
 agent_runtime:
   kind: create_agent
-  runtime_loop_limit: 12          # mặc định 8
+  runtime_loop_limit: 12
 
-# Tự chủ cao nhất: agent tự viết shell/python trong Docker sandbox cách ly. Chậm hơn (vài phút),
-# cần Docker + model tool-calling mạnh. File agent ghi vào /work được đọc lại kèm kết quả (v41).
+# Option 2: Autonomous shell within Docker sandbox (slow, needs Docker daemon)
 agent_runtime:
   kind: deep_agent
   sandbox:
     provider: docker
-    lease_seconds: 1800           # tuỳ chọn: cửa sổ sống của container (mặc định 1800, tối đa 3600)
+    lease_seconds: 1800    # container lifetime (default 1800s, max 3600s)
+    mem_limit: 512m        # container RAM cap (default 512m, max 4g)
 ```
 
-- **`create_agent`** — LLM-tự-chọn-tool, read-only. **v45**: thêm file-scratch trong graph-state (ghi/đọc file .md để soạn báo cáo, KHÔNG shell, KHÔNG host FS, KHÔNG Docker) — nên một bước no-shell tự viết-tinh-chỉnh báo cáo mà không cần container. Mọi write ra ngoài vẫn qua Gateway ở tầng deliver.
-- **`deep_agent`** — shell tự chủ trong sandbox; file trong `/work` (tmpfs, không chạm host). Kết quả trả về text; report ghi ra `/work/*.md` được đọc lại gắn vào kết quả. **Chỉ dùng khi bước THẬT cần chạy shell/code** (v45 routing tự leo lên đây qua `needs_shell`).
-- Toolset read-only KHÔNG có web-search generic (cố ý) — dùng `web.scrape` có kiểm; nếu nghề cần search thì thêm tool có-kiểm (như `academic.search`), không mở egress rộng.
-
-### 6b. Định tuyến: chọn runtime tier + cơ chế multi-agent nào
-
-> **v45 — team-task tự định tuyến per-step:** với một team-task, bạn KHÔNG phải chọn tier cho từng
-> bước bằng tay. Decompose-LLM đặt `needs_shell` cho mỗi bước; hệ thống tự cho bước no-shell chạy
-> `create_agent` (0 Docker) và chỉ bước cần shell leo lên `deep_agent`. Bảng dưới mô tả *hình dạng
-> việc → tier phù hợp* để hiểu bản chất; team-task áp nó tự động, còn agent-report vẫn theo
-> `agent_runtime` per-agent.
-
-Benchmark cho thấy điều dễ nhầm nhất KHÔNG phải chọn sai config mà là **dùng sai công cụ cho hình dạng việc**. Bảng quyết định:
-
-| Hình dạng việc | Runtime tier | Cơ chế multi-agent |
-|---|---|---|
-| Báo cáo template / việc nhiều-vai có cấu trúc | `native` (mặc định) | **native team** (decompose→DAG→PIC→review) |
-| Suy luận trên dữ liệu ĐỌC, không cần shell | `create_agent` | — (1 agent) |
-| 1 báo cáo, vài nhánh ngữ cảnh LỚN cần tóm riêng biệt | `deep_agent` | **deep_team** (≤3 trợ lý con in-sandbox, v43) |
-| Nhiều nhánh ĐỘC LẬP / nhiều deliverable | `native` | **native team** (KHÔNG deep_team) |
-| Thật sự cần chạy shell / ghi file | `deep_agent` | — (hoặc deep_team nếu cần siloing) |
-
-**Nguyên tắc cốt lõi:**
-- **native team** = fan-out RỘNG: nhiều vai, nhiều deliverable, chạy đa tiến trình thật (đây là lợi thế cấu trúc). Cap: 7 step/DAG, concurrency 2 (chỉnh per-company qua `team_task_concurrency` trong `company.yaml`).
-- **deep_team** (in-sandbox subagent) = siloing HẸP-SÂU: 2-3 ngữ cảnh lớn mỗi cái cần tóm tách bạch, gộp về MỘT deliverable. **KHÔNG dùng cho fan-out rộng** — benchmark cho thấy 5 nhánh vs cap 3 → gộp, đắt 3-7× mà không tốt hơn. Cap mặc định 3.
-- `deep_agent` **chậm hơn khi CẦN shell** vì bước đó nhận một container sandbox mới, cách ly, tự-hủy — **cách ly đó là mục đích, không phải lỗi**; **shell thật CHỈ chạy trong sandbox** (bác host-exec: fleet autonomous không ai duyệt lệnh real-time + input injectable). v45: bước no-shell KHÔNG còn spin container (tự route sang `create_agent`), nên chỉ việc thật cần shell mới trả giá đó. Docker cold-start đo ~0.4s/step — không phải nút thắt tốc độ.
-
-**Knob per-company/agent (v41/v44) — chỉ nâng khi có nhu cầu nặng cụ thể; mặc định bảo vệ ca thường + giới hạn blast-radius:**
+**Per-team options (v44):**
 
 ```yaml
-agent_runtime:
-  kind: deep_agent
-  sandbox:
-    provider: docker
-    lease_seconds: 1800    # v41: cửa sổ sống container (mặc định 1800, tối đa 3600)
-    mem_limit: 512m        # v44: trần RAM container (mặc định 512m, tối đa 4g) — nâng cho research nặng
-deep_team: true            # v43: bật điều phối trợ lý con in-sandbox
-deep_team_max_calls: 3     # v44: trần số lần giao trợ lý con (mặc định 3, kẹp [1,8])
+deep_team: true                 # enable in-sandbox subagents (v43)
+deep_team_max_calls: 3          # subagent cap (default 3, range [1,8])
 ```
 
-> **v45 `needs_shell`** KHÔNG phải knob trong `profile.yaml` — nó là cờ per-BƯỚC do decompose-LLM đặt
-> lúc phân rã team-task (mặc định false → create_agent 0-Docker; true → deep_agent). Bind vào CEO-confirm
-> hash. Một bước cần shell mà agent-nhận không có `sandbox` config → task FAIL LOUD (fail-closed), nên
-> hãy giao bước cần shell cho agent đã cấu hình `agent_runtime: deep_agent` + sandbox.
+**v45 Smart Routing:** Team tasks auto-route per-step — no-shell steps run `create_agent` (0 Docker); steps with `needs_shell` flag run `deep_agent`. One agent with `deep_agent` config doesn't spin a container for every step; only steps that need shell pay the Docker cost.
 
-## 7. Backup & khôi phục
+### Docker Sandbox for `deep_agent`
+
+**Requires:** Docker Desktop OR `colima` (lightweight, no GUI):
 
 ```bash
-./deploy/backup.sh /path/to/backups     # tar .data/ + profiles/ + registry.yaml + company-docs/
-# cron hằng ngày:  0 2 * * *  /path/to/deploy/backup.sh /path/to/backups
+brew install colima && colima start
 ```
 
-`.env` (secrets) KHÔNG vào backup — khôi phục tay từ password manager. Khôi phục: giải nén
-tar về repo root, chạy lại `install.sh`.
+If Docker daemon is offline, deep_agent steps fail with "sandbox unavailable" — check the **Health** panel (§8) before assigning shell-heavy work.
 
-## 8. Kiểm tra sức khỏe
+**Limitation:** deep_agent sandbox is **not available inside the provided container** — if running my-crew in Docker, agents cannot spawn a nested sandbox. If you need deep_agent (shell tasks), run my-crew on the host or with Docker-in-Docker.
 
-**Cài đặt → Sức khỏe hệ thống** trong web: bảng ✓/✗ từng tích hợp (OpenRouter, Atlassian,
-Slack, MCP builds, GitHub, gws, **Docker** v47) + cảnh báo web_search-thiếu-key (v18). Mục lỗi
-kèm lệnh sửa. Check "Docker (deep_agent sandbox)" probe daemon có giới hạn thời gian (không treo
-panel); ✗ chỉ ảnh hưởng agent deep_agent — đội no-shell bỏ qua an toàn.
+---
 
-**Warm image sandbox (tuỳ chọn):** để bước deep_agent ĐẦU tiên không phải chờ pull image, chạy
-trước `python -m my_crew.entrypoints.mpm sandbox prepull` (idempotent; image đã có → no-op; daemon
-tắt/offline → in thông báo rõ, không crash).
+## 8. Going Live: DRY_RUN & Trust Modes
 
-## 9. Sự cố thường gặp
+### Dry-Run Toggle
 
-| Triệu chứng | Nguyên nhân | Xử lý |
+By default, agents **log intended actions without writing anywhere external.**
+
+```bash
+DRY_RUN=false my-crew serve       # enable external writes (Slack posts, PR merges, etc.)
+```
+
+Without this, all agents run in dry-run; set it in `.env`:
+
+```env
+DRY_RUN=false
+```
+
+### Trust Modes (per agent)
+
+**Autonomous (default):** Actions that send outside the company (post to Slack, merge PR, close ticket) **run immediately** and are logged in the audit trail. No CEO approval needed.
+
+```yaml
+# profiles/<id>/profile.yaml
+safety:
+  trust_mode: autonomous
+```
+
+**Guarded (opt-in):** Same actions **queue for approval** before executing. CEO must review and click "Approve" or "Reject" in the **Approvals** tab.
+
+```yaml
+safety:
+  trust_mode: guarded
+```
+
+> **Hard-deny (Lớp A):** Actions that could lose data permanently (delete records, expose secrets) are **never allowed**, regardless of trust mode. See [action-gateway-explainer.md](action-gateway-explainer.md) for details.
+
+---
+
+## 9. Backup & Recovery
+
+```bash
+./deploy/backup.sh /path/to/backups
+# → creates timestamped tar of .data/, profiles/, registry.yaml, company-docs/
+```
+
+**Secrets (.env) are NOT backed up.** Restore manually from your password manager. Restore data:
+
+```bash
+cd /path/to/repo
+tar -xzf /path/to/backups/my-crew-TIMESTAMP.tar.gz
+./deploy/install.sh    # idempotent; re-seeds state from backups
+```
+
+**Cron backup (daily at 02:00):**
+
+```bash
+0 2 * * * /path/to/deploy/backup.sh /path/to/backups
+```
+
+---
+
+## 10. Health Checks
+
+Access **Settings → System Health** in the web dashboard. A table shows ✓/✗ status for:
+
+- OpenRouter (LLM connectivity)
+- Atlassian (Jira + Confluence)
+- Slack
+- GitHub (via `gh`)
+- MCP server builds
+- Docker daemon (for deep_agent)
+- Web search integration
+
+Each failure shows the exact remediation command. Docker probe has a time limit (won't hang the panel); ✗ only affects agents using `deep_agent` — teams without deep_agent work fine.
+
+### Warm Sandbox Image (Optional)
+
+On first `deep_agent` step, the Docker image is pulled (slow). Pre-warm it:
+
+```bash
+my-crew sandbox prepull
+# or with a custom image:
+my-crew sandbox prepull ghcr.io/phuc-nt/my-crew-sandbox:latest
+```
+
+Idempotent: if image exists, no-op. If daemon is offline, prints a clear message (no crash).
+
+---
+
+## 11. Troubleshooting
+
+| Symptom | Cause | Fix |
 |---|---|---|
-| Giao việc xong "kẹt" không chạy | coordinator daemon không chạy | `uv run python -m my_crew.runtime.service` |
-| Văn phòng trống, giao việc không có ai | registry thiếu agent office | trang Đội → "Hồ sơ chưa trong đội" → Thêm |
-| Nghiên cứu trả "xin phép tra cứu web" | thiếu Tavily/Brave key | thêm key ở Setup, hoặc tắt web_search |
-| Bind LAN bị từ chối lúc khởi động | web-auth chưa bật | đặt `WEB_AUTH_PASSWORD_HASH` + `WEB_SESSION_SECRET` |
-| deep_agent lỗi "Docker sandbox không khả dụng" | Docker daemon không chạy | Chạy Docker Desktop hoặc `colima start`; kiểm ở panel Sức khỏe (§8). Chỉ cần cho agent deep_agent (chạy shell) |
-| Bước deep_agent đầu tiên chậm | image sandbox chưa có, phải pull | Warm trước: `python -m my_crew.entrypoints.mpm sandbox prepull` (§8) |
-| Tính năng/route mới không xuất hiện sau `git pull` | server dev chạy tay không tự nạp code mới (launchd tự reload khi đổi; chạy tay thì không) | Khởi động lại web + coordinator (kill rồi chạy lại §4), hoặc `./deploy/install.sh` nếu dùng launchd |
+| Tasks assigned but stuck (not running) | Coordinator daemon not running | `uv run python -m my_crew.runtime.service` |
+| Dashboard shows empty teams | Registry missing agents | **Teams** tab → "Profiles not in registry" → **Add to team** |
+| Research agent says "web search not authorized" | Web search key not provided in Setup Wizard | Add Tavily or Brave key in Setup, or disable web_search |
+| LAN bind fails on startup | Web auth not configured | Set `WEB_AUTH_PASSWORD_HASH` + `WEB_SESSION_SECRET` in `.env` |
+| deep_agent step errors "sandbox unavailable" | Docker daemon not running | Start Docker Desktop or `colima start`; check **Health** panel first |
+| First deep_agent step is slow | Image not cached; Docker is pulling | Pre-warm with `my-crew sandbox prepull` (§10) |
+| New route/feature doesn't appear after `git pull` | Dev server not reloading code | Restart web service: kill + re-run `serve`, or `./deploy/install.sh` if using launchd |
+
+---
+
+## 12. Upgrade Path & Breaking Changes
+
+### v51 Rename Notification
+
+**After upgrading to v51**, the source directory was renamed (`src/` → `my_crew/`). If upgrading a running system:
+
+1. **Re-run the installer to re-render launchd plists:**
+   ```bash
+   git pull origin main
+   ./deploy/install.sh
+   ```
+
+2. **Check for orphan pre-rename processes** (they will 500 every route):
+   ```bash
+   lsof -nP -iTCP:8765
+   # Kill any stale processes holding port 8765
+   ```
+
+3. **Restart coordinator and web if upgrading from <v51:**
+   ```bash
+   # If using launchd:
+   launchctl stop com.phucnt.my-crew-coordinator
+   launchctl stop com.phucnt.my-crew-web
+   
+   # Then re-run install.sh, which reloads them
+   ./deploy/install.sh
+   ```
+
+### DRY_RUN Default Behavior
+
+`DRY_RUN=true` is the safe default. On first deploy, all agents log intended actions but make no external writes. Only set `DRY_RUN=false` when you are ready for the agent to act autonomously.
+
+---
+
+## 13. Performance & Scaling
+
+### Memory & CPU
+
+**Minimum:** 2 GB RAM, 2 CPU cores.
+
+**Recommended:** 4 GB RAM, 4 CPU cores (if running deep_agent with multiple concurrent tasks).
+
+**Docker:** Set container `mem_limit` in `docker-compose.yaml` if needed; default 512m per sandbox.
+
+### Concurrency Knobs
+
+```yaml
+# company.yaml (global settings)
+team_task_concurrency: 2        # max parallel team tasks (default 2)
+deep_team_max_calls: 3          # max subagents per deep_agent (default 3)
+```
+
+---
+
+## 14. Production Checklist
+
+- [ ] All 3 required credentials filled in Setup Wizard (OpenRouter, Atlassian, Slack, GitHub).
+- [ ] `WEB_AUTH_PASSWORD_HASH` + `WEB_SESSION_SECRET` set if binding to LAN.
+- [ ] `DRY_RUN=false` set in `.env` to enable external writes.
+- [ ] Backup script configured: `0 2 * * * /path/to/deploy/backup.sh /path/to/backups`.
+- [ ] Coordinator daemon running (check **Health** → "Coordinator" ✓).
+- [ ] Health panel shows ✓ for all integrations you're using.
+- [ ] First test report ran successfully (check **Activity** tab).
+- [ ] Agents assigned to work; observe one full cycle (compose → execute → report).
+- [ ] Telegram bot optional but recommended for real-time alerts.
+
+---
+
+## Further Reading
+
+- **Daily operations:** [user-guide.md](user-guide.md)
+- **Understanding the guardrail:** [action-gateway-explainer.md](action-gateway-explainer.md)
+- **Architecture & decisions:** [project-overview-pdr.md](project-overview-pdr.md) · [system-architecture.md](system-architecture.md)
+- **Build history & lessons:** [journals/](journals/)

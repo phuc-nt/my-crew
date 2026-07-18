@@ -483,7 +483,7 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 | **External report** | PII scrub at prompt time | Same (persona/project/memory NOT injected to external path — safety preserved) |
 | **Data isolation** | All data in `.data/` | Per-agent under `.data/agents/<id>/` (v1 `.data/` migrated to `.data/agents/default/` once) |
 | **Multi-agent** | Single agent hardcoded | Multiple agents via registry.yaml (enabled/disabled) |
-| **Default profile** | N/A | `profiles/default/` = v1 replica (empty MD, yaml from config.example.env) |
+| **Default profile** | N/A | `profiles/default/` = v1 replica (empty MD, yaml from .env.example) |
 | **Thread safety** | `thread_id` = kind + audience | `thread_id` = agent_id + kind + audience (checkpoint isolation) |
 
 ## Testing

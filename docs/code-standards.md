@@ -25,7 +25,7 @@
 1. **KHÔNG gọi API write trực tiếp** từ node/tool. Mọi mutation qua `actions/action_gateway.py`. Vi phạm = bug nghiêm trọng (phá guardrail "full autonomous").
 2. **Tool trả dữ liệu chuẩn hóa**, không trả raw API response cho LLM. Chuẩn hóa ở tool layer.
 3. **Mọi write log audit** trước khi return. Không audit = không được merge.
-4. **Secrets chỉ qua env**. Hardcode token/key = chặn merge. `.env` không commit; cập nhật `config.example.env`.
+4. **Secrets chỉ qua env**. Hardcode token/key = chặn merge. `.env` không commit; cập nhật `.env.example`.
 5. **Errors tường minh** — try/except phải log + raise có ngữ cảnh, KHÔNG nuốt lỗi im lặng.
 6. **Bounded I/O** — mọi call ngoài có timeout + retry giới hạn (chống treo agent).
 

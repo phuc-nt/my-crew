@@ -1,5 +1,8 @@
 # my-crew
 
+[![ci](https://github.com/phuc-nt/my-crew/actions/workflows/ci.yml/badge.svg)](https://github.com/phuc-nt/my-crew/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/my-crew)](https://pypi.org/project/my-crew/)
+
 *[Tiếng Việt](README.vi.md)*
 
 An **autonomous LangGraph (Python) agent** that does the repetitive **management** work (PM / Scrum Master / Team Lead) for an AI-native team — it reads project state across **Jira · GitHub · Confluence · Slack**, reasons, and *acts* (writes reports, flags risk, tracks OKRs) on its own schedule. Not a chatbot you ask — an agent that works.
@@ -47,14 +50,34 @@ One PM agent (daily/weekly/OKR/resource reports) became a **CEO-operated virtual
 
 The [journals](docs/journals/) are the best learning material here — each phase records the real decisions and the bugs adversarial review caught (denylist→allowlist, a JQL-injection surface, a privacy leak via a linked artifact).
 
-## Try it
+## Install & first run (5 minutes)
+
+```bash
+uvx my-crew quickstart        # or: pipx install my-crew && my-crew quickstart
+```
+
+`quickstart` runs the starter agent's daily report **in dry-run** — it needs exactly
+one thing, an `OPENROUTER_API_KEY` in `.env` (put it under `~/.my-crew/`), and can
+never write anywhere external. From there:
+
+```bash
+my-crew serve                 # web dashboard + coordinator, foreground
+# → http://127.0.0.1:8765 — the browser Setup Wizard takes the rest (secrets never
+#   touch the terminal). Node.js is required for the Jira/Confluence/Slack servers.
+```
+
+Prefer containers? `deploy/docker/` has a Compose file (auth-first, state on a
+volume). macOS operators can install background services with `./deploy/install.sh`.
+Full setup — integrations, cron, trust modes: **[docs/deployment-guide.md](docs/deployment-guide.md)**.
+
+## Evaluate the code
 
 ```bash
 git clone git@github.com:phuc-nt/my-crew.git && cd my-crew && uv sync
-uv run pytest    # 2207 BE + 200 FE tests pass, no secrets needed
+uv run pytest    # 2360 BE + 201 FE tests pass, no secrets needed
 ```
 
-`DRY_RUN=true` by default — it logs what it *would* do, posts nothing. To go live, follow **[docs/deployment-guide.md](docs/deployment-guide.md)**.
+`DRY_RUN=true` by default everywhere — the agent logs what it *would* do, posts nothing, until you flip it.
 
 ## License
 

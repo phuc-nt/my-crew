@@ -1,6 +1,6 @@
 # profiles/default/profile.yaml — the v1-equivalent agent.
 #
-# Thresholds / safety / budget are the shipped v1 defaults (from config.example.env).
+# Thresholds / safety / budget are the shipped v1 defaults (from .env.example).
 # Per-deployment fields (project_key, repo, channels, space ids, okr_page_id, and the
 # server-env site/email/domain) are EMPTY here: for an existing v1 user the loader
 # falls back to .env; for a new agent, fill them here (a profile value wins over env).

@@ -17,7 +17,7 @@ web/dist
 .env
 .env.*
 *.env
-!config.example.env
+!.env.example
 !deploy/docker/my-crew.env.example
 registry.yaml
 company.yaml

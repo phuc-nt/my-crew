@@ -11,7 +11,7 @@ __pycache__/
 # Secrets — never commit
 .env
 *.env
-!config.example.env
+!.env.example
 
 # Runtime data: audit log, checkpoints, budget (see plan .data/ decision)
 .data/
