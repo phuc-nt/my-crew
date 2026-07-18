@@ -1,5 +1,5 @@
 // v16: the "task giao xong kẹt im lặng" fix — a red banner whenever the dispatch
-// engine (src.runtime.service ticker) is not heartbeating. Polls /api/health/coordinator
+// engine (my_crew.runtime.service ticker) is not heartbeating. Polls /api/health/coordinator
 // every 30s; renders nothing while alive.
 //
 // v50: mounted on both /office (office-unified) and /team (Team.tsx, so a freshly created crew
@@ -37,7 +37,7 @@ export function CoordinatorHealthBanner() {
   return (
     <div className="office-health-banner office-health-dead">
       Bộ điều phối chưa chạy — việc đã giao sẽ KHÔNG tiến triển. Khởi động bằng:{' '}
-      <code>uv run python -m src.runtime.service</code> (hoặc cài dịch vụ nền theo mục A.2
+      <code>uv run python -m my_crew.runtime.service</code> (hoặc cài dịch vụ nền theo mục A.2
       của hướng dẫn).
     </div>
   )

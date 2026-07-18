@@ -43,7 +43,9 @@ def test_quickstart_reads_key_from_env_file(monkeypatch, tmp_path):
         os.environ.pop("OPENROUTER_API_KEY", None)
 
 
-def test_quickstart_runs_default_daily_dry_run(monkeypatch):
+def test_quickstart_runs_default_daily_dry_run(monkeypatch, tmp_path):
+    # Empty home: the guard's load_dotenv must not import the dev machine's real .env.
+    monkeypatch.setattr(onb, "MY_CREW_HOME", tmp_path)
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-fake")
     seen = {}
 

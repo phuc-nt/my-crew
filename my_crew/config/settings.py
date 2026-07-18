@@ -35,6 +35,14 @@ def resolve_home(env_value: str | None, repo_root: Path) -> Path:
 
 
 MY_CREW_HOME = resolve_home(os.environ.get("MY_CREW_HOME"), REPO_ROOT)
+# Installed-package mode needs the home to exist before the first flat-file write
+# (wizard .env, registry bootstrap, .setup-complete). No-op for a checkout — the
+# repo root already exists. A read-only fs must not break import; the first real
+# write will surface its own clear error.
+try:
+    MY_CREW_HOME.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
 DATA_DIR = MY_CREW_HOME / ".data"
 
 # OpenRouter is OpenAI-compatible; base URL is fixed by the provider.

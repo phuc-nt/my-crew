@@ -30,7 +30,7 @@ restart_app() {
   lsof -ti ":$PORT" 2>/dev/null | xargs kill 2>/dev/null || true
   sleep 1
   mkdir -p "$BACKUP"
-  nohup uv run python -c "from src.server.app import main; main()" \
+  nohup uv run python -c "from my_crew.server.app import main; main()" \
     > "$BACKUP/app-$PORT.log" 2>&1 &
   # chờ app lên (tối đa ~10s)
   for _ in $(seq 1 20); do
@@ -118,12 +118,12 @@ demo_off() {
   echo "✅ DEMO MODE: TẮT — data thật đã trả lại nguyên vẹn."
 }
 
-# v16: demo chạy KÈM bộ điều phối thật (src.runtime.service) — không thì việc giao trong
+# v16: demo chạy KÈM bộ điều phối thật (my_crew.runtime.service) — không thì việc giao trong
 # demo kẹt ở "đã nhận việc" y như bug thật. PID FILE: off giết đúng process của demo,
 # không bao giờ pkill theo tên (tránh giết service thật của user).
 start_demo_service() {
-  if pgrep -f "src.runtime.service" >/dev/null 2>&1; then
-    echo "LỖI: đang có bộ điều phối khác chạy (src.runtime.service) — tắt nó trước khi bật demo" >&2
+  if pgrep -f "my_crew.runtime.service" >/dev/null 2>&1; then
+    echo "LỖI: đang có bộ điều phối khác chạy (my_crew.runtime.service) — tắt nó trước khi bật demo" >&2
     echo "     (2 ticker cùng lúc sẽ tranh nhau store)." >&2
     echo "     Đang hoàn tác demo swap (demo off)..." >&2
     demo_off
@@ -131,7 +131,7 @@ start_demo_service() {
   fi
   # macOS không có setsid; nohup + PID trực tiếp là đủ (worker con là process ngắn hạn
   # tự thoát — kill service PID không để mồ côi gì lâu dài).
-  nohup .venv/bin/python -m src.runtime.service > "$BACKUP/service.log" 2>&1 &
+  nohup .venv/bin/python -m my_crew.runtime.service > "$BACKUP/service.log" 2>&1 &
   echo $! > "$SERVICE_PID_FILE"
   sleep 1
   if kill -0 "$(cat "$SERVICE_PID_FILE" 2>/dev/null)" 2>/dev/null; then
