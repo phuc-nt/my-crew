@@ -8,6 +8,7 @@
 // depends on is covered by agent-office-state.test.ts.
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
+import { UiModeProvider } from '../../ui-mode-context'
 import { afterEach, expect, test, vi } from 'vitest'
 import * as officeStreamHook from '../../hooks/use-office-stream'
 import type { OfficeMessage } from '../../types'
@@ -47,7 +48,7 @@ test('renders the 2D fallback table (not Canvas) when prefers-reduced-motion is 
       body: { task_title: 'Demo', step_title: 'draft', status: 'started', assigned_to: 'agent-a' },
     },
   ])
-  render(<MemoryRouter><OfficeUnified /></MemoryRouter>)
+  render(<MemoryRouter><UiModeProvider><OfficeUnified /></UiModeProvider></MemoryRouter>)
   expect(screen.getAllByText('agent-a').length).toBeGreaterThan(0)
   expect(screen.getByText('Đang làm')).toBeInTheDocument()
   expect(screen.getAllByText('Demo').length).toBeGreaterThan(0)
@@ -62,7 +63,7 @@ test('the fallback table reflects a done state from a handoff event', () => {
       body: { task_title: 'Demo', step_title: 'review', message: 'xong', assigned_to: 'agent-b' },
     },
   ])
-  render(<MemoryRouter><OfficeUnified /></MemoryRouter>)
+  render(<MemoryRouter><UiModeProvider><OfficeUnified /></UiModeProvider></MemoryRouter>)
   expect(screen.getAllByText('agent-b').length).toBeGreaterThan(0)
   expect(screen.getByText('Vừa hoàn thành')).toBeInTheDocument()
 })
@@ -70,7 +71,7 @@ test('the fallback table reflects a done state from a handoff event', () => {
 test('shows an empty-state hint when no agents have appeared in the stream yet', () => {
   stubReducedMotion(true)
   mockStream([])
-  render(<MemoryRouter><OfficeUnified /></MemoryRouter>)
+  render(<MemoryRouter><UiModeProvider><OfficeUnified /></UiModeProvider></MemoryRouter>)
   expect(screen.getAllByText('Chưa có nhân sự nào xuất hiện trong dòng sự kiện.').length).toBeGreaterThan(0)
 })
 
@@ -80,6 +81,6 @@ test('milestone/ceo events alone do not create a desk row in the fallback table'
     { seq: 1, ts: 't', author: 'ceo', kind: 'ceo', body: { text: 'bắt đầu' } },
     { seq: 2, ts: 't', author: 'coordinator', kind: 'milestone', body: { task_title: 'Demo', milestone: 'kickoff' } },
   ])
-  render(<MemoryRouter><OfficeUnified /></MemoryRouter>)
+  render(<MemoryRouter><UiModeProvider><OfficeUnified /></UiModeProvider></MemoryRouter>)
   expect(screen.getAllByText('Chưa có nhân sự nào xuất hiện trong dòng sự kiện.').length).toBeGreaterThan(0)
 })

@@ -31,16 +31,19 @@ interface SpeechBubbleProps {
   consultWith?: string | null
   // v15: desk belongs to a PIC of at least one running task (AgentDeskState.picTasks).
   isPic?: boolean
+  // Dual-lens P1: the desk's last step failed — lead the bubble with a ⚠ tag.
+  isError?: boolean
 }
 
 export function SpeechBubble({
-  position, taskTitle, stepTitle, phase, consultWith, isPic,
+  position, taskTitle, stepTitle, phase, consultWith, isPic, isError,
 }: SpeechBubbleProps) {
-  if (!taskTitle && !consultWith) return null
+  if (!taskTitle && !consultWith && !isError) return null
   const phaseLabel = phase ? PHASE_LABEL[phase] : undefined
   return (
     <Html position={position} center distanceFactor={8} occlude={false}>
-      <div className="office-3d-bubble">
+      <div className={isError ? 'office-3d-bubble office-3d-bubble-has-error' : 'office-3d-bubble'}>
+        {isError && <span className="office-3d-bubble-error">⚠ lỗi</span>}
         {isPic && <span className="office-3d-bubble-pic">PIC</span>}
         {taskTitle && <strong title={taskTitle}>{taskTitle}</strong>}
         {stepTitle && (

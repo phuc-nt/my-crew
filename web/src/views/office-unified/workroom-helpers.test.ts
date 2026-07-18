@@ -40,7 +40,7 @@ test('maxSeqOf picks the highest seq among the given kinds only', () => {
 test('shouldShowBubble: only running/consulting desks speak (v17 Q4)', () => {
   const base = {
     id: 'a', taskTitle: 'T', stepTitle: 'S', phase: null, attemptId: null,
-    consultWith: null, picTasks: new Set<string>(),
+    consultWith: null, lastVerdict: null, picTasks: new Set<string>(),
   }
   expect(shouldShowBubble({ ...base, state: 'working' })).toBe(true)
   expect(shouldShowBubble({ ...base, state: 'assigned' })).toBe(true)

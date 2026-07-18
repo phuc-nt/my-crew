@@ -9,7 +9,7 @@
 // `handoff` KIND, not a `step_status` status value.
 import { describe, expect, test } from 'vitest'
 import type { OfficeMessage } from '../../types'
-import { agentIdsInOrder, deriveAgentDesks } from './agent-office-state'
+import { agentIdsInOrder, deriveAgentDesks, shouldShowBubble } from './agent-office-state'
 
 function msg(partial: Partial<OfficeMessage> & Pick<OfficeMessage, 'kind' | 'author'>): OfficeMessage {
   return { seq: 1, ts: 't', body: {}, ...partial }
@@ -35,6 +35,7 @@ describe('deriveAgentDesks', () => {
       phase: null,
       attemptId: null,
       consultWith: null,
+      lastVerdict: null,
       picTasks: new Set(),
     })
     expect(desks.has('coordinator')).toBe(false)
@@ -61,7 +62,7 @@ describe('deriveAgentDesks', () => {
     expect(desks.get('agent-a')?.state).toBe('done')
   })
 
-  test('a worker-authored step_status failed frees the desk back to idle', () => {
+  test('a worker-authored step_status failed shows the error state (dual-lens P1)', () => {
     const desks = deriveAgentDesks([
       msg({
         kind: 'step_status', author: 'coordinator',
@@ -72,7 +73,7 @@ describe('deriveAgentDesks', () => {
         body: { task_title: 'Demo', step_title: 'draft', status: 'failed', assigned_to: 'agent-a' },
       }),
     ])
-    expect(desks.get('agent-a')?.state).toBe('idle')
+    expect(desks.get('agent-a')?.state).toBe('error')
   })
 
   test('a handoff event marks the assignee desk as done and carries task/step titles', () => {
@@ -90,6 +91,7 @@ describe('deriveAgentDesks', () => {
       phase: null,
       attemptId: null,
       consultWith: null,
+      lastVerdict: null,
       picTasks: new Set(),
     })
   })
@@ -352,4 +354,51 @@ test('deskTooltipText names the state and the current work', () => {
     .toBe('đang làm — soạn outline')
   expect(deskTooltipText({ ...base, state: 'done', taskTitle: 'Bài blog' } as never))
     .toBe('vừa xong một bước — Bài blog')
+})
+
+// --- Dual-lens P1: error visual + review verdict capture ---
+
+describe('dual-lens P1: error state + verdict', () => {
+  const started = (agent: string) =>
+    msg({
+      kind: 'step_status', author: 'coordinator',
+      body: { task_title: 'Demo', step_title: 'draft', status: 'started', assigned_to: agent },
+    })
+  const failed = (agent: string) =>
+    msg({
+      kind: 'step_status', author: agent,
+      body: { task_title: 'Demo', step_title: 'draft', status: 'failed', assigned_to: agent },
+    })
+
+  test('an error desk still speaks (bubble carries the ⚠) and recovers on the next dispatch', () => {
+    const errored = deriveAgentDesks([started('a'), failed('a')]).get('a')
+    expect(errored?.state).toBe('error')
+    expect(shouldShowBubble(errored as never)).toBe(true)
+    // next dispatch (retry / new task) clears the error like any other transition
+    const recovered = deriveAgentDesks([started('a'), failed('a'), started('a')]).get('a')
+    expect(recovered?.state).toBe('working')
+  })
+
+  test('a review event stores the closed-enum verdict for the flash layer', () => {
+    const desks = deriveAgentDesks([
+      msg({
+        kind: 'review', author: 'reviewer', ts: '2026-07-18T09:00:00Z',
+        body: {
+          task_title: 'Demo', step_title: 'review', verdict: 'needs_rework',
+          failure_count: 2, criteria_total: 5, criteria_passed: 3, assigned_to: 'reviewer',
+        },
+      }),
+    ])
+    expect(desks.get('reviewer')?.lastVerdict).toEqual({
+      verdict: 'needs_rework', failureCount: 2, criteriaTotal: 5, criteriaPassed: 3,
+      ts: '2026-07-18T09:00:00Z',
+    })
+  })
+
+  test('an unknown/blank verdict (server already dropped it) sets nothing', () => {
+    const desks = deriveAgentDesks([
+      msg({ kind: 'review', author: 'r', body: { verdict: '', assigned_to: 'r' } as never }),
+    ])
+    expect(desks.get('r')?.lastVerdict).toBeNull()
+  })
 })

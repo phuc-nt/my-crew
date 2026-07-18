@@ -332,6 +332,12 @@ h4 { font-size: var(--fs-h4); }
 .office-3d-state-assigned { color: var(--color-accent); }
 .office-3d-state-working { color: var(--color-warn); }
 .office-3d-state-done { color: var(--color-ok); }
+.office-3d-state-error { color: var(--color-err, #ef4444); font-weight: 700; }
+.office-3d-bubble-error {
+  display: inline-block; background: #ef4444; color: #fff; border-radius: 4px;
+  padding: 0 4px; margin-right: 4px; font-weight: 700;
+}
+.office-3d-bubble-has-error { border-color: #ef4444; }
 /* High-mode ("Chế độ nâng cao") secondary nav row — v10 M25. Lighter than the primary row so
    the 4 CEO items stay dominant; sits directly under them. */
 .app-nav-advanced { gap: var(--space-3); font-size: var(--fs-sm); margin-top: calc(-1 * var(--space-2)); }

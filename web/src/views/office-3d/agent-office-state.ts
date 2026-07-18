@@ -17,7 +17,19 @@
 // value — there is no `completed`/`done`/`in_progress` status string in production.
 import type { OfficeMessage } from '../../types'
 
-export type AgentState = 'idle' | 'assigned' | 'working' | 'done'
+export type AgentState = 'idle' | 'assigned' | 'working' | 'done' | 'error'
+
+// Review verdict enum mirrors the server's closed set (`_REVIEW_VERDICTS` in
+// office_event_projection.py) — anything else was already dropped to "" server-side.
+export interface DeskVerdict {
+  verdict: 'passed' | 'needs_rework'
+  failureCount: number
+  criteriaTotal: number
+  criteriaPassed: number
+  // Event timestamp (OfficeMessage.ts) — the RENDER layer uses it to fade the flash by
+  // age, so a reconnect-replay of old events never re-flashes (reducer stays pure).
+  ts: string
+}
 
 export interface AgentDeskState {
   id: string
@@ -40,6 +52,9 @@ export interface AgentDeskState {
   // and never emit its own event, see `endConsult` below) — see the `consult` case
   // below + the endConsult call at the top of every other case.
   consultWith: string | null
+  // Last review verdict THIS desk produced (it is the reviewer's desk, same keying as
+  // the `review` case below). Advisory render layer only — never gates state.
+  lastVerdict: DeskVerdict | null
   // v15 PIC: the task_ids this desk is currently PIC (chịu trách nhiệm chính) of.
   // Set by an `assignment` event's `pic`+`task_id`; a task_id is REMOVED by that
   // task's `milestone` event with the HARD field value `milestone === 'done'`
@@ -54,10 +69,11 @@ function nextState(prev: AgentState, status: string | undefined): AgentState {
     case 'started':
       return 'working'
     case 'failed':
-      // No distinct "error" visual yet (phase scope) — a failed step frees the desk back to
-      // idle rather than showing a false "working"/"done"; the office room timeline (not the
-      // 3D scene) is the surface for failure detail.
-      return 'idle'
+      // Dual-lens P1: a failed step shows a real error visual (red desk + ⚠ bubble)
+      // instead of silently freeing the desk to idle — the CEO must see breakage from
+      // the office itself. The desk leaves 'error' on its own next dispatch/clarify
+      // event (the cases above), exactly like every other transition.
+      return 'error'
     case 'waiting_clarify':
       // v34 P2: paused mid-step on a CEO question — show the "has a task, not
       // actively working" visual (existing state, no new enum) until resume.
@@ -78,7 +94,7 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
     if (!d) {
       d = {
         id, state: 'idle', taskTitle: null, stepTitle: null, phase: null, attemptId: null,
-        consultWith: null, picTasks: new Set<string>(),
+        consultWith: null, lastVerdict: null, picTasks: new Set<string>(),
       }
       desks.set(id, d)
     }
@@ -167,6 +183,17 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
         d.taskTitle = m.body.task_title ?? d.taskTitle
         d.stepTitle = m.body.step_title ?? d.stepTitle
         d.state = 'done'
+        // Dual-lens P1: keep the verdict for the render layer's pass/fail flash. The
+        // server only lets the closed enum through; "" (unknown) sets nothing.
+        if (m.body.verdict === 'passed' || m.body.verdict === 'needs_rework') {
+          d.lastVerdict = {
+            verdict: m.body.verdict,
+            failureCount: m.body.failure_count ?? 0,
+            criteriaTotal: m.body.criteria_total ?? 0,
+            criteriaPassed: m.body.criteria_passed ?? 0,
+            ts: m.ts,
+          }
+        }
         break
       }
       case 'consult': {
@@ -194,8 +221,14 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
 // v17 Q4 (CEO decision): a desk speaks ONLY while actually working — a done/idle desk
 // keeps its label/⭐ but shows no bubble (stale task titles no longer linger after a
 // new task starts elsewhere). Consult is "happening now" and keeps the bubble alive.
+// Dual-lens P1: an error is also "happening now" — the ⚠ bubble must not be silent.
 export function shouldShowBubble(desk: AgentDeskState): boolean {
-  return desk.state === 'assigned' || desk.state === 'working' || desk.consultWith !== null
+  return (
+    desk.state === 'assigned' ||
+    desk.state === 'working' ||
+    desk.state === 'error' ||
+    desk.consultWith !== null
+  )
 }
 
 // Distinct agent ids seen in the stream, in first-seen order — drives desk layout (grid

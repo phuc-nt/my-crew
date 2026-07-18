@@ -12,12 +12,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { api } from '../../api/client'
+import { useUiMode } from '../../ui-mode-context'
 import { useOfficeStream } from '../../hooks/use-office-stream'
 import { agentIdsInOrder, deriveAgentDesks } from '../office-3d/agent-office-state'
 import { AgentStatusTable } from '../office-3d/agent-status-table'
 import { OfficeCanvas } from '../office-3d/office-canvas'
 import { use3dFallback } from '../office-3d/use-3d-fallback'
-import type { Workroom } from '../../types'
+import type { TeamBoardLane, Workroom } from '../../types'
 import { ActivityFeed } from './activity-feed'
 import { ArtifactPanel } from './artifact-panel'
 import { AssignComposer } from './assign-composer'
@@ -55,6 +56,34 @@ export function OfficeUnified() {
       .catch(() => setRosterIds(null))
   }, [])
 
+  // Dual-lens P1 (high-mode): sandbox-tier (needs_shell) badges come from the board
+  // API — the office stream's allowlist does NOT carry tier data and stays untouched.
+  // `pic_id`/`room_id` are exact joins; no title matching. Board is fetched only in
+  // high mode and refetched on the same guarded signal as the rooms list.
+  const { isHigh } = useUiMode()
+  const [boardLanes, setBoardLanes] = useState<TeamBoardLane[]>([])
+  const loadBoard = useCallback(() => {
+    api.getTeamTaskBoard().then((p) => setBoardLanes(p.lanes)).catch(() => undefined)
+  }, [])
+  useEffect(() => {
+    if (isHigh) loadBoard()
+    else setBoardLanes([])
+  }, [isHigh, loadBoard])
+  const { needsShellAgents, needsShellRooms } = useMemo(() => {
+    const agents = new Set<string>()
+    const roomsWithShell = new Set<string>()
+    for (const lane of boardLanes) {
+      if (lane.id === 'done' || lane.id === 'khac') continue // only live tasks badge
+      for (const card of lane.cards) {
+        if ((card.steps_needs_shell ?? 0) > 0) {
+          if (card.pic_id) agents.add(card.pic_id)
+          if (card.room_id) roomsWithShell.add(card.room_id)
+        }
+      }
+    }
+    return { needsShellAgents: agents, needsShellRooms: roomsWithShell }
+  }, [boardLanes])
+
   // Rooms list — refetch only when a NEW assignment/milestone seq shows up (guarded).
   const lastRoomSignal = useRef(0)
   const loadRooms = useCallback(() => {
@@ -68,8 +97,9 @@ export function OfficeUnified() {
     if (signal > lastRoomSignal.current) {
       lastRoomSignal.current = signal
       loadRooms()
+      if (isHigh) loadBoard() // same guarded signal — tier badges follow new tasks
     }
-  }, [office.messages, loadRooms])
+  }, [office.messages, loadRooms, isHigh, loadBoard])
 
   // Dim staff not involved in the selected room (derived from the ROOM stream's events).
   const dimmedIds = useMemo(() => {
@@ -138,17 +168,23 @@ export function OfficeUnified() {
       {!collapsed && (
         <div className="office-unified-main">
           {useFallback ? (
-            <AgentStatusTable agentIds={agentIds} desks={desks} onDeskSelect={openDesk} />
+            <AgentStatusTable
+              agentIds={agentIds} desks={desks} onDeskSelect={openDesk}
+              needsShellAgents={needsShellAgents}
+            />
           ) : (
             <OfficeCanvas
               agentIds={agentIds} desks={desks} rosterIds={rosterIds} dimmedIds={dimmedIds}
-              onDeskSelect={openDesk}
+              onDeskSelect={openDesk} needsShellAgents={needsShellAgents}
             />
           )}
         </div>
       )}
       <div className="office-unified-layout office-columns">
-        <WorkroomList rooms={rooms} activeRoom={activeRoom} onSelect={selectRoom} />
+        <WorkroomList
+          rooms={rooms} activeRoom={activeRoom} onSelect={selectRoom}
+          needsShellRooms={needsShellRooms}
+        />
         <ActivityFeed
           messages={room.messages} connected={room.connected} errored={room.errored}
         />

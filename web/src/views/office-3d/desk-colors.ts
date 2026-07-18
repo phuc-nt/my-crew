@@ -15,7 +15,11 @@ export const DESK_EDGE_COLOR: Record<AgentState, string> = {
   assigned: '#3b82f6', // accent blue — task received, walking to desk
   working: '#f59e0b', // amber — actively working
   done: '#34d399', // green — step completed
+  error: '#ef4444', // red — step failed (dual-lens P1: breakage must be visible)
 }
+
+// Verdict-flash hues (dual-lens P1) — match the done/amber family, distinct from error red.
+export const VERDICT_FLASH_COLOR = { passed: '#34d399', needs_rework: '#fb923c' } as const
 
 export const COORDINATOR_EDGE_COLOR = '#38506e' // deep slate-blue — distinct, always visible
 

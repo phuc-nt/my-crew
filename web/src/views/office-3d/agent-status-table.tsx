@@ -8,6 +8,7 @@ const STATE_LABEL: Record<AgentState, string> = {
   assigned: 'Đã nhận việc',
   working: 'Đang làm',
   done: 'Vừa hoàn thành',
+  error: 'Gặp lỗi',
 }
 
 interface AgentStatusTableProps {
@@ -15,9 +16,21 @@ interface AgentStatusTableProps {
   desks: Map<string, AgentDeskState>
   // v32 parity with the 3D desks: a row click opens the same target a desk click does.
   onDeskSelect?: (id: string) => void
+  // Dual-lens P1 parity with the 3D 🔒 badge (high-mode only — parent gates it).
+  needsShellAgents?: Set<string>
 }
 
-export function AgentStatusTable({ agentIds, desks, onDeskSelect }: AgentStatusTableProps) {
+// Verdict cell parity with the 3D flash ring — persistent text here (a static table
+// cannot flash): "✓ đạt" or "✗ N lỗi".
+export function verdictCellText(desk: AgentDeskState | undefined): string {
+  const v = desk?.lastVerdict
+  if (!v) return '—'
+  return v.verdict === 'passed' ? '✓ đạt' : `✗ ${v.failureCount} lỗi`
+}
+
+export function AgentStatusTable({
+  agentIds, desks, onDeskSelect, needsShellAgents,
+}: AgentStatusTableProps) {
   return (
     <section className="office-3d-scene">
       {/* v37: h3 not h2 — this is a subsection of the Office page, whose own <h2>"Văn phòng"
@@ -37,6 +50,7 @@ export function AgentStatusTable({ agentIds, desks, onDeskSelect }: AgentStatusT
               <th>Trạng thái</th>
               <th>Công việc</th>
               <th>Bước</th>
+              <th>Kiểm định</th>
             </tr>
           </thead>
           <tbody>
@@ -50,12 +64,16 @@ export function AgentStatusTable({ agentIds, desks, onDeskSelect }: AgentStatusT
                   style={onDeskSelect ? { cursor: 'pointer' } : undefined}
                   title={onDeskSelect ? 'Bấm để mở' : undefined}
                 >
-                  <td data-label="Nhân sự">{id}</td>
+                  <td data-label="Nhân sự">
+                    {needsShellAgents?.has(id) ? '🔒 ' : ''}
+                    {id}
+                  </td>
                   <td data-label="Trạng thái">
                     <span className={`office-3d-state office-3d-state-${state}`}>{STATE_LABEL[state]}</span>
                   </td>
                   <td data-label="Công việc">{d?.taskTitle ?? '—'}</td>
                   <td data-label="Bước">{d?.stepTitle ?? '—'}</td>
+                  <td data-label="Kiểm định">{verdictCellText(d)}</td>
                 </tr>
               )
             })}

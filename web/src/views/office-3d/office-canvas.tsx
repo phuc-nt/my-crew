@@ -24,6 +24,9 @@ interface OfficeCanvasProps {
   dimmedIds?: Set<string>
   // v32: desk click — the unified screen decides what "open" means (PIC room / agent page).
   onDeskSelect?: (id: string) => void
+  // Dual-lens P1 (high-mode only — the unified screen gates it): PIC agents of tasks
+  // that have sandbox (needs_shell) steps. Board-API truth, not the event stream.
+  needsShellAgents?: Set<string>
 }
 
 // Roster filter runs BEFORE ring-index math (red-team m-visibleDesks): positions are
@@ -50,7 +53,9 @@ function useThemeIsDark(): boolean {
   return dark
 }
 
-export function OfficeCanvas({ agentIds, desks, rosterIds, dimmedIds, onDeskSelect }: OfficeCanvasProps) {
+export function OfficeCanvas({
+  agentIds, desks, rosterIds, dimmedIds, onDeskSelect, needsShellAgents,
+}: OfficeCanvasProps) {
   const visible = visibleDesks(agentIds, rosterIds)
   const dark = useThemeIsDark()
   const theme = officeTheme(dark)
@@ -89,6 +94,7 @@ export function OfficeCanvas({ agentIds, desks, rosterIds, dimmedIds, onDeskSele
               dimmed={dimmedIds?.has(id) ?? false}
               dark={dark}
               onSelect={onDeskSelect}
+              needsShell={needsShellAgents?.has(id) ?? false}
             />
           )
         })}

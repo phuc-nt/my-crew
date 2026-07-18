@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { shouldShowBubble } from './agent-office-state'
 import type { AgentDeskState } from './agent-office-state'
-import { DESK_EDGE_COLOR, agentColor, agentHash, officeTheme } from './desk-colors'
+import { DESK_EDGE_COLOR, VERDICT_FLASH_COLOR, agentColor, agentHash, officeTheme } from './desk-colors'
 import { consultMeetPoint } from './desk-layout'
 import { SpeechBubble } from './speech-bubble'
 
@@ -35,7 +35,14 @@ interface AgentDeskProps {
   dark?: boolean
   // v32: desk click → the unified screen decides (open PIC room / agent page).
   onSelect?: (id: string) => void
+  // Dual-lens P1 (high-mode only — parent gates it): this agent is PIC of a task with
+  // sandbox (needs_shell) steps. Task-level truth from the board API, not the stream.
+  needsShell?: boolean
 }
+
+// Verdict flash lifetime — render-side fade keyed off the EVENT timestamp, so an SSE
+// reconnect-replay of an old review never re-flashes (the reducer stays pure).
+const VERDICT_FLASH_MS = 3000
 
 // One solid low-poly person: head + capsule body in the agent's personal hue + accessory.
 function AgentAvatar({ id, skin }: { id: string; skin: string }) {
@@ -78,14 +85,26 @@ export function deskTooltipText(desk: AgentDeskState): string {
   const state =
     desk.state === 'working' ? 'đang làm' :
     desk.state === 'assigned' ? 'vừa nhận việc' :
-    desk.state === 'done' ? 'vừa xong một bước' : 'đang rảnh'
+    desk.state === 'done' ? 'vừa xong một bước' :
+    desk.state === 'error' ? 'gặp lỗi' : 'đang rảnh'
   const doing = desk.stepTitle || desk.taskTitle
   return doing ? `${state} — ${doing}` : state
 }
 
-export function AgentDesk({ position, label, desk, consultPos, dimmed, dark, onSelect }: AgentDeskProps) {
+// Age-based flash opacity [0..1]; exported for unit tests (pure, no Fiber needed).
+export function verdictFlashStrength(ts: string, now: number): number {
+  const age = now - Date.parse(ts)
+  if (!Number.isFinite(age) || age < 0 || age >= VERDICT_FLASH_MS) return 0
+  return 1 - age / VERDICT_FLASH_MS
+}
+
+export function AgentDesk({
+  position, label, desk, consultPos, dimmed, dark, onSelect, needsShell,
+}: AgentDeskProps) {
   const avatarRef = useRef<THREE.Group>(null)
   const bobRef = useRef<THREE.Group>(null) // inner group: bob rides here, NOT inside the lerp
+  const screenMatRef = useRef<THREE.MeshBasicMaterial>(null) // error pulse rides the screen
+  const flashMatRef = useRef<THREE.MeshBasicMaterial>(null) // verdict flash ring
   const [hovered, setHovered] = useState(false)
   // Unmounting while hovered (roster shrink, fallback flip, navigating away from the
   // desk's own click) must not leave the page stuck with a pointer cursor.
@@ -122,6 +141,18 @@ export function AgentDesk({ position, label, desk, consultPos, dimmed, dark, onS
     const rawTurn = angle - avatar.rotation.y
     const shortTurn = Math.atan2(Math.sin(rawTurn), Math.cos(rawTurn))
     avatar.rotation.y += shortTurn * t
+    // Dual-lens P1: error pulse (screen opacity breathes hard) + verdict flash decay.
+    const screenMat = screenMatRef.current
+    if (screenMat) {
+      screenMat.opacity =
+        desk.state === 'error'
+          ? 0.55 + 0.45 * Math.sin(state.clock.elapsedTime * 6)
+          : desk.state === 'idle' ? 0.35 : 1
+    }
+    const flashMat = flashMatRef.current
+    if (flashMat && desk.lastVerdict) {
+      flashMat.opacity = 0.85 * verdictFlashStrength(desk.lastVerdict.ts, Date.now())
+    }
   })
 
   const stateColor = DESK_EDGE_COLOR[desk.state]
@@ -168,8 +199,29 @@ export function AgentDesk({ position, label, desk, consultPos, dimmed, dark, onS
         </mesh>
         <mesh position={[0, 1.12, -0.246]}>
           <planeGeometry args={[0.62, 0.36]} />
-          <meshBasicMaterial color={stateColor} transparent opacity={desk.state === 'idle' ? 0.35 : 1} />
+          <meshBasicMaterial
+            ref={screenMatRef}
+            color={stateColor}
+            transparent
+            opacity={desk.state === 'idle' ? 0.35 : 1}
+          />
         </mesh>
+        {/* verdict flash ring on the floor — green (passed) / orange (needs_rework),
+            fades over VERDICT_FLASH_MS keyed to the event timestamp (no re-flash on
+            SSE replay). Rendered only while a verdict is fresh enough to matter. */}
+        {desk.lastVerdict &&
+          verdictFlashStrength(desk.lastVerdict.ts, Date.now()) > 0 && (
+            <mesh position={[0, 0.03, 0.35]} rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[0.9, 1.15, 32]} />
+              <meshBasicMaterial
+                ref={flashMatRef}
+                color={VERDICT_FLASH_COLOR[desk.lastVerdict.verdict]}
+                transparent
+                opacity={0.85}
+                depthWrite={false}
+              />
+            </mesh>
+          )}
         {/* status pill above the desk corner — thicker on `done` (the old outline cue) */}
         <mesh position={[0.75, 1.5, 0]} scale={desk.state === 'done' ? 1.4 : 1}>
           <sphereGeometry args={[0.1, 16, 12]} />
@@ -199,6 +251,7 @@ export function AgentDesk({ position, label, desk, consultPos, dimmed, dark, onS
       <Html position={[position[0], position[1] + 1.7, position[2]]} center distanceFactor={10} occlude={false}>
         <div className="office-3d-label" style={{ color: agentColor(label) }}>
           {desk.picTasks.size > 0 ? '⭐ ' : ''}
+          {needsShell ? '🔒 ' : ''}
           {label}
         </div>
       </Html>
@@ -210,6 +263,7 @@ export function AgentDesk({ position, label, desk, consultPos, dimmed, dark, onS
           phase={desk.phase}
           consultWith={desk.consultWith}
           isPic={desk.picTasks.size > 0}
+          isError={desk.state === 'error'}
         />
       )}
     </group>
