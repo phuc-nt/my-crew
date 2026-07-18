@@ -3,6 +3,29 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.2.0] — 2026-07-18
+
+Office dual-lens: one office screen serving both the CEO (normal) and the maintainer
+(technical) through a header lens toggle.
+
+### Added
+- **Failure & review visuals** in the 3D office: a failed step now paints a red desk +
+  ⚠ bubble (previously it silently went idle); a peer-review verdict flashes a floor
+  ring (green passed / orange needs-rework).
+- **Technical mode** (👁/🔬 header toggle): sandbox-tier 🔒 badges, a health strip
+  (coordinator heartbeat + integration checks + fleet budget), a Desk Inspector drawer
+  (step, engine tier, cost-so-far), a **Captures** telemetry explorer, and a full-text
+  **history search** box. Mode is view-layer only — never a permission gate.
+- Read-only observability API: `GET /api/budget`, `/api/captures` (+ `/{id}`),
+  `/api/search`.
+
+### Fixed
+- launchd services now get a PATH that includes Homebrew + Docker dirs, so the
+  coordinator's workers, the MCP watchers, and the deep_agent sandbox find
+  `node`/`docker`/`gh`/`gws` (regression from the v0.1.0 `src`→`my_crew` rename).
+- A superseded worker's late `failed` event no longer paints a false red desk over a
+  live retry (the office event now carries its `attempt_id`).
+
 ## [0.1.0] — 2026-07-18
 
 First installable release. Everything below existed as a clone-and-run system built
