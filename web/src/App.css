@@ -338,6 +338,26 @@ h4 { font-size: var(--fs-h4); }
   padding: 0 4px; margin-right: 4px; font-weight: 700;
 }
 .office-3d-bubble-has-error { border-color: #ef4444; }
+
+/* Dual-lens P2: high-mode health strip + desk inspector drawer */
+.office-health-strip {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: 4px 0; font-size: 0.85rem;
+}
+.health-chip {
+  display: inline-block; border-radius: 10px; padding: 1px 8px;
+  border: 1px solid var(--color-border, #d0d7de);
+}
+.health-ok { color: var(--color-ok); }
+.health-bad { color: #fff; background: #ef4444; border-color: #ef4444; }
+.desk-inspector {
+  position: fixed; right: 12px; bottom: 12px; width: min(340px, 92vw);
+  background: var(--color-bg, #fff); border: 1px solid var(--color-border, #d0d7de);
+  border-radius: 10px; padding: 12px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); z-index: 40;
+}
+.desk-inspector-head { display: flex; justify-content: space-between; align-items: center; }
+.desk-inspector-task code { font-size: 0.8em; }
+.mode-toggle { font-weight: 600; }
 /* High-mode ("Chế độ nâng cao") secondary nav row — v10 M25. Lighter than the primary row so
    the 4 CEO items stay dominant; sits directly under them. */
 .app-nav-advanced { gap: var(--space-3); font-size: var(--fs-sm); margin-top: calc(-1 * var(--space-2)); }

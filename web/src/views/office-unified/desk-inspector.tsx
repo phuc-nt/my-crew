@@ -1,0 +1,69 @@
+// Dual-lens P2 (high-mode only): click a desk → this drawer answers the maintainer's
+// three questions without leaving the office — what is this agent doing (state/step/
+// phase from the desk reducer), on which engine tier, and what has it cost so far.
+// Fetch-on-open only (no background polling): agent status always; per-task cost only
+// when the desk is PIC of a task (the only exact task_id the stream provides — see
+// agent-office-state.ts picTasks).
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
+import { api } from '../../api/client'
+import type { AgentDeskState } from '../office-3d/agent-office-state'
+import { deskTooltipText } from '../office-3d/agent-desk'
+import type { AgentStatus, TeamTaskCostPayload } from '../../types'
+
+interface DeskInspectorProps {
+  agentId: string
+  desk: AgentDeskState | undefined
+  onClose: () => void
+}
+
+export function DeskInspector({ agentId, desk, onClose }: DeskInspectorProps) {
+  const [status, setStatus] = useState<AgentStatus | null>(null)
+  const [cost, setCost] = useState<TeamTaskCostPayload | null>(null)
+  const picTask = desk && desk.picTasks.size > 0 ? [...desk.picTasks][0] : null
+
+  useEffect(() => {
+    let stop = false
+    api.getAgentStatus(agentId).then((s) => { if (!stop) setStatus(s) }).catch(() => undefined)
+    if (picTask) {
+      api.getTeamTaskCost(picTask).then((c) => { if (!stop) setCost(c) }).catch(() => undefined)
+    }
+    return () => { stop = true }
+  }, [agentId, picTask])
+
+  const engines = cost
+    ? [...new Set(cost.steps.map((s) => s.engine).filter(Boolean))].join(', ')
+    : null
+
+  return (
+    <aside className="desk-inspector" aria-label={`Chi tiết ${agentId}`}>
+      <header className="desk-inspector-head">
+        <strong>{agentId}</strong>
+        <button type="button" className="chip" onClick={onClose}>Đóng</button>
+      </header>
+      {desk && <p>{deskTooltipText(desk)}{desk.phase ? ` · pha: ${desk.phase}` : ''}</p>}
+      {status && (
+        <p className="muted">
+          {status.trust_mode === 'guarded' ? 'guarded' : 'autonomous'} · ngân sách tháng: $
+          {status.budget.spent.toFixed(2)} / ${status.budget.cap.toFixed(0)}
+        </p>
+      )}
+      {picTask && (
+        <div className="desk-inspector-task">
+          <p>
+            Việc đang PIC: <code>{picTask}</code>
+            {engines && <> · engine: {engines}</>}
+          </p>
+          {cost && (
+            <p>
+              Chi phí việc này: ${cost.total_cost_usd.toFixed(4)} ({cost.steps.length} bước)
+            </p>
+          )}
+        </div>
+      )}
+      <p className="desk-inspector-links">
+        <Link to={`/agents/${agentId}`}>Trang nhân sự</Link>
+      </p>
+    </aside>
+  )
+}

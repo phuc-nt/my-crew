@@ -23,6 +23,8 @@ import { ActivityFeed } from './activity-feed'
 import { ArtifactPanel } from './artifact-panel'
 import { AssignComposer } from './assign-composer'
 import { CoordinatorHealthBanner } from './coordinator-health-banner'
+import { DeskInspector } from './desk-inspector'
+import { OfficeHealthStrip } from './office-health-strip'
 import { WorkroomList } from './workroom-list'
 
 const OFFICE_ROOM_ID = 'office'
@@ -119,12 +121,22 @@ export function OfficeUnified() {
   }
 
   const navigate = useNavigate()
+  // Dual-lens P2 (high mode): a desk click opens the Inspector drawer instead of
+  // navigating — the maintainer inspects in place. Low mode keeps the v32 behavior.
+  const [inspectorAgent, setInspectorAgent] = useState<string | null>(null)
+  useEffect(() => {
+    if (!isHigh) setInspectorAgent(null) // leaving high mode closes the drawer
+  }, [isHigh])
   // v32 desk click: a PIC desk opens its task's workroom (room id = task id for a
   // standalone task; a child task's events mirror into its parent room via room_for_task
   // server-side, so the task id is still the room the FEED knows). A desk with no PIC
   // task opens the agent's own page — always a useful destination.
   const openDesk = useCallback(
     (agentId: string) => {
+      if (isHigh) {
+        setInspectorAgent(agentId)
+        return
+      }
       const desk = desks.get(agentId)
       const picTask = desk && desk.picTasks.size > 0 ? [...desk.picTasks][0] : null
       if (picTask && rooms.some((r) => r.room_id === picTask)) {
@@ -135,7 +147,7 @@ export function OfficeUnified() {
     },
     // selectRoom is a stable wrapper over setSearchParams; desks/rooms drive the mapping
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [desks, rooms, navigate],
+    [desks, rooms, navigate, isHigh],
   )
 
   const toggleCollapsed = () => {
@@ -156,6 +168,7 @@ export function OfficeUnified() {
         </button>
       </header>
       <CoordinatorHealthBanner />
+      {isHigh && <OfficeHealthStrip />}
       <details className="office-hint">
         <summary>Hướng dẫn nhanh</summary>
         <p className="ops-chat-hint">
@@ -191,6 +204,13 @@ export function OfficeUnified() {
         <ArtifactPanel activeRoom={activeRoom} roomMessages={room.messages} />
       </div>
       <AssignComposer activeRoom={activeRoom} onTaskCreated={(taskId) => selectRoom(taskId)} />
+      {isHigh && inspectorAgent && (
+        <DeskInspector
+          agentId={inspectorAgent}
+          desk={desks.get(inspectorAgent)}
+          onClose={() => setInspectorAgent(null)}
+        />
+      )}
     </section>
   )
 }
