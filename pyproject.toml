@@ -1,6 +1,6 @@
 [project]
 name = "my-crew"
-version = "0.0.0"
+version = "0.1.0"
 description = "my-crew — an autonomous AI crew (agent harness) for a one-person company: read real data, analyze, and act through a single safety gateway."
 requires-python = ">=3.12"
 dependencies = [
@@ -40,6 +40,9 @@ dependencies = [
 # Docker sandbox (never the host). Optional so the base install stays light + never needs Docker.
 # Install with `uv sync --extra deep`; the `docker` SDK drives the local sandbox container.
 deep = ["deepagents==0.6.12", "docker>=7.1"]
+
+[project.scripts]
+my-crew = "my_crew.entrypoints.mpm:main"
 
 [build-system]
 requires = ["hatchling"]

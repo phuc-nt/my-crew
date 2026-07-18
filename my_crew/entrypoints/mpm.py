@@ -1,31 +1,37 @@
-"""Multi-agent CLI entrypoint (v2 M1-P4) — `mpm agent ...`.
+"""my-crew CLI front door — `my-crew <group> ...` (also `python -m my_crew.entrypoints.mpm`).
 
-    python -m my_crew.entrypoints.mpm agent list
-    python -m my_crew.entrypoints.mpm agent register <id>
-    python -m my_crew.entrypoints.mpm agent run <id> --report <kind> [--audience ...] [--dry-run]
-    python -m my_crew.entrypoints.mpm agent approvals <id>
-    python -m my_crew.entrypoints.mpm agent approve <id> <approval-id>
-    python -m my_crew.entrypoints.mpm agent reject <id> <approval-id>
-    python -m my_crew.entrypoints.mpm agent audit <id> [--tool X] [--verdict V] [--limit N]
+    my-crew quickstart
+    my-crew crew init
+    my-crew agent list | register <id> | run <id> --report <kind> [--audience ...] [--dry-run]
+    my-crew agent resume <id> <thread_id> --decision approve|reject
+    my-crew agent replay <id> <thread_id> [--checkpoint <id>]
+    my-crew agent automate <id> <automation.yaml> [--dry-run]
+    my-crew agent approvals <id> | approve <id> <approval-id> | reject <id> <approval-id>
+    my-crew agent audit <id> [--tool X] [--verdict V] [--limit N]
+    my-crew web hash-password
+    my-crew sandbox prepull [image]
 
 The multi-agent surface over the P3 primitives (registry + per-agent worker + per-agent
 stores). `cli.py` / `cron.py` stay as the legacy single-agent entrypoints. This is a thin
-dispatcher: each command group lives in its own module (registry / run / management).
+argparse dispatcher: each command group lives in its own module (registry / run /
+management), imported lazily so `--help` costs nothing and tests can monkeypatch the
+command modules before dispatch binds them.
 """
 
 from __future__ import annotations
 
+import argparse
 import logging
 import sys
+from importlib.metadata import PackageNotFoundError, version
 
-_USAGE = (
-    "usage: python -m my_crew.entrypoints.mpm quickstart | crew init | agent "
-    "list | register <id> | run <id> --report <kind> [--audience ...] [--dry-run] | "
-    "resume <id> <thread_id> --decision approve|reject | "
-    "replay <id> <thread_id> [--checkpoint <id>] | "
-    "automate <id> <automation.yaml> [--dry-run] | "
-    "approvals <id> | approve <id> <approval-id> | reject <id> <approval-id> | audit <id> [filters]"
-)
+
+def _dist_version() -> str:
+    """Installed distribution version; a checkout without an install has no metadata."""
+    try:
+        return version("my-crew")
+    except PackageNotFoundError:
+        return "0.0.0+uninstalled"
 
 
 def _flag_value(args: list[str], flag: str) -> str | None:
@@ -37,68 +43,120 @@ def _flag_value(args: list[str], flag: str) -> str | None:
     return None
 
 
-def main(argv: list[str] | None = None) -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    args = argv if argv is not None else sys.argv[1:]
-    # v6 M16: `mpm web hash-password` — generate a bcrypt hash for WEB_AUTH_PASSWORD_HASH.
-    if len(args) >= 2 and args[0] == "web":
-        from my_crew.entrypoints.mpm_web_cmd import run_web
+_AGENT_ACTIONS = (
+    "list", "register", "run", "resume", "replay", "automate",
+    "approvals", "approve", "reject", "audit",
+)
 
-        return run_web(args[1], args[2:])
-    # v47: `mpm sandbox prepull [image]` — opt-in warm of the deep_agent sandbox image so the
-    # first shell step doesn't pay the pull. Daemon-safe: prints a clear line, never crashes.
-    if len(args) >= 2 and args[0] == "sandbox" and args[1] == "prepull":
-        from my_crew.runtime_backends.sandbox_backend import prepull_sandbox_image
 
-        result = prepull_sandbox_image(args[2] if len(args) >= 3 else None)
-        print(result["message"])
-        return 0 if result["ok"] else 1
-    # v49: `mpm quickstart` — OpenRouter-only first report (dry-run) in one command.
-    if len(args) >= 1 and args[0] == "quickstart":
-        from my_crew.entrypoints.mpm_onboarding_cmds import run_quickstart
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="my-crew",
+        description=(
+            "my-crew — autonomous AI crew for a one-person company. Every write "
+            "flows through the Action Gateway (autonomy-first, locked guardrails, full audit)."
+        ),
+        epilog=(
+            "examples:\n"
+            "  my-crew quickstart          # first dry-run report, only needs an OpenRouter key\n"
+            "  my-crew crew init                  # scaffold the starter crew as real profiles\n"
+            "  my-crew agent run pm --report daily --dry-run\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--version", action="version", version=f"my-crew {_dist_version()}")
+    sub = parser.add_subparsers(dest="group", required=True, metavar="<group>")
 
-        return run_quickstart(args[1:])
-    # v49: `mpm crew init` — scaffold the shipped starter crew as real keepable profiles.
-    if len(args) >= 2 and args[0] == "crew":
-        from my_crew.entrypoints.mpm_onboarding_cmds import run_crew
+    p = sub.add_parser("quickstart", help="run a first dry-run report with only an OpenRouter key")
+    p.add_argument("rest", nargs=argparse.REMAINDER)
 
-        return run_crew(args[1], args[2:])
-    if len(args) < 2 or args[0] != "agent":
-        print(_USAGE, file=sys.stderr)
-        return 2
+    p = sub.add_parser("crew", help="crew-level onboarding (init: scaffold the starter crew)")
+    p.add_argument("action", metavar="init")
+    p.add_argument("rest", nargs=argparse.REMAINDER)
 
-    sub, rest = args[1], args[2:]
-    if sub == "list":
+    p = sub.add_parser("agent", help="operate one agent (list/register/run/approvals/audit/...)")
+    p.add_argument("action", metavar="|".join(_AGENT_ACTIONS))
+    p.add_argument("rest", nargs=argparse.REMAINDER)
+
+    p = sub.add_parser("web", help="web helpers (hash-password: bcrypt for WEB_AUTH_PASSWORD_HASH)")
+    p.add_argument("action", metavar="hash-password")
+    p.add_argument("rest", nargs=argparse.REMAINDER)
+
+    p = sub.add_parser("sandbox", help="deep-agent sandbox helpers (prepull: warm the image)")
+    p.add_argument("action", metavar="prepull")
+    p.add_argument("rest", nargs=argparse.REMAINDER)
+
+    return parser
+
+
+def _dispatch_agent(action: str, rest: list[str]) -> int:
+    if action == "list":
         from my_crew.entrypoints.mpm_registry_cmds import run_list
 
         return run_list(rest)
-    if sub == "register":
+    if action == "register":
         from my_crew.entrypoints.mpm_registry_cmds import run_register
 
         return run_register(rest)
-    if sub == "run":
+    if action == "run":
         from my_crew.entrypoints.mpm_run_cmd import run_agent
 
         return run_agent(rest)
-    if sub == "resume":
+    if action == "resume":
         from my_crew.entrypoints.mpm_resume_cmd import run_resume
 
         return run_resume(rest)
-    if sub == "replay":
+    if action == "replay":
         from my_crew.entrypoints.mpm_replay_cmd import run_replay
 
         return run_replay(rest)
-    if sub == "automate":
+    if action == "automate":
         from my_crew.entrypoints.mpm_automate_cmd import run_automate
 
         return run_automate(rest)
-    if sub in {"approvals", "approve", "reject", "audit"}:
+    if action in {"approvals", "approve", "reject", "audit"}:
         from my_crew.entrypoints.mpm_manage_cmds import run_manage
 
-        return run_manage(sub, rest)
-
-    print(f"error: unknown subcommand {sub!r}.\n{_USAGE}", file=sys.stderr)
+        return run_manage(action, rest)
+    print(f"error: unknown subcommand {action!r}.", file=sys.stderr)
     return 2
+
+
+def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    args = argv if argv is not None else sys.argv[1:]
+    parser = _build_parser()
+    # argparse signals usage errors (and --help/--version) via SystemExit; the mpm
+    # contract is return-int (tests and cron drivers call main() directly), so fold
+    # the exit code back into a return value.
+    try:
+        ns = parser.parse_args(args)
+    except SystemExit as exc:
+        code = exc.code
+        return code if isinstance(code, int) else 2
+
+    if ns.group == "quickstart":
+        from my_crew.entrypoints.mpm_onboarding_cmds import run_quickstart
+
+        return run_quickstart(ns.rest)
+    if ns.group == "crew":
+        from my_crew.entrypoints.mpm_onboarding_cmds import run_crew
+
+        return run_crew(ns.action, ns.rest)
+    if ns.group == "web":
+        from my_crew.entrypoints.mpm_web_cmd import run_web
+
+        return run_web(ns.action, ns.rest)
+    if ns.group == "sandbox":
+        if ns.action != "prepull":
+            print(f"error: unknown subcommand {ns.action!r}.", file=sys.stderr)
+            return 2
+        from my_crew.runtime_backends.sandbox_backend import prepull_sandbox_image
+
+        result = prepull_sandbox_image(ns.rest[0] if ns.rest else None)
+        print(result["message"])
+        return 0 if result["ok"] else 1
+    return _dispatch_agent(ns.action, ns.rest)
 
 
 if __name__ == "__main__":
