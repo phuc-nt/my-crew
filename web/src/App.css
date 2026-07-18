@@ -195,9 +195,12 @@ h4 { font-size: var(--fs-h4); }
   border: 1px solid var(--color-border);
   border-radius: var(--radius); overflow: hidden; background: #eef2f7; }
 [data-theme='dark'] .office-3d-canvas-wrap { background: #171a20; }
+/* Fixed moderate width: long step titles wrap instead of stretching the tooltip across
+   the whole scene (titles are already length-capped server-side, so ≤ a few lines). */
 .office-3d-tooltip { background: var(--color-bg); color: var(--color-text);
   border: 1px solid var(--color-border); border-radius: 6px; padding: 0.3rem 0.55rem;
-  font-size: var(--fs-xs); white-space: nowrap; box-shadow: 0 2px 8px rgb(0 0 0 / 0.18); }
+  font-size: var(--fs-xs); max-width: 260px; width: max-content; white-space: normal;
+  overflow-wrap: break-word; box-shadow: 0 2px 8px rgb(0 0 0 / 0.18); }
 /* Fixed-width bubble frame: long titles ellipsize per line instead of stretching across the
    scene. The canvas is always light (see office-canvas.tsx) so the bubble uses fixed light
    colors, not theme tokens. */
