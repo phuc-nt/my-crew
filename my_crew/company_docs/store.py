@@ -20,9 +20,9 @@ from pathlib import Path
 
 import yaml
 
-from my_crew.config.settings import REPO_ROOT
+from my_crew.config.settings import MY_CREW_HOME
 
-_DOCS_DIR = REPO_ROOT / "company-docs"
+_DOCS_DIR = MY_CREW_HOME / "company-docs"
 
 #: Reject a doc larger than this at write time — fail loud, don't silently truncate a doc.
 MAX_DOC_CHARS = 50_000

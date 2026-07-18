@@ -23,7 +23,7 @@ def clean_env(tmp_path, monkeypatch):
     marker = tmp_path / ".setup-complete"
     monkeypatch.setattr("my_crew.server.env_writer._ENV_PATH", env)
     monkeypatch.setattr(routes_setup, "_SETUP_COMPLETE_MARKER", marker)
-    monkeypatch.setattr("my_crew.server.routes_setup.REPO_ROOT", tmp_path)
+    monkeypatch.setattr("my_crew.server.routes_setup.MY_CREW_HOME", tmp_path)
     monkeypatch.delenv("WEB_AUTH_PASSWORD_HASH", raising=False)
     # neutralize the real restart during tests
     monkeypatch.setattr(routes_setup, "_restart_web_service", lambda: None)

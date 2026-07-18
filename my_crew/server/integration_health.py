@@ -31,7 +31,7 @@ from my_crew.config.reporting_config import (
     _DEFAULT_JIRA_DIST,
     _DEFAULT_SLACK_DIST,
 )
-from my_crew.config.settings import REPO_ROOT
+from my_crew.config.settings import MY_CREW_HOME
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ def integration_checks(*, use_cache: bool = True) -> dict:
     now = time.time()
     if use_cache and _cache["payload"] is not None and now - _cache["at"] < _CACHE_TTL_SECONDS:
         return _cache["payload"]
-    load_dotenv(REPO_ROOT / ".env")  # presence checks must see .env values (no override)
+    load_dotenv(MY_CREW_HOME / ".env")  # presence checks must see .env values (no override)
     payload = {"checks": _run_checks(), "checked_at": now}
     _cache["at"], _cache["payload"] = now, payload
     return payload

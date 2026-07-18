@@ -21,9 +21,9 @@ from pathlib import Path
 
 import yaml
 
-from my_crew.config.settings import REPO_ROOT
+from my_crew.config.settings import MY_CREW_HOME
 
-_COMPANY_PATH = REPO_ROOT / "company.yaml"
+_COMPANY_PATH = MY_CREW_HOME / "company.yaml"
 
 #: Default monthly cap for a cross-agent "team task" (Validation Session 1 decision).
 DEFAULT_TEAM_TASK_CAP_USD = 2.0

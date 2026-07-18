@@ -27,14 +27,14 @@ import secrets
 
 from fastapi import APIRouter, Body, HTTPException, Request
 
-from my_crew.config.settings import REPO_ROOT
+from my_crew.config.settings import MY_CREW_HOME
 from my_crew.server import auth, env_writer
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/setup", tags=["setup"])
 
-_SETUP_COMPLETE_MARKER = REPO_ROOT / ".setup-complete"
+_SETUP_COMPLETE_MARKER = MY_CREW_HOME / ".setup-complete"
 
 #: Public integration groups the wizard can Test, mapped to the env keys each needs set.
 _TEST_GROUPS: dict[str, tuple[str, ...]] = {
@@ -129,7 +129,7 @@ def setup_test(request: Request, group: str) -> dict:
         raise HTTPException(status_code=404, detail=f"nhóm không rõ: {group}")
     from dotenv import load_dotenv
 
-    load_dotenv(REPO_ROOT / ".env", override=True)  # SEE the values the wizard just wrote
+    load_dotenv(MY_CREW_HOME / ".env", override=True)  # SEE the values the wizard just wrote
     from my_crew.server import integration_health
 
     payload = integration_health.integration_checks(use_cache=False)

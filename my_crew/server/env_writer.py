@@ -23,9 +23,9 @@ import os
 import re
 from pathlib import Path
 
-from my_crew.config.settings import REPO_ROOT
+from my_crew.config.settings import MY_CREW_HOME
 
-_ENV_PATH = REPO_ROOT / ".env"
+_ENV_PATH = MY_CREW_HOME / ".env"
 
 #: Keys the Setup Wizard may write. Deliberately EXCLUDES process-behavior keys (DRY_RUN,
 #: AGENT_WRITE_DISABLED) and the auth keys (WEB_AUTH_PASSWORD_HASH / WEB_SESSION_SECRET are

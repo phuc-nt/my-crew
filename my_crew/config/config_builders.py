@@ -120,10 +120,10 @@ def build_settings_from_env() -> Settings:
 
     Reproduces the v1 env-loaded settings exactly (same keys, same coercion).
     """
-    from my_crew.config.settings import REPO_ROOT
+    from my_crew.config.settings import MY_CREW_HOME
     from my_crew.runtime.run_config import tracing_env_on
 
-    load_dotenv(REPO_ROOT / ".env")
+    load_dotenv(MY_CREW_HOME / ".env")
     return build_settings_from_dict(
         {
             "openrouter_api_key": os.getenv("OPENROUTER_API_KEY"),

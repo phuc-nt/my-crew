@@ -80,9 +80,9 @@ def bind_telegram(
     # 4. Make the token live NOW (per-call env read → no restart needed, unlike M17 secret).
     from dotenv import load_dotenv
 
-    from my_crew.config.settings import REPO_ROOT
+    from my_crew.config.settings import MY_CREW_HOME
 
-    load_dotenv(REPO_ROOT / ".env", override=True)
+    load_dotenv(MY_CREW_HOME / ".env", override=True)
     return {"ok": True, "bot_username": bot_username, "env_name": env_name}
 
 

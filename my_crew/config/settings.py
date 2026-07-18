@@ -10,12 +10,32 @@ LLM call is made), not at import time, so guardrail/unit code runs without a key
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
-# Repo root = three levels up from this file (my_crew/config/settings.py).
+# Repo root = three levels up from this file (my_crew/config/settings.py). For an
+# installed wheel this resolves into site-packages — only shipped resources (packs,
+# templates, examples) may be read relative to it, never user state.
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = REPO_ROOT / ".data"
+
+
+def resolve_home(env_value: str | None, repo_root: Path) -> Path:
+    """Root for user state (.env, registry.yaml, company.yaml, profiles/, .data/).
+
+    Resolution order: MY_CREW_HOME env > git checkout (repo-local state, unchanged
+    operator/dev behavior) > ~/.my-crew (installed package — site-packages must
+    never hold user data). Pure so tests can exercise the order directly.
+    """
+    if env_value:
+        return Path(env_value).expanduser()
+    if (repo_root / ".git").exists():
+        return repo_root
+    return Path.home() / ".my-crew"
+
+
+MY_CREW_HOME = resolve_home(os.environ.get("MY_CREW_HOME"), REPO_ROOT)
+DATA_DIR = MY_CREW_HOME / ".data"
 
 # OpenRouter is OpenAI-compatible; base URL is fixed by the provider.
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"

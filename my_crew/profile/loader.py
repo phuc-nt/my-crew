@@ -25,12 +25,12 @@ from my_crew.config.config_builders import (
     build_settings_from_dict,
 )
 from my_crew.config.reporting_config import ReportingConfig
-from my_crew.config.settings import DATA_DIR, REPO_ROOT, Settings
+from my_crew.config.settings import DATA_DIR, MY_CREW_HOME, Settings
 from my_crew.memory.provider import MemoryConfig, parse_memory_config
 from my_crew.profile.loader_mapping import build_reporting_dict, build_settings_dict
 from my_crew.runtime_backends.config import AgentRuntimeConfig, parse_agent_runtime_config
 
-_PROFILES_DIR = REPO_ROOT / "profiles"
+_PROFILES_DIR = MY_CREW_HOME / "profiles"
 
 
 def profile_memory_path(profile_id: str, *, profiles_dir: Path | None = None) -> Path:
@@ -143,7 +143,7 @@ def load_profile(
     # Load .env so the env-fallback (empty profile field → env) + token_env resolution
     # see the user's secrets, exactly as v1's build_*_from_env did. Existing os.environ
     # values win (load_dotenv does not override), so a caller-set env is respected.
-    load_dotenv(REPO_ROOT / ".env")
+    load_dotenv(MY_CREW_HOME / ".env")
 
     yaml_doc = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
     if not isinstance(yaml_doc, dict):

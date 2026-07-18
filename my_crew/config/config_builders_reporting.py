@@ -122,9 +122,9 @@ def build_reporting_config_from_env() -> ReportingConfig:
 
     Reproduces the v1 env-loaded reporting config exactly (same keys, same coercion).
     """
-    from my_crew.config.settings import REPO_ROOT
+    from my_crew.config.settings import MY_CREW_HOME
 
-    load_dotenv(REPO_ROOT / ".env")
+    load_dotenv(MY_CREW_HOME / ".env")
     return build_reporting_config_from_dict(
         {
             "extra_servers": extra_servers_from_env(),

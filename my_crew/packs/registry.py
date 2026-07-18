@@ -24,7 +24,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-from my_crew.config.settings import REPO_ROOT
+from my_crew.config.settings import MY_CREW_HOME, REPO_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ def profile_skills_dir(profile_id: str, *, profiles_dir: Path | None = None) -> 
     LOWER trust tier than pack skills (repo-vetted): their bodies are wrapped through the
     internal-content guard before entering the prompt (see `load_agent_skills`).
     """
-    base = profiles_dir if profiles_dir is not None else (REPO_ROOT / "profiles")
+    base = profiles_dir if profiles_dir is not None else (MY_CREW_HOME / "profiles")
     return base / profile_id / "skills"
 
 
