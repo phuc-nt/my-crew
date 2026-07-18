@@ -1,0 +1,62 @@
+# CI: the suite is secret-free by design (tests/conftest.py isolates env + tmp dirs),
+# so every job runs on plain PyPI/npm with no credentials.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra deep
+      - run: uv run ruff check .
+      - run: uv run pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      # Build for real, not just --noEmit: a stale committed dist bit us before
+      # (v32); tsc -b + vite build is the honest gate.
+      - run: npx tsc -b
+      - run: npm test
+      - run: npm run build
+
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv build
+      # The wheel must carry the shipped resources and the FE bundle — a wheel
+      # without them installs a my-crew that cannot seed a fresh home.
+      - name: verify wheel contents
+        run: |
+          test "$(unzip -l dist/*.whl | grep -c _shipped/)" -ge 60
+          test "$(unzip -l dist/*.whl | grep -cE 'static/app/')" -ge 10
+      - name: smoke-install from the wheel
+        run: |
+          python -m venv /tmp/v && /tmp/v/bin/pip -q install dist/*.whl
+          MY_CREW_HOME=/tmp/crew-home /tmp/v/bin/my-crew --version
+          MY_CREW_HOME=/tmp/crew-home /tmp/v/bin/my-crew agent list
