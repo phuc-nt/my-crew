@@ -17,12 +17,12 @@ import math
 from pathlib import Path
 from typing import Any
 
-from my_crew.config.settings import REPO_ROOT
+from my_crew.config.settings import SHIPPED_ROOT
 
 logger = logging.getLogger(__name__)
 
 #: Default location of the price table (repo-root config/), overridable for tests.
-DEFAULT_PRICES_PATH = REPO_ROOT / "config" / "model_prices.yaml"
+DEFAULT_PRICES_PATH = SHIPPED_ROOT / "config" / "model_prices.yaml"
 
 
 def load_prices(path: Path | None = None) -> dict[str, dict[str, float]]:

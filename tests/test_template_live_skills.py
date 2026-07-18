@@ -24,7 +24,7 @@ def template_world(tmp_path, monkeypatch):
         "---\nname: tra-cuu\ndescription: tra cứu có nguồn\n---\nThân kỹ năng tra cứu.",
         encoding="utf-8",
     )
-    monkeypatch.setattr("my_crew.packs.registry.REPO_ROOT", repo)
+    monkeypatch.setattr("my_crew.packs.registry.SHIPPED_ROOT", repo)
     # profile_skills_dir(profile_id, profiles_dir=...) — point agent-own dirs under repo too.
     (repo / "profiles" / "agent-x" / "skills").mkdir(parents=True)
     return repo

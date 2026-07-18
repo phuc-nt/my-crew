@@ -51,6 +51,16 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["my_crew"]
 
+# Shipped resources live at the repo root for the checkout workflow; the wheel maps
+# them under my_crew/_shipped/ where settings.SHIPPED_ROOT resolves them.
+[tool.hatch.build.targets.wheel.force-include]
+"profiles/default" = "my_crew/_shipped/profiles/default"
+"profiles/templates" = "my_crew/_shipped/profiles/templates"
+"domain-packs" = "my_crew/_shipped/domain-packs"
+"registry.example.yaml" = "my_crew/_shipped/registry.example.yaml"
+"config.example.env" = "my_crew/_shipped/config.example.env"
+"config/model_prices.yaml" = "my_crew/_shipped/config/model_prices.yaml"
+
 [tool.ruff]
 # snake_case Python, type hints on public fns (code-standards.md)
 line-length = 100

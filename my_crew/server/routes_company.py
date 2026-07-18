@@ -21,7 +21,7 @@ import logging
 import yaml
 from fastapi import APIRouter, Body, HTTPException
 
-from my_crew.config.settings import REPO_ROOT
+from my_crew.config.settings import SHIPPED_ROOT
 from my_crew.runtime.company import load_company, save_company
 from my_crew.runtime.registry import load_registry
 
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["company"])
 
-_TEMPLATES_DIR = REPO_ROOT / "profiles" / "templates"
+_TEMPLATES_DIR = SHIPPED_ROOT / "profiles" / "templates"
 
 #: template.yaml v1 contract — see profiles/templates/*/template.yaml docstring for why
 #: `skills` is deliberately excluded.

@@ -103,9 +103,9 @@ def _load_template_skills(template_role: str) -> dict[str, Skill]:
     Loaded as repo-vetted (via `load_skills`, NOT the scrubbed agent loader) because a
     committed template is trusted code, ranking with pack skills. A missing/renamed
     template dir ⇒ {} + WARNING (fail-open to fewer skills, never a crash)."""
-    from my_crew.packs.registry import REPO_ROOT
+    from my_crew.packs.registry import SHIPPED_ROOT
 
-    skills_dir = REPO_ROOT / "profiles" / "templates" / template_role / "skills"
+    skills_dir = SHIPPED_ROOT / "profiles" / "templates" / template_role / "skills"
     if not skills_dir.is_dir():
         logger.warning(
             "template_role %r has no skills dir at %s; no template skills loaded",

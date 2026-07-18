@@ -24,7 +24,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-from my_crew.config.settings import MY_CREW_HOME, REPO_ROOT
+from my_crew.config.settings import MY_CREW_HOME, SHIPPED_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ DEFAULT_DOMAIN = "pm"
 
 #: Where in-repo packs live (✅ CHỐT 2026-06-30: in-repo folder, not a plugin
 #: entry-point). A domain `x` resolves to `domain-packs/x-pack/`.
-_PACKS_DIR = REPO_ROOT / "domain-packs"
+_PACKS_DIR = SHIPPED_ROOT / "domain-packs"
 
 #: A `graphs.py` is the marker of a real pack folder (every pack has one). Discovery
 #: keys off it so an empty/partial dir is not mistaken for a domain.
