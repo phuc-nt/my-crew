@@ -11,6 +11,7 @@ import { api } from '../api/client'
 import { useTeamHealth } from '../hooks/use-team-health'
 import { useSharedPendingApprovals } from '../pending-approvals-context'
 import { useUiMode } from '../ui-mode-context'
+import { SearchBox } from './search-box'
 import { ThemeToggle } from './ThemeToggle'
 
 async function logout() {
@@ -47,6 +48,8 @@ const ADVANCED_NAV = [
   { to: 'guardrail', label: 'Guardrail' },
   { to: 'config', label: 'Cấu hình' },
   { to: 'trigger', label: 'Chạy tay' },
+  // Dual-lens P3: per-attempt telemetry explorer over the v26 captures store.
+  { to: 'captures', label: 'Captures' },
   // v15: the 3D view merged into the primary "Văn phòng" screen; this advanced entry is
   // the full room-by-room timeline (complete history + room picker).
   { to: 'office/timeline', label: 'Nhật ký văn phòng' },
@@ -63,6 +66,8 @@ export function Layout() {
       <header className="app-header">
         <h1>my-crew</h1>
         <div className="app-header-actions">
+          {/* Dual-lens P3: FTS5 history search — a maintainer tool, high mode only. */}
+          {isHigh && <SearchBox />}
           {/* Dual-lens P2: the low/high lens toggle moves up here from Settings (which
               keeps its control as a mirror — same context). View-layer only, never a
               permission (ui-mode-context.tsx). */}

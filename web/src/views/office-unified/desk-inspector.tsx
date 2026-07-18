@@ -63,6 +63,14 @@ export function DeskInspector({ agentId, desk, onClose }: DeskInspectorProps) {
       )}
       <p className="desk-inspector-links">
         <Link to={`/agents/${agentId}`}>Trang nhân sự</Link>
+        {picTask && (
+          <>
+            {' · '}
+            <Link to={`/captures?task_id=${encodeURIComponent(picTask)}`}>
+              Captures việc này
+            </Link>
+          </>
+        )}
       </p>
     </aside>
   )

@@ -696,3 +696,56 @@ export interface TemplateUpgradePreview {
 export interface TemplateUpgradeResult extends TemplateUpgradePreview {
   backup: string
 }
+
+// --- Dual-lens P3: read-only observability payloads ---
+
+export interface FleetBudgetAgent {
+  agent_id: string
+  spent_usd: number
+  cap_usd: number
+  ratio: number
+}
+
+export interface FleetBudgetPayload {
+  agents: FleetBudgetAgent[]
+  total_spent_usd: number
+  total_cap_usd: number
+  ratio: number
+}
+
+// One per-step-attempt telemetry row (v26 captures table, verbatim column names).
+export interface CaptureRow {
+  attempt_id: string
+  task_id: string
+  step_id: string
+  agent_id: string
+  engine: string
+  status: string
+  step_type: string
+  review_round: number
+  cost_usd: number | null
+  cost_source: string
+  input_tokens: number | null
+  output_tokens: number | null
+  started_at: string
+  ended_at: string
+  duration_ms: number | null
+  error: string
+  ts: string
+}
+
+export interface CapturesPayload {
+  captures: CaptureRow[]
+}
+
+export interface HistorySearchHit {
+  excerpt: string
+  source: 'step' | 'audit'
+  ref: string
+  agent_id: string
+  ts: string
+}
+
+export interface HistorySearchPayload {
+  hits: HistorySearchHit[]
+}

@@ -29,6 +29,7 @@ from my_crew.server import (
     routes_company,
     routes_company_docs,
     routes_connections,
+    routes_observability,
     routes_office_artifacts,
     routes_office_assign,
     routes_office_room_chat,
@@ -98,6 +99,8 @@ def create_app() -> FastAPI:
     app.include_router(routes_connections.router)
     # v33 P3: outputs hub (cross-room artifact index + downloads) + team-task board.
     app.include_router(routes_outputs.router)
+    # Dual-lens P3: read-only observability (fleet budget, captures explorer, history search).
+    app.include_router(routes_observability.router)
     # v33 P4: clarify — agent questions the CEO answers from web or Telegram buttons.
     app.include_router(routes_clarify.router)
     # v15: office composer assignment (thin wrappers over the assign command's own

@@ -4,7 +4,11 @@
 import type {
   AssignPreviewPayload,
   AssignStaffPayload,
+  CaptureRow,
+  CapturesPayload,
   CoordinatorHealthPayload,
+  FleetBudgetPayload,
+  HistorySearchPayload,
   UnregisteredProfilesPayload,
   RoomArtifactsPayload,
   StepArtifactPayload,
@@ -223,6 +227,26 @@ export const api = {
       task_id: taskId, amendment_id: amendmentId,
     }),
   getCoordinatorHealth: () => request<CoordinatorHealthPayload>('/api/health/coordinator'),
+  // Dual-lens P3: read-only observability (fleet budget / captures / history search).
+  getFleetBudget: () => request<FleetBudgetPayload>('/api/budget'),
+  getCaptures: (params?: { task_id?: string; agent?: string; since?: string; limit?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.task_id) q.set('task_id', params.task_id)
+    if (params?.agent) q.set('agent', params.agent)
+    if (params?.since) q.set('since', params.since)
+    if (params?.limit) q.set('limit', String(params.limit))
+    const qs = q.toString()
+    return request<CapturesPayload>(`/api/captures${qs ? `?${qs}` : ''}`)
+  },
+  getCaptureDetail: (attemptId: string) =>
+    request<CaptureRow>(`/api/captures/${encodeURIComponent(attemptId)}`),
+  searchHistory: (q: string, params?: { agent?: string; days?: number; limit?: number }) => {
+    const usp = new URLSearchParams({ q })
+    if (params?.agent) usp.set('agent', params.agent)
+    if (params?.days) usp.set('days', String(params.days))
+    if (params?.limit) usp.set('limit', String(params.limit))
+    return request<HistorySearchPayload>(`/api/search?${usp.toString()}`)
+  },
   // v17 artifact viewer (read-only)
   getRoomArtifacts: (roomId: string) =>
     request<RoomArtifactsPayload>(`/api/office/rooms/${roomId}/artifacts`),

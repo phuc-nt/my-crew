@@ -11,6 +11,7 @@ import { Layout } from './components/Layout'
 import { PendingApprovalsProvider } from './pending-approvals-context'
 import { AgentPage } from './views/AgentPage'
 import { Chat } from './views/Chat'
+import { Captures } from './views/Captures'
 import { CompanyActivity } from './views/CompanyActivity'
 import { CompanyDocs } from './views/CompanyDocs'
 import { Config } from './views/Config'
@@ -99,6 +100,8 @@ function App() {
             <Route path="company-docs" element={<CompanyDocs />} />
             {/* v31 P1: fleet-wide post-hoc audit — CEO-primary in autonomy-first. */}
             <Route path="company-activity" element={<CompanyActivity />} />
+            {/* Dual-lens P3: per-attempt telemetry explorer (ADVANCED_NAV). */}
+            <Route path="captures" element={<Captures />} />
             {/* v15: the unified office — 3D + live feed + composer, one SSE stream.
                 Lazy so three/@react-three/fiber never land in the main bundle. */}
             <Route path="office" element={<OfficeUnifiedLazy />} />

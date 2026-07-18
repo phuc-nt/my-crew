@@ -358,6 +358,33 @@ h4 { font-size: var(--fs-h4); }
 .desk-inspector-head { display: flex; justify-content: space-between; align-items: center; }
 .desk-inspector-task code { font-size: 0.8em; }
 .mode-toggle { font-weight: 600; }
+
+/* Dual-lens P3: header search + captures explorer */
+.header-search { position: relative; }
+.header-search input {
+  width: 180px; border-radius: 8px; border: 1px solid var(--color-border, #d0d7de);
+  padding: 4px 8px; font-size: 0.85rem;
+}
+.header-search-results {
+  position: absolute; top: 110%; right: 0; width: min(420px, 90vw); max-height: 50vh;
+  overflow-y: auto; background: var(--color-bg, #fff);
+  border: 1px solid var(--color-border, #d0d7de); border-radius: 8px; z-index: 50;
+  list-style: none; margin: 0; padding: 4px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+}
+.header-search-results button {
+  display: block; width: 100%; text-align: left; background: none; border: 0;
+  padding: 6px 8px; cursor: pointer; font-size: 0.85rem;
+}
+.header-search-results button:hover { background: var(--color-border, #eef1f4); }
+.captures-filters { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+.captures-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.captures-table th, .captures-table td {
+  text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--color-border, #e5e9ee);
+}
+.captures-table tbody tr { cursor: pointer; }
+.captures-row-open { background: var(--color-border, #f2f5f8); }
+.captures-detail { font-size: 0.8em; margin-top: 4px; }
+.captures-error { color: #ef4444; }
 /* High-mode ("Chế độ nâng cao") secondary nav row — v10 M25. Lighter than the primary row so
    the 4 CEO items stay dominant; sits directly under them. */
 .app-nav-advanced { gap: var(--space-3); font-size: var(--fs-sm); margin-top: calc(-1 * var(--space-2)); }
