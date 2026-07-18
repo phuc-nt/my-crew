@@ -130,6 +130,6 @@ class Settings:
         if not self.openrouter_api_key:
             raise RuntimeError(
                 "OPENROUTER_API_KEY is not set. Add it to .env "
-                "(copy from config.example.env)."
+                "(copy from .env.example)."
             )
         return self.openrouter_api_key

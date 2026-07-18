@@ -108,7 +108,7 @@ def _context_of(loaded, settings, store, registry) -> ProfileContext:
 def _require_key(settings) -> bool:
     if not settings.openrouter_api_key:
         print(
-            "OPENROUTER_API_KEY is not set. Copy config.example.env to .env and fill it in.",
+            "OPENROUTER_API_KEY is not set. Copy .env.example to .env and fill it in.",
             file=sys.stderr,
         )
         return False

@@ -144,10 +144,8 @@ echo
 echo "[4/7] MCP servers (Jira / Confluence / Slack) — source: $MCP_SOURCE"
 MCP_BASE="${MCP_BASE:-$HOME/workspace}"
 NPM_PREFIX="$REPO_DIR/.mcp-servers"
-# Pinned exact versions — keep in sync with each repo's published package.json.
-JIRA_PKG_VERSION="4.2.0"
-CONFLUENCE_PKG_VERSION="1.5.0"
-SLACK_PKG_VERSION="1.3.0"
+# Pinned exact versions — single-sourced (also read by the Dockerfile and doctor).
+. "$REPO_DIR/config/mcp-server-pins.sh"
 
 # Read a *_MCP_DIST override from .env (value only), if present.
 env_dist() { [ -f .env ] && grep -E "^$1=" .env 2>/dev/null | tail -1 | cut -d= -f2- || true; }
@@ -262,7 +260,7 @@ echo "[5/7] .env setup"
 if [ -f .env ] && grep -q "^WEB_AUTH_PASSWORD_HASH=." .env 2>/dev/null; then
   echo "  auth already configured — setup complete, going straight to login"
 else
-  [ -f .env ] || cp config.example.env .env
+  [ -f .env ] || cp .env.example .env
   echo "  first run — the browser will open the Setup Wizard to enter keys + set a password"
 fi
 

@@ -85,6 +85,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("action", metavar="|".join(_AGENT_ACTIONS))
     p.add_argument("rest", nargs=argparse.REMAINDER)
 
+    p = sub.add_parser("doctor", help="diagnose the install (env keys, MCP builds, node, home)")
+    p.add_argument("rest", nargs=argparse.REMAINDER)
+
+    p = sub.add_parser("upgrade", help="show the upgrade path; --check compares against PyPI")
+    p.add_argument("--check", action="store_true", help="exit 3 when an update is available")
+
     p = sub.add_parser("web", help="web helpers (hash-password: bcrypt for WEB_AUTH_PASSWORD_HASH)")
     p.add_argument("action", metavar="hash-password")
     p.add_argument("rest", nargs=argparse.REMAINDER)
@@ -163,6 +169,14 @@ def main(argv: list[str] | None = None) -> int:
         from my_crew.entrypoints.mpm_onboarding_cmds import run_crew
 
         return run_crew(ns.action, ns.rest)
+    if ns.group == "doctor":
+        from my_crew.entrypoints.mpm_lifecycle_cmds import run_doctor
+
+        return run_doctor(ns.rest)
+    if ns.group == "upgrade":
+        from my_crew.entrypoints.mpm_lifecycle_cmds import run_upgrade
+
+        return run_upgrade(["--check"] if ns.check else [])
     if ns.group == "web":
         from my_crew.entrypoints.mpm_web_cmd import run_web
 

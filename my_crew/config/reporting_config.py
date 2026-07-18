@@ -49,7 +49,7 @@ class McpServerSpec:
         if missing:
             raise RuntimeError(
                 f"MCP server {self.name!r} missing required env: {', '.join(missing)}. "
-                f"Set them in .env (see config.example.env)."
+                f"Set them in .env (see .env.example)."
             )
 
 

@@ -14,13 +14,14 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# MCP servers in their own layer (pins change rarely; keep in sync with
-# deploy/install.sh JIRA/CONFLUENCE/SLACK_PKG_VERSION until the pins are
-# single-sourced).
-RUN npm install --prefix /app/.mcp-servers \
-      mcp-jira-cloud-server@4.2.0 \
-      confluence-cloud-mcp-server@1.5.0 \
-      slack-browser-mcp-server@1.3.0
+# MCP servers in their own layer — versions single-sourced from the pins file
+# (layer invalidates exactly when a pin changes).
+COPY config/mcp-server-pins.sh /tmp/mcp-server-pins.sh
+RUN . /tmp/mcp-server-pins.sh \
+ && npm install --prefix /app/.mcp-servers \
+      "$JIRA_PKG_NAME@$JIRA_PKG_VERSION" \
+      "$CONFLUENCE_PKG_NAME@$CONFLUENCE_PKG_VERSION" \
+      "$SLACK_PKG_NAME@$SLACK_PKG_VERSION"
 
 COPY . /app
 # Editable install: REPO_ROOT resolves to /app so shipped resources

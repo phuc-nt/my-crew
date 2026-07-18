@@ -58,8 +58,9 @@ packages = ["my_crew"]
 "profiles/templates" = "my_crew/_shipped/profiles/templates"
 "domain-packs" = "my_crew/_shipped/domain-packs"
 "registry.example.yaml" = "my_crew/_shipped/registry.example.yaml"
-"config.example.env" = "my_crew/_shipped/config.example.env"
+".env.example" = "my_crew/_shipped/.env.example"
 "config/model_prices.yaml" = "my_crew/_shipped/config/model_prices.yaml"
+"config/mcp-server-pins.sh" = "my_crew/_shipped/config/mcp-server-pins.sh"
 
 [tool.ruff]
 # snake_case Python, type hints on public fns (code-standards.md)
