@@ -12,7 +12,7 @@ import importlib.util
 
 import pytest
 
-from src.runtime_backends.community_loop_core import record_loop_result
+from my_crew.runtime_backends.community_loop_core import record_loop_result
 
 
 class _Msg:
@@ -66,7 +66,7 @@ def _system_count(messages):
 
 def test_tools_tier_sends_exactly_one_system_message(monkeypatch):
     # react loop passes system ONLY as a SystemMessage; create_agent gets no system_prompt.
-    import src.runtime_backends.react_loop as react_loop
+    import my_crew.runtime_backends.react_loop as react_loop
 
     seen = {}
 
@@ -106,7 +106,7 @@ def test_invoke_capped_forces_tracing_off_during_invoke(monkeypatch):
     # With tracing env ON, the invoke must see it OFF (blanked env), then have it restored after.
     import os
 
-    from src.runtime_backends.community_loop_core import invoke_capped
+    from my_crew.runtime_backends.community_loop_core import invoke_capped
 
     monkeypatch.setenv("LANGCHAIN_TRACING_V2", "true")
     monkeypatch.setenv("LANGSMITH_API_KEY", "fake-should-not-egress")
@@ -132,7 +132,7 @@ def test_invoke_capped_degrades_on_recursion_overflow():
     from langchain_core.messages import HumanMessage, SystemMessage
     from langgraph.errors import GraphRecursionError
 
-    from src.runtime_backends.community_loop_core import invoke_capped, record_loop_result
+    from my_crew.runtime_backends.community_loop_core import invoke_capped, record_loop_result
 
     class _Overflow:
         def invoke(self, state, config=None):
@@ -147,7 +147,7 @@ def test_invoke_capped_degrades_on_recursion_overflow():
 @pytest.mark.skipif(not _HAS_DEEPAGENTS, reason="deepagents optional dep not installed")
 def test_shell_tier_binds_system_prompt_and_one_system_message(monkeypatch):
     # deep loop keeps BOTH: create_deep_agent(system_prompt=<sanitized>) AND one SystemMessage.
-    import src.runtime_backends.deep_agent_loop as loop
+    import my_crew.runtime_backends.deep_agent_loop as loop
 
     seen = {}
 
@@ -163,10 +163,12 @@ def test_shell_tier_binds_system_prompt_and_one_system_message(monkeypatch):
     monkeypatch.setattr("deepagents.create_deep_agent", _fake_create_deep_agent)
     monkeypatch.setattr("langchain_openai.ChatOpenAI", lambda *a, **k: object())
     monkeypatch.setattr(
-        "src.runtime_backends.sandbox_backend.build_sandbox_backend",
+        "my_crew.runtime_backends.sandbox_backend.build_sandbox_backend",
         lambda cfg: type("B", (), {"teardown": lambda self: None})(),
     )
-    monkeypatch.setattr("src.runtime_backends.sandbox_teardown.teardown_sandbox", lambda b: None)
+    monkeypatch.setattr(
+        "my_crew.runtime_backends.sandbox_teardown.teardown_sandbox", lambda b: None
+    )
 
     class _S:
         openrouter_model = "x/y"

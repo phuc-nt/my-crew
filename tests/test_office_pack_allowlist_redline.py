@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions.hard_block import BlockCategory, classify
-from src.packs import PackRegistry
+from my_crew.actions.hard_block import BlockCategory, classify
+from my_crew.packs import PackRegistry
 
 
 def _mcp(server, tool, **extra):
@@ -33,7 +33,7 @@ def test_office_pack_allowlist_is_an_empty_dict_not_none():
 def test_office_pack_manifest_declares_no_servers():
     import yaml
 
-    from src.config.settings import REPO_ROOT
+    from my_crew.config.settings import REPO_ROOT
 
     manifest = yaml.safe_load(
         (REPO_ROOT / "domain-packs" / "office-pack" / "pack.yaml").read_text(encoding="utf-8")
@@ -85,8 +85,8 @@ def test_office_pack_allowlist_used_by_a_real_gateway_still_denies(settings_fact
     # gateway would be constructed if one were ever added. A NOT_ALLOWLISTED verdict
     # raises HardBlockedError (there is no "denied" GatewayResult status) — the
     # gateway never silently returns a soft failure for a blocked write.
-    from src.actions.action_gateway import ActionGateway, HardBlockedError
-    from src.audit.audit_log import AuditLog
+    from my_crew.actions.action_gateway import ActionGateway, HardBlockedError
+    from my_crew.audit.audit_log import AuditLog
 
     office_allowlist = PackRegistry().load("office").allowlist
     settings = settings_factory()

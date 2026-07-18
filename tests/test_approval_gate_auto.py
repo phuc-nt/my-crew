@@ -13,9 +13,9 @@ from datetime import date
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from src.agent.report_graph import ReportDeps, build_report_graph
-from src.profile.context import ProfileContext
-from src.tools.models import CiRun, Issue, PullRequest, Risk
+from my_crew.agent.report_graph import ReportDeps, build_report_graph
+from my_crew.profile.context import ProfileContext
+from my_crew.tools.models import CiRun, Issue, PullRequest, Risk
 
 
 def _checkpointer() -> SqliteSaver:

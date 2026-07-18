@@ -12,9 +12,9 @@ from datetime import date
 
 from langgraph.store.memory import InMemoryStore
 
-from src.agent.memory_node import make_memory_node
-from src.agent.report_graph import ReportDeps, build_report_graph
-from src.tools.models import CiRun, Issue, Risk
+from my_crew.agent.memory_node import make_memory_node
+from my_crew.agent.report_graph import ReportDeps, build_report_graph
+from my_crew.tools.models import CiRun, Issue, Risk
 
 
 class _Settings:
@@ -56,7 +56,7 @@ def test_real_graph_remember_node_writes_then_load_profile_reads(tmp_path, monke
     assert out["memory_written"] == 1  # the remember node fired
 
     # A later load_profile reads the agent fact back into LoadedProfile.memory.
-    from src.profile.loader import load_profile
+    from my_crew.profile.loader import load_profile
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")  # loader needs a key present
     loaded = load_profile("acme", profiles_dir=tmp_path / "profiles", data_dir=tmp_path / ".data")
@@ -66,7 +66,7 @@ def test_real_graph_remember_node_writes_then_load_profile_reads(tmp_path, monke
 
 def test_internal_prompt_injects_memory_external_does_not():
     # Re-assert the guardrail: memory reaches INTERNAL reports only (P2/P5 invariant).
-    from src.llm.report_prompt import build_detail_messages
+    from my_crew.llm.report_prompt import build_detail_messages
 
     memory = "AGENT-FACT: sprint 4 slipped"
     internal = build_detail_messages([], report_date="2026-06-25", kind="daily",

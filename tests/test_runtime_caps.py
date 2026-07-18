@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.runtime_backends.config import (
+from my_crew.runtime_backends.config import (
     MAX_LOOP_STEPS,
     AgentRuntimeConfig,
     parse_agent_runtime_config,
@@ -69,7 +69,7 @@ def test_cost_cap_is_observability_only():
 
 def test_tool_calling_uses_config_loop_limit():
     # ToolCallingRuntime.build_task threads runtime_config → caps().runtime_loop_limit.
-    from src.runtime_backends.tool_calling_runtime import ToolCallingRuntime
+    from my_crew.runtime_backends.tool_calling_runtime import ToolCallingRuntime
 
     captured = {}
     rt = ToolCallingRuntime()
@@ -77,7 +77,7 @@ def test_tool_calling_uses_config_loop_limit():
     def _fake_build(**kw):
         return "graph"
 
-    import src.agent.team_task_graph as ttg
+    import my_crew.agent.team_task_graph as ttg
 
     orig = ttg.build_team_task_graph
     ttg.build_team_task_graph = lambda **kw: (captured.update(kw) or "graph")

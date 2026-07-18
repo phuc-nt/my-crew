@@ -11,8 +11,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from src.agent.memory_mirror import END, START, replace_agent_section
-from src.memory.consolidation import (
+from my_crew.agent.memory_mirror import END, START, replace_agent_section
+from my_crew.memory.consolidation import (
     CONSOLIDATE_THRESHOLD_CHARS,
     _parse_fact_lines,
     _validate,
@@ -62,11 +62,11 @@ def _big_memory_file(tmp_path, agent_id="agent-x", n_facts=400):
 def wired(tmp_path, monkeypatch):
     """Point the module's path helpers at tmp so no real profile/agent data is touched."""
     monkeypatch.setattr(
-        "src.profile.loader.profile_memory_path",
+        "my_crew.profile.loader.profile_memory_path",
         lambda agent_id, profiles_dir=None: tmp_path / "profiles" / agent_id / "MEMORY.md",
     )
     monkeypatch.setattr(
-        "src.runtime.agent_paths.agent_data_dir",
+        "my_crew.runtime.agent_paths.agent_data_dir",
         lambda agent_id: tmp_path / "data" / agent_id,
     )
     return tmp_path
@@ -181,11 +181,11 @@ def test_replace_agent_section_swaps_not_merges():
 
 
 def test_service_gate_only_fires_at_sweep_hour(monkeypatch):
-    from src.runtime import service
+    from my_crew.runtime import service
 
     calls = []
     monkeypatch.setattr(
-        "src.memory.consolidation.run_consolidation_sweep",
+        "my_crew.memory.consolidation.run_consolidation_sweep",
         lambda now=None: calls.append(now) or 0,
     )
     service._consolidate_memories_best_effort(datetime(2026, 7, 13, 14, 0))
@@ -194,7 +194,7 @@ def test_service_gate_only_fires_at_sweep_hour(monkeypatch):
     assert len(calls) == 1
     # A sweep crash must not propagate into the tick.
     monkeypatch.setattr(
-        "src.memory.consolidation.run_consolidation_sweep",
+        "my_crew.memory.consolidation.run_consolidation_sweep",
         lambda now=None: (_ for _ in ()).throw(RuntimeError("boom")),
     )
     service._consolidate_memories_best_effort(datetime(2026, 7, 13, 3, 6))  # no raise

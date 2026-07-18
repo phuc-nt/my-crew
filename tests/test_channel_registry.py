@@ -9,14 +9,14 @@ from __future__ import annotations
 
 import subprocess
 
-from src.actions.action_gateway import ActionGateway
-from src.agent.channel_registry import (
+from my_crew.actions.action_gateway import ActionGateway
+from my_crew.agent.channel_registry import (
     EXTRA_CHANNEL_OK_STATUSES,
     deliver_extra_channels,
     resolve_channels,
 )
-from src.audit.audit_log import AuditLog
-from src.config.config_builders import build_reporting_config_from_dict
+from my_crew.audit.audit_log import AuditLog
+from my_crew.config.config_builders import build_reporting_config_from_dict
 
 
 def _config_with_smtp():
@@ -71,10 +71,10 @@ def test_deliver_extra_channels_email_queues(settings_factory, tmp_path):
 def test_smtplib_imported_only_in_email_write():
     """No side path: smtplib must not be imported anywhere but the gateway handler."""
     out = subprocess.run(
-        ["grep", "-rln", "import smtplib", "src/"],
+        ["grep", "-rln", "import smtplib", "my_crew/"],
         capture_output=True, text=True, check=False,
     ).stdout.split()
-    assert out == ["src/actions/email_write.py"], f"smtplib imported outside email_write: {out}"
+    assert out == ["my_crew/actions/email_write.py"], f"smtplib imported outside email_write: {out}"
 
 
 def test_extra_channel_email_carries_confined_attachment(settings_factory, tmp_path):

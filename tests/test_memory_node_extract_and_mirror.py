@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from langgraph.store.memory import InMemoryStore
 
-from src.agent.memory_mirror import END, START, rewrite_agent_section, write_memory_file
-from src.agent.memory_node import make_memory_node
+from my_crew.agent.memory_mirror import END, START, rewrite_agent_section, write_memory_file
+from my_crew.agent.memory_node import make_memory_node
 
 # --- pure rewrite fn (the most important unit) ---
 
@@ -142,7 +142,7 @@ def test_node_dedupes_store_by_content_hash(tmp_path):
 
 def test_node_does_not_import_action_gateway(tmp_path, monkeypatch):
     # Guardrail: the memory node is INTERNAL — it must never call the Action Gateway.
-    import src.actions.action_gateway as gw_mod
+    import my_crew.actions.action_gateway as gw_mod
 
     calls = []
     monkeypatch.setattr(gw_mod.ActionGateway, "execute", lambda self, *a, **k: calls.append(1))

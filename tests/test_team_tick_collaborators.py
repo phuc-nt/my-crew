@@ -13,10 +13,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.runtime.office_room_store import OFFICE_ROOM_ID, OfficeRoomStore
-from src.runtime.team_task_steps import TeamStep
-from src.runtime.team_task_store import TeamTask
-from src.runtime.team_tick_collaborators import make_escalate
+from my_crew.runtime.office_room_store import OFFICE_ROOM_ID, OfficeRoomStore
+from my_crew.runtime.team_task_steps import TeamStep
+from my_crew.runtime.team_task_store import TeamTask
+from my_crew.runtime.team_tick_collaborators import make_escalate
 
 
 @pytest.fixture(autouse=True)
@@ -24,7 +24,7 @@ def _isolated_team_tasks_root(monkeypatch, tmp_path):
     """Every test in this module writes through the shared cross-agent root (store,
     artifacts, office-room appends) — pin it to tmp_path so no test can touch the
     real install's .data (the office room is a real user-visible surface)."""
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
 def _task(task_id="t1"):
     return TeamTask(
@@ -56,7 +56,7 @@ def test_escalate_appends_the_room_milestone_even_with_no_coordinator_telegram_b
     of its own must still leave a trace in the office room — the mirror path is the
     ONLY way the CEO ever hears about this escalation, so a silent early-return here
     would make the escalation vanish entirely."""
-    from src.runtime import team_task_paths
+    from my_crew.runtime import team_task_paths
 
     monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
 
@@ -85,7 +85,7 @@ def test_escalate_room_append_survives_even_if_the_gateway_import_itself_would_f
     """The room append is wrapped in its OWN try/except, independent of the Telegram
     send block below it — an exception constructing the gateway (bad settings, missing
     env) must not retroactively un-append the room event that already succeeded."""
-    from src.runtime import team_task_paths
+    from my_crew.runtime import team_task_paths
 
     monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
 
@@ -97,7 +97,7 @@ def test_escalate_room_append_survives_even_if_the_gateway_import_itself_would_f
         def __init__(self, *a, **kw):
             raise RuntimeError("gateway boom")
 
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway", _ExplodingGateway)
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway", _ExplodingGateway)
 
     escalate = make_escalate(loaded, settings=SimpleNamespace())
     escalate(_task(), _step(), "step_failed", "bước draft thất bại")  # must not raise
@@ -113,7 +113,7 @@ def test_escalate_room_append_survives_even_if_the_gateway_import_itself_would_f
 def test_escalate_step_none_omits_step_id_from_dedup_hint_without_crashing(tmp_path, monkeypatch):
     """A task-level escalation (no single step responsible, e.g. `task_stuck`) passes
     `step=None` — must not crash on `step.step_id`."""
-    from src.runtime import team_task_paths
+    from my_crew.runtime import team_task_paths
 
     monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
 
@@ -140,7 +140,7 @@ def test_task_level_stall_escalations_append_the_constant_amend_suggestion(
     gets a CONSTANT-template amend suggestion appended, with the task id interpolated —
     never anything derived from task/step title or other task content (which could
     itself carry text absorbed from a hostile brief/artifact)."""
-    from src.runtime import team_task_paths
+    from my_crew.runtime import team_task_paths
 
     monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
 
@@ -161,7 +161,7 @@ def test_step_level_escalation_does_not_get_the_amend_suggestion(tmp_path, monke
     """A single-step failure (`step_failed`) does not by itself mean the WHOLE task is
     stalled — a later tick's other-step-completes/retry path may still resolve it, so
     this event_kind must NOT carry the task-replan suggestion."""
-    from src.runtime import team_task_paths
+    from my_crew.runtime import team_task_paths
 
     monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
 

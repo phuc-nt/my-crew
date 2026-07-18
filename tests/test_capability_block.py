@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.profile.capability_block import build_capability_block
+from my_crew.profile.capability_block import build_capability_block
 
 
 class _LP:

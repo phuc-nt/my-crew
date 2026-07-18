@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(not _HAS_DEEPAGENTS, reason="deepagents optional
 
 
 def test_fail_closed_rejects_none_and_bad_providers():
-    from src.runtime_backends.sandbox_backend import SandboxDenied, build_sandbox_backend
+    from my_crew.runtime_backends.sandbox_backend import SandboxDenied, build_sandbox_backend
 
     for bad in (None, {}, {"provider": "local"}, {"provider": "localshell"},
                 {"provider": "modal"}, {"provider": "e2b"}, {"provider": "unknown"}):
@@ -25,7 +25,7 @@ def test_fail_closed_rejects_none_and_bad_providers():
 
 
 def test_fake_backend_builds_and_runs():
-    from src.runtime_backends.sandbox_backend import build_sandbox_backend
+    from my_crew.runtime_backends.sandbox_backend import build_sandbox_backend
 
     fb = build_sandbox_backend({"provider": "fake"})
     assert fb.id.startswith("fake:")
@@ -36,7 +36,7 @@ def test_fake_backend_builds_and_runs():
 
 
 def test_fake_backend_env_is_token_free():
-    from src.runtime_backends.sandbox_backend import (
+    from my_crew.runtime_backends.sandbox_backend import (
         _TOKEN_ENV_NAMES,
         build_sandbox_backend,
     )
@@ -52,7 +52,7 @@ def test_fake_backend_env_is_token_free():
 def test_assert_not_host_shell_blocks_localshell():
     from deepagents.backends import LocalShellBackend
 
-    from src.runtime_backends.sandbox_backend import SandboxDenied, assert_not_host_shell
+    from my_crew.runtime_backends.sandbox_backend import SandboxDenied, assert_not_host_shell
 
     with pytest.raises(SandboxDenied, match="host"):
         assert_not_host_shell(LocalShellBackend(virtual_mode=False))
@@ -60,7 +60,7 @@ def test_assert_not_host_shell_blocks_localshell():
 
 def test_docker_unavailable_fails_closed(monkeypatch):
     # If Docker is not running, the docker provider raises SandboxDenied (never host shell).
-    from src.runtime_backends import sandbox_backend as sb
+    from my_crew.runtime_backends import sandbox_backend as sb
 
     def _boom(image, network=False):
         raise RuntimeError("Cannot connect to the Docker daemon")
@@ -123,7 +123,7 @@ def _patch_docker(monkeypatch, client):
 
 
 def test_docker_network_off_by_default(monkeypatch):
-    from src.runtime_backends import sandbox_backend as sb
+    from my_crew.runtime_backends import sandbox_backend as sb
 
     client = _FakeDockerClient()
     _patch_docker(monkeypatch, client)
@@ -132,7 +132,7 @@ def test_docker_network_off_by_default(monkeypatch):
 
 
 def test_docker_network_opt_in(monkeypatch):
-    from src.runtime_backends import sandbox_backend as sb
+    from my_crew.runtime_backends import sandbox_backend as sb
 
     client = _FakeDockerClient()
     _patch_docker(monkeypatch, client)
@@ -144,7 +144,7 @@ def test_docker_execute_degrades_on_transient_exec_error(monkeypatch):
     """v43: a Docker exec error (e.g. 404 when the container was concurrently removed while
     parallel subagent execs race it) must degrade to a non-zero ExecuteResponse, NOT raise and
     abort the whole run — mirrors upload/download per-call guards."""
-    from src.runtime_backends import sandbox_backend as sb
+    from my_crew.runtime_backends import sandbox_backend as sb
 
     class _BoomContainer(_FakeContainer):
         def exec_run(self, *a, **k):
@@ -162,7 +162,7 @@ def test_docker_execute_degrades_on_transient_exec_error(monkeypatch):
 
 
 def test_docker_hardening_kwargs_present(monkeypatch):
-    from src.runtime_backends import sandbox_backend as sb
+    from my_crew.runtime_backends import sandbox_backend as sb
 
     client = _FakeDockerClient()
     _patch_docker(monkeypatch, client)
@@ -176,7 +176,7 @@ def test_docker_hardening_kwargs_present(monkeypatch):
     # tmpfs is world-writable (1777) so the non-root `nobody` can write its workdir/home.
     assert run["tmpfs"] == {"/tmp": "rw,mode=1777", "/work": "rw,mode=1777"}
     # v41: lease is configurable (default 1800s) — was a hard 600 that killed slow deep_agent runs.
-    from src.runtime_backends.sandbox_backend import SANDBOX_LEASE_S
+    from my_crew.runtime_backends.sandbox_backend import SANDBOX_LEASE_S
 
     assert run["command"] == f"sleep {SANDBOX_LEASE_S}"
     # HOME is on the container env only; token-free preserved.
@@ -185,14 +185,14 @@ def test_docker_hardening_kwargs_present(monkeypatch):
 
 def test_docker_shared_scrubbed_env_has_no_home(monkeypatch):
     # M4: the shared helper (used by the fake backend's host subprocess) must NOT gain HOME.
-    from src.runtime_backends.sandbox_backend import _scrubbed_sandbox_env
+    from my_crew.runtime_backends.sandbox_backend import _scrubbed_sandbox_env
 
     assert "HOME" not in _scrubbed_sandbox_env()
 
 
 def test_docker_mem_limit_default_and_override(monkeypatch):
     """v44: mem_limit is a per-company sandbox override; absent ⇒ 512m default (unchanged)."""
-    from src.runtime_backends import sandbox_backend as sb
+    from my_crew.runtime_backends import sandbox_backend as sb
 
     client = _FakeDockerClient()
     _patch_docker(monkeypatch, client)
@@ -205,7 +205,7 @@ def test_docker_mem_limit_default_and_override(monkeypatch):
 
 def test_docker_mem_limit_clamps(monkeypatch):
     """Huge value clamped to ceiling; garbage falls back to default (never unbounded)."""
-    from src.runtime_backends import sandbox_backend as sb
+    from my_crew.runtime_backends import sandbox_backend as sb
 
     client = _FakeDockerClient()
     _patch_docker(monkeypatch, client)
@@ -221,7 +221,7 @@ def test_docker_mem_limit_clamps(monkeypatch):
 
 def test_docker_mem_limit_rides_degradable_group(monkeypatch):
     """mem_limit is degradable — dropped WITH the group when the daemon rejects a degradable one."""
-    from src.runtime_backends import sandbox_backend as sb
+    from my_crew.runtime_backends import sandbox_backend as sb
 
     client = _FakeDockerClient(raise_on={"pids_limit"})  # reject a degradable kwarg
     _patch_docker(monkeypatch, client)
@@ -234,7 +234,7 @@ def test_docker_mem_limit_rides_degradable_group(monkeypatch):
 def test_docker_degrade_keeps_privilege_and_network(monkeypatch):
     # A daemon that rejects a resource/fs kwarg (pids_limit) → retry drops ONLY resource/fs;
     # privilege + network survive.
-    from src.runtime_backends import sandbox_backend as sb
+    from my_crew.runtime_backends import sandbox_backend as sb
 
     client = _FakeDockerClient(raise_on={"pids_limit"})
     _patch_docker(monkeypatch, client)
@@ -251,7 +251,7 @@ def test_docker_degrade_keeps_privilege_and_network(monkeypatch):
 def test_docker_hard_kwarg_rejection_fails_closed(monkeypatch):
     # A daemon that rejects a HARD privilege kwarg (cap_drop) → both attempts fail → SandboxDenied
     # (never a privileged container).
-    from src.runtime_backends import sandbox_backend as sb
+    from my_crew.runtime_backends import sandbox_backend as sb
 
     client = _FakeDockerClient(raise_on={"cap_drop"})
     _patch_docker(monkeypatch, client)

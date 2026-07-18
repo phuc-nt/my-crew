@@ -11,12 +11,12 @@ did not loosen the guardrail:
 
 from __future__ import annotations
 
-from src.actions.hard_block import (
+from my_crew.actions.hard_block import (
     _DEFAULT_MCP_ALLOWLIST,
     BlockCategory,
     classify,
 )
-from src.packs import PackRegistry
+from my_crew.packs import PackRegistry
 
 
 def _mcp(server, tool, **extra):

@@ -12,11 +12,11 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from src.agent import knowledge_template as kt
+from my_crew.agent import knowledge_template as kt
 
 
 def _client():
-    from src.server.app import create_app
+    from my_crew.server.app import create_app
 
     return TestClient(create_app())
 
@@ -92,10 +92,10 @@ def stub_profile(monkeypatch, tmp_path):
     prof = tmp_path / "acme"
     prof.mkdir()
     (prof / "profile.yaml").write_text("name: acme\ndomain: pm\n", encoding="utf-8")
-    monkeypatch.setattr("src.profile.loader._PROFILES_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", tmp_path)
     store = {"profile": "name: acme\ndomain: pm\nskills: []\n", "soul": "", "project": ""}
     saved = {}
-    monkeypatch.setattr("src.server.profile_editor.read_profile_files", lambda aid: dict(store))
+    monkeypatch.setattr("my_crew.server.profile_editor.read_profile_files", lambda aid: dict(store))
 
     def _save_md(aid, filename, text):
         key = {"SOUL.md": "soul", "PROJECT.md": "project"}[filename]
@@ -104,8 +104,8 @@ def stub_profile(monkeypatch, tmp_path):
     def _save_yaml(aid, text):
         store["profile"] = text
 
-    monkeypatch.setattr("src.server.profile_editor.save_markdown", _save_md)
-    monkeypatch.setattr("src.server.profile_editor.save_profile_yaml", _save_yaml)
+    monkeypatch.setattr("my_crew.server.profile_editor.save_markdown", _save_md)
+    monkeypatch.setattr("my_crew.server.profile_editor.save_profile_yaml", _save_yaml)
     return {"store": store, "saved": saved}
 
 
@@ -195,15 +195,15 @@ def stub_domain(monkeypatch):
     from types import SimpleNamespace
 
     monkeypatch.setattr(
-        "src.profile.loader.load_profile",
+        "my_crew.profile.loader.load_profile",
         lambda pid, **k: SimpleNamespace(domain="pm", skills=()),
     )
 
 
 def test_put_skills_rejects_unknown_name(stub_profile, stub_domain, monkeypatch):
-    from src.skills.models import Skill
+    from my_crew.skills.models import Skill
 
-    monkeypatch.setattr("src.skills.skill_loader.load_skills",
+    monkeypatch.setattr("my_crew.skills.skill_loader.load_skills",
                         lambda **k: [Skill(name="daily-standup", description="d", body="")])
     c = _client()
     r = c.put("/api/agents/acme/skills", json={"names": ["daily-standup", "not-a-skill"]})
@@ -214,9 +214,9 @@ def test_put_skills_rejects_unknown_name(stub_profile, stub_domain, monkeypatch)
 
 
 def test_put_skills_writes_valid_names(stub_profile, stub_domain, monkeypatch):
-    from src.skills.models import Skill
+    from my_crew.skills.models import Skill
 
-    monkeypatch.setattr("src.skills.skill_loader.load_skills",
+    monkeypatch.setattr("my_crew.skills.skill_loader.load_skills",
                         lambda **k: [Skill(name="daily-standup", description="d", body=""),
                                      Skill(name="sprint-report", description="d", body="")])
     c = _client()

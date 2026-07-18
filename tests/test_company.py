@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.runtime.company import (
+from my_crew.runtime.company import (
     DEFAULT_TEAM_TASK_CAP_USD,
     Company,
     load_company,

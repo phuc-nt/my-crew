@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions import confluence_write
-from src.actions.action_gateway import ActionGateway
-from src.actions.confluence_write import create_report_page, parse_created_page
-from src.audit.audit_log import AuditLog
+from my_crew.actions import confluence_write
+from my_crew.actions.action_gateway import ActionGateway
+from my_crew.actions.confluence_write import create_report_page, parse_created_page
+from my_crew.audit.audit_log import AuditLog
 
 # Real shape from the Confluence MCP server (verified 2026-06-21).
 REAL_CREATE_RESULT = [

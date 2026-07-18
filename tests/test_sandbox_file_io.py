@@ -17,7 +17,7 @@ pytestmark = pytest.mark.skipif(not _HAS_DEEPAGENTS, reason="deepagents not inst
 
 
 def _fake():
-    from src.runtime_backends.sandbox_backend import build_sandbox_backend
+    from my_crew.runtime_backends.sandbox_backend import build_sandbox_backend
 
     return build_sandbox_backend({"provider": "fake"})
 
@@ -61,7 +61,7 @@ def test_absolute_work_path_is_accepted():
 def test_shell_metachar_paths_refused(bad):
     """The docker backend interpolates the path into `sh -c`; a metachar path must be
     refused before it can inject a command."""
-    from src.runtime_backends.sandbox_backend import _confined_rel
+    from my_crew.runtime_backends.sandbox_backend import _confined_rel
 
     assert _confined_rel(bad) is None
 
@@ -88,7 +88,7 @@ def test_download_missing_file_returns_error_not_crash():
 
 
 def test_oversized_upload_refused():
-    from src.runtime_backends.sandbox_backend import _MAX_FILE_BYTES
+    from my_crew.runtime_backends.sandbox_backend import _MAX_FILE_BYTES
 
     sb = _fake()
     try:
@@ -99,7 +99,7 @@ def test_oversized_upload_refused():
 
 
 def test_confined_rel_helper():
-    from src.runtime_backends.sandbox_backend import _confined_rel
+    from my_crew.runtime_backends.sandbox_backend import _confined_rel
 
     assert _confined_rel("report.md") == "report.md"
     assert _confined_rel("/work/sub/x.txt") == "sub/x.txt"
@@ -126,7 +126,7 @@ def test_real_docker_round_trip_and_confine():
     """The bug was Docker-specific: /work is a tmpfs over a READ-ONLY rootfs, so
     put_archive/get_archive fail — we write/read via exec+base64. This proves the real
     container path (upload→download binary round-trip + /etc refused)."""
-    from src.runtime_backends.sandbox_backend import build_sandbox_backend
+    from my_crew.runtime_backends.sandbox_backend import build_sandbox_backend
 
     sb = build_sandbox_backend({"provider": "docker", "network": False})
     try:

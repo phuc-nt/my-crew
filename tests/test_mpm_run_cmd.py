@@ -5,8 +5,8 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from src.entrypoints import mpm_run_cmd
-from src.runtime.registry import RegistryEntry
+from my_crew.entrypoints import mpm_run_cmd
+from my_crew.runtime.registry import RegistryEntry
 
 
 class _FakeProc:
@@ -42,7 +42,7 @@ def _patch_known(monkeypatch, ids=("acme",)):
 
 def _patch_detail(monkeypatch, detail):
     """Stub _supervise's run-event read so the printed outcome is deterministic."""
-    monkeypatch.setattr("src.runtime.service._last_run_event", lambda agent_id: detail)
+    monkeypatch.setattr("my_crew.runtime.service._last_run_event", lambda agent_id: detail)
 
 
 def test_happy_exact_argv_and_exit_0(monkeypatch, capsys):
@@ -53,7 +53,7 @@ def test_happy_exact_argv_and_exit_0(monkeypatch, capsys):
     rc = mpm_run_cmd.run_agent(["acme", "--report", "daily"], spawn=_fake_spawn(record))
     assert rc == 0
     assert record[0] == [
-        sys.executable, "-m", "src.runtime.worker",
+        sys.executable, "-m", "my_crew.runtime.worker",
         "--agent-id", "acme", "--report", "daily", "--audience", "internal",
     ]
     assert "delivered=True" in capsys.readouterr().out
@@ -156,7 +156,7 @@ def test_team_step_happy_path_appends_the_triple_to_argv(monkeypatch):
     )
     assert rc == 0
     assert record[0] == [
-        sys.executable, "-m", "src.runtime.worker",
+        sys.executable, "-m", "my_crew.runtime.worker",
         "--agent-id", "acme", "--report", "team-step", "--audience", "internal",
         "--task-id", "t1", "--step-id", "s2", "--attempt-id", "a3",
     ]

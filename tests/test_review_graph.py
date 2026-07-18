@@ -11,10 +11,10 @@ import json
 
 import pytest
 
-import src.llm.client as llm_client_mod
-from src.agent.review_graph import ReviewStepInput, run_review_step
-from src.agent.team_task_artifact import read_review_verdict_artifact, write_step_artifact
-from src.config.config_builders import build_settings_from_dict
+import my_crew.llm.client as llm_client_mod
+from my_crew.agent.review_graph import ReviewStepInput, run_review_step
+from my_crew.agent.team_task_artifact import read_review_verdict_artifact, write_step_artifact
+from my_crew.config.config_builders import build_settings_from_dict
 
 
 class _FakeResult:
@@ -176,7 +176,7 @@ def test_run_review_step_malformed_llm_json_raises_review_verdict_error(tmp_path
 
     monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)
 
-    from src.agent.review_graph import ReviewVerdictError
+    from my_crew.agent.review_graph import ReviewVerdictError
 
     with pytest.raises(ReviewVerdictError):
         run_review_step(None, _settings(tmp_path), data_dir=tmp_path, review_input=_input())

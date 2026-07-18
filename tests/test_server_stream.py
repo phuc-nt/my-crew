@@ -13,10 +13,10 @@ import json
 
 from fastapi.testclient import TestClient
 
-from src.server.app import create_app
-from src.server.graph_runner import Terminal
-from src.server.run_manager import RunHandle, RunManager
-from src.server.sse_stream import stream_run
+from my_crew.server.app import create_app
+from my_crew.server.graph_runner import Terminal
+from my_crew.server.run_manager import RunHandle, RunManager
+from my_crew.server.sse_stream import stream_run
 
 
 class _FakeGraph:
@@ -88,8 +88,8 @@ def test_drive_runs_a_real_sqlitesaver_graph(tmp_path):
 
     from langgraph.checkpoint.sqlite import SqliteSaver
 
-    from src.agent.report_graph import ReportDeps, build_report_graph
-    from src.tools.models import CiRun, Issue, Risk
+    from my_crew.agent.report_graph import ReportDeps, build_report_graph
+    from my_crew.tools.models import CiRun, Issue, Risk
 
     def _real_graph(*a, **k):
         saver = SqliteSaver(sqlite3.connect(str(tmp_path / "cp.db"), check_same_thread=False))
@@ -136,7 +136,7 @@ def test_stream_handles_none_delta_chunks():
 def test_concurrent_attach_to_running_run_is_refused():
     # A second concurrent live drain on a still-running run raises StreamBusyError
     # (instead of blocking forever on the single-consumer queue).
-    from src.server.run_manager import StreamBusyError
+    from my_crew.server.run_manager import StreamBusyError
 
     async def _run():
         h = RunHandle("r1", "acme", "acme:daily:internal", "daily", "internal")

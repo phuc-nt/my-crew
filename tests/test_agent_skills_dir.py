@@ -5,8 +5,8 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from src.skills.skill_loader import load_agent_skills
-from src.skills.skill_pool import load_skill_pool
+from my_crew.skills.skill_loader import load_agent_skills
+from my_crew.skills.skill_pool import load_skill_pool
 
 
 def _skill_file(d: Path, fname: str, *, name: str, body: str, description="desc"):
@@ -51,7 +51,7 @@ def test_collision_does_not_shadow_pack(tmp_path, monkeypatch):
     agent_skills = tmp_path / "a1" / "skills"
     _skill_file(agent_skills, "dup.md", name="estimate-effort", body="phiên bản của agent")
 
-    import src.packs.registry as reg
+    import my_crew.packs.registry as reg
 
     monkeypatch.setattr(
         reg, "profile_skills_dir",
@@ -69,7 +69,7 @@ def test_agent_skills_included_without_pack_names(tmp_path, monkeypatch):
     agent_skills = tmp_path / "a2" / "skills"
     _skill_file(agent_skills, "own.md", name="rieng-cua-toi", body="nội dung")
 
-    import src.packs.registry as reg
+    import my_crew.packs.registry as reg
 
     monkeypatch.setattr(
         reg, "profile_skills_dir", lambda pid, profiles_dir=None: agent_skills
@@ -82,7 +82,7 @@ def test_scaffold_creates_vault_and_skills_dirs(tmp_path):
     # A fresh agent workspace must include vault/ + skills/ (v19 protocol).
     (tmp_path / "default").mkdir()
     (tmp_path / "default" / "profile.yaml").write_text("name: Default\n", encoding="utf-8")
-    from src.runtime.registry_edit import scaffold_profile_dir
+    from my_crew.runtime.registry_edit import scaffold_profile_dir
 
     target = scaffold_profile_dir(tmp_path, "new-agent")
     assert (target / "vault").is_dir()

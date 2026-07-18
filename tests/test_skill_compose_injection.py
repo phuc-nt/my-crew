@@ -7,8 +7,8 @@ to the no-skills call when `skills=""` (backward compat).
 
 from __future__ import annotations
 
-from src.llm import okr_report_prompt, report_prompt, resource_report_prompt
-from src.tools.models import (
+from my_crew.llm import okr_report_prompt, report_prompt, resource_report_prompt
+from my_crew.tools.models import (
     AssigneeLoad,
     CostSummary,
     KeyResult,

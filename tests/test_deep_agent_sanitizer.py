@@ -12,7 +12,7 @@ import importlib.util
 
 import pytest
 
-from src.runtime_backends.deep_agent_sanitizer import sanitize_bundle
+from my_crew.runtime_backends.deep_agent_sanitizer import sanitize_bundle
 
 _HAS_DEEPAGENTS = importlib.util.find_spec("deepagents") is not None
 
@@ -78,7 +78,7 @@ def test_sanitize_bundle_empty_fields_skip_and_stay_ok():
 def test_run_deep_agent_work_forces_network_off_on_sanitize_failure(monkeypatch):
     # THE C1 GUARANTEE: sanitize failure → the sandbox is built with network OFF even when the
     # agent opted into network. We capture the cfg handed to build_sandbox_backend.
-    import src.runtime_backends.deep_agent_loop as loop
+    import my_crew.runtime_backends.deep_agent_loop as loop
 
     captured = {}
 
@@ -94,10 +94,14 @@ def test_run_deep_agent_work_forces_network_off_on_sanitize_failure(monkeypatch)
         def invoke(self, _state, config=None):
             return {"messages": [type("M", (), {"content": "done", "usage_metadata": None})()]}
 
-    monkeypatch.setattr("src.runtime_backends.sandbox_backend.build_sandbox_backend", _fake_build)
+    monkeypatch.setattr(
+        "my_crew.runtime_backends.sandbox_backend.build_sandbox_backend", _fake_build
+    )
     monkeypatch.setattr("deepagents.create_deep_agent", lambda *a, **k: _FakeAgent())
     monkeypatch.setattr("langchain_openai.ChatOpenAI", lambda *a, **k: object())
-    monkeypatch.setattr("src.runtime_backends.sandbox_teardown.teardown_sandbox", lambda b: None)
+    monkeypatch.setattr(
+        "my_crew.runtime_backends.sandbox_teardown.teardown_sandbox", lambda b: None
+    )
 
     class _Settings:
         openrouter_model = "x/y"
@@ -120,7 +124,7 @@ def test_run_deep_agent_work_forces_network_off_on_sanitize_failure(monkeypatch)
 @pytest.mark.skipif(not _HAS_DEEPAGENTS, reason="deepagents optional dep not installed")
 def test_run_deep_agent_work_keeps_network_on_when_sanitize_ok(monkeypatch):
     # Sanitize success + opt-in → network stays on (the sanitized bundle is safe to egress).
-    import src.runtime_backends.deep_agent_loop as loop
+    import my_crew.runtime_backends.deep_agent_loop as loop
 
     captured = {}
 
@@ -136,10 +140,14 @@ def test_run_deep_agent_work_keeps_network_on_when_sanitize_ok(monkeypatch):
         def invoke(self, _state, config=None):
             return {"messages": [type("M", (), {"content": "done", "usage_metadata": None})()]}
 
-    monkeypatch.setattr("src.runtime_backends.sandbox_backend.build_sandbox_backend", _fake_build)
+    monkeypatch.setattr(
+        "my_crew.runtime_backends.sandbox_backend.build_sandbox_backend", _fake_build
+    )
     monkeypatch.setattr("deepagents.create_deep_agent", lambda *a, **k: _FakeAgent())
     monkeypatch.setattr("langchain_openai.ChatOpenAI", lambda *a, **k: object())
-    monkeypatch.setattr("src.runtime_backends.sandbox_teardown.teardown_sandbox", lambda b: None)
+    monkeypatch.setattr(
+        "my_crew.runtime_backends.sandbox_teardown.teardown_sandbox", lambda b: None
+    )
 
     class _Settings:
         openrouter_model = "x/y"
@@ -163,7 +171,7 @@ def test_run_deep_agent_work_keeps_network_on_when_sanitize_ok(monkeypatch):
 def test_deep_agent_recursion_limit_is_double_loop_limit(monkeypatch):
     # The effective recursion_limit handed to the deepagents invoke is loop_limit*2 (LangGraph
     # counts a tool round as ~2 super-steps). Documented in config; asserted here at the invoke.
-    import src.runtime_backends.deep_agent_loop as loop
+    import my_crew.runtime_backends.deep_agent_loop as loop
 
     seen = {}
 
@@ -177,11 +185,13 @@ def test_deep_agent_recursion_limit_is_double_loop_limit(monkeypatch):
             return {"messages": [type("M", (), {"content": "done", "usage_metadata": None})()]}
 
     monkeypatch.setattr(
-        "src.runtime_backends.sandbox_backend.build_sandbox_backend", lambda cfg: _FakeBackend()
+        "my_crew.runtime_backends.sandbox_backend.build_sandbox_backend", lambda cfg: _FakeBackend()
     )
     monkeypatch.setattr("deepagents.create_deep_agent", lambda *a, **k: _FakeAgent())
     monkeypatch.setattr("langchain_openai.ChatOpenAI", lambda *a, **k: object())
-    monkeypatch.setattr("src.runtime_backends.sandbox_teardown.teardown_sandbox", lambda b: None)
+    monkeypatch.setattr(
+        "my_crew.runtime_backends.sandbox_teardown.teardown_sandbox", lambda b: None
+    )
 
     class _Settings:
         openrouter_model = "x/y"

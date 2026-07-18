@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.entrypoints import mpm
+from my_crew.entrypoints import mpm
 
 
 def test_no_args_usage_exit_2(capsys):
@@ -33,7 +33,7 @@ def _spy(seen):
 
 
 def test_list_routes_to_run_list(monkeypatch):
-    import src.entrypoints.mpm_registry_cmds as cmds
+    import my_crew.entrypoints.mpm_registry_cmds as cmds
 
     seen = {}
     monkeypatch.setattr(cmds, "run_list", _spy(seen))
@@ -42,7 +42,7 @@ def test_list_routes_to_run_list(monkeypatch):
 
 
 def test_register_routes_to_run_register(monkeypatch):
-    import src.entrypoints.mpm_registry_cmds as cmds
+    import my_crew.entrypoints.mpm_registry_cmds as cmds
 
     seen = {}
     monkeypatch.setattr(cmds, "run_register", _spy(seen))

@@ -17,10 +17,10 @@ import httpx
 import pytest
 from openai import APIStatusError, APITimeoutError
 
-from src.config.config_builders import build_settings_from_dict
-from src.llm.budget_tracker import BudgetExceededError
-from src.llm.client import LlmClient
-from src.llm.fallback_policy import ProviderCallError, should_try_next_model
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.llm.budget_tracker import BudgetExceededError
+from my_crew.llm.client import LlmClient
+from my_crew.llm.fallback_policy import ProviderCallError, should_try_next_model
 
 
 def _status_error(code: int) -> APIStatusError:
@@ -186,14 +186,14 @@ def test_chain_overriding_configured_model_warns(monkeypatch, tmp_path, caplog):
     client, _ = _client(
         monkeypatch, tmp_path, chain=["other-a", "other-b"], script={"other-a": "ok"}
     )
-    with caplog.at_level("WARNING", logger="src.llm.client"):
+    with caplog.at_level("WARNING", logger="my_crew.llm.client"):
         result = client.complete([{"role": "user", "content": "hi"}])
     assert result.model == "other-a"
     assert any("overrides configured model" in r.message for r in caplog.records)
 
 
 def test_profile_yaml_chain_wins_over_env(monkeypatch, tmp_path):
-    from src.profile.loader_mapping import build_settings_dict
+    from my_crew.profile.loader_mapping import build_settings_dict
 
     monkeypatch.setenv("OPENROUTER_MODEL_CHAIN", "env-a,env-b")
     d = build_settings_dict({"model_chain": ["yaml-a", "yaml-b"]}, tmp_path)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from src.audit.audit_log import AuditEntry, AuditLog, redact
+from my_crew.audit.audit_log import AuditEntry, AuditLog, redact
 
 
 def test_append_only_one_line_per_record(tmp_path):

@@ -15,7 +15,7 @@ import pytest
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
-from src.runtime.replay import list_checkpoints, replay_from_checkpoint
+from my_crew.runtime.replay import list_checkpoints, replay_from_checkpoint
 
 _THREAD = "acme:daily:internal"  # parse_thread_id-compatible
 

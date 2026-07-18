@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from html import escape
 
-from src.tools.models import Task
+from my_crew.tools.models import Task
 
 
 @dataclass(frozen=True)

@@ -92,7 +92,7 @@ uv sync
 
 # ---------------------------------------------------------------------------------------------
 # [3/7] build the web SPA into a TEMP dir (vite --outDir override), then swap into the served dir
-# only if the output actually differs. Building straight into src/server/static/app/ — which
+# only if the output actually differs. Building straight into my_crew/server/static/app/ — which
 # vite.config.ts does by default with emptyOutDir:true — would first WIPE the live-served dir and
 # then rewrite it, handing a client a 404/partial bundle mid-build. Building to a temp dir and
 # rsync-ing in place avoids that window and lets us skip the web restart when the SPA is unchanged
@@ -100,7 +100,7 @@ uv sync
 # ---------------------------------------------------------------------------------------------
 echo
 echo "[3/7] build web SPA"
-SPA_DIR="src/server/static/app"
+SPA_DIR="my_crew/server/static/app"
 SPA_TMP="$(mktemp -d "${TMPDIR:-/tmp}/mpm-spa.XXXXXX")"
 spa_changed=0
 # Fingerprint a build dir by RELATIVE-path + content, so a dir hashes the same regardless of where

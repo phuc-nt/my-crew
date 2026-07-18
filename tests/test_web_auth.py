@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from src.server import auth
+from my_crew.server import auth
 
 
 @pytest.fixture
@@ -25,7 +25,7 @@ def auth_env(monkeypatch):
 
 
 def _app():
-    from src.server.app import create_app
+    from my_crew.server.app import create_app
 
     return create_app()
 

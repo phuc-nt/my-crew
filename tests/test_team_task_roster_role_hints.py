@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import src.agent.team_task_roster as roster_mod
-import src.profile.loader as loader_mod
+import my_crew.agent.team_task_roster as roster_mod
+import my_crew.profile.loader as loader_mod
 
 
 def _wire_souls(monkeypatch, souls: dict[str, str]):
@@ -52,7 +52,7 @@ def test_propose_prompt_wraps_roster_block_as_untrusted_content():
     """The role hint is colleague-AUTHORED SOUL text — the propose prompt must wrap the
     roster listing the same way it wraps handoff context, so a hostile persona line
     cannot smuggle instructions (second-order injection posture, v13)."""
-    from src.agent.team_task_consult_propose import build_propose_messages
+    from my_crew.agent.team_task_consult_propose import build_propose_messages
 
     messages = build_propose_messages(
         step_title="t", handoff_context="",

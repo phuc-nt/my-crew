@@ -10,7 +10,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 def _store(tmp_path):
@@ -51,9 +51,9 @@ def test_list_workrooms_rollup_and_draft_exclusion(tmp_path):
 
 
 def test_room_for_task_effective_and_degrade(tmp_path, monkeypatch):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
-    from src.runtime.office_room_append import room_for_task
-    from src.runtime.team_task_paths import team_tasks_db_path
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    from my_crew.runtime.office_room_append import room_for_task
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
 
     st = TeamTaskStore(team_tasks_db_path())
     st.create_task(task_id="root", title="R")
@@ -67,7 +67,7 @@ def test_room_for_task_effective_and_degrade(tmp_path, monkeypatch):
 # ---- intent tiers (M3/M4) ----------------------------------------------------
 
 def test_resolve_intent_hard_prefixes_no_llm(monkeypatch):
-    import src.server.routes_office_room_chat as mod
+    import my_crew.server.routes_office_room_chat as mod
 
     def _boom(_msg):
         raise AssertionError("hard prefix must not call the LLM")
@@ -83,7 +83,7 @@ def test_resolve_intent_hard_prefixes_no_llm(monkeypatch):
 
 
 def test_resolve_intent_llm_tier_never_hard(monkeypatch):
-    import src.server.routes_office_room_chat as mod
+    import my_crew.server.routes_office_room_chat as mod
 
     monkeypatch.setattr(mod, "_classify_with_llm", lambda m: "new_task")
     intent, payload, _t, hard = mod.resolve_intent("mình cần thêm một bài so sánh giá nhé")
@@ -93,7 +93,7 @@ def test_resolve_intent_llm_tier_never_hard(monkeypatch):
 
 
 def test_classify_garbage_defaults_to_question(monkeypatch):
-    import src.server.routes_office_room_chat as mod
+    import my_crew.server.routes_office_room_chat as mod
 
     class _Llm:
         def complete(self, messages):
@@ -102,7 +102,7 @@ def test_classify_garbage_defaults_to_question(monkeypatch):
                 cost_usd = 0.0
             return R()
 
-    monkeypatch.setattr("src.llm.client.LlmClient", lambda s: _Llm())
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", lambda s: _Llm())
     assert mod._classify_with_llm("gì đó mơ hồ") == "question"
 
 
@@ -110,24 +110,24 @@ def test_classify_garbage_defaults_to_question(monkeypatch):
 
 @pytest.fixture()
 def client(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
-    from src.server.app import create_app
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    from my_crew.server.app import create_app
 
     return TestClient(create_app())
 
 
 def test_chat_question_is_read_only_and_appends_ceo_event(client, monkeypatch, tmp_path):
-    import src.server.routes_office_room_chat as mod
+    import my_crew.server.routes_office_room_chat as mod
 
     monkeypatch.setattr(mod, "_classify_with_llm", lambda m: "question")
-    monkeypatch.setattr("src.agent.office_room_qa.answer_room_question",
+    monkeypatch.setattr("my_crew.agent.office_room_qa.answer_room_question",
                         lambda room, q, settings: ("Đang chạy tốt.", 0.0))
     r = client.post("/api/office/rooms/room-1/chat", json={"message": "ổn không?"})
     assert r.status_code == 200
     assert r.json() == {"intent": "question", "reply": "Đang chạy tốt."}
 
-    from src.runtime.office_room_store import OfficeRoomStore, office_room_db_path
-    from src.runtime.team_task_paths import team_tasks_root
+    from my_crew.runtime.office_room_store import OfficeRoomStore, office_room_db_path
+    from my_crew.runtime.team_task_paths import team_tasks_root
 
     store = OfficeRoomStore(office_room_db_path(team_tasks_root()))
     try:
@@ -136,7 +136,7 @@ def test_chat_question_is_read_only_and_appends_ceo_event(client, monkeypatch, t
         store.close()
     assert [e.kind for e in events] == ["ceo"]  # question wrote NOTHING else
     # and no task row appeared
-    from src.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
 
     st = TeamTaskStore(team_tasks_db_path())
     assert st.list_workrooms() == []
@@ -144,7 +144,7 @@ def test_chat_question_is_read_only_and_appends_ceo_event(client, monkeypatch, t
 
 
 def test_chat_adjust_zero_and_many_tasks_ask_back(client, monkeypatch, tmp_path):
-    from src.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
 
     r = client.post("/api/office/rooms/r1/chat", json={"message": "chỉnh: bỏ bước 2"})
     assert "Không tìm thấy việc" in r.json()["reply"]
@@ -160,8 +160,8 @@ def test_chat_adjust_zero_and_many_tasks_ask_back(client, monkeypatch, tmp_path)
 
 
 def test_chat_new_task_llm_tier_forces_manual_confirm(client, monkeypatch):
-    import src.agent.ops_assign_team_task as assign_mod
-    import src.server.routes_office_room_chat as mod
+    import my_crew.agent.ops_assign_team_task as assign_mod
+    import my_crew.server.routes_office_room_chat as mod
 
     monkeypatch.setattr(mod, "_classify_with_llm", lambda m: "new_task")
     captured = {}
@@ -185,10 +185,10 @@ def test_chat_new_task_llm_tier_forces_manual_confirm(client, monkeypatch):
 def test_coordinator_health_states(client, monkeypatch, tmp_path):
     from types import SimpleNamespace
 
-    import src.runtime.company as company_mod
-    import src.server.routes_office_room_chat as mod
+    import my_crew.runtime.company as company_mod
+    import my_crew.server.routes_office_room_chat as mod
 
-    monkeypatch.setattr("src.config.settings.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.config.settings.DATA_DIR", tmp_path)
     monkeypatch.setattr(company_mod, "load_company",
                         lambda: SimpleNamespace(coordinator_id=None))
     assert client.get("/api/health/coordinator").json()["reason"] == "no_coordinator"

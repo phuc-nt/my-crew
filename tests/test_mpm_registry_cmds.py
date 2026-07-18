@@ -5,8 +5,8 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from src.entrypoints.mpm_registry_cmds import run_list, run_register
-from src.runtime.registry import load_registry
+from my_crew.entrypoints.mpm_registry_cmds import run_list, run_register
+from my_crew.runtime.registry import load_registry
 
 _REAL_DEFAULT = Path("profiles/default/profile.yaml")
 
@@ -81,7 +81,7 @@ def test_list_shows_rows_with_last_run(tmp_path, monkeypatch, capsys):
     (pdir / "acme").mkdir()
     shutil.copyfile(_REAL_DEFAULT, pdir / "acme" / "profile.yaml")
     # seed a runs.jsonl for acme under a tmp data dir
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
     acme_dir = tmp_path / ".data" / "agents" / "acme"
     acme_dir.mkdir(parents=True)
     (acme_dir / "runs.jsonl").write_text(
@@ -97,7 +97,7 @@ def test_list_shows_rows_with_last_run(tmp_path, monkeypatch, capsys):
 
 def test_list_missing_profile_is_error_row_not_crash(tmp_path, monkeypatch, capsys):
     pdir, reg = _seed(tmp_path, "agents:\n  - id: ghost\n")  # no profiles/ghost/
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
     rc = run_list([], registry_path=reg, profiles_dir=pdir)
     assert rc == 0
     assert "ghost" in capsys.readouterr().out  # error row, no traceback

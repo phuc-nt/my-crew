@@ -11,15 +11,15 @@ from __future__ import annotations
 
 import pytest
 
-from src.company_docs import inject, store
-from src.company_docs.pool import load_company_docs
+from my_crew.company_docs import inject, store
+from my_crew.company_docs.pool import load_company_docs
 
 
 @pytest.fixture
 def docs_dir(tmp_path, monkeypatch):
     """Point the store at a throwaway dir so tests never touch the repo's company-docs/."""
     d = tmp_path / "company-docs"
-    monkeypatch.setattr("src.company_docs.store._DOCS_DIR", d)
+    monkeypatch.setattr("my_crew.company_docs.store._DOCS_DIR", d)
     return d
 
 

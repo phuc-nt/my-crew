@@ -8,7 +8,7 @@ the flag+value so dispatch sees a clean subcommand.
 
 from __future__ import annotations
 
-from src.entrypoints.cli import _strip_flag_value
+from my_crew.entrypoints.cli import _strip_flag_value
 
 
 def test_strip_profile_before_subcommand():

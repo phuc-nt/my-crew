@@ -1,6 +1,6 @@
 """M4-S5: the React SPA is served at `/` (committed build, no Node step at serve time).
 
-The Vite build is committed under `src/server/static/app/`; the app serves index.html at `/`
+The Vite build is committed under `my_crew/server/static/app/`; the app serves index.html at `/`
 and for any non-API client route (browser-router deep-links), assets at `/assets/*`. These
 tests guard that the dist stays committed and the SPA-serve + `/api` precedence hold.
 """
@@ -12,9 +12,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from src.server.app import create_app
+from my_crew.server.app import create_app
 
-_DIST = Path(__file__).resolve().parents[1] / "src" / "server" / "static" / "app"
+_DIST = Path(__file__).resolve().parents[1] / "my_crew" / "server" / "static" / "app"
 
 
 def test_spa_index_is_committed():

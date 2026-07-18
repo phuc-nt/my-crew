@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.runtime_backends.sandbox_backend import (
+from my_crew.runtime_backends.sandbox_backend import (
     SANDBOX_LEASE_MAX_S,
     SANDBOX_LEASE_S,
     _clamp_lease,
@@ -35,8 +35,8 @@ def test_clamp_lease(given, expected):
 
 
 def test_reaper_threshold_is_max_of_step_and_sandbox_lease():
-    from src.runtime.team_task_store import DEFAULT_LEASE_TTL_S
-    from src.runtime_backends.sandbox_reaper import _default_ttl_s
+    from my_crew.runtime.team_task_store import DEFAULT_LEASE_TTL_S
+    from my_crew.runtime_backends.sandbox_reaper import _default_ttl_s
 
     # A container living >step-lease (600) but within its sandbox lease (1800) must not be
     # reapable — the threshold takes the longer of the two.
@@ -49,7 +49,7 @@ def test_reaper_does_not_reap_valid_long_container(monkeypatch):
     lease) is NOT reaped — the bug was reaping it at ~780s."""
     from datetime import UTC, datetime, timedelta
 
-    from src.runtime_backends import sandbox_reaper
+    from my_crew.runtime_backends import sandbox_reaper
 
     now = datetime.now(UTC)
 
@@ -84,7 +84,7 @@ def test_docker_backend_sleep_uses_lease(monkeypatch):
     if importlib.util.find_spec("docker") is None:
         pytest.skip("docker sdk not installed")
 
-    from src.runtime_backends import sandbox_backend
+    from my_crew.runtime_backends import sandbox_backend
 
     captured = {}
 

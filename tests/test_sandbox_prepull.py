@@ -5,7 +5,7 @@ clear result dict, never an exception. No deepagents / Docker dependency (a fake
 
 from __future__ import annotations
 
-from src.runtime_backends.sandbox_backend import (
+from my_crew.runtime_backends.sandbox_backend import (
     SANDBOX_DEFAULT_IMAGE,
     prepull_sandbox_image,
 )

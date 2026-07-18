@@ -13,15 +13,15 @@ from datetime import date
 import pytest
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from src.actions.action_gateway import (
+from my_crew.actions.action_gateway import (
     AUTONOMOUS_RATIONALE,
     ActionGateway,
     HardBlockedError,
     WriteDisabledError,
 )
-from src.audit.audit_log import AuditLog
-from src.config.config_builders import build_settings_from_dict
-from src.profile.loader_mapping import build_settings_dict
+from my_crew.audit.audit_log import AuditLog
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.profile.loader_mapping import build_settings_dict
 
 MERGE = {"type": "gh_cli", "argv": ["pr", "merge", "42"]}  # Lớp B (interrupt)
 UNLISTED = {"type": "mcp_tool", "server": "jira", "tool": "createDashboard", "args": {}}
@@ -184,8 +184,8 @@ def _checkpointer() -> SqliteSaver:
 
 
 def _fake_deps(deliver):
-    from src.agent.report_graph import ReportDeps
-    from src.tools.models import CiRun, Issue, PullRequest, Risk
+    from my_crew.agent.report_graph import ReportDeps
+    from my_crew.tools.models import CiRun, Issue, PullRequest, Risk
 
     return ReportDeps(
         fetch_issues=lambda: [Issue(key="AB-1", summary="x", status="In Progress",
@@ -212,7 +212,7 @@ class _DeliverSpy:
 
 
 def test_approval_gate_autonomous_delivers_without_interrupt(settings_factory):
-    from src.agent.report_graph import build_report_graph
+    from my_crew.agent.report_graph import build_report_graph
 
     spy = _DeliverSpy()
     graph = build_report_graph(
@@ -227,7 +227,7 @@ def test_approval_gate_autonomous_delivers_without_interrupt(settings_factory):
 
 def test_approval_gate_without_settings_still_interrupts():
     """settings=None (deps-injected callers) must stay guarded — fail-safe default."""
-    from src.agent.report_graph import build_report_graph
+    from my_crew.agent.report_graph import build_report_graph
 
     spy = _DeliverSpy()
     graph = build_report_graph(

@@ -18,7 +18,7 @@ def _build_example(
     checkpointer, *, config, settings, context, audience, store, remember, tools=None,
 ):
     # Skeleton: reuse the core daily/weekly report graph. Swap this for your domain's graph.
-    from src.agent.report_graph import build_report_graph
+    from my_crew.agent.report_graph import build_report_graph
 
     return build_report_graph(
         checkpointer, config=config, settings=settings, context=context,

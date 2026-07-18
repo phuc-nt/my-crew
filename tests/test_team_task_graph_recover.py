@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.agent.team_task_graph import MAX_RECOVER, TeamTaskDeps, build_team_task_graph
+from my_crew.agent.team_task_graph import MAX_RECOVER, TeamTaskDeps, build_team_task_graph
 
 
 def _deps(run_work, **overrides):
@@ -237,8 +237,8 @@ def test_work_error_squashed_to_single_line():
 def test_recover_phase_tag_passes_room_projection_allowlist():
     """v13 lesson pinned: a NEW phase tag must clear the write-time allowlist, or the
     room event silently drops it — graph writer, projection and FE label must agree."""
-    from src.agent.team_task_graph import PHASE_RECOVER
-    from src.server.office_event_projection import summarize_office_event
+    from my_crew.agent.team_task_graph import PHASE_RECOVER
+    from my_crew.server.office_event_projection import summarize_office_event
 
     body = summarize_office_event("step_status", {"phase": PHASE_RECOVER, "status": "started"})
     assert body["phase"] == PHASE_RECOVER

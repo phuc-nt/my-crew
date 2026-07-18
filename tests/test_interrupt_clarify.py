@@ -18,7 +18,7 @@ from types import SimpleNamespace
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 
-from src.agent.team_task_graph import TeamTaskDeps, build_team_task_graph
+from my_crew.agent.team_task_graph import TeamTaskDeps, build_team_task_graph
 
 
 def _saver(tmp_path):
@@ -110,31 +110,31 @@ def test_uncheckpointed_graph_keeps_v33_fire_and_forget(tmp_path):
 
 
 def test_clarify_resume_input_maps_store_status(monkeypatch):
-    from src.runtime import team_step_runner as runner
+    from my_crew.runtime import team_step_runner as runner
 
     intr = SimpleNamespace(value={"clarify_id": 7, "question": "q"})
     snapshot = SimpleNamespace(tasks=(SimpleNamespace(interrupts=(intr,)),))
 
     monkeypatch.setattr(
-        "src.runtime.clarify_service.clarify_status", lambda cid: ("answered", "Tốc độ"))
+        "my_crew.runtime.clarify_service.clarify_status", lambda cid: ("answered", "Tốc độ"))
     cmd, waiting = runner._clarify_resume_input(snapshot)
     assert waiting is False and isinstance(cmd, Command) and cmd.resume == "Tốc độ"
 
     monkeypatch.setattr(
-        "src.runtime.clarify_service.clarify_status", lambda cid: ("expired", ""))
+        "my_crew.runtime.clarify_service.clarify_status", lambda cid: ("expired", ""))
     cmd, waiting = runner._clarify_resume_input(snapshot)
     assert waiting is False and cmd.resume == ""
 
     monkeypatch.setattr(
-        "src.runtime.clarify_service.clarify_status", lambda cid: ("pending", ""))
+        "my_crew.runtime.clarify_service.clarify_status", lambda cid: ("pending", ""))
     cmd, waiting = runner._clarify_resume_input(snapshot)
     assert waiting is True and cmd is None
 
 
 def test_store_waiting_clarify_roundtrip(tmp_path, monkeypatch):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
-    from src.runtime.team_task_paths import team_tasks_db_path
-    from src.runtime.team_task_store import TeamTaskStore
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
 
     store = TeamTaskStore(team_tasks_db_path())
     store.create_task(task_id="t1", title="T", pic_id="")
@@ -152,7 +152,7 @@ def test_store_waiting_clarify_roundtrip(tmp_path, monkeypatch):
 
 
 def test_poll_waiting_clarify_step_dispatch_rules(monkeypatch):
-    from src.agent.coordinator_nodes import tick_actions
+    from my_crew.agent.coordinator_nodes import tick_actions
 
     spawned = []
     monkeypatch.setattr(
@@ -188,7 +188,7 @@ def test_dead_end_detector_counts_waiting_clarify_as_in_flight():
     """H1: one terminally-failed step + one clarify-paused sibling must NOT stall the
     task — the paused step is alive, and stalling would orphan the pending clarify
     (a stalled task leaves list_dispatchable, so the poll never runs again)."""
-    from src.agent.coordinator_graph import _dead_end_result
+    from my_crew.agent.coordinator_graph import _dead_end_result
 
     task = SimpleNamespace(
         id="t1", title="T",
@@ -205,7 +205,7 @@ def test_pending_resume_carries_clarify_id_and_keeps_thread(tmp_path, monkeypatc
     clarify_id extracted from the INTERRUPT PAYLOAD (snapshot values never carry it —
     a None here would re-mark the step un-pollable after the crash window), and
     (b) leave the thread resumable afterwards."""
-    from src.runtime import team_step_runner as runner
+    from my_crew.runtime import team_step_runner as runner
 
     work_calls, rework_calls, delivered = [], [], []
     saver = _saver(tmp_path)
@@ -214,7 +214,7 @@ def test_pending_resume_carries_clarify_id_and_keeps_thread(tmp_path, monkeypatc
     _run(graph, dict(_INITIAL), config)  # pauses on the interrupt (clarify_id=42)
 
     monkeypatch.setattr(
-        "src.runtime.clarify_service.clarify_status", lambda cid: ("pending", ""))
+        "my_crew.runtime.clarify_service.clarify_status", lambda cid: ("pending", ""))
     stream_input, state, finished = runner._load_resume_state(
         graph, config, dict(_INITIAL), attempt_id="a2", task_id="t9", step_id="s1",
     )
@@ -223,11 +223,11 @@ def test_pending_resume_carries_clarify_id_and_keeps_thread(tmp_path, monkeypatc
 
     # thread must still be resumable once the CEO answers
     monkeypatch.setattr(
-        "src.runtime.clarify_service.clarify_status",
+        "my_crew.runtime.clarify_service.clarify_status",
         lambda cid: ("answered", "Tốc độ"))
     stream_input, state, finished = runner._load_resume_state(
         graph, config, dict(_INITIAL), attempt_id="a3", task_id="t9", step_id="s1",
     )
     assert finished is None
-    final = _run(graph, stream_input, config)
+    _run(graph, stream_input, config)
     assert delivered and "THEO CEO" in delivered[0][1]

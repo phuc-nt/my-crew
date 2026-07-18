@@ -12,13 +12,13 @@ Load-bearing:
 
 from __future__ import annotations
 
-import src.llm.client as llm_client_mod
-from src.agent.team_task_consult_propose import (
+import my_crew.llm.client as llm_client_mod
+from my_crew.agent.team_task_consult_propose import (
     ConsultProposalError,
     parse_consult_proposal,
     propose_consult_targets,
 )
-from src.config.config_builders import build_settings_from_dict
+from my_crew.config.config_builders import build_settings_from_dict
 
 
 class _FakeResult:

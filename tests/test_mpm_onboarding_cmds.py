@@ -5,7 +5,7 @@ dispatch + the forced-dry-run + the idempotent-summary, not the underlying repor
 
 from __future__ import annotations
 
-from src.entrypoints import mpm_onboarding_cmds as onb
+from my_crew.entrypoints import mpm_onboarding_cmds as onb
 
 # --- quickstart -----------------------------------------------------------------------
 
@@ -26,7 +26,7 @@ def test_quickstart_runs_default_daily_dry_run(monkeypatch):
         seen["argv"] = argv
         return 0
 
-    monkeypatch.setattr("src.entrypoints.mpm_run_cmd.run_agent", _fake_run_agent)
+    monkeypatch.setattr("my_crew.entrypoints.mpm_run_cmd.run_agent", _fake_run_agent)
     rc = onb.run_quickstart([])
     assert rc == 0
     assert seen["argv"] == ["default", "--report", "daily", "--dry-run"]
@@ -38,7 +38,7 @@ def test_quickstart_runs_default_daily_dry_run(monkeypatch):
 
 def test_crew_init_calls_create_crew_and_prints_summary(monkeypatch, capsys):
     monkeypatch.setattr(
-        "src.server.template_create.create_crew",
+        "my_crew.server.template_create.create_crew",
         lambda: {"crew": "starter", "created": ["a", "b"], "skipped": [],
                  "failed": [], "coordinator_id": "truong-phong"},
     )
@@ -50,7 +50,7 @@ def test_crew_init_calls_create_crew_and_prints_summary(monkeypatch, capsys):
 
 def test_crew_init_idempotent_all_skipped(monkeypatch, capsys):
     monkeypatch.setattr(
-        "src.server.template_create.create_crew",
+        "my_crew.server.template_create.create_crew",
         lambda: {"crew": "starter", "created": [], "skipped": ["a", "b"],
                  "failed": [], "coordinator_id": "truong-phong"},
     )
@@ -61,7 +61,7 @@ def test_crew_init_idempotent_all_skipped(monkeypatch, capsys):
 
 def test_crew_init_reports_failure_nonzero(monkeypatch, capsys):
     monkeypatch.setattr(
-        "src.server.template_create.create_crew",
+        "my_crew.server.template_create.create_crew",
         lambda: {"crew": "starter", "created": [], "skipped": [],
                  "failed": [{"role_id": "x", "error": "boom"}], "coordinator_id": ""},
     )

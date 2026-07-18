@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from src.config.config_builders import build_settings_from_dict
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 def _fake_loaded():
@@ -26,11 +26,11 @@ def _plan(store: TeamTaskStore):
 
 
 def test_team_step_runs_under_mcp_pool(tmp_path, monkeypatch):
-    from src.adapters.mcp_session_pool import current_pool
-    from src.runtime import team_step_runner
-    from src.runtime.worker import _run_team_step_kind
+    from my_crew.adapters.mcp_session_pool import current_pool
+    from my_crew.runtime import team_step_runner
+    from my_crew.runtime.worker import _run_team_step_kind
 
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
     store = TeamTaskStore(tmp_path / "team_tasks.sqlite3")
     _plan(store)

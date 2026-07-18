@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.agent.resource_report_graph import ResourceReportDeps, build_resource_graph
-from src.llm.resource_report_prompt import (
+from my_crew.agent.resource_report_graph import ResourceReportDeps, build_resource_graph
+from my_crew.llm.resource_report_prompt import (
     build_resource_slack_short,
     fallback_resource_narrative,
     render_resource_xhtml,
 )
-from src.tools.models import AssigneeLoad, CostSummary, ResourceReport
+from my_crew.tools.models import AssigneeLoad, CostSummary, ResourceReport
 
 
 def _resource(*, overloaded=("Carol",), unassigned=2):
@@ -136,8 +136,8 @@ def test_build_xlsx_writes_confined_file_when_email_configured(settings_factory,
     """default_resource_deps.build_xlsx writes the .xlsx into the gateway artifact dir."""
     from openpyxl import load_workbook
 
-    from src.agent.resource_report_graph import default_resource_deps
-    from src.config.config_builders import build_reporting_config_from_dict
+    from my_crew.agent.resource_report_graph import default_resource_deps
+    from my_crew.config.config_builders import build_reporting_config_from_dict
 
     settings = settings_factory(dry_run=True)
     config = build_reporting_config_from_dict(
@@ -156,8 +156,8 @@ def test_build_xlsx_writes_confined_file_when_email_configured(settings_factory,
 
 def test_build_xlsx_skipped_without_email_channel(settings_factory):
     """No smtp ⇒ no email consumer ⇒ no orphan artifact file (returns None)."""
-    from src.agent.resource_report_graph import default_resource_deps
-    from src.config.config_builders import build_reporting_config_from_dict
+    from my_crew.agent.resource_report_graph import default_resource_deps
+    from my_crew.config.config_builders import build_reporting_config_from_dict
 
     deps = default_resource_deps(
         config=build_reporting_config_from_dict({}), settings=settings_factory()
@@ -169,12 +169,12 @@ def test_resource_deliver_uses_resource_dedup_namespace(settings_factory, tmp_pa
     """The deliver path must go through the gateway with a resource-<date> dedup key."""
     from datetime import UTC, datetime
 
-    import src.actions.confluence_write as cw
-    import src.actions.slack_write as sw
-    from src.actions.action_gateway import ActionGateway, GatewayResult
-    from src.actions.confluence_write import ConfluencePage
-    from src.agent import resource_report_graph
-    from src.audit.audit_log import AuditLog
+    import my_crew.actions.confluence_write as cw
+    import my_crew.actions.slack_write as sw
+    from my_crew.actions.action_gateway import ActionGateway, GatewayResult
+    from my_crew.actions.confluence_write import ConfluencePage
+    from my_crew.agent import resource_report_graph
+    from my_crew.audit.audit_log import AuditLog
 
     today = datetime.now(UTC).date().isoformat()
     gw = ActionGateway(
@@ -211,7 +211,7 @@ def test_resource_deliver_uses_resource_dedup_namespace(settings_factory, tmp_pa
 
 
 def test_parse_report_kind_resource():
-    from src.entrypoints.cli import _parse_report_kind
+    from my_crew.entrypoints.cli import _parse_report_kind
 
     assert _parse_report_kind(["--resource"]) == "resource"
     assert _parse_report_kind(["--okr"]) == "okr"
@@ -235,8 +235,8 @@ def _fake_loaded(tmp_path, *, api_key):
 
 def test_cli_report_resource_dispatch(monkeypatch, tmp_path):
     """`report --resource` builds the resource graph."""
-    import src.agent.resource_report_graph as rc_graph_mod
-    from src.entrypoints import cli
+    import my_crew.agent.resource_report_graph as rc_graph_mod
+    from my_crew.entrypoints import cli
 
     called = {}
 
@@ -260,14 +260,14 @@ def test_cli_report_resource_dispatch(monkeypatch, tmp_path):
 
 def test_audit_still_keyless_after_resource(monkeypatch, tmp_path):
     """Regression: non-LLM commands stay keyless after the --resource change."""
-    from src.entrypoints import cli
+    from my_crew.entrypoints import cli
 
     monkeypatch.setattr(cli, "load_profile", lambda pid: _fake_loaded(tmp_path, api_key=None))
     assert cli.main(["audit", "--limit", "1"]) == 0
 
 
 def test_cron_resource_kind():
-    from src.entrypoints.cron import _report_kind
+    from my_crew.entrypoints.cron import _report_kind
 
     assert _report_kind(["--resource"]) == "resource"
     assert _report_kind(["--okr"]) == "okr"

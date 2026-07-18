@@ -9,7 +9,7 @@ borrow `prior_output`'s framing or vice versa.
 
 from __future__ import annotations
 
-from src.llm.team_task_check_prompt import build_rework_messages
+from my_crew.llm.team_task_check_prompt import build_rework_messages
 
 
 def _user_content(messages: list[dict[str, str]]) -> str:

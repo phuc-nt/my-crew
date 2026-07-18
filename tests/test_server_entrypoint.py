@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from src.server import app as app_module
+from my_crew.server import app as app_module
 
 
 def test_app_importable():
-    from src.server.app import app
+    from my_crew.server.app import app
 
     assert app is not None
 

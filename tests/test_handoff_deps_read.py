@@ -13,9 +13,9 @@ Load-bearing:
 
 from __future__ import annotations
 
-from src.agent.team_task_artifact import write_step_artifact
-from src.agent.team_task_graph import _read_deps_handoff
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.agent.team_task_artifact import write_step_artifact
+from my_crew.agent.team_task_graph import _read_deps_handoff
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 def _seed_store(tmp_path, steps: list[dict]) -> None:

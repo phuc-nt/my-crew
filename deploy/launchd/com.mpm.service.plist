@@ -16,7 +16,7 @@
         <string>run</string>
         <string>python</string>
         <string>-m</string>
-        <string>src.runtime.service</string>
+        <string>my_crew.runtime.service</string>
     </array>
     <key>WorkingDirectory</key>
     <string>__REPO_DIR__</string>

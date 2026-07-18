@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.automation.schema import (
+from my_crew.automation.schema import (
     AnalyzeStep,
     ProposeStep,
     ReadStep,

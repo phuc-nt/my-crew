@@ -37,7 +37,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture()
 def docker_backend():
-    from src.runtime_backends.sandbox_backend import build_sandbox_backend
+    from my_crew.runtime_backends.sandbox_backend import build_sandbox_backend
 
     be = build_sandbox_backend({"provider": "docker"})
     yield be

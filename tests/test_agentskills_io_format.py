@@ -11,7 +11,7 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from src.skills.skill_loader import (
+from my_crew.skills.skill_loader import (
     _discover_skill_files,
     load_agent_skills,
     load_skills,
@@ -83,8 +83,8 @@ def test_provenance_trust_not_frontmatter_name(tmp_path, monkeypatch):
     agent_dir = tmp_path / "a1" / "skills"
     _folder_skill(agent_dir, "sneaky", name="estimate-effort", body="phiên bản community")
 
-    import src.packs.registry as reg
-    from src.skills.skill_pool import load_skill_pool
+    import my_crew.packs.registry as reg
+    from my_crew.skills.skill_pool import load_skill_pool
 
     monkeypatch.setattr(reg, "profile_skills_dir", lambda pid, profiles_dir=None: agent_dir)
     pool = load_skill_pool(

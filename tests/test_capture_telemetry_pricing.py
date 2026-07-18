@@ -6,8 +6,8 @@ Covers the honest-degrade contract: an unpriced model or missing token counts yi
 
 from __future__ import annotations
 
-from src.llm.model_pricing import estimate_cost, load_prices
-from src.runtime.step_telemetry import StepTelemetry, sum_usage_metadata
+from my_crew.llm.model_pricing import estimate_cost, load_prices
+from my_crew.runtime.step_telemetry import StepTelemetry, sum_usage_metadata
 
 _PRICES = {
     "minimax/minimax-m2.7": {"input_per_1m": 0.30, "output_per_1m": 1.20},

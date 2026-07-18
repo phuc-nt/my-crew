@@ -10,13 +10,13 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from src.config.config_builders import build_settings_from_dict
-from src.runtime.capture_store import CaptureStore
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.runtime.capture_store import CaptureStore
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 def _patch_root(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
 
 def _fake_loaded():
@@ -40,7 +40,7 @@ def _fake_llm(monkeypatch, *, cost=0.02):
         def complete(self, _m):
             return _Result()
 
-    import src.llm.client as mod
+    import my_crew.llm.client as mod
     monkeypatch.setattr(mod, "LlmClient", _Llm)
 
 
@@ -52,7 +52,7 @@ def _plan(store: TeamTaskStore):
 
 
 def test_team_step_run_writes_capture_row(tmp_path, monkeypatch):
-    from src.runtime.worker import _run_team_step_kind
+    from my_crew.runtime.worker import _run_team_step_kind
 
     _patch_root(monkeypatch, tmp_path)
     _fake_llm(monkeypatch, cost=0.02)
@@ -89,7 +89,7 @@ def test_review_step_path_threads_telemetry(monkeypatch):
     # tests stay green. This drives the review branch directly.
     from types import SimpleNamespace
 
-    import src.runtime.team_step_runner as runner
+    import my_crew.runtime.team_step_runner as runner
 
     captured = {}
 
@@ -99,7 +99,7 @@ def test_review_step_path_threads_telemetry(monkeypatch):
                 "room_message": "", "passed": True, "failures": []}
 
     monkeypatch.setattr(runner, "run_review_step", _fake_run_review_step, raising=False)
-    monkeypatch.setattr("src.agent.review_graph.run_review_step", _fake_run_review_step)
+    monkeypatch.setattr("my_crew.agent.review_graph.run_review_step", _fake_run_review_step)
 
     step = SimpleNamespace(
         step_id="s1-review-0-0", parent_step_id="s1", deps=("s1",), review_round=0,

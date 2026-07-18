@@ -12,22 +12,22 @@ from datetime import UTC, datetime
 
 import pytest
 
-import src.agent.team_task_roster as roster_mod
-from src.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker
-from src.agent.coordinator_nodes.review_insert import (
+import my_crew.agent.team_task_roster as roster_mod
+from my_crew.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker
+from my_crew.agent.coordinator_nodes.review_insert import (
     MAX_REVIEW_ROUNDS,
     maybe_handle_review_done,
     maybe_insert_review,
     maybe_insert_review_after_rework,
 )
-from src.agent.task_decomposition import decomposition_content_hash
-from src.agent.team_task_artifact import write_review_verdict_artifact
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.agent.task_decomposition import decomposition_content_hash
+from my_crew.agent.team_task_artifact import write_review_verdict_artifact
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 @pytest.fixture(autouse=True)
 def _isolated_team_tasks_root(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
 
 def _store(tmp_path) -> TeamTaskStore:
@@ -126,7 +126,7 @@ def test_no_eligible_reviewer_skips_without_stalling(tmp_path, monkeypatch):
     _wire_roster(monkeypatch, [("agent-a", "pm")])  # only the author — no peer
     events = []
     monkeypatch.setattr(
-        "src.agent.coordinator_nodes.review_insert.append_office_event",
+        "my_crew.agent.coordinator_nodes.review_insert.append_office_event",
         lambda *a, **kw: events.append(kw.get("body", {}).get("milestone")),
     )
     task = store.get("t1")
@@ -157,7 +157,7 @@ def test_passed_verdict_is_a_clean_no_op(tmp_path, monkeypatch):
     store = _store(tmp_path)
     _plan_one_step(store, needs_review=True)
     _mint_review(store)
-    from src.runtime.team_task_paths import team_tasks_root
+    from my_crew.runtime.team_task_paths import team_tasks_root
 
     write_review_verdict_artifact(
         team_tasks_root(), "t1", 1, 0, {"passed": True, "failures": []},
@@ -175,7 +175,7 @@ def test_needs_rework_verdict_mints_rework_step_with_original_author(tmp_path, m
     store = _store(tmp_path)
     _plan_one_step(store, needs_review=True)
     _mint_review(store)
-    from src.runtime.team_task_paths import team_tasks_root
+    from my_crew.runtime.team_task_paths import team_tasks_root
 
     write_review_verdict_artifact(
         team_tasks_root(), "t1", 1, 0,
@@ -199,7 +199,7 @@ def test_rework_round_cap_stalls_and_escalates_after_max_rounds(tmp_path, monkey
     store = _store(tmp_path)
     _plan_one_step(store, needs_review=True)
     _mint_review(store, review_round=MAX_REVIEW_ROUNDS)
-    from src.runtime.team_task_paths import team_tasks_root
+    from my_crew.runtime.team_task_paths import team_tasks_root
 
     write_review_verdict_artifact(
         team_tasks_root(), "t1", 1, MAX_REVIEW_ROUNDS,

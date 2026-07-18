@@ -14,10 +14,10 @@ from __future__ import annotations
 import importlib.util
 from datetime import date
 
-from src.agent.resource_analyzer import build_resource_report
-from src.agent.risk_analyzer import analyze
-from src.config.settings import REPO_ROOT
-from src.tools.models import Event, Issue, Task
+from my_crew.agent.resource_analyzer import build_resource_report
+from my_crew.agent.risk_analyzer import analyze
+from my_crew.config.settings import REPO_ROOT
+from my_crew.tools.models import Event, Issue, Task
 
 
 def _pm_models():

@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions import approved_dispatch, email_write
-from src.actions.action_gateway import ActionGateway, WriteDisabledError
-from src.audit.audit_log import AuditLog
-from src.config.config_builders import build_reporting_config_from_dict
-from src.config.smtp_config import SmtpConfig
+from my_crew.actions import approved_dispatch, email_write
+from my_crew.actions.action_gateway import ActionGateway, WriteDisabledError
+from my_crew.audit.audit_log import AuditLog
+from my_crew.config.config_builders import build_reporting_config_from_dict
+from my_crew.config.smtp_config import SmtpConfig
 
 
 def _smtp() -> SmtpConfig:
@@ -65,7 +65,7 @@ def _reset_fake():
 
 
 def test_email_queues_for_approval(settings_factory, tmp_path, monkeypatch):
-    monkeypatch.setattr("src.actions.email_write.smtplib.SMTP", _FakeSMTP)
+    monkeypatch.setattr("my_crew.actions.email_write.smtplib.SMTP", _FakeSMTP)
     gw = _gateway(settings_factory, tmp_path, dry_run=False)
     result = email_write.deliver_email_report(
         "report body", "Daily", gateway=gw, smtp=_smtp(), report_date="2026-06-26"
@@ -75,7 +75,7 @@ def test_email_queues_for_approval(settings_factory, tmp_path, monkeypatch):
 
 
 def test_dry_run_opens_no_connection(settings_factory, tmp_path, monkeypatch):
-    monkeypatch.setattr("src.actions.email_write.smtplib.SMTP", _FakeSMTP)
+    monkeypatch.setattr("my_crew.actions.email_write.smtplib.SMTP", _FakeSMTP)
     # dry_run short-circuits in the gateway BEFORE the handler. Use approved path so the
     # Lớp B queue is skipped and we'd reach the handler if not for dry-run.
     gw = _gateway(settings_factory, tmp_path, dry_run=True)
@@ -87,7 +87,7 @@ def test_dry_run_opens_no_connection(settings_factory, tmp_path, monkeypatch):
 
 
 def test_kill_switch_refuses(settings_factory, tmp_path, monkeypatch):
-    monkeypatch.setattr("src.actions.email_write.smtplib.SMTP", _FakeSMTP)
+    monkeypatch.setattr("my_crew.actions.email_write.smtplib.SMTP", _FakeSMTP)
     gw = _gateway(settings_factory, tmp_path, dry_run=False, write_disabled=True)
     with pytest.raises(WriteDisabledError):
         email_write.deliver_email_report(
@@ -120,7 +120,7 @@ def test_refuses_no_recipient(settings_factory, tmp_path):
 
 
 def test_dispatch_approved_email_sends(monkeypatch):
-    monkeypatch.setattr("src.actions.email_write.smtplib.SMTP", _FakeSMTP)
+    monkeypatch.setattr("my_crew.actions.email_write.smtplib.SMTP", _FakeSMTP)
     monkeypatch.setenv("SMTP_PASSWORD", "app-pw")
     config = build_reporting_config_from_dict(
         {"smtp": {"host": "smtp.test", "user": "bot@test", "recipients": "lead@team.com"}}
@@ -185,7 +185,7 @@ def test_attachment_inside_artifact_dir_queues_for_approval(settings_factory, tm
 
 
 def test_attachment_traversal_is_hard_denied(settings_factory, tmp_path):
-    from src.actions.action_gateway import HardBlockedError
+    from my_crew.actions.action_gateway import HardBlockedError
 
     gw = _gateway(settings_factory, tmp_path, dry_run=False)
     outside = tmp_path / "secret.xlsx"
@@ -199,7 +199,7 @@ def test_attachment_traversal_is_hard_denied(settings_factory, tmp_path):
 
 
 def test_attachment_absolute_elsewhere_denied(settings_factory, tmp_path):
-    from src.actions.action_gateway import HardBlockedError
+    from my_crew.actions.action_gateway import HardBlockedError
 
     gw = _gateway(settings_factory, tmp_path, dry_run=False)
     with pytest.raises(HardBlockedError):
@@ -210,7 +210,7 @@ def test_attachment_absolute_elsewhere_denied(settings_factory, tmp_path):
 
 
 def test_attachment_missing_file_denied(settings_factory, tmp_path):
-    from src.actions.action_gateway import HardBlockedError
+    from my_crew.actions.action_gateway import HardBlockedError
 
     gw = _gateway(settings_factory, tmp_path, dry_run=False)
     ghost = str(gw.artifact_root / "resource-2026-06-26.xlsx")  # never written
@@ -222,7 +222,7 @@ def test_attachment_missing_file_denied(settings_factory, tmp_path):
 
 
 def test_approved_send_attaches_xlsx(settings_factory, tmp_path, monkeypatch):
-    monkeypatch.setattr("src.actions.email_write.smtplib.SMTP", _FakeSMTP)
+    monkeypatch.setattr("my_crew.actions.email_write.smtplib.SMTP", _FakeSMTP)
     monkeypatch.setenv("SMTP_PASSWORD", "app-pw")
     gw = _gateway(settings_factory, tmp_path, dry_run=False)
     path = _make_xlsx(gw, "okr-2026-06-26.xlsx")

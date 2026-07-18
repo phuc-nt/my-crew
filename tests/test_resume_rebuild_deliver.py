@@ -17,14 +17,14 @@ import pytest
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 
-from src.agent.okr_analyzer import OkrRollup
-from src.agent.okr_report_graph import OkrReportDeps, build_okr_graph
-from src.agent.report_graph import ReportDeps, build_report_graph
-from src.agent.resource_report_graph import ResourceReportDeps, build_resource_graph
-from src.llm.okr_report_prompt import build_okr_slack_short
-from src.llm.report_slack_short import build_slack_short
-from src.llm.resource_report_prompt import build_resource_slack_short
-from src.tools.models import (
+from my_crew.agent.okr_analyzer import OkrRollup
+from my_crew.agent.okr_report_graph import OkrReportDeps, build_okr_graph
+from my_crew.agent.report_graph import ReportDeps, build_report_graph
+from my_crew.agent.resource_report_graph import ResourceReportDeps, build_resource_graph
+from my_crew.llm.okr_report_prompt import build_okr_slack_short
+from my_crew.llm.report_slack_short import build_slack_short
+from my_crew.llm.resource_report_prompt import build_resource_slack_short
+from my_crew.tools.models import (
     AssigneeLoad,
     CiRun,
     CostSummary,

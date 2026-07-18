@@ -11,15 +11,15 @@ from __future__ import annotations
 
 import pytest
 
-from src.agent.okr_analyzer import OkrRollup
-from src.agent.okr_report_graph import default_okr_deps
-from src.agent.report_graph import default_report_deps
-from src.agent.resource_report_graph import default_resource_deps
-from src.llm.client import LlmResult
-from src.profile.context import ProfileContext
-from src.skills.models import Skill
-from src.skills.skill_pool import build_skill_context, load_skill_pool
-from src.tools.models import (
+from my_crew.agent.okr_analyzer import OkrRollup
+from my_crew.agent.okr_report_graph import default_okr_deps
+from my_crew.agent.report_graph import default_report_deps
+from my_crew.agent.resource_report_graph import default_resource_deps
+from my_crew.llm.client import LlmResult
+from my_crew.profile.context import ProfileContext
+from my_crew.skills.models import Skill
+from my_crew.skills.skill_pool import build_skill_context, load_skill_pool
+from my_crew.tools.models import (
     AssigneeLoad,
     CostSummary,
     KeyResult,
@@ -58,8 +58,8 @@ class _Config:
 
 
 def _gateway(settings, tmp_path):
-    from src.actions.action_gateway import ActionGateway
-    from src.audit.audit_log import AuditLog
+    from my_crew.actions.action_gateway import ActionGateway
+    from my_crew.audit.audit_log import AuditLog
 
     return ActionGateway(settings=settings, audit_log=AuditLog(tmp_path / "audit.jsonl"))
 
@@ -68,8 +68,8 @@ def _patch_llm(monkeypatch):
     """Patch every site that constructs an LlmClient with the recording fake."""
     rec = _RecordingLlm()
     factory = lambda *_a, **_k: rec  # noqa: E731
-    monkeypatch.setattr("src.llm.client.LlmClient", factory)
-    monkeypatch.setattr("src.agent.report_graph.LlmClient", factory)
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", factory)
+    monkeypatch.setattr("my_crew.agent.report_graph.LlmClient", factory)
     return rec
 
 

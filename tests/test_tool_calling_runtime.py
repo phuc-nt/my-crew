@@ -10,14 +10,14 @@ from __future__ import annotations
 
 import pytest
 
-from src.runtime_backends import resolve_runtime
-from src.runtime_backends.config import AgentRuntimeConfig
-from src.runtime_backends.read_only_toolset import (
+from my_crew.runtime_backends import resolve_runtime
+from my_crew.runtime_backends.config import AgentRuntimeConfig
+from my_crew.runtime_backends.read_only_toolset import (
     ToolPolicyError,
     assert_read_only,
     build_read_toolset,
 )
-from src.runtime_backends.tool_calling_runtime import ToolCallingRuntime
+from my_crew.runtime_backends.tool_calling_runtime import ToolCallingRuntime
 
 
 class _LP:
@@ -76,7 +76,7 @@ def test_assert_read_only_passes_reads():
 def test_classify_shim_runs_on_each_call(monkeypatch):
     # Every read call must pass through hard_block.classify (red-team C1 policy chokepoint).
     calls = []
-    import src.actions.hard_block as hb
+    import my_crew.actions.hard_block as hb
 
     real = hb.classify
 
@@ -90,7 +90,7 @@ def test_classify_shim_runs_on_each_call(monkeypatch):
     class Cfg:
         pass
 
-    import src.tools.github_read as gh
+    import my_crew.tools.github_read as gh
 
     monkeypatch.setattr(gh, "get_open_prs", lambda config=None: "prs")
     tools = build_read_toolset(Cfg(), audience="internal")

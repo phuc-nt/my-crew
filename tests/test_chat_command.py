@@ -16,11 +16,14 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions.action_gateway import ActionGateway
-from src.agent.chat_command import classify_intent, maybe_handle_command, validate_args
-from src.config.config_builders import build_reporting_config_from_dict, build_settings_from_dict
-from src.packs.registry import PackRegistry, _load_commands
-from src.profile.loader import LoadedProfile
+from my_crew.actions.action_gateway import ActionGateway
+from my_crew.agent.chat_command import classify_intent, maybe_handle_command, validate_args
+from my_crew.config.config_builders import (
+    build_reporting_config_from_dict,
+    build_settings_from_dict,
+)
+from my_crew.packs.registry import PackRegistry, _load_commands
+from my_crew.profile.loader import LoadedProfile
 
 
 def _config():
@@ -75,10 +78,10 @@ def test_catalog_with_forbidden_tool_is_rejected_at_load(tmp_path, monkeypatch):
     ):
         module = type("M", (), {"COMMANDS": {"boom": {**bad, "description": "x"}}})
         monkeypatch.setattr(
-            "src.packs.registry._load_pack_module", lambda d, m, _mod=module: _mod
+            "my_crew.packs.registry._load_pack_module", lambda d, m, _mod=module: _mod
         )
         monkeypatch.setattr(
-            "src.packs.registry.pack_dir",
+            "my_crew.packs.registry.pack_dir",
             lambda d: tmp_path,  # commands.py existence check
         )
         (tmp_path / "commands.py").write_text("", encoding="utf-8")
@@ -91,8 +94,8 @@ def test_catalog_noncallable_build_args_rejected_at_load(tmp_path, monkeypatch):
         "description": "x", "server": "slack", "tool": "post_message",
         "build_args": "not-callable",
     }}})
-    monkeypatch.setattr("src.packs.registry._load_pack_module", lambda d, m: module)
-    monkeypatch.setattr("src.packs.registry.pack_dir", lambda d: tmp_path)
+    monkeypatch.setattr("my_crew.packs.registry._load_pack_module", lambda d, m: module)
+    monkeypatch.setattr("my_crew.packs.registry.pack_dir", lambda d: tmp_path)
     (tmp_path / "commands.py").write_text("", encoding="utf-8")
     with pytest.raises(RuntimeError, match="build_args must be callable"):
         _load_commands("pm", {"slack": ("post_message",)})
@@ -100,8 +103,8 @@ def test_catalog_noncallable_build_args_rejected_at_load(tmp_path, monkeypatch):
 
 def test_catalog_empty_commands_export_rejected(tmp_path, monkeypatch):
     module = type("M", (), {"COMMANDS": {}})
-    monkeypatch.setattr("src.packs.registry._load_pack_module", lambda d, m: module)
-    monkeypatch.setattr("src.packs.registry.pack_dir", lambda d: tmp_path)
+    monkeypatch.setattr("my_crew.packs.registry._load_pack_module", lambda d, m: module)
+    monkeypatch.setattr("my_crew.packs.registry.pack_dir", lambda d: tmp_path)
     (tmp_path / "commands.py").write_text("", encoding="utf-8")
     with pytest.raises(RuntimeError, match="exports no COMMANDS"):
         _load_commands("pm", {})
@@ -110,7 +113,7 @@ def test_catalog_empty_commands_export_rejected(tmp_path, monkeypatch):
 def test_classifier_reraises_infra_errors():
     # A provider outage must NOT be misread as "this was a question" — the inbox
     # holds its watermark on these and retries the mention (review M1).
-    from src.llm.fallback_policy import ProviderCallError
+    from my_crew.llm.fallback_policy import ProviderCallError
 
     class _DownLlm:
         def complete(self, messages):
@@ -265,7 +268,7 @@ def test_enqueue_for_approval_refuses_hard_denied_action(tmp_path):
 
 
 def test_approve_dispatches_jira_create_issue(tmp_path, monkeypatch):
-    from src.actions.approved_dispatch import dispatch_approved_action
+    from my_crew.actions.approved_dispatch import dispatch_approved_action
 
     loaded = _loaded(tmp_path)
     gw = _gw(loaded)
@@ -275,7 +278,7 @@ def test_approve_dispatches_jira_create_issue(tmp_path, monkeypatch):
         calls.update(server=server, tool=tool, args=args)
         return {"key": "SCRUM-99"}
 
-    monkeypatch.setattr("src.actions.jira_write.call_tool", fake_call_tool)
+    monkeypatch.setattr("my_crew.actions.jira_write.call_tool", fake_call_tool)
     try:
         queued = gw.enqueue_for_approval(
             {"type": "mcp_tool", "server": "jira", "tool": "createIssue",
@@ -312,7 +315,7 @@ def test_autonomous_command_runs_now_and_names_the_mode(tmp_path, monkeypatch):
     gw = _gw(loaded)
     calls = []
     monkeypatch.setattr(
-        "src.actions.approved_dispatch.dispatch_approved_action",
+        "my_crew.actions.approved_dispatch.dispatch_approved_action",
         lambda a, cfg: calls.append(a) or "jira createIssue -> SCRUM-9",
     )
     try:
@@ -333,7 +336,7 @@ def test_autonomous_duplicate_command_reports_dedup_not_refusal(tmp_path, monkey
     loaded = _loaded_autonomous(tmp_path)
     gw = _gw(loaded)
     monkeypatch.setattr(
-        "src.actions.approved_dispatch.dispatch_approved_action", lambda a, cfg: "ok",
+        "my_crew.actions.approved_dispatch.dispatch_approved_action", lambda a, cfg: "ok",
     )
     try:
         llm = _FakeLlm('{"intent":"command","command_id":"create_issue",'

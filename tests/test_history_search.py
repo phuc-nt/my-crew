@@ -14,19 +14,19 @@ import json
 
 import pytest
 
-from src.runtime.history_search_index import HistorySearchIndex
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.runtime.history_search_index import HistorySearchIndex
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 @pytest.fixture()
 def wired(tmp_path, monkeypatch):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
     return tmp_path
 
 
 def _seed_step(tmp_path, text="Quyết định: chốt agenda 4 mục cho buổi họp."):
-    from src.agent.team_task_artifact import write_step_artifact
-    from src.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
+    from my_crew.agent.team_task_artifact import write_step_artifact
+    from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
 
     store = TeamTaskStore(team_tasks_db_path())
     store.create_task(task_id="t1", title="Họp tuần", pic_id="noi-dung")
@@ -49,7 +49,7 @@ def _seed_audit(tmp_path, monkeypatch):
     class _Entry:
         id = "noi-dung"
 
-    monkeypatch.setattr("src.runtime.registry.load_registry", lambda *a, **k: [_Entry()])
+    monkeypatch.setattr("my_crew.runtime.registry.load_registry", lambda *a, **k: [_Entry()])
     audit_dir = tmp_path / "agents" / "noi-dung" / "audit"
     audit_dir.mkdir(parents=True)
     (audit_dir / "audit.jsonl").write_text(
@@ -59,7 +59,7 @@ def _seed_audit(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        "src.runtime.agent_paths.agent_data_dir",
+        "my_crew.runtime.agent_paths.agent_data_dir",
         lambda agent_id: tmp_path / "agents" / agent_id,
     )
 
@@ -108,7 +108,7 @@ def test_agent_and_days_filters(wired):
 
 
 def test_toolset_exposes_history_search_internal_only(wired):
-    from src.runtime_backends.read_only_toolset import build_read_toolset
+    from my_crew.runtime_backends.read_only_toolset import build_read_toolset
 
     internal = build_read_toolset(None, audience="internal")
     external = build_read_toolset(None, audience="external")
@@ -119,7 +119,7 @@ def test_toolset_exposes_history_search_internal_only(wired):
 
 
 def test_tool_returns_cited_wrapped_results(wired):
-    from src.runtime_backends.read_only_toolset import build_read_toolset
+    from my_crew.runtime_backends.read_only_toolset import build_read_toolset
 
     _seed_step(wired)
     out = build_read_toolset(None, audience="internal")["history.search"](
@@ -128,7 +128,7 @@ def test_tool_returns_cited_wrapped_results(wired):
 
 
 def test_ops_command_search_history(wired):
-    from src.agent.ops_catalog import OPS_COMMANDS
+    from my_crew.agent.ops_catalog import OPS_COMMANDS
 
     spec = OPS_COMMANDS["search_history"]
     assert spec["readonly"] is True

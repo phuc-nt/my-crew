@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.runtime_backends.config import AgentRuntimeConfig
-from src.runtime_backends.native_graph_runtime import NativeGraphRuntime
-from src.runtime_backends.protocol import (
+from my_crew.runtime_backends.config import AgentRuntimeConfig
+from my_crew.runtime_backends.native_graph_runtime import NativeGraphRuntime
+from my_crew.runtime_backends.protocol import (
     SandboxUnavailableForShellStep,
     resolve_step_runtime,
 )

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from src.actions.approval_store import ApprovalStore
+from my_crew.actions.approval_store import ApprovalStore
 
 
 def test_enqueue_records_actor_and_round_trips(tmp_path):

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.server import integration_health as health_mod
+from my_crew.server import integration_health as health_mod
 
 
 @pytest.fixture(autouse=True)
@@ -30,7 +30,7 @@ def test_env_absent_skips_probe_entirely(monkeypatch):
 
     called = {"n": 0}
     monkeypatch.setattr(
-        "src.adapters.mcp_adapter.call_tool",
+        "my_crew.adapters.mcp_adapter.call_tool",
         lambda *a, **k: called.__setitem__("n", called["n"] + 1),
     )
     result = health_mod._slack_check()
@@ -42,7 +42,7 @@ def test_dist_missing_falls_back_to_presence_only(monkeypatch):
     monkeypatch.setenv("SLACK_MCP_DIST", "/no/such/file.js")
     called = {"n": 0}
     monkeypatch.setattr(
-        "src.adapters.mcp_adapter.call_tool",
+        "my_crew.adapters.mcp_adapter.call_tool",
         lambda *a, **k: called.__setitem__("n", called["n"] + 1),
     )
     result = health_mod._slack_check()
@@ -52,7 +52,7 @@ def test_dist_missing_falls_back_to_presence_only(monkeypatch):
 
 def test_whoami_ok_reports_authenticated_user_and_team(monkeypatch):
     monkeypatch.setattr(
-        "src.adapters.mcp_adapter.call_tool",
+        "my_crew.adapters.mcp_adapter.call_tool",
         lambda spec, tool, args: {"ok": True, "user": "phuc", "team": "Acme"},
     )
     result = health_mod._slack_check()
@@ -63,7 +63,7 @@ def test_whoami_ok_reports_authenticated_user_and_team(monkeypatch):
 
 def test_whoami_token_expired_reports_not_ok_with_vn_hint(monkeypatch):
     monkeypatch.setattr(
-        "src.adapters.mcp_adapter.call_tool",
+        "my_crew.adapters.mcp_adapter.call_tool",
         lambda spec, tool, args: {"ok": False, "code": "TOKEN_EXPIRED"},
     )
     result = health_mod._slack_check()
@@ -79,7 +79,7 @@ def test_whoami_tool_not_found_falls_back_to_presence_check(monkeypatch):
             f"MCP tool {tool!r} not found on server 'slack'. Available: search_messages"
         )
 
-    monkeypatch.setattr("src.adapters.mcp_adapter.call_tool", fake_call_tool)
+    monkeypatch.setattr("my_crew.adapters.mcp_adapter.call_tool", fake_call_tool)
     result = health_mod._slack_check()
     assert result["ok"] is True  # old server, presence was fine -> not an error
 
@@ -88,7 +88,7 @@ def test_whoami_other_failure_reports_not_ok(monkeypatch):
     def fake_call_tool(spec, tool, args):
         raise RuntimeError("MCP call failed: server='slack' tool='whoami': boom")
 
-    monkeypatch.setattr("src.adapters.mcp_adapter.call_tool", fake_call_tool)
+    monkeypatch.setattr("my_crew.adapters.mcp_adapter.call_tool", fake_call_tool)
     result = health_mod._slack_check()
     assert result["ok"] is False
     assert "boom" in result["detail"]
@@ -97,7 +97,7 @@ def test_whoami_other_failure_reports_not_ok(monkeypatch):
 def test_run_checks_includes_slack_and_does_not_crash(monkeypatch):
     """Sanity: the full check list still assembles with the new slack check wired in."""
     monkeypatch.setattr(
-        "src.adapters.mcp_adapter.call_tool",
+        "my_crew.adapters.mcp_adapter.call_tool",
         lambda spec, tool, args: {"ok": True, "user": "x", "team": "y"},
     )
     checks = health_mod._run_checks()
@@ -148,7 +148,7 @@ def test_docker_check_bounded_on_hang(monkeypatch):
 
 def test_run_checks_includes_docker(monkeypatch):
     monkeypatch.setattr(
-        "src.adapters.mcp_adapter.call_tool",
+        "my_crew.adapters.mcp_adapter.call_tool",
         lambda spec, tool, args: {"ok": True, "user": "x", "team": "y"},
     )
     ids = [c["id"] for c in health_mod._run_checks()]

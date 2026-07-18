@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.config.settings import Settings
+from my_crew.config.settings import Settings
 
 
 @pytest.fixture
@@ -17,7 +17,7 @@ def settings_factory(tmp_path: Path):
     cannot drift from production coercion/defaults — only the data dir and the
     explicit test overrides differ from a real build.
     """
-    from src.config.config_builders import build_settings_from_dict
+    from my_crew.config.config_builders import build_settings_from_dict
 
     def _make(
         *,

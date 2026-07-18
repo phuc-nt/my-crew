@@ -9,8 +9,8 @@ from __future__ import annotations
 import pytest
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from src.agent.checkpoint import get_checkpointer
-from src.config.config_builders import build_settings_from_dict
+from my_crew.agent.checkpoint import get_checkpointer
+from my_crew.config.config_builders import build_settings_from_dict
 
 
 def test_default_is_sqlite_at_data_dir(tmp_path):
@@ -90,7 +90,7 @@ def test_config_explicit_postgres():
 
 def test_profile_yaml_runtime_block_maps(tmp_path, monkeypatch):
     # A profile.yaml runtime: block resolves through build_settings_dict (yaml wins).
-    from src.profile.loader_mapping import build_settings_dict
+    from my_crew.profile.loader_mapping import build_settings_dict
 
     monkeypatch.delenv("CHECKPOINTER_TYPE", raising=False)
     monkeypatch.delenv("STORE_TYPE", raising=False)
@@ -103,7 +103,7 @@ def test_profile_yaml_runtime_block_maps(tmp_path, monkeypatch):
 
 
 def test_profile_yaml_empty_runtime_defers_to_default(tmp_path, monkeypatch):
-    from src.profile.loader_mapping import build_settings_dict
+    from my_crew.profile.loader_mapping import build_settings_dict
 
     monkeypatch.delenv("CHECKPOINTER_TYPE", raising=False)
     monkeypatch.delenv("STORE_TYPE", raising=False)

@@ -10,14 +10,14 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
-from src.config.config_builders import build_settings_from_dict
-from src.profile.loader import LoadedProfile, _parse_watchers
-from src.runtime.watcher_normalize import (
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.profile.loader import LoadedProfile, _parse_watchers
+from my_crew.runtime.watcher_normalize import (
     NotSupportedError,
     normalize_and_hash,
 )
-from src.runtime.watcher_runner import run_watchers
-from src.runtime.watcher_store import WatcherStore
+from my_crew.runtime.watcher_runner import run_watchers
+from my_crew.runtime.watcher_store import WatcherStore
 
 # --- normalize idempotency, through the REAL parsers (not hand-built dicts) ---
 
@@ -39,7 +39,7 @@ _RAW_PR = {
 
 
 def test_jira_label_reorder_same_hash():
-    from src.tools.jira_read import parse_issue
+    from my_crew.tools.jira_read import parse_issue
 
     a = parse_issue(_RAW_ISSUE)
     swapped = {**_RAW_ISSUE, "fields": {**_RAW_ISSUE["fields"], "labels": ["auth", "backend"]}}
@@ -48,7 +48,7 @@ def test_jira_label_reorder_same_hash():
 
 
 def test_jira_status_change_new_hash():
-    from src.tools.jira_read import parse_issue
+    from my_crew.tools.jira_read import parse_issue
 
     a = parse_issue(_RAW_ISSUE)
     changed = {**_RAW_ISSUE, "fields": {**_RAW_ISSUE["fields"], "status": {"name": "Done"}}}
@@ -58,7 +58,7 @@ def test_jira_status_change_new_hash():
 
 def test_github_age_days_drift_same_hash():
     """The critical false-diff: a day passing changes age_days/stale but NOT the source."""
-    from src.tools.github_read import parse_pr
+    from my_crew.tools.github_read import parse_pr
 
     a = parse_pr(_RAW_PR, today=date(2026, 7, 10), stale_days=7)
     b = parse_pr(_RAW_PR, today=date(2026, 7, 11), stale_days=7)  # +1 day → stale flips
@@ -67,7 +67,7 @@ def test_github_age_days_drift_same_hash():
 
 
 def test_sheets_row_insert_only_adds_that_row():
-    from src.packs.registry import _load_pack_module
+    from my_crew.packs.registry import _load_pack_module
 
     tools = _load_pack_module("hr", "tools")
     rows = [["name", "status", "email"], ["An", "active", "an@x.vn"],
@@ -177,7 +177,7 @@ def test_lost_wake_refires_next_tick(tmp_path):
 
 def test_poll_fail_three_times_alerts_once(tmp_path, monkeypatch):
     alerts = []
-    monkeypatch.setattr("src.runtime.watcher_runner._alert",
+    monkeypatch.setattr("my_crew.runtime.watcher_runner._alert",
                         lambda text, wid, kind: alerts.append((wid, kind)))
 
     def boom(w, lo, s):
@@ -193,7 +193,7 @@ def test_poll_fail_three_times_alerts_once(tmp_path, monkeypatch):
 
 def test_stale_alerts_but_never_wakes(tmp_path, monkeypatch):
     alerts = []
-    monkeypatch.setattr("src.runtime.watcher_runner._alert",
+    monkeypatch.setattr("my_crew.runtime.watcher_runner._alert",
                         lambda text, wid, kind: alerts.append(kind))
     monkeypatch.setattr(WatcherStore, "is_stale", lambda self, wid, **kw: True)
     loaded = _loaded(tmp_path, [_W])
@@ -218,20 +218,20 @@ def test_run_event_carries_no_cost(tmp_path):
 
 
 def test_wake_enqueues_single_step_task(tmp_path, monkeypatch):
-    from src.runtime.watcher_runner import _wake_via_team_task
+    from my_crew.runtime.watcher_runner import _wake_via_team_task
 
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path / ".data")
     (tmp_path / ".data").mkdir()
-    monkeypatch.setattr("src.agent.team_task_roster.is_assignable", lambda a: a == "acme")
+    monkeypatch.setattr("my_crew.agent.team_task_roster.is_assignable", lambda a: a == "acme")
     events = []
     monkeypatch.setattr(
-        "src.runtime.office_room_append.append_office_event",
+        "my_crew.runtime.office_room_append.append_office_event",
         lambda room, *, author, kind, body, also_office=False: events.append(kind),
     )
     loaded = _loaded(tmp_path, [_W])
     assert _wake_via_team_task(loaded, _W) is True
-    from src.runtime.team_task_paths import team_tasks_db_path
-    from src.runtime.team_task_store import TeamTaskStore
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
 
     store = TeamTaskStore(team_tasks_db_path())
     try:
@@ -248,7 +248,7 @@ def test_wake_enqueues_single_step_task(tmp_path, monkeypatch):
         assert not task.plan_hash.startswith("watch-")
         from types import SimpleNamespace
 
-        from src.agent.task_decomposition import decomposition_content_hash
+        from my_crew.agent.task_decomposition import decomposition_content_hash
 
         recomputed = decomposition_content_hash(SimpleNamespace(steps=[
             SimpleNamespace(step_id=s.step_id, title=s.title,
@@ -262,11 +262,11 @@ def test_wake_enqueues_single_step_task(tmp_path, monkeypatch):
 
 
 def test_wake_refuses_non_assignable_agent(tmp_path, monkeypatch):
-    from src.runtime.watcher_runner import _wake_via_team_task
+    from my_crew.runtime.watcher_runner import _wake_via_team_task
 
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path / ".data")
     (tmp_path / ".data").mkdir()
-    monkeypatch.setattr("src.agent.team_task_roster.is_assignable", lambda a: False)
+    monkeypatch.setattr("my_crew.agent.team_task_roster.is_assignable", lambda a: False)
     loaded = _loaded(tmp_path, [_W])
     assert _wake_via_team_task(loaded, _W) is False  # → hash not advanced upstream
 
@@ -276,24 +276,24 @@ def test_wake_task_passes_ticker_hash_gate(tmp_path, monkeypatch):
     ticker must dispatch (spawn), NOT stall on the plan-hash gate."""
     from datetime import UTC, datetime
 
-    from src.agent.coordinator_graph import (
+    from my_crew.agent.coordinator_graph import (
         CoordinatorDeps,
         in_memory_retry_tracker,
         run_one_tick,
     )
-    from src.runtime.watcher_runner import _wake_via_team_task
+    from my_crew.runtime.watcher_runner import _wake_via_team_task
 
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path / ".data")
     (tmp_path / ".data").mkdir()
-    monkeypatch.setattr("src.agent.team_task_roster.is_assignable", lambda a: a == "acme")
+    monkeypatch.setattr("my_crew.agent.team_task_roster.is_assignable", lambda a: a == "acme")
     monkeypatch.setattr(
-        "src.runtime.office_room_append.append_office_event",
+        "my_crew.runtime.office_room_append.append_office_event",
         lambda *a, **k: None,
     )
     assert _wake_via_team_task(_loaded(tmp_path, [_W]), _W) is True
 
-    from src.runtime.team_task_paths import team_tasks_db_path
-    from src.runtime.team_task_store import TeamTaskStore
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
 
     store = TeamTaskStore(team_tasks_db_path())
     spawned = []
@@ -336,7 +336,7 @@ def test_parse_watchers_shapes():
 
 
 def test_effective_schedule_byte_identical_without_watchers(tmp_path):
-    from src.runtime.service import _effective_schedule
+    from my_crew.runtime.service import _effective_schedule
 
     loaded = _loaded(tmp_path, [])
     schedule, reports = _effective_schedule(loaded)
@@ -344,7 +344,7 @@ def test_effective_schedule_byte_identical_without_watchers(tmp_path):
 
 
 def test_effective_schedule_synthesizes_watch(tmp_path):
-    from src.runtime.service import _effective_schedule
+    from my_crew.runtime.service import _effective_schedule
 
     loaded = _loaded(tmp_path, [_W])
     schedule, reports = _effective_schedule(loaded)

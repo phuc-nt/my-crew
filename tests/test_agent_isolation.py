@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions.action_gateway import ActionGateway
-from src.config.config_builders import build_settings_from_dict
-from src.llm.budget_tracker import BudgetExceededError, BudgetTracker
-from src.runtime.agent_paths import agent_data_dir, agent_thread_id
+from my_crew.actions.action_gateway import ActionGateway
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.llm.budget_tracker import BudgetExceededError, BudgetTracker
+from my_crew.runtime.agent_paths import agent_data_dir, agent_thread_id
 
 
 def _settings(data_dir, *, monthly_budget_usd=50.0):

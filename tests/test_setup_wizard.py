@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from src.server import routes_setup
+from my_crew.server import routes_setup
 
 
 @pytest.fixture
@@ -21,9 +21,9 @@ def clean_env(tmp_path, monkeypatch):
     env = tmp_path / ".env"
     env.write_text("", encoding="utf-8")
     marker = tmp_path / ".setup-complete"
-    monkeypatch.setattr("src.server.env_writer._ENV_PATH", env)
+    monkeypatch.setattr("my_crew.server.env_writer._ENV_PATH", env)
     monkeypatch.setattr(routes_setup, "_SETUP_COMPLETE_MARKER", marker)
-    monkeypatch.setattr("src.server.routes_setup.REPO_ROOT", tmp_path)
+    monkeypatch.setattr("my_crew.server.routes_setup.REPO_ROOT", tmp_path)
     monkeypatch.delenv("WEB_AUTH_PASSWORD_HASH", raising=False)
     # neutralize the real restart during tests
     monkeypatch.setattr(routes_setup, "_restart_web_service", lambda: None)
@@ -31,7 +31,7 @@ def clean_env(tmp_path, monkeypatch):
 
 
 def _client():
-    from src.server.app import create_app
+    from my_crew.server.app import create_app
 
     return TestClient(create_app())
 
@@ -159,7 +159,7 @@ def test_non_localhost_refused(clean_env):
 
 def test_test_group_rechecks_with_fresh_env(clean_env, monkeypatch):
     monkeypatch.setattr(
-        "src.server.integration_health.integration_checks",
+        "my_crew.server.integration_health.integration_checks",
         lambda use_cache: {
             "checks": [{"id": "openrouter", "ok": True, "detail": "OK", "hint": ""}]
         },

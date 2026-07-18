@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.profile.context import EMPTY, ProfileContext, build_context_block, prepend_persona
+from my_crew.profile.context import EMPTY, ProfileContext, build_context_block, prepend_persona
 
 
 def test_empty_context_defaults():

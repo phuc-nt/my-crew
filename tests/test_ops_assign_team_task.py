@@ -11,11 +11,11 @@ from types import SimpleNamespace
 
 import pytest
 
-import src.agent.ops_assign_team_task as mod
-import src.profile.loader as loader_mod
-import src.runtime.company as company_mod
-import src.runtime.registry as registry_mod
-from src.runtime.registry import RegistryEntry
+import my_crew.agent.ops_assign_team_task as mod
+import my_crew.profile.loader as loader_mod
+import my_crew.runtime.company as company_mod
+import my_crew.runtime.registry as registry_mod
+from my_crew.runtime.registry import RegistryEntry
 
 
 @pytest.fixture(autouse=True)
@@ -23,7 +23,7 @@ def _isolated_team_tasks_root(monkeypatch, tmp_path):
     """Every test in this module writes through the shared cross-agent root (store,
     artifacts, office-room appends) — pin it to tmp_path so no test can touch the
     real install's .data (the office room is a real user-visible surface)."""
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
 def _company(coordinator_id):
     return SimpleNamespace(name="", coordinator_id=coordinator_id, team_task_cap_usd=2.0)
@@ -167,7 +167,7 @@ def test_escalation_routable_ignores_a_disabled_admin_agents_route(monkeypatch):
 def test_escalation_routable_ignores_a_non_admin_agents_route(monkeypatch):
     """An enabled agent with a working Telegram binding but domain != "admin" does not
     provide the mirror path — `milestone_mirror_runner`'s ops-tick is scheduled only
-    for admin-domain agents (`src.runtime.service._effective_schedule`)."""
+    for admin-domain agents (`my_crew.runtime.service._effective_schedule`)."""
     monkeypatch.setattr(company_mod, "load_company", lambda: _company("coord-1"))
     monkeypatch.setattr(
         registry_mod, "load_registry", lambda: (RegistryEntry(id="sales", enabled=True),),

@@ -5,7 +5,7 @@ alphabetically-first peer, `None` on an empty peer set (1-staff fleet).
 
 from __future__ import annotations
 
-from src.agent.team_task_roster import pick_reviewer
+from my_crew.agent.team_task_roster import pick_reviewer
 
 
 def test_pick_reviewer_never_returns_author():

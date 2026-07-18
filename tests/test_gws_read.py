@@ -11,8 +11,8 @@ import json
 
 import pytest
 
-from src.tools import gws_read
-from src.tools.gws_read import (
+from my_crew.tools import gws_read
+from my_crew.tools.gws_read import (
     _READ_ALLOWLIST,
     GwsReadError,
     calendar_agenda,
@@ -89,28 +89,28 @@ class _Cfg:
 
 
 def test_toolset_off_by_default_no_gws():
-    from src.runtime_backends.read_only_toolset import build_read_toolset
+    from my_crew.runtime_backends.read_only_toolset import build_read_toolset
 
     tools = build_read_toolset(_Cfg(), audience="internal")
     assert not any(n.startswith("gws.") for n in tools)  # byte-identical when flag off
 
 
 def test_toolset_flag_on_adds_three_internal_tools():
-    from src.runtime_backends.read_only_toolset import build_read_toolset
+    from my_crew.runtime_backends.read_only_toolset import build_read_toolset
 
     tools = build_read_toolset(_Cfg(), audience="internal", gws_context=True)
     assert {"gws.gmail", "gws.calendar", "gws.drive"} <= set(tools)
 
 
 def test_toolset_external_audience_drops_gws():
-    from src.runtime_backends.read_only_toolset import build_read_toolset
+    from my_crew.runtime_backends.read_only_toolset import build_read_toolset
 
     tools = build_read_toolset(_Cfg(), audience="external", gws_context=True)
     assert not any(n.startswith("gws.") for n in tools)  # internal-only, withheld externally
 
 
 def test_gws_tool_degrades_on_error(monkeypatch):
-    from src.runtime_backends.read_only_toolset import build_read_toolset
+    from my_crew.runtime_backends.read_only_toolset import build_read_toolset
 
     monkeypatch.setattr(gws_read.subprocess, "run",
                         lambda argv, **kw: (_ for _ in ()).throw(FileNotFoundError("no gws")))
@@ -120,7 +120,7 @@ def test_gws_tool_degrades_on_error(monkeypatch):
 
 
 def test_gws_tools_never_reach_assert_read_only_as_write():
-    from src.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
+    from my_crew.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
 
     tools = build_read_toolset(_Cfg(), audience="internal", gws_context=True)
     assert_read_only(list(tools))  # no gws.* name trips the write/destructive guard

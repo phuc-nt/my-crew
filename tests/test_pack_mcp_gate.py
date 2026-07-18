@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.packs.pack_mcp_gate import (
+from my_crew.packs.pack_mcp_gate import (
     PackMcpDenied,
     assert_pack_mcp_allowed,
     scrubbed_pack_mcp_env,
@@ -51,6 +51,6 @@ def test_scrubbed_env_excludes_tokens(monkeypatch):
 
 
 def test_template_pack_excluded_from_discovery():
-    from src.packs.registry import discover_domains
+    from my_crew.packs.registry import discover_domains
 
     assert "_template" not in discover_domains()

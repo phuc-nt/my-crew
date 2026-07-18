@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from src.agent.checkpoint import get_checkpointer
-from src.agent.graph import build_graph
-from src.entrypoints.cli import main as cli_main
-from src.llm.client import LlmResult
+from my_crew.agent.checkpoint import get_checkpointer
+from my_crew.agent.graph import build_graph
+from my_crew.entrypoints.cli import main as cli_main
+from my_crew.llm.client import LlmResult
 
 
 class _FakeClient:
@@ -49,7 +49,7 @@ def test_cli_no_args_returns_usage_code():
 def test_cli_no_key_returns_one(monkeypatch, tmp_path):
     # Ensure no key is visible regardless of the developer's real .env.
     # Point settings at an empty tmp dir so load_dotenv finds no .env to reload.
-    from src.config import settings as settings_mod
+    from my_crew.config import settings as settings_mod
 
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     # Also clear stakeholder/external channel vars so a CI runner that exports a
@@ -59,7 +59,7 @@ def test_cli_no_key_returns_one(monkeypatch, tmp_path):
     monkeypatch.setattr(settings_mod, "REPO_ROOT", tmp_path)
     # The profile loader load_dotenv's the real .env; block it so the deleted key
     # stays absent and _require_key returns 1.
-    monkeypatch.setattr("src.profile.loader.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr("my_crew.profile.loader.load_dotenv", lambda *a, **k: None)
     assert cli_main(["hello"]) == 1
 
 

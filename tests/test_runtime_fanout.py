@@ -18,22 +18,22 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
-from src.agent.coordinator_nodes.fanout_insert import (
+from my_crew.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
+from my_crew.agent.coordinator_nodes.fanout_insert import (
     MAX_TASK_STEPS,
     maybe_copy_gather_results,
     maybe_insert_fanout,
 )
-from src.agent.coordinator_nodes.tick_actions import ready_pending_steps
-from src.agent.task_decomposition import decomposition_content_hash
-from src.agent.team_task_graph import TeamTaskDeps, build_team_task_graph
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.agent.coordinator_nodes.tick_actions import ready_pending_steps
+from my_crew.agent.task_decomposition import decomposition_content_hash
+from my_crew.agent.team_task_graph import TeamTaskDeps, build_team_task_graph
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
-    from src.runtime.team_task_paths import team_tasks_db_path
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
 
     s = TeamTaskStore(team_tasks_db_path())
     yield s
@@ -207,8 +207,8 @@ def test_downstream_blocked_until_fanout_children_done(store):
 
 
 def test_gather_result_copied_onto_parent_artifact(store, tmp_path):
-    from src.agent.team_task_artifact import read_step_artifact, write_step_artifact
-    from src.runtime.team_task_paths import team_tasks_root
+    from my_crew.agent.team_task_artifact import read_step_artifact, write_step_artifact
+    from my_crew.runtime.team_task_paths import team_tasks_root
 
     _plan(store)
     _finish_s1_with_split(store)
@@ -241,7 +241,7 @@ def test_gather_result_copied_onto_parent_artifact(store, tmp_path):
 
 
 def test_split_parent_gets_no_review_row(store):
-    from src.agent.coordinator_nodes.review_insert import maybe_insert_review
+    from my_crew.agent.coordinator_nodes.review_insert import maybe_insert_review
 
     _plan(store)
     _finish_s1_with_split(store)
@@ -277,7 +277,7 @@ def test_mint_is_atomic_failure_rolls_back_everything(store, monkeypatch):
     _plan(store)
     _finish_s1_with_split(store)
 
-    from src.runtime import team_task_steps as steps_mod
+    from my_crew.runtime import team_task_steps as steps_mod
 
     real_insert = steps_mod.insert_step
     calls = {"n": 0}

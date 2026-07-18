@@ -10,11 +10,11 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timedelta
 
-from src.actions.dedup_store import DedupStore
-from src.runtime.capture_store import CaptureStore
-from src.runtime.clarify_store import ClarifyStore
-from src.runtime.office_room_store import OfficeRoomStore
-from src.runtime.store_schema_meta import (
+from my_crew.actions.dedup_store import DedupStore
+from my_crew.runtime.capture_store import CaptureStore
+from my_crew.runtime.clarify_store import ClarifyStore
+from my_crew.runtime.office_room_store import OfficeRoomStore
+from my_crew.runtime.store_schema_meta import (
     SCHEMA_VERSION,
     ensure_schema_meta,
     read_schema_version,
@@ -131,7 +131,7 @@ def test_schema_meta_adopts_existing_db(tmp_path):
 # ---- orchestrator ------------------------------------------------------------
 
 def test_retention_sweep_survives_a_broken_store(monkeypatch, tmp_path):
-    from src.runtime import storage_hygiene
+    from my_crew.runtime import storage_hygiene
 
     # captures opener raises; sweep must still return and record the others.
     def _boom():
@@ -139,17 +139,17 @@ def test_retention_sweep_survives_a_broken_store(monkeypatch, tmp_path):
 
     # The store constructors raise before any path is used, so only the openers + the
     # (empty) registry need patching — the sweep must still return the survivors.
-    monkeypatch.setattr("src.runtime.capture_store.CaptureStore", lambda p: _boom())
-    monkeypatch.setattr("src.runtime.office_room_store.OfficeRoomStore", lambda p: _boom())
-    monkeypatch.setattr("src.runtime.clarify_store.ClarifyStore", lambda p: _boom())
-    monkeypatch.setattr("src.runtime.registry.load_registry", lambda: ())
+    monkeypatch.setattr("my_crew.runtime.capture_store.CaptureStore", lambda p: _boom())
+    monkeypatch.setattr("my_crew.runtime.office_room_store.OfficeRoomStore", lambda p: _boom())
+    monkeypatch.setattr("my_crew.runtime.clarify_store.ClarifyStore", lambda p: _boom())
+    monkeypatch.setattr("my_crew.runtime.registry.load_registry", lambda: ())
     out = storage_hygiene.run_retention_sweep(now=_NOW)
     # Broken stores are simply absent from the result; dedup ran (empty registry → 0).
     assert out == {"dedup": 0}
 
 
 def test_integrity_audit_flags_orphans_daily_gated(monkeypatch, tmp_path):
-    from src.runtime import storage_hygiene
+    from my_crew.runtime import storage_hygiene
 
     db = tmp_path / "team_tasks.sqlite3"
     conn = sqlite3.connect(str(db))
@@ -161,8 +161,8 @@ def test_integrity_audit_flags_orphans_daily_gated(monkeypatch, tmp_path):
     conn.commit()
     conn.close()
 
-    monkeypatch.setattr("src.runtime.team_task_paths.team_tasks_db_path", lambda: db)
-    monkeypatch.setattr("src.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.team_tasks_db_path", lambda: db)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
 
     lines = storage_hygiene.run_integrity_audit(now=_NOW)
     assert any("missing task" in ln for ln in lines)

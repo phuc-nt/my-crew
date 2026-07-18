@@ -11,11 +11,11 @@ import textwrap
 
 import pytest
 
-from src.profile.loader import load_profile
-from src.runtime_backends import resolve_runtime
-from src.runtime_backends.config import AgentRuntimeConfig, parse_agent_runtime_config
-from src.runtime_backends.native_graph_runtime import NativeGraphRuntime
-from src.runtime_backends.protocol import runtime_kind_for
+from my_crew.profile.loader import load_profile
+from my_crew.runtime_backends import resolve_runtime
+from my_crew.runtime_backends.config import AgentRuntimeConfig, parse_agent_runtime_config
+from my_crew.runtime_backends.native_graph_runtime import NativeGraphRuntime
+from my_crew.runtime_backends.protocol import runtime_kind_for
 
 
 class _LP:
@@ -61,14 +61,14 @@ def test_native_resolves_native():
 
 def test_create_agent_resolves_tool_calling_runtime():
     # Phase 2 landed: create_agent now resolves to ToolCallingRuntime (was deferred in Phase 1).
-    from src.runtime_backends.tool_calling_runtime import ToolCallingRuntime
+    from my_crew.runtime_backends.tool_calling_runtime import ToolCallingRuntime
 
     assert isinstance(resolve_runtime(_LP("create_agent")), ToolCallingRuntime)
 
 
 def test_deep_agent_resolves_deep_runtime():
     # Phase 3 landed: deep_agent resolves to DeepAgentRuntime (gated by optional dep at build).
-    from src.runtime_backends.deep_agent_runtime import DeepAgentRuntime
+    from my_crew.runtime_backends.deep_agent_runtime import DeepAgentRuntime
 
     assert isinstance(resolve_runtime(_LP("deep_agent")), DeepAgentRuntime)
 
@@ -87,8 +87,8 @@ def test_deep_agent_build_task_tolerates_full_extra_kwargs():
 
         _pytest.skip("deepagents optional dep not installed")
 
-    from src.runtime_backends.config import AgentRuntimeConfig
-    from src.runtime_backends.deep_agent_runtime import DeepAgentRuntime
+    from my_crew.runtime_backends.config import AgentRuntimeConfig
+    from my_crew.runtime_backends.deep_agent_runtime import DeepAgentRuntime
 
     # No sandbox → the provider check raises RuntimeError. The point: it must reach that check,
     # not raise TypeError on gws_context/deep_team first.
@@ -141,7 +141,7 @@ def test_loader_infra_runtime_block_not_confused(tmp_path):
 
 def test_report_guard_fails_loud_for_non_native(tmp_path):
     # A non-native agent hitting the report path must fail loud, not silently run native.
-    from src.runtime.worker import build_graph_for
+    from my_crew.runtime.worker import build_graph_for
 
     d = tmp_path / "a3"
     d.mkdir()

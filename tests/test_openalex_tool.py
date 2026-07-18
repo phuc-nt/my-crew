@@ -5,7 +5,7 @@ the per-agent toolset flag (default byte-identical, opt-in adds academic.search)
 
 from __future__ import annotations
 
-from src.tools.openalex_tool import (
+from my_crew.tools.openalex_tool import (
     parse_work,
     reconstruct_abstract,
     render_works,
@@ -92,7 +92,7 @@ def test_secret_in_query_is_redacted_before_egress(monkeypatch):
     assert urls and secret not in urls[0]  # egressed form carries the mask, not the key
 
     urls.clear()
-    monkeypatch.setattr("src.actions.secret_patterns.query_still_sensitive",
+    monkeypatch.setattr("my_crew.actions.secret_patterns.query_still_sensitive",
                         lambda text: True)
     assert search_works("anything") == []
     assert urls == []  # fail-closed: still-sensitive ⇒ zero network I/O
@@ -131,7 +131,7 @@ class _FakeConfig:
 
 
 def test_toolset_default_has_no_academic_search():
-    from src.runtime_backends.read_only_toolset import build_read_toolset
+    from my_crew.runtime_backends.read_only_toolset import build_read_toolset
 
     tools = build_read_toolset(_FakeConfig(), audience="internal")
     assert "academic.search" not in tools
@@ -142,7 +142,7 @@ def test_toolset_default_has_no_academic_search():
 
 
 def test_toolset_flag_adds_academic_search_both_audiences():
-    from src.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
+    from my_crew.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
 
     internal = build_read_toolset(_FakeConfig(), audience="internal", academic_search=True)
     external = build_read_toolset(_FakeConfig(), audience="external", academic_search=True)
@@ -151,12 +151,12 @@ def test_toolset_flag_adds_academic_search_both_audiences():
 
 
 def test_toolset_tool_degrades_on_provider_error(monkeypatch):
-    from src.runtime_backends.read_only_toolset import build_read_toolset
+    from my_crew.runtime_backends.read_only_toolset import build_read_toolset
 
     def boom(*a, **k):
         raise RuntimeError("429 rate limited")
 
-    monkeypatch.setattr("src.tools.openalex_tool.search_works", boom)
+    monkeypatch.setattr("my_crew.tools.openalex_tool.search_works", boom)
     tools = build_read_toolset(None, academic_search=True)
     out = tools["academic.search"]({"query": "x"})
     assert "lỗi" in out and "429" in out  # message, not a crash
@@ -165,11 +165,11 @@ def test_toolset_tool_degrades_on_provider_error(monkeypatch):
 def test_profile_flag_loads(tmp_path, monkeypatch):
     import yaml
 
-    monkeypatch.setattr("src.profile.loader._PROFILES_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", tmp_path)
     d = tmp_path / "acme"
     d.mkdir()
     (d / "profile.yaml").write_text(yaml.safe_dump({"name": "A", "academic_search": True}))
-    from src.profile.loader import load_profile
+    from my_crew.profile.loader import load_profile
 
     loaded = load_profile("acme", data_dir=tmp_path / "data")
     assert loaded.academic_search is True

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions.action_gateway import (
+from my_crew.actions.action_gateway import (
     ActionGateway,
     HardBlockedError,
     RateLimitedError,
     WriteDisabledError,
 )
-from src.audit.audit_log import AuditLog
+from my_crew.audit.audit_log import AuditLog
 
 POST = {
     "type": "mcp_tool",

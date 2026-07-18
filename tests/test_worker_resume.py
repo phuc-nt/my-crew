@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import json
 
-from src.runtime import worker
-from src.runtime.worker_resume import run_resume
+from my_crew.runtime import worker
+from my_crew.runtime.worker_resume import run_resume
 
 
 def _patch_data_dir(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
-    monkeypatch.setattr("src.runtime.legacy_migration.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.legacy_migration.DATA_DIR", tmp_path / ".data")
 
 
 # --- fresh run that hits the interrupt: exit 3 + status=interrupted ---

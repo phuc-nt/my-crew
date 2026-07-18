@@ -9,7 +9,7 @@ Load-bearing:
   `ask_colleague` — it degrades to `("", 0.0)`, matching `search_hook`'s contract.
 - the room event this function appends is a TEMPLATE summary only (never the raw
   question/answer verbatim beyond ~120 chars) — and this function touches NEITHER
-  `src.agent.store.get_store` NOR `src.agent.sibling_memory.read_sibling_facts`
+  `my_crew.agent.store.get_store` NOR `my_crew.agent.sibling_memory.read_sibling_facts`
   (Decision C: consult is explicitly NOT the sibling-memory system).
 - `question` reaches the LLM prompt only via `format_internal_content` (never raw).
 """
@@ -18,13 +18,13 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import src.agent.team_task_consult as consult_mod
-import src.agent.team_task_roster as roster_mod
-import src.llm.client as llm_client_mod
-import src.profile.loader as loader_mod
-import src.runtime.agent_paths as agent_paths_mod
-import src.runtime.office_room_append as office_room_append_mod
-from src.config.config_builders import build_settings_from_dict
+import my_crew.agent.team_task_consult as consult_mod
+import my_crew.agent.team_task_roster as roster_mod
+import my_crew.llm.client as llm_client_mod
+import my_crew.profile.loader as loader_mod
+import my_crew.runtime.agent_paths as agent_paths_mod
+import my_crew.runtime.office_room_append as office_room_append_mod
+from my_crew.config.config_builders import build_settings_from_dict
 
 
 class _FakeResult:
@@ -135,8 +135,8 @@ def test_ask_colleague_never_touches_store_or_sibling_memory(tmp_path, monkeypat
     _wire_profile(monkeypatch, souls={"colleague-1": ("soul", "project")})
     _wire_llm(monkeypatch, answer="ok")
 
-    import src.agent.sibling_memory as sibling_memory_mod
-    import src.agent.store as store_mod
+    import my_crew.agent.sibling_memory as sibling_memory_mod
+    import my_crew.agent.store as store_mod
 
     store_spy = SimpleNamespace(called=False)
     sibling_spy = SimpleNamespace(called=False)

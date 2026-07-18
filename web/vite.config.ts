@@ -10,7 +10,7 @@ export default defineConfig({
   // S5: the SPA is served at `/` (StaticFiles html=True). Assets resolve under `/assets`.
   base: '/',
   build: {
-    outDir: '../src/server/static/app',
+    outDir: '../my_crew/server/static/app',
     emptyOutDir: true,
   },
   server: {

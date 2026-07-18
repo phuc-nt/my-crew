@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.runtime.report_summary import MAX_SUMMARY_CHARS, summarize_report
+from my_crew.runtime.report_summary import MAX_SUMMARY_CHARS, summarize_report
 
 
 def test_empty_is_empty():

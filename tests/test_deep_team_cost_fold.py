@@ -8,7 +8,7 @@ the messages-walk path stays byte-identical (native / create_agent / non-deep-te
 
 from __future__ import annotations
 
-from src.runtime_backends.community_loop_core import (
+from my_crew.runtime_backends.community_loop_core import (
     _flatten_usage_handler,
     invoke_capped,
     record_loop_result,

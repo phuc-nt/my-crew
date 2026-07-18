@@ -7,20 +7,20 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 @pytest.fixture()
 def client(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
-    from src.server.app import create_app
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    from my_crew.server.app import create_app
 
     return TestClient(create_app())
 
 
 def _seed(tmp_path, *, with_artifact=True):
-    from src.agent.team_task_artifact import write_step_artifact
-    from src.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
+    from my_crew.agent.team_task_artifact import write_step_artifact
+    from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
 
     store = TeamTaskStore(team_tasks_db_path())
     store.create_task(task_id="t1", title="Việc A", pic_id="noi-dung")
@@ -76,7 +76,7 @@ def test_seq_traversal_is_type_blocked(client, tmp_path):
 
 
 def test_artifact_routes_are_not_public():
-    from src.server.auth import _PUBLIC_PREFIXES
+    from my_crew.server.auth import _PUBLIC_PREFIXES
 
     assert not any(p.startswith("/api/office") for p in _PUBLIC_PREFIXES)
 
@@ -84,12 +84,12 @@ def test_artifact_routes_are_not_public():
 def test_timeout_kill_emits_step_status_failed(monkeypatch, tmp_path):
     """v17 M2 pin: the ticker's timeout path must free the desk via a `step_status
     failed` room event (previously only a milestone → bubble hung forever)."""
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
     from types import SimpleNamespace
 
-    from src.agent.coordinator_nodes.tick_actions import _append_timeout_step_event
-    from src.runtime.office_room_store import OfficeRoomStore, office_room_db_path
-    from src.runtime.team_task_paths import team_tasks_root
+    from my_crew.agent.coordinator_nodes.tick_actions import _append_timeout_step_event
+    from my_crew.runtime.office_room_store import OfficeRoomStore, office_room_db_path
+    from my_crew.runtime.team_task_paths import team_tasks_root
 
     task = SimpleNamespace(id="t-9", title="Việc X")
     step = SimpleNamespace(title="Bước Y", assigned_to="noi-dung")

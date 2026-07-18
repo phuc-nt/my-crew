@@ -8,7 +8,7 @@ node reads `result_text` (team-step key, not `report_text`), and when `costed=Tr
 
 from __future__ import annotations
 
-from src.agent.memory_node import make_memory_node
+from my_crew.agent.memory_node import make_memory_node
 
 
 class _Settings:

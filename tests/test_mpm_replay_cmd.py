@@ -9,8 +9,8 @@ import pytest
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
-from src.entrypoints import mpm_replay_cmd
-from src.runtime.registry import RegistryEntry
+from my_crew.entrypoints import mpm_replay_cmd
+from my_crew.runtime.registry import RegistryEntry
 
 _THREAD = "acme:daily:internal"
 
@@ -64,7 +64,7 @@ def test_replay_lists_history(seeded_build, capsys):
 
 def test_replay_from_checkpoint(seeded_build, capsys):
     # grab a real checkpoint id from the listing first
-    from src.runtime.replay import list_checkpoints
+    from my_crew.runtime.replay import list_checkpoints
 
     cps = list_checkpoints(None, None, _THREAD, build_graph=seeded_build)
     cp = cps[0]["checkpoint_id"]
@@ -105,7 +105,7 @@ def test_replay_unknown_checkpoint_errors(seeded_build, capsys):
 
 def test_replay_dispatch_via_mpm(seeded_build, monkeypatch):
     """`mpm agent replay` routes to run_replay."""
-    from src.entrypoints import mpm
+    from my_crew.entrypoints import mpm
 
     called = {}
 
@@ -113,7 +113,7 @@ def test_replay_dispatch_via_mpm(seeded_build, monkeypatch):
         called["rest"] = rest
         return 0
 
-    monkeypatch.setattr("src.entrypoints.mpm_replay_cmd.run_replay", _fake_run_replay)
+    monkeypatch.setattr("my_crew.entrypoints.mpm_replay_cmd.run_replay", _fake_run_replay)
     rc = mpm.main(["agent", "replay", "acme", _THREAD])
     assert rc == 0
     assert called["rest"] == ["acme", _THREAD]

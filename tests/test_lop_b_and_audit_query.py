@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions.action_gateway import ActionGateway, HardBlockedError
-from src.actions.hard_block import needs_interrupt
-from src.audit.audit_log import AuditEntry, AuditLog
+from my_crew.actions.action_gateway import ActionGateway, HardBlockedError
+from my_crew.actions.hard_block import needs_interrupt
+from my_crew.audit.audit_log import AuditEntry, AuditLog
 
 MERGE = {"type": "gh_cli", "argv": ["pr", "merge", "42"]}
 CLOSE_ISSUE = {"type": "mcp_tool", "server": "jira", "tool": "closeIssue", "args": {"key": "AB-1"}}
@@ -178,7 +178,7 @@ def test_reject_is_audited(settings_factory, tmp_path):
 
 def test_approval_store_redacts_secret(settings_factory, tmp_path):
     # M2: a secret in a queued action is redacted in the approval store.
-    from src.actions.approval_store import ApprovalStore
+    from my_crew.actions.approval_store import ApprovalStore
 
     store = ApprovalStore(tmp_path / "approvals.db")
     aid = store.enqueue(

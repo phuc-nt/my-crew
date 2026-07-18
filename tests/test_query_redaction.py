@@ -1,4 +1,4 @@
-"""Web-search query redaction / fail-closed gate (`src/actions/secret_patterns.py`).
+"""Web-search query redaction / fail-closed gate (`my_crew/actions/secret_patterns.py`).
 
 Load-bearing (the query-egress threat model, distinct from the audit-log redaction
 threat model already covered by `redact`/`contains_secret`):
@@ -17,7 +17,7 @@ credential-shaped literal. The assembled runtime string is identical either way.
 
 from __future__ import annotations
 
-from src.actions.secret_patterns import REDACTED, query_still_sensitive, redact_query
+from my_crew.actions.secret_patterns import REDACTED, query_still_sensitive, redact_query
 
 
 def test_redact_query_masks_email():

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from src.agent.risk_analyzer import analyze
-from src.tools.models import CiRun, Issue, PullRequest
+from my_crew.agent.risk_analyzer import analyze
+from my_crew.tools.models import CiRun, Issue, PullRequest
 
 TODAY = date(2026, 6, 21)
 

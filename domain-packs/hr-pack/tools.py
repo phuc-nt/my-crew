@@ -1,12 +1,12 @@
 """hr-pack ToolProvider (v3 M6 S2) — the real test of the ToolProvider abstraction.
 
 HR reads two sources the core never modeled:
-- Confluence (REUSED): `src.tools.confluence_read.get_page_content` — the same read PM
+- Confluence (REUSED): `my_crew.tools.confluence_read.get_page_content` — the same read PM
   uses, no change. The HR page id comes from env (`HR_CONFLUENCE_PAGE_ID`), the pack's
   own config, so the core needs no HR-specific config field.
 - Google Sheet (NEW ADAPTER): spawns the `gws` CLI (`gws sheets spreadsheets values
   get`) exactly as PM's github_read spawns `gh` — a transport (HTTP-behind-a-CLI) the
-  core never knew about. If this slots in with `git diff src/` = empty, the M5
+  core never knew about. If this slots in with `git diff my_crew/` = empty, the M5
   ToolProvider abstraction is proven transport-agnostic.
 
 Both sources map their rows into the generic `Task` model (kind "headcount-row"), so the
@@ -22,7 +22,7 @@ import subprocess
 from html.parser import HTMLParser
 from typing import Any
 
-from src.tools.models import Task
+from my_crew.tools.models import Task
 
 # Env config the HR pack reads (the pack owns its own config source; env-only).
 _SHEET_ID_ENV = "HR_SHEET_ID"
@@ -151,7 +151,7 @@ def _confluence_table_rows(page_id: str, config: Any) -> list[list[str]]:
     Reuses the PM `confluence_read.get_page_content` unchanged; the table parse is
     pack-local so the core needs no HR-specific parser.
     """
-    from src.tools import confluence_read
+    from my_crew.tools import confluence_read
 
     content = confluence_read.get_page_content(page_id, config=config)
     if not content:
@@ -164,7 +164,7 @@ def _confluence_table_rows(page_id: str, config: Any) -> list[list[str]]:
 class HrToolProvider:
     """HR reads: Confluence table (reused) + Google Sheet (new gws adapter) → Tasks.
 
-    Conforms to `src.packs.tool_provider.ToolProvider`: one `read(kind, config,
+    Conforms to `my_crew.packs.tool_provider.ToolProvider`: one `read(kind, config,
     settings)` returning normalized records. Both sources are optional — whichever env
     config is present is read; their Task lists are concatenated.
     """

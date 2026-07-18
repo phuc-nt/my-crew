@@ -13,14 +13,14 @@ from fastapi.testclient import TestClient
 
 
 def _client():
-    from src.server.app import create_app
+    from my_crew.server.app import create_app
 
     return TestClient(create_app())
 
 
 @pytest.fixture
 def docs_dir(tmp_path, monkeypatch):
-    monkeypatch.setattr("src.company_docs.store._DOCS_DIR", tmp_path / "company-docs")
+    monkeypatch.setattr("my_crew.company_docs.store._DOCS_DIR", tmp_path / "company-docs")
     return tmp_path / "company-docs"
 
 
@@ -79,15 +79,15 @@ def stub_agent(monkeypatch, tmp_path):
     prof = tmp_path / "acme"
     prof.mkdir()
     (prof / "profile.yaml").write_text("name: acme\ndomain: pm\n", encoding="utf-8")
-    monkeypatch.setattr("src.profile.loader._PROFILES_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", tmp_path)
     from types import SimpleNamespace
 
     store_yaml = {"text": "name: acme\ndomain: pm\n"}
-    monkeypatch.setattr("src.profile.loader.load_profile",
+    monkeypatch.setattr("my_crew.profile.loader.load_profile",
                         lambda pid, **k: SimpleNamespace(company_docs=()))
-    monkeypatch.setattr("src.server.profile_editor.read_profile_files",
+    monkeypatch.setattr("my_crew.server.profile_editor.read_profile_files",
                         lambda aid: {"profile": store_yaml["text"]})
-    monkeypatch.setattr("src.server.profile_editor.save_profile_yaml",
+    monkeypatch.setattr("my_crew.server.profile_editor.save_profile_yaml",
                         lambda aid, text: store_yaml.update(text=text))
     return store_yaml
 
@@ -116,6 +116,6 @@ def test_agent_company_docs_put_rejects_unknown(docs_dir, stub_agent):
 
 def test_company_docs_not_public():
     # structural red line: the library/opt-in surfaces are NOT in the public prefix list.
-    from src.server.auth import _PUBLIC_PREFIXES
+    from my_crew.server.auth import _PUBLIC_PREFIXES
 
     assert not any("company-docs" in p for p in _PUBLIC_PREFIXES)

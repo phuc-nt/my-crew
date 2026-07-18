@@ -5,8 +5,8 @@ from __future__ import annotations
 import subprocess
 from datetime import datetime
 
-from src.runtime import service
-from src.runtime.registry import RegistryEntry
+from my_crew.runtime import service
+from my_crew.runtime.registry import RegistryEntry
 
 _8AM = datetime(2026, 6, 24, 8, 0, 0)
 _YESTERDAY = datetime(2026, 6, 23, 9, 0, 0)
@@ -63,7 +63,7 @@ def test_two_enabled_agents_both_spawn_exact_argv(monkeypatch):
     svc.run_tick(_8AM, spawn=_fake_spawn(record))
     assert [a[a.index("--agent-id") + 1] for a in record] == ["acme-web", "beta-app"]
     assert record[0] == [
-        service.sys.executable, "-m", "src.runtime.worker",
+        service.sys.executable, "-m", "my_crew.runtime.worker",
         "--agent-id", "acme-web", "--report", "daily", "--audience", "internal",
     ]
 

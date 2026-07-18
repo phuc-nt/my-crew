@@ -44,7 +44,7 @@ class _FakeBackend:
 
 
 def _merge(backend, text):
-    from src.runtime_backends.deep_agent_loop import _merge_sandbox_artifacts
+    from my_crew.runtime_backends.deep_agent_loop import _merge_sandbox_artifacts
 
     return _merge_sandbox_artifacts(backend, text)
 
@@ -91,7 +91,7 @@ def test_execute_failure_leaves_text_unchanged():
 
 
 def test_total_size_capped():
-    from src.runtime_backends.deep_agent_loop import _ARTIFACT_MERGE_MAX_CHARS
+    from my_crew.runtime_backends.deep_agent_loop import _ARTIFACT_MERGE_MAX_CHARS
 
     big = b"y" * (_ARTIFACT_MERGE_MAX_CHARS + 5000)
     be = _FakeBackend({"big.md": big})

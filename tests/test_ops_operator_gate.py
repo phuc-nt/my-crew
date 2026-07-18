@@ -8,9 +8,12 @@ operator configured) skips ops entirely — proving the gate is on the immutable
 
 from __future__ import annotations
 
-from src.agent.qa_answer import _is_ops_operator
-from src.config.config_builders import build_reporting_config_from_dict, build_settings_from_dict
-from src.profile.loader import LoadedProfile
+from my_crew.agent.qa_answer import _is_ops_operator
+from my_crew.config.config_builders import (
+    build_reporting_config_from_dict,
+    build_settings_from_dict,
+)
+from my_crew.profile.loader import LoadedProfile
 
 
 def _loaded(tmp_path, *, domain, telegram):

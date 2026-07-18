@@ -14,13 +14,13 @@ import pytest
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 
-from src.actions.action_gateway import ActionGateway
-from src.audit.audit_log import AuditLog
-from src.automation.engine import run_workflow
-from src.automation.schema import parse_automation
-from src.config.config_builders import build_settings_from_dict
-from src.runtime.replay import list_checkpoints, replay_from_checkpoint
-from src.runtime.run_config import invoke_config
+from my_crew.actions.action_gateway import ActionGateway
+from my_crew.audit.audit_log import AuditLog
+from my_crew.automation.engine import run_workflow
+from my_crew.automation.schema import parse_automation
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.runtime.replay import list_checkpoints, replay_from_checkpoint
+from my_crew.runtime.run_config import invoke_config
 
 _THREAD = "acme:daily:internal"
 _TRACE_ENV = ("LANGCHAIN_TRACING_V2", "LANGSMITH_API_KEY")
@@ -122,14 +122,15 @@ def test_d3_propose_into_existing_approval_queue(tmp_path):
 
 
 def test_mpm_dispatches_replay_and_automate(monkeypatch):
-    from src.entrypoints import mpm
+    from my_crew.entrypoints import mpm
 
     seen = []
     monkeypatch.setattr(
-        "src.entrypoints.mpm_replay_cmd.run_replay", lambda rest, **k: seen.append("replay") or 0
+        "my_crew.entrypoints.mpm_replay_cmd.run_replay",
+        lambda rest, **k: seen.append("replay") or 0,
     )
     monkeypatch.setattr(
-        "src.entrypoints.mpm_automate_cmd.run_automate",
+        "my_crew.entrypoints.mpm_automate_cmd.run_automate",
         lambda rest, **k: seen.append("automate") or 0,
     )
     assert mpm.main(["agent", "replay", "acme", _THREAD]) == 0

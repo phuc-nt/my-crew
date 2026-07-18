@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.config.config_builders import build_settings_from_dict
-from src.runtime.run_config import (
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.runtime.run_config import (
     build_callbacks,
     invoke_config,
     invoke_config_env,
@@ -114,10 +114,10 @@ def test_api_key_only_enables_all_paths(clean_trace_env, monkeypatch):
     """M2 fix: with ONLY LANGSMITH_API_KEY set, the env-derived settings flag AND the
     server env path BOTH enable — no server-vs-worker/cli divergence."""
     monkeypatch.setenv("LANGSMITH_API_KEY", "lsv2_fakekey")
-    from src.config.config_builders import build_settings_from_env
+    from my_crew.config.config_builders import build_settings_from_env
 
     # from_env normalizes the api-key presence to tracing=True (not a literal key string).
-    monkeypatch.setattr("src.config.config_builders.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr("my_crew.config.config_builders.load_dotenv", lambda *a, **k: None)
     s = build_settings_from_env()
     assert s.tracing is True
     assert tracing_enabled(s) is True  # worker/cli path ON
@@ -129,7 +129,7 @@ def test_api_key_only_enables_all_paths(clean_trace_env, monkeypatch):
 
 def test_from_env_reads_tracing_flag(monkeypatch):
     monkeypatch.setenv("LANGCHAIN_TRACING_V2", "true")
-    from src.profile.loader_mapping import build_settings_dict
+    from my_crew.profile.loader_mapping import build_settings_dict
 
     out = build_settings_dict({"runtime": {"tracing": True}}, data_dir="/tmp/x")
     assert out["tracing"] is True

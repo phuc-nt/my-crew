@@ -13,10 +13,10 @@ import importlib.util
 
 import pytest
 
-from src.config.config_builders import build_settings_from_dict
-from src.runtime.step_telemetry import StepTelemetry
-from src.runtime_backends import resolve_runtime
-from src.runtime_backends.config import AgentRuntimeConfig
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.runtime.step_telemetry import StepTelemetry
+from my_crew.runtime_backends import resolve_runtime
+from my_crew.runtime_backends.config import AgentRuntimeConfig
 
 
 class _LoadedProfile:

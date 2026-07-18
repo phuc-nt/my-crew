@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 
 try:
-    from src.config.config_builders import build_settings_from_env
+    from my_crew.config.config_builders import build_settings_from_env
 
     _settings = build_settings_from_env()
     _HAS_KEY = bool(getattr(_settings, "openrouter_api_key", None))
@@ -44,9 +44,9 @@ def test_create_agent_reaches_documented_rounds_at_cap():
     from langchain_core.messages import HumanMessage, SystemMessage
     from langchain_openai import ChatOpenAI
 
-    from src.config.settings import OPENROUTER_BASE_URL
-    from src.runtime_backends.community_loop_core import invoke_capped, record_loop_result
-    from src.runtime_backends.config import MAX_LOOP_STEPS
+    from my_crew.config.settings import OPENROUTER_BASE_URL
+    from my_crew.runtime_backends.community_loop_core import invoke_capped, record_loop_result
+    from my_crew.runtime_backends.config import MAX_LOOP_STEPS
 
     counter = {"n": 0}
     model = ChatOpenAI(

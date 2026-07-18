@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import src.agent.team_task_roster as roster_mod
-import src.profile.loader as loader_mod
-import src.runtime.company as company_mod
-import src.runtime.registry as registry_mod
+import my_crew.agent.team_task_roster as roster_mod
+import my_crew.profile.loader as loader_mod
+import my_crew.runtime.company as company_mod
+import my_crew.runtime.registry as registry_mod
 
 
 def _entry(agent_id: str, *, enabled: bool = True):

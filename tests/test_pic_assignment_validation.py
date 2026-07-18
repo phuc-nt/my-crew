@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.agent.ops_assign_team_task import parse_pic_prefix
-from src.agent.task_decomposition import (
+from my_crew.agent.ops_assign_team_task import parse_pic_prefix
+from my_crew.agent.task_decomposition import (
     DecomposedTask,
     DecompositionError,
     TeamStepPlan,

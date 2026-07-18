@@ -19,10 +19,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from src.runtime import registry_edit
-from src.runtime.registry import load_registry
-from src.server import agent_create
-from src.server.app import create_app
+from my_crew.runtime import registry_edit
+from my_crew.runtime.registry import load_registry
+from my_crew.server import agent_create
+from my_crew.server.app import create_app
 
 _REPO = Path(__file__).resolve().parents[1]
 
@@ -47,11 +47,11 @@ def tmp_world(tmp_path, monkeypatch):
         _REPO / "profiles" / "default" / "profile.yaml",
         profiles / "default" / "profile.yaml",
     )
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
     monkeypatch.setattr(agent_create, "_REGISTRY_PATH", registry)
     monkeypatch.setattr(agent_create, "_PROFILES_DIR", profiles)
     monkeypatch.setattr(registry_edit, "_REGISTRY_PATH", registry)
-    monkeypatch.setattr("src.profile.loader._PROFILES_DIR", profiles)
+    monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", profiles)
     return registry, profiles
 
 
@@ -352,7 +352,7 @@ def test_registry_edit_failure_leaves_file_untouched(tmp_world):
 
 def _isolate_health(monkeypatch):
     """Fresh cache + no real `gh` subprocess (keeps the suite offline/deterministic)."""
-    from src.server import integration_health
+    from my_crew.server import integration_health
 
     monkeypatch.setattr(integration_health, "_cache", {"at": 0.0, "payload": None})
     monkeypatch.setattr(

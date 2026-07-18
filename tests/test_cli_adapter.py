@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from src.adapters import cli_adapter
+from my_crew.adapters import cli_adapter
 
 
 def _fake_completed(stdout="", stderr="", returncode=0):

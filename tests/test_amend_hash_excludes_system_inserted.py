@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from src.agent.task_decomposition import decomposition_content_hash
-from src.agent.team_task_amend_prompt import _amend_frozen_prefix
+from my_crew.agent.task_decomposition import decomposition_content_hash
+from my_crew.agent.team_task_amend_prompt import _amend_frozen_prefix
 
 
 def _step(step_id, status, *, system_inserted=0, deps=()):

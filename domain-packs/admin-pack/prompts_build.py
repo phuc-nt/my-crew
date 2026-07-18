@@ -13,8 +13,8 @@ from dataclasses import asdict
 
 from domain_pack_admin.analyzers import FleetReport
 
-from src.packs.registry import load_pack_prompt
-from src.profile.context import build_context_block, prepend_persona
+from my_crew.packs.registry import load_pack_prompt
+from my_crew.profile.context import build_context_block, prepend_persona
 
 
 def build_admin_narrative_messages(

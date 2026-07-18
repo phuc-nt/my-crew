@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.config.config_builders import build_reporting_config_from_dict
-from src.tools import linear_read
+from my_crew.config.config_builders import build_reporting_config_from_dict
+from my_crew.tools import linear_read
 
 
 def _config_with_linear(monkeypatch):

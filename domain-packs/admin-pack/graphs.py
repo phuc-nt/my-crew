@@ -1,7 +1,7 @@
 """admin-pack fleet graphs (v3 M8) — one parametrized builder, three report kinds.
 
 Same `perceive → analyze → compose → deliver` shape as PM/HR, all core machinery
-imported from `src/` unchanged (the pack-purity gate). Admin-specific: the fleet
+imported from `my_crew/` unchanged (the pack-purity gate). Admin-specific: the fleet
 ToolProvider (platform state), the three pure analyzers, and the narrative prompt
 asset — all sibling `domain_pack_admin.*` modules.
 
@@ -17,14 +17,14 @@ from functools import partial
 
 from langgraph.graph import END, START, StateGraph
 
-from src.actions.action_gateway import ActionGateway
-from src.actions.slack_write import deliver_report
-from src.agent.approval_gate import add_approval_gate, external_summary
-from src.agent.audience_delivery import SLACK_OK_STATUSES, resolve_audience_delivery
-from src.agent.memory_node import add_remember_node
-from src.agent.state import ReportState
-from src.llm.client import LlmClient
-from src.profile.context import EMPTY
+from my_crew.actions.action_gateway import ActionGateway
+from my_crew.actions.slack_write import deliver_report
+from my_crew.agent.approval_gate import add_approval_gate, external_summary
+from my_crew.agent.audience_delivery import SLACK_OK_STATUSES, resolve_audience_delivery
+from my_crew.agent.memory_node import add_remember_node
+from my_crew.agent.state import ReportState
+from my_crew.llm.client import LlmClient
+from my_crew.profile.context import EMPTY
 
 
 def _today_utc() -> date:
@@ -47,7 +47,7 @@ def build_fleet_graph(
             "project-rollup is internal-only (it aggregates internal report summaries); "
             "an external audience is not supported."
         )
-    from src.packs.registry import PackRegistry
+    from my_crew.packs.registry import PackRegistry
 
     pack = PackRegistry().load("admin")
     if tools is None:

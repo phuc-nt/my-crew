@@ -11,16 +11,16 @@ from __future__ import annotations
 
 from langgraph.store.memory import InMemoryStore
 
-from src.agent.memory_node import _NAMESPACE_KIND
-from src.agent.okr_analyzer import OkrRollup
-from src.agent.okr_report_graph import default_okr_deps
-from src.agent.report_graph import default_report_deps
-from src.agent.resource_report_graph import default_resource_deps
-from src.agent.sibling_memory import build_sibling_context
-from src.llm.client import LlmResult
-from src.profile.context import ProfileContext
-from src.runtime.registry import RegistryEntry
-from src.tools.models import (
+from my_crew.agent.memory_node import _NAMESPACE_KIND
+from my_crew.agent.okr_analyzer import OkrRollup
+from my_crew.agent.okr_report_graph import default_okr_deps
+from my_crew.agent.report_graph import default_report_deps
+from my_crew.agent.resource_report_graph import default_resource_deps
+from my_crew.agent.sibling_memory import build_sibling_context
+from my_crew.llm.client import LlmResult
+from my_crew.profile.context import ProfileContext
+from my_crew.runtime.registry import RegistryEntry
+from my_crew.tools.models import (
     AssigneeLoad,
     CostSummary,
     KeyResult,
@@ -56,8 +56,8 @@ class _Config:
 
 
 def _gateway(settings, tmp_path):
-    from src.actions.action_gateway import ActionGateway
-    from src.audit.audit_log import AuditLog
+    from my_crew.actions.action_gateway import ActionGateway
+    from my_crew.audit.audit_log import AuditLog
 
     return ActionGateway(settings=settings, audit_log=AuditLog(tmp_path / "audit.jsonl"))
 
@@ -65,8 +65,8 @@ def _gateway(settings, tmp_path):
 def _patch_llm(monkeypatch):
     rec = _RecordingLlm()
     factory = lambda *_a, **_k: rec  # noqa: E731
-    monkeypatch.setattr("src.llm.client.LlmClient", factory)
-    monkeypatch.setattr("src.agent.report_graph.LlmClient", factory)
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", factory)
+    monkeypatch.setattr("my_crew.agent.report_graph.LlmClient", factory)
     return rec
 
 
@@ -185,7 +185,7 @@ class _NoKeySettings:
 
 
 def test_build_sibling_context_no_project_allocation_free(monkeypatch):
-    monkeypatch.setattr("src.llm.client.LlmClient", _boom_llm)
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", _boom_llm)
 
     class _Loaded:
         profile_id = "A"
@@ -201,7 +201,7 @@ def _boom_llm(*_a, **_k):
 
 def test_build_sibling_context_reads_real_sibling_facts(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
-    monkeypatch.setattr("src.llm.client.LlmClient", lambda *_a, **_k: _RecordingLlm())
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", lambda *_a, **_k: _RecordingLlm())
     profiles = tmp_path / "profiles"
     _write_profile(profiles, "A", "name: A\nproject: acme\n")
     _write_profile(profiles, "B", "name: B\nproject: acme\n")

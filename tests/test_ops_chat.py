@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.agent.ops_catalog import OPS_COMMANDS
-from src.agent.ops_chat import classify_ops_intent, handle_ops_message
-from src.agent.ops_conversation_store import DRAFT_TTL_S, OpsConversationStore, OpsDraft
+from my_crew.agent.ops_catalog import OPS_COMMANDS
+from my_crew.agent.ops_chat import classify_ops_intent, handle_ops_message
+from my_crew.agent.ops_conversation_store import DRAFT_TTL_S, OpsConversationStore, OpsDraft
 
 
 class _FakeLlm:
@@ -55,7 +55,7 @@ def test_create_agent_domain_choices_cover_every_installed_pack():
     """Guard against the choices map drifting behind the packs: a new domain-pack that
     isn't added to create_agent's `domain` choices would be un-creatable by chat with a
     Vietnamese role name. If this fails, add the new domain (+ its VN aliases) to the map."""
-    from src.packs.registry import discover_domains
+    from my_crew.packs.registry import discover_domains
 
     domain_choices = set(OPS_COMMANDS["create_agent"]["slots"]["domain"]["choices"])
     assert set(discover_domains()) <= domain_choices, (
@@ -67,7 +67,7 @@ def test_create_agent_domain_choices_cover_every_installed_pack():
 def test_confirm_accepts_natural_affirmation_and_cancel_wins(tmp_path, monkeypatch):
     """A confirm reply is word-membership, not exact-match: 'ok tạo đi' confirms; a cancel
     word anywhere ('không, thôi') cancels (fail-safe)."""
-    from src.agent.ops_chat import _confirm_decision
+    from my_crew.agent.ops_chat import _confirm_decision
 
     assert _confirm_decision("ok tạo đi luôn") == "confirm"
     assert _confirm_decision("được, chốt nhé") == "confirm"
@@ -87,7 +87,7 @@ def test_classify_garbage_falls_back_to_question(garbage):
 
 
 def test_classify_reraises_infra_error():
-    from src.llm.fallback_policy import ProviderCallError
+    from my_crew.llm.fallback_policy import ProviderCallError
 
     class _Down:
         def complete(self, m):
@@ -102,11 +102,11 @@ def test_classify_reraises_infra_error():
 
 def test_get_status_runs_without_confirm(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "src.runtime.agent_state_reader.read_all_agent_states",
+        "my_crew.runtime.agent_state_reader.read_all_agent_states",
         lambda: [{"agent_id": "pm", "enabled": True, "pending_approvals": [1, 2]},
                  {"agent_id": "hr", "enabled": False, "pending_approvals": []}],
     )
-    monkeypatch.setattr("src.runtime.agent_state_reader.team_alerts", lambda s: [])
+    monkeypatch.setattr("my_crew.runtime.agent_state_reader.team_alerts", lambda s: [])
     store = _store(tmp_path)
     try:
         reply, _ = handle_ops_message(
@@ -121,7 +121,7 @@ def test_get_status_runs_without_confirm(tmp_path, monkeypatch):
 
 def test_get_cost_sums_fleet(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "src.runtime.agent_state_reader.read_all_agent_states",
+        "my_crew.runtime.agent_state_reader.read_all_agent_states",
         lambda: [{"agent_id": "pm", "budget_spent_usd": 1.5, "budget_cap_usd": 50},
                  {"agent_id": "hr", "budget_spent_usd": 0.25, "budget_cap_usd": 50}],
     )
@@ -171,7 +171,7 @@ def test_create_agent_full_slot_filling_flow(tmp_path, monkeypatch):
         created.update(spec)
         return {"id": spec["id"], "domain": spec["domain"], "reports": spec["reports"]}
 
-    monkeypatch.setattr("src.server.agent_create.create_agent", fake_create)
+    monkeypatch.setattr("my_crew.server.agent_create.create_agent", fake_create)
     store = _store(tmp_path)
     try:
         # Turn 1: intent + partial slots (id only). Engine asks for the next missing slot.
@@ -212,7 +212,7 @@ def test_confirm_runs_once_no_double_on_repoll(tmp_path, monkeypatch):
         calls["n"] += 1
         return {"id": spec["id"], "domain": spec["domain"], "reports": spec["reports"]}
 
-    monkeypatch.setattr("src.server.agent_create.create_agent", fake_create)
+    monkeypatch.setattr("my_crew.server.agent_create.create_agent", fake_create)
     store = _store(tmp_path)
     store.save("ceo", OpsDraft("create_agent",
                {"id": "x", "domain": "pm", "reports": "daily"}, "awaiting_confirm", 1.0))
@@ -229,7 +229,7 @@ def test_confirm_runs_once_no_double_on_repoll(tmp_path, monkeypatch):
 
 
 def test_cancel_at_confirm_creates_nothing(tmp_path, monkeypatch):
-    monkeypatch.setattr("src.server.agent_create.create_agent",
+    monkeypatch.setattr("my_crew.server.agent_create.create_agent",
                         lambda s: pytest.fail("must not create on cancel"))
     store = _store(tmp_path)
     store.save("ceo", OpsDraft("create_agent",
@@ -250,7 +250,7 @@ def test_preview_value_error_becomes_friendly_reply_and_clears_draft(tmp_path, m
     with the message, and drop the draft — never let it propagate out of
     `handle_ops_message` (which would 500 the poller) and never leave a half-formed
     draft the CEO's next message would be confused by."""
-    import src.agent.ops_chat as ops_chat_module
+    import my_crew.agent.ops_chat as ops_chat_module
 
     def _boom_preview(slots):
         raise ValueError("chưa có đường báo cáo sự cố")
@@ -299,7 +299,7 @@ def test_invalid_slot_value_asks_again(tmp_path):
 def test_set_enabled_flow(tmp_path, monkeypatch):
     flipped = {}
     monkeypatch.setattr(
-        "src.runtime.registry_edit.set_registry_enabled",
+        "my_crew.runtime.registry_edit.set_registry_enabled",
         lambda path, aid, on: flipped.update(aid=aid, on=on),
     )
     store = _store(tmp_path)
@@ -324,7 +324,7 @@ def test_domain_and_id_are_normalized_from_conversational_answers(tmp_path, monk
     map "quản lý dự án" → "pm" and lowercase the id, not reject them."""
     created = {}
     monkeypatch.setattr(
-        "src.server.agent_create.create_agent",
+        "my_crew.server.agent_create.create_agent",
         lambda spec: created.update(spec) or {"id": spec["id"], "domain": spec["domain"],
                                               "reports": spec["reports"]},
     )
@@ -355,7 +355,7 @@ def test_reports_are_lowercased(tmp_path, monkeypatch):
     lowercase 'daily'. The reports slot must lowercase before it reaches create_agent."""
     created = {}
     monkeypatch.setattr(
-        "src.server.agent_create.create_agent",
+        "my_crew.server.agent_create.create_agent",
         lambda spec: created.update(spec) or {"id": spec["id"], "domain": spec["domain"],
                                               "reports": spec["reports"]},
     )
@@ -414,8 +414,8 @@ def test_advance_or_confirm_skips_draft_after_auto_confirm(tmp_path, monkeypatch
     "Đã huỷ"/"kế hoạch đã thay đổi" turn for a task that is already running."""
     import time
 
-    from src.agent.ops_catalog import OPS_COMMANDS
-    from src.agent.ops_chat import _advance_or_confirm
+    from my_crew.agent.ops_catalog import OPS_COMMANDS
+    from my_crew.agent.ops_chat import _advance_or_confirm
 
     def _auto_preview(slots):
         slots["auto_confirmed"] = "1"

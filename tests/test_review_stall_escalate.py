@@ -12,19 +12,19 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker
-from src.agent.coordinator_nodes.review_insert import (
+from my_crew.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker
+from my_crew.agent.coordinator_nodes.review_insert import (
     MAX_REVIEW_ROUNDS,
     maybe_handle_review_done,
 )
-from src.agent.task_decomposition import decomposition_content_hash
-from src.agent.team_task_artifact import write_review_verdict_artifact
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.agent.task_decomposition import decomposition_content_hash
+from my_crew.agent.team_task_artifact import write_review_verdict_artifact
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 @pytest.fixture(autouse=True)
 def _isolated_team_tasks_root(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
 
 def _store(tmp_path) -> TeamTaskStore:
@@ -69,7 +69,7 @@ def _plan_with_final_round_review(store, tmp_path) -> None:
     store.mark_done(
         "t1", f"s1-review-{MAX_REVIEW_ROUNDS}", outcome_ref="x", cost_usd=0.0,
     )
-    from src.runtime.team_task_paths import team_tasks_root
+    from my_crew.runtime.team_task_paths import team_tasks_root
 
     write_review_verdict_artifact(
         team_tasks_root(), "t1", 1, MAX_REVIEW_ROUNDS,
@@ -109,7 +109,7 @@ def test_max_round_stall_never_relies_on_dead_end_path(tmp_path, monkeypatch):
     `maybe_handle_review_done`'s own explicit call, proven here by calling
     `_dead_end_result` directly against the same task state and asserting it is a
     no-op (returns None, does not itself stall anything)."""
-    from src.agent.coordinator_graph import _dead_end_result
+    from my_crew.agent.coordinator_graph import _dead_end_result
 
     store = _store(tmp_path)
     _plan_with_final_round_review(store, tmp_path)

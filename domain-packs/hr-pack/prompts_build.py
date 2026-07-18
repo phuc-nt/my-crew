@@ -11,8 +11,8 @@ core `prepend_persona` / `build_context_block` (so the external PII red line is 
 
 from __future__ import annotations
 
-from src.packs.registry import load_pack_prompt
-from src.profile.context import build_context_block, prepend_persona
+from my_crew.packs.registry import load_pack_prompt
+from my_crew.profile.context import build_context_block, prepend_persona
 
 _SYSTEM = load_pack_prompt("hr", "headcount-narrative-system")
 _EXTERNAL_SYSTEM = load_pack_prompt("hr", "headcount-narrative-external-system")

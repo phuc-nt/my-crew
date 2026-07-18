@@ -7,11 +7,11 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions.action_gateway import ActionGateway, HardBlockedError
-from src.actions.hard_block import BlockCategory, classify, needs_interrupt
-from src.actions.team_task_write import make_team_task_handler
-from src.config.config_builders import build_settings_from_dict
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.actions.action_gateway import ActionGateway, HardBlockedError
+from my_crew.actions.hard_block import BlockCategory, classify, needs_interrupt
+from my_crew.actions.team_task_write import make_team_task_handler
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 def _settings(tmp_path, trust_mode):
@@ -96,13 +96,13 @@ def test_guarded_queues_autonomous_runs(tmp_path):
 @pytest.fixture
 def task_env(tmp_path, monkeypatch):
     """Shared team-task store under a tmp DATA_DIR + a stubbed roster."""
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path / ".data")
     (tmp_path / ".data").mkdir()
-    monkeypatch.setattr("src.agent.team_task_roster.is_assignable",
+    monkeypatch.setattr("my_crew.agent.team_task_roster.is_assignable",
                         lambda agent_id: agent_id in {"noi-dung", "thiet-ke"})
     events = []
     monkeypatch.setattr(
-        "src.runtime.office_room_append.append_office_event",
+        "my_crew.runtime.office_room_append.append_office_event",
         lambda room_id, *, author, kind, body, also_office=False:
             events.append({"room": room_id, "author": author, "kind": kind, "body": body}),
     )
@@ -215,7 +215,7 @@ def test_step_assignee_may_move(task_env):
 
 
 def test_office_pack_ships_kanban_catalog():
-    from src.packs.registry import PackRegistry
+    from my_crew.packs.registry import PackRegistry
 
     commands = PackRegistry().load("office").commands
     assert {"create_team_task", "move_team_task"} <= set(commands)
@@ -224,14 +224,14 @@ def test_office_pack_ships_kanban_catalog():
 
 
 def test_agent_bound_dispatch_routes_team_task(task_env):
-    from src.actions.approved_dispatch import make_agent_bound_dispatch
+    from my_crew.actions.approved_dispatch import make_agent_bound_dispatch
 
     summary = make_agent_bound_dispatch("truong-phong", config=object())(_create_action())
     assert "team task created" in summary
 
 
 def test_legacy_dispatch_refuses_team_task():
-    from src.actions.approved_dispatch import dispatch_approved_action
+    from my_crew.actions.approved_dispatch import dispatch_approved_action
 
     with pytest.raises(RuntimeError, match="agent-bound handler"):
         dispatch_approved_action(_create_action(), config=object())

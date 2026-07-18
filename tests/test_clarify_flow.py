@@ -13,8 +13,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from src.runtime import clarify_service
-from src.runtime.clarify_store import (
+from my_crew.runtime import clarify_service
+from my_crew.runtime.clarify_store import (
     MAX_PENDING_PER_AGENT,
     ClarifyCapError,
     ClarifyStore,
@@ -31,7 +31,7 @@ def store(tmp_path):
 @pytest.fixture()
 def wired(tmp_path, monkeypatch):
     """Point the module-level path helper at a tmp store for service/route tests."""
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
     return tmp_path
 
 
@@ -77,7 +77,7 @@ def test_ask_ceo_sanitizes_stores_and_notifies(wired, monkeypatch):
         return True
 
     monkeypatch.setattr(
-        "src.runtime.operator_notify.notify_operator_best_effort", _notify
+        "my_crew.runtime.operator_notify.notify_operator_best_effort", _notify
     )
     note, clarify_id = clarify_service.ask_ceo(
         agent_id="nghien-cuu", task_id="t1",
@@ -91,7 +91,7 @@ def test_ask_ceo_sanitizes_stores_and_notifies(wired, monkeypatch):
 
 def test_ask_ceo_cap_returns_safe_note_never_raises(wired, monkeypatch):
     monkeypatch.setattr(
-        "src.runtime.operator_notify.notify_operator_best_effort",
+        "my_crew.runtime.operator_notify.notify_operator_best_effort",
         lambda *a, **k: True,
     )
     for _ in range(MAX_PENDING_PER_AGENT):
@@ -102,13 +102,13 @@ def test_ask_ceo_cap_returns_safe_note_never_raises(wired, monkeypatch):
 
 def test_answer_from_callback_landing_and_stale(wired, monkeypatch):
     monkeypatch.setattr(
-        "src.runtime.operator_notify.notify_operator_best_effort",
+        "my_crew.runtime.operator_notify.notify_operator_best_effort",
         lambda *a, **k: True,
     )
     clarify_service.ask_ceo(agent_id="a", task_id="t", question="Chọn?",
                             options=["A", "B"])
-    from src.runtime.clarify_store import ClarifyStore as _S
-    from src.runtime.team_task_paths import clarify_db_path
+    from my_crew.runtime.clarify_store import ClarifyStore as _S
+    from my_crew.runtime.team_task_paths import clarify_db_path
 
     cid = _S(clarify_db_path()).list_pending()[0].id
     landed, toast = clarify_service.answer_from_callback(f"clarify:{cid}:1")
@@ -120,12 +120,12 @@ def test_answer_from_callback_landing_and_stale(wired, monkeypatch):
 
 def test_answered_context_renders_for_next_step(wired, monkeypatch):
     monkeypatch.setattr(
-        "src.runtime.operator_notify.notify_operator_best_effort",
+        "my_crew.runtime.operator_notify.notify_operator_best_effort",
         lambda *a, **k: True,
     )
     clarify_service.ask_ceo(agent_id="a", task_id="t9", question="Ngân sách bao nhiêu?")
-    from src.runtime.clarify_store import ClarifyStore as _S
-    from src.runtime.team_task_paths import clarify_db_path
+    from my_crew.runtime.clarify_store import ClarifyStore as _S
+    from my_crew.runtime.team_task_paths import clarify_db_path
 
     s = _S(clarify_db_path())
     cid = s.list_pending()[0].id
@@ -140,8 +140,8 @@ def test_answered_context_renders_for_next_step(wired, monkeypatch):
 
 
 def test_fetch_new_updates_splits_messages_and_callbacks(monkeypatch):
-    from src.config.telegram_config import TelegramConfig
-    from src.tools import telegram_read
+    from my_crew.config.telegram_config import TelegramConfig
+    from my_crew.tools import telegram_read
 
     updates = [
         {"update_id": 10, "message": {"text": "hi", "message_id": 1,
@@ -173,11 +173,11 @@ def test_fetch_new_updates_splits_messages_and_callbacks(monkeypatch):
 def test_callback_from_non_operator_user_is_ignored(monkeypatch):
     from types import SimpleNamespace
 
-    from src.runtime.telegram_inbox import _handle_callback
+    from my_crew.runtime.telegram_inbox import _handle_callback
 
     applied = []
     monkeypatch.setattr(
-        "src.runtime.clarify_service.answer_from_callback",
+        "my_crew.runtime.clarify_service.answer_from_callback",
         lambda data: applied.append(data) or (True, "ok"),
     )
     telegram = SimpleNamespace(ops_operator_id="111", bot_token_env="X")
@@ -203,7 +203,7 @@ def test_callback_from_non_operator_user_is_ignored(monkeypatch):
 
 
 def test_work_node_routes_ceo_proposal_to_ask_ceo():
-    from src.agent.team_task_graph import TeamTaskDeps, build_team_task_graph
+    from my_crew.agent.team_task_graph import TeamTaskDeps, build_team_task_graph
 
     asked = {}
     colleague_calls = []
@@ -234,12 +234,12 @@ def test_work_node_routes_ceo_proposal_to_ask_ceo():
 
 def test_routes_pending_and_answer(wired, monkeypatch):
     monkeypatch.setattr(
-        "src.runtime.operator_notify.notify_operator_best_effort",
+        "my_crew.runtime.operator_notify.notify_operator_best_effort",
         lambda *a, **k: True,
     )
     clarify_service.ask_ceo(agent_id="a", task_id="t", question="Chọn?",
                             options=["A", "B"])
-    from src.server.app import create_app
+    from my_crew.server.app import create_app
 
     client = TestClient(create_app())
     qs = client.get("/api/clarify/pending").json()["questions"]

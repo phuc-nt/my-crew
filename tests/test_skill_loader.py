@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.skills.skill_loader import load_skills
+from my_crew.skills.skill_loader import load_skills
 
 _BUNDLED = {"flag-risk", "prioritize-blockers", "estimate-effort",
             "fetch-jira-epics", "parse-github-labels"}
@@ -79,7 +79,7 @@ def _write_profile(tmp_path, agent_id, yaml_text):
 
 def test_profile_skills_block_parsed(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
-    from src.profile.loader import load_profile
+    from my_crew.profile.loader import load_profile
 
     base = _write_profile(tmp_path, "acme", "name: Acme\nskills: [flag-risk, estimate-effort]\n")
     lp = load_profile("acme", profiles_dir=base, data_dir=tmp_path / ".data")
@@ -88,7 +88,7 @@ def test_profile_skills_block_parsed(tmp_path, monkeypatch):
 
 def test_profile_no_skills_block_empty(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
-    from src.profile.loader import load_profile
+    from my_crew.profile.loader import load_profile
 
     base = _write_profile(tmp_path, "acme", "name: Acme\n")
     lp = load_profile("acme", profiles_dir=base, data_dir=tmp_path / ".data")
@@ -97,8 +97,8 @@ def test_profile_no_skills_block_empty(tmp_path, monkeypatch):
 
 def test_default_profile_has_no_skills(monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
-    from src.profile.loader import load_profile
-    from src.runtime.agent_paths import agent_data_dir
+    from my_crew.profile.loader import load_profile
+    from my_crew.runtime.agent_paths import agent_data_dir
 
     lp = load_profile("default", data_dir=agent_data_dir("default"))
     assert lp.skills == ()  # default profile ships with no skills block — unchanged behavior

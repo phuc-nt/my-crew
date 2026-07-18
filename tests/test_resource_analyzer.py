@@ -6,9 +6,9 @@ from datetime import date
 
 import pytest
 
-from src.agent.resource_analyzer import build_cost_summary, build_resource_report
-from src.llm.budget_tracker import BudgetTracker
-from src.tools.models import Issue
+from my_crew.agent.resource_analyzer import build_cost_summary, build_resource_report
+from my_crew.llm.budget_tracker import BudgetTracker
+from my_crew.tools.models import Issue
 
 TODAY = date(2026, 6, 22)
 

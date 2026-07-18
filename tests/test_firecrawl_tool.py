@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from src.tools.firecrawl_tool import (
+from my_crew.tools.firecrawl_tool import (
     FirecrawlBlocked,
     FirecrawlConfig,
     _assert_public_url,
@@ -112,7 +112,7 @@ def test_scrape_ssrf_checked_before_request(monkeypatch):
 
 
 def test_read_toolset_exposes_web_scrape_when_configured():
-    from src.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
+    from my_crew.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
 
     class _S:
         firecrawl_base_url = "http://localhost:3002"

@@ -17,14 +17,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agent.task_decomposition import decomposition_content_hash
-from src.runtime.team_task_amend import full_dag_plan_hash
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.agent.task_decomposition import decomposition_content_hash
+from my_crew.runtime.team_task_amend import full_dag_plan_hash
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 @pytest.fixture(autouse=True)
 def _isolated_team_tasks_root(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
 
 def _content_hash(steps: list[dict]) -> str:
@@ -83,7 +83,7 @@ def test_reserve_blocked_until_confirm_transaction_finishes_then_sees_post_swap_
     confirm_holds_lock = threading.Event()
     reserve_attempted = threading.Event()
 
-    import src.runtime.team_task_steps as steps_mod
+    import my_crew.runtime.team_task_steps as steps_mod
 
     real_swap = steps_mod.swap_pending_steps
 
@@ -92,7 +92,7 @@ def test_reserve_blocked_until_confirm_transaction_finishes_then_sees_post_swap_
         reserve_attempted.wait(timeout=5)
         return real_swap(*args, **kwargs)
 
-    # `confirm_amendment` does `from src.runtime import team_task_steps as _steps`
+    # `confirm_amendment` does `from my_crew.runtime import team_task_steps as _steps`
     # LOCALLY inside its own function body (not a module-level import on
     # `team_task_amend`), so the patch target is the real `team_task_steps` module
     # attribute itself — the local import binds to this same module object at call time.

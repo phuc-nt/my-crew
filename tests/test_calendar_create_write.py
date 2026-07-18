@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from src.actions.hard_block import BlockCategory, _hard_deny_gws
+from my_crew.actions.hard_block import BlockCategory, _hard_deny_gws
 
 
 def _gws(argv):
@@ -52,7 +52,7 @@ def test_destructive_word_in_event_title_fails_closed():
 # ---- ops command -----------------------------------------------------------
 
 def test_ops_command_registered():
-    from src.agent.ops_catalog import get_command
+    from my_crew.agent.ops_catalog import get_command
 
     cmd = get_command("create_calendar_event")
     assert cmd is not None and cmd["readonly"] is False
@@ -60,7 +60,7 @@ def test_ops_command_registered():
 
 
 def test_build_event_body_shape():
-    from src.agent.ops_calendar_event import _build_event_body
+    from my_crew.agent.ops_calendar_event import _build_event_body
 
     body = _build_event_body({
         "title": "Họp sprint", "start": "2026-07-20T09:00:00+07:00",
@@ -73,7 +73,7 @@ def test_build_event_body_shape():
 
 
 def test_build_event_body_requires_title_and_start():
-    from src.agent.ops_calendar_event import _build_event_body
+    from my_crew.agent.ops_calendar_event import _build_event_body
 
     with pytest.raises(ValueError, match="tiêu đề"):
         _build_event_body({"start": "2026-07-20T09:00:00Z"})
@@ -87,8 +87,8 @@ def test_build_event_body_requires_title_and_start():
     ("skipped", "KHÔNG tạo được"),
 ])
 def test_ops_reply_reports_status_honestly(status, phrase, monkeypatch):
-    from src.actions.action_gateway import GatewayResult
-    from src.agent import ops_calendar_event
+    from my_crew.actions.action_gateway import GatewayResult
+    from my_crew.agent import ops_calendar_event
 
     class _Loaded:
         settings = object()
@@ -100,7 +100,7 @@ def test_ops_reply_reports_status_honestly(status, phrase, monkeypatch):
         def execute(self, action, *, handler=None, rationale=""):
             return GatewayResult(status=status, summary="x")
 
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway", lambda *a, **k: _GW())
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway", lambda *a, **k: _GW())
     out = ops_calendar_event.run_create_calendar_event(
         {"title": "họp", "start": "2026-07-20T09:00:00+07:00"})
     assert phrase in out
@@ -108,8 +108,8 @@ def test_ops_reply_reports_status_honestly(status, phrase, monkeypatch):
 
 def test_ops_builds_fixed_argv_not_llm_supplied(monkeypatch):
     """The argv is CODE-built: subcommand fixed, slots only fill the --json body."""
-    from src.actions.action_gateway import GatewayResult
-    from src.agent import ops_calendar_event
+    from my_crew.actions.action_gateway import GatewayResult
+    from my_crew.agent import ops_calendar_event
 
     class _Loaded:
         settings = object()
@@ -123,7 +123,7 @@ def test_ops_builds_fixed_argv_not_llm_supplied(monkeypatch):
             return GatewayResult(status="executed", summary="ok")
 
     monkeypatch.setattr(ops_calendar_event, "_sender_profile", lambda: _Loaded())
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway", lambda *a, **k: _GW())
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway", lambda *a, **k: _GW())
     ops_calendar_event.run_create_calendar_event(
         {"title": "họp", "start": "2026-07-20T09:00:00+07:00"})
     argv = captured["action"]["argv"]

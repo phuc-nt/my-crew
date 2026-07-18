@@ -7,11 +7,11 @@ builds the same dict but never touches the gateway (ApprovalStore stays empty).
 
 from __future__ import annotations
 
-from src.actions.action_gateway import ActionGateway
-from src.audit.audit_log import AuditLog
-from src.automation.engine import run_workflow
-from src.automation.schema import parse_automation
-from src.config.config_builders import build_settings_from_dict
+from my_crew.actions.action_gateway import ActionGateway
+from my_crew.audit.audit_log import AuditLog
+from my_crew.automation.engine import run_workflow
+from my_crew.automation.schema import parse_automation
+from my_crew.config.config_builders import build_settings_from_dict
 
 
 def _gateway(tmp_path, **kw):

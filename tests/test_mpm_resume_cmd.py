@@ -5,8 +5,8 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from src.entrypoints import mpm, mpm_resume_cmd
-from src.runtime.registry import RegistryEntry
+from my_crew.entrypoints import mpm, mpm_resume_cmd
+from my_crew.runtime.registry import RegistryEntry
 
 
 class _FakeProc:
@@ -40,7 +40,7 @@ def _patch_known(monkeypatch, ids=("acme",)):
 
 
 def _patch_detail(monkeypatch, detail):
-    monkeypatch.setattr("src.runtime.service._last_run_event", lambda agent_id: detail)
+    monkeypatch.setattr("my_crew.runtime.service._last_run_event", lambda agent_id: detail)
 
 
 def test_resume_approve_exact_argv_exit_0(monkeypatch, capsys):
@@ -52,7 +52,7 @@ def test_resume_approve_exact_argv_exit_0(monkeypatch, capsys):
     )
     assert rc == 0
     assert record[0] == [
-        sys.executable, "-m", "src.runtime.worker",
+        sys.executable, "-m", "my_crew.runtime.worker",
         "--agent-id", "acme", "--resume",
         "--thread", "acme:daily:external", "--decision", "approve",
     ]
@@ -102,7 +102,7 @@ def test_mpm_dispatch_routes_resume(monkeypatch):
         called["rest"] = rest
         return 0
 
-    monkeypatch.setattr("src.entrypoints.mpm_resume_cmd.run_resume", _fake)
+    monkeypatch.setattr("my_crew.entrypoints.mpm_resume_cmd.run_resume", _fake)
     rc = mpm.main(["agent", "resume", "acme", "acme:daily:external", "--decision", "approve"])
     assert rc == 0
     assert called["rest"] == ["acme", "acme:daily:external", "--decision", "approve"]

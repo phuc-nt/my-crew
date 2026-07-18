@@ -12,16 +12,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
-from src.agent.coordinator_nodes.review_insert import MAX_REVIEW_ROUNDS
-from src.agent.task_decomposition import decomposition_content_hash
-from src.agent.team_task_artifact import write_review_verdict_artifact
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
+from my_crew.agent.coordinator_nodes.review_insert import MAX_REVIEW_ROUNDS
+from my_crew.agent.task_decomposition import decomposition_content_hash
+from my_crew.agent.team_task_artifact import write_review_verdict_artifact
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 @pytest.fixture(autouse=True)
 def _isolated_team_tasks_root(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
 
 def _store(tmp_path) -> TeamTaskStore:
@@ -58,7 +58,7 @@ def _deps(store, **overrides) -> CoordinatorDeps:
 
 
 def _wire_roster(monkeypatch, roster: list[tuple[str, str]]) -> None:
-    import src.agent.team_task_roster as roster_mod
+    import my_crew.agent.team_task_roster as roster_mod
 
     monkeypatch.setattr(roster_mod, "assignable_staff", lambda: list(roster))
 
@@ -66,7 +66,7 @@ def _wire_roster(monkeypatch, roster: list[tuple[str, str]]) -> None:
 def _fail_newest_review(store, tmp_path) -> None:
     """Complete the newest pending/running review-step and write a "needs_rework"
     verdict for it — simulates the review-step's worker having already run."""
-    from src.runtime.team_task_paths import team_tasks_root
+    from my_crew.runtime.team_task_paths import team_tasks_root
 
     task = store.get("t1")
     review = max(

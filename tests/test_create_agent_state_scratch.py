@@ -17,7 +17,7 @@ pytestmark = pytest.mark.skipif(not _HAS_DEEPAGENTS, reason="deepagents optional
 
 def test_scratch_middleware_has_no_execute_tool():
     """THE moat check: the scratch surface exposes file tools but NO shell-shaped tool."""
-    from src.runtime_backends.react_loop import _state_scratch_middleware
+    from my_crew.runtime_backends.react_loop import _state_scratch_middleware
 
     mw = _state_scratch_middleware()
     names = {getattr(t, "name", "") for t in mw.tools}
@@ -47,7 +47,7 @@ def test_scratch_backend_touches_no_host():
 
 
 def test_readback_surfaces_md_scratch_file():
-    from src.runtime_backends.react_loop import _merge_state_scratch_artifacts
+    from my_crew.runtime_backends.react_loop import _merge_state_scratch_artifacts
 
     result = {"files": {"report.md": {"content": "# Bao cao\nNoi dung day du", "encoding": "u"}}}
     out = _merge_state_scratch_artifacts(result, "tom tat ngan")
@@ -56,7 +56,7 @@ def test_readback_surfaces_md_scratch_file():
 
 
 def test_readback_skips_when_already_in_reply():
-    from src.runtime_backends.react_loop import _merge_state_scratch_artifacts
+    from my_crew.runtime_backends.react_loop import _merge_state_scratch_artifacts
 
     body = "# Bao cao chi tiet ABC day du"
     result = {"files": {"report.md": {"content": body, "encoding": "utf-8"}}}
@@ -65,14 +65,14 @@ def test_readback_skips_when_already_in_reply():
 
 
 def test_readback_no_files_unchanged():
-    from src.runtime_backends.react_loop import _merge_state_scratch_artifacts
+    from my_crew.runtime_backends.react_loop import _merge_state_scratch_artifacts
 
     assert _merge_state_scratch_artifacts({"files": {}}, "reply") == "reply"
     assert _merge_state_scratch_artifacts({}, "reply") == "reply"
 
 
 def test_readback_skips_non_md_and_plain_string_shape():
-    from src.runtime_backends.react_loop import _merge_state_scratch_artifacts
+    from my_crew.runtime_backends.react_loop import _merge_state_scratch_artifacts
 
     # non-.md ignored; plain-string file value also supported (shape tolerance)
     result = {"files": {"data.json": {"content": "{}", "encoding": "utf-8"},
@@ -83,7 +83,7 @@ def test_readback_skips_non_md_and_plain_string_shape():
 
 
 def test_readback_capped():
-    from src.runtime_backends.react_loop import (
+    from my_crew.runtime_backends.react_loop import (
         _SCRATCH_MERGE_MAX_CHARS,
         _merge_state_scratch_artifacts,
     )
@@ -95,7 +95,7 @@ def test_readback_capped():
 
 
 def test_readback_best_effort_on_bad_shape():
-    from src.runtime_backends.react_loop import _merge_state_scratch_artifacts
+    from my_crew.runtime_backends.react_loop import _merge_state_scratch_artifacts
 
     # unexpected shapes must never raise — reply returned unchanged
     assert _merge_state_scratch_artifacts({"files": "not-a-dict"}, "reply") == "reply"

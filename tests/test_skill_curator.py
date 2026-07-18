@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from src.skills.skill_curator import (
+from my_crew.skills.skill_curator import (
     ARCHIVE_UNUSED_DAYS,
     NEVER_USED_GRACE_DAYS,
     archive_agent_skills,
@@ -24,9 +24,9 @@ _NOW = datetime(2026, 7, 13, 3, 0, 0)
 @pytest.fixture
 def agent_world(tmp_path, monkeypatch):
     """Isolated per-agent data dir + profiles dir so usage/archive touch only tmp."""
-    monkeypatch.setattr("src.runtime.agent_paths.agent_data_dir",
+    monkeypatch.setattr("my_crew.runtime.agent_paths.agent_data_dir",
                         lambda aid: tmp_path / "data" / aid)
-    monkeypatch.setattr("src.packs.registry._PROFILES_DIR", tmp_path / "profiles",
+    monkeypatch.setattr("my_crew.packs.registry._PROFILES_DIR", tmp_path / "profiles",
                         raising=False)
     (tmp_path / "profiles" / "a1" / "skills").mkdir(parents=True)
     return tmp_path
@@ -61,7 +61,7 @@ def test_record_usage_empty_is_noop(agent_world):
 
 def test_record_usage_never_raises_on_bad_dir(monkeypatch):
     # Point at an unwritable path shape; must swallow, never raise into the hot path.
-    monkeypatch.setattr("src.runtime.agent_paths.agent_data_dir",
+    monkeypatch.setattr("my_crew.runtime.agent_paths.agent_data_dir",
                         lambda aid: (_ for _ in ()).throw(OSError("boom")))
     record_usage("a1", ["x"], now=_NOW)  # no exception
 
@@ -104,9 +104,9 @@ def test_archive_never_touches_template_skills(agent_world):
 
 
 def test_select_skill_text_records_when_context_has_agent_id(agent_world):
-    from src.profile.context import ProfileContext
-    from src.skills.models import Skill
-    from src.skills.skill_selector import select_skill_text
+    from my_crew.profile.context import ProfileContext
+    from my_crew.skills.models import Skill
+    from my_crew.skills.skill_selector import select_skill_text
 
     skill = Skill(name="s1", description="d", body="body")
     ctx = ProfileContext(
@@ -120,9 +120,9 @@ def test_select_skill_text_records_when_context_has_agent_id(agent_world):
 
 
 def test_select_skill_text_no_agent_id_no_tracking(agent_world):
-    from src.profile.context import ProfileContext
-    from src.skills.models import Skill
-    from src.skills.skill_selector import select_skill_text
+    from my_crew.profile.context import ProfileContext
+    from my_crew.skills.models import Skill
+    from my_crew.skills.skill_selector import select_skill_text
 
     ctx = ProfileContext(skills=(Skill(name="s1", description="d", body="b"),),
                          skill_selector=lambda c, k: ["s1"])  # no agent_id
@@ -133,13 +133,13 @@ def test_select_skill_text_no_agent_id_no_tracking(agent_world):
 def test_sweep_cooldown_skips_repeat_within_window(agent_world, monkeypatch):
     """Review MED #4: the 60s tick fires the sweep ~60x in the hour-3 window; a per-agent
     cooldown makes all but the first a no-op."""
-    from src.skills import skill_curator
+    from my_crew.skills import skill_curator
 
     class _E:
         id = "a1"
         enabled = True
 
-    monkeypatch.setattr("src.runtime.registry.load_registry", lambda: (_E(),))
+    monkeypatch.setattr("my_crew.runtime.registry.load_registry", lambda: (_E(),))
     calls = []
     monkeypatch.setattr(skill_curator, "archive_agent_skills",
                         lambda aid, now=None: calls.append(aid) or [])
@@ -151,15 +151,15 @@ def test_sweep_cooldown_skips_repeat_within_window(agent_world, monkeypatch):
 
 
 def test_service_gate_only_fires_at_sweep_hour(monkeypatch):
-    from src.runtime import service
+    from my_crew.runtime import service
 
     calls = []
-    monkeypatch.setattr("src.skills.skill_curator.run_skill_archive_sweep",
+    monkeypatch.setattr("my_crew.skills.skill_curator.run_skill_archive_sweep",
                         lambda now=None: calls.append(now) or 0)
     service._archive_stale_skills_best_effort(datetime(2026, 7, 13, 14, 0))
     assert calls == []
     service._archive_stale_skills_best_effort(datetime(2026, 7, 13, 3, 5))
     assert len(calls) == 1
-    monkeypatch.setattr("src.skills.skill_curator.run_skill_archive_sweep",
+    monkeypatch.setattr("my_crew.skills.skill_curator.run_skill_archive_sweep",
                         lambda now=None: (_ for _ in ()).throw(RuntimeError("boom")))
     service._archive_stale_skills_best_effort(datetime(2026, 7, 13, 3, 6))  # no raise

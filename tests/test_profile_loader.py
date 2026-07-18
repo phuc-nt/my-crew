@@ -6,11 +6,11 @@ import dataclasses as dc
 
 import pytest
 
-from src.config.config_builders import (
+from my_crew.config.config_builders import (
     build_reporting_config_from_env,
     build_settings_from_env,
 )
-from src.profile.loader import load_profile
+from my_crew.profile.loader import load_profile
 
 # Env the loader + from_env read; clear all so the comparison is deterministic.
 _ALL_ENV = [
@@ -34,9 +34,11 @@ def clean_env(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     # Block .env load in all three spots that call it (loader + both env builders), so
     # the cleared process env is the only source and default == from_env is exact.
-    monkeypatch.setattr("src.profile.loader.load_dotenv", lambda *a, **k: None)
-    monkeypatch.setattr("src.config.config_builders.load_dotenv", lambda *a, **k: None)
-    monkeypatch.setattr("src.config.config_builders_reporting.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr("my_crew.profile.loader.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr("my_crew.config.config_builders.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "my_crew.config.config_builders_reporting.load_dotenv", lambda *a, **k: None
+    )
 
 
 def _write_profile(tmp_path, profile_yaml, *, soul=None, project=None, memory=None):

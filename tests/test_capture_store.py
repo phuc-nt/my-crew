@@ -7,7 +7,7 @@ needs, distinguishes review rows from work rows, and tolerates two concurrent co
 
 from __future__ import annotations
 
-from src.runtime.capture_store import CaptureStore
+from my_crew.runtime.capture_store import CaptureStore
 
 
 def _store(tmp_path):

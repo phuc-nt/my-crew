@@ -15,9 +15,12 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from src.config.config_builders import build_reporting_config_from_dict, build_settings_from_dict
-from src.profile.loader import LoadedProfile
-from src.runtime.task_store import TaskStore
+from my_crew.config.config_builders import (
+    build_reporting_config_from_dict,
+    build_settings_from_dict,
+)
+from my_crew.profile.loader import LoadedProfile
+from my_crew.runtime.task_store import TaskStore
 
 
 def _loaded(tmp_path):
@@ -38,7 +41,7 @@ def _loaded(tmp_path):
 
 
 def test_report_task_runs_the_report_graph(tmp_path, monkeypatch):
-    from src.runtime import recurring_task
+    from my_crew.runtime import recurring_task
 
     invoked = {}
 
@@ -47,21 +50,21 @@ def test_report_task_runs_the_report_graph(tmp_path, monkeypatch):
             invoked["ran"] = True
             return {}
 
-    monkeypatch.setattr("src.runtime.worker.build_graph_for", lambda *a, **k: _Graph())
-    monkeypatch.setattr("src.runtime.run_config.invoke_config", lambda tid, s: {})
+    monkeypatch.setattr("my_crew.runtime.worker.build_graph_for", lambda *a, **k: _Graph())
+    monkeypatch.setattr("my_crew.runtime.run_config.invoke_config", lambda tid, s: {})
     summary, cost = recurring_task.run_report_task({"kind": "daily"}, _loaded(tmp_path), None)
     assert invoked["ran"] and "daily" in summary
 
 
 def test_report_task_missing_kind_raises(tmp_path):
-    from src.runtime.recurring_task import run_report_task
+    from my_crew.runtime.recurring_task import run_report_task
 
     with pytest.raises(ValueError, match="kind"):
         run_report_task({}, _loaded(tmp_path), None)
 
 
 def test_qa_task_answers_via_m11_path(tmp_path, monkeypatch):
-    from src.runtime import recurring_task
+    from my_crew.runtime import recurring_task
 
     captured = {}
 
@@ -69,9 +72,9 @@ def test_qa_task_answers_via_m11_path(tmp_path, monkeypatch):
         captured["question"] = mention["text"]
         return type("R", (), {"status": "executed"})(), 0.002
 
-    monkeypatch.setattr("src.agent.qa_answer._answer_question", fake_answer)
-    monkeypatch.setattr("src.packs.registry.PackRegistry.load", lambda self, d: object())
-    monkeypatch.setattr("src.llm.client.LlmClient", lambda s: object())
+    monkeypatch.setattr("my_crew.agent.qa_answer._answer_question", fake_answer)
+    monkeypatch.setattr("my_crew.packs.registry.PackRegistry.load", lambda self, d: object())
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", lambda s: object())
     summary, cost = recurring_task.run_qa_task(
         {"question": "hôm nay ai quá tải?"}, _loaded(tmp_path), None, gateway=object()
     )
@@ -79,7 +82,7 @@ def test_qa_task_answers_via_m11_path(tmp_path, monkeypatch):
 
 
 def test_qa_task_missing_question_raises(tmp_path):
-    from src.runtime.recurring_task import run_qa_task
+    from my_crew.runtime.recurring_task import run_qa_task
 
     with pytest.raises(ValueError, match="question"):
         run_qa_task({}, _loaded(tmp_path), None, gateway=object())
@@ -89,7 +92,7 @@ def test_qa_task_dedup_ts_is_deterministic_across_processes(tmp_path, monkeypatc
     """The synthetic mention ts (which the M11 reply dedup keys on) must be STABLE for the
     same (agent, question, day) — builtin hash() is per-process randomized and would re-post
     the answer every restart. Assert the ts is a stable sha digest, not hash()-derived."""
-    from src.runtime import recurring_task
+    from my_crew.runtime import recurring_task
 
     seen = {}
 
@@ -98,9 +101,9 @@ def test_qa_task_dedup_ts_is_deterministic_across_processes(tmp_path, monkeypatc
         assert mention["ts"] == seen["ts"]  # same across calls
         return type("R", (), {"status": "executed"})(), None
 
-    monkeypatch.setattr("src.agent.qa_answer._answer_question", fake_answer)
-    monkeypatch.setattr("src.packs.registry.PackRegistry.load", lambda self, d: object())
-    monkeypatch.setattr("src.llm.client.LlmClient", lambda s: object())
+    monkeypatch.setattr("my_crew.agent.qa_answer._answer_question", fake_answer)
+    monkeypatch.setattr("my_crew.packs.registry.PackRegistry.load", lambda self, d: object())
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", lambda s: object())
     loaded = _loaded(tmp_path)
     recurring_task.run_qa_task({"question": "ai quá tải?"}, loaded, None, gateway=object())
     recurring_task.run_qa_task({"question": "ai quá tải?"}, loaded, None, gateway=object())
@@ -118,7 +121,7 @@ def test_qa_task_dedup_ts_is_deterministic_across_processes(tmp_path, monkeypatc
 
 
 def test_recurring_task_stops_at_deadline(tmp_path, monkeypatch):
-    from src.runtime import task_runner
+    from my_crew.runtime import task_runner
 
     old = (datetime.now(UTC) - timedelta(days=15)).isoformat()
     s = TaskStore(tmp_path / "tasks.sqlite3")
@@ -131,10 +134,10 @@ def test_recurring_task_stops_at_deadline(tmp_path, monkeypatch):
     posts = []
     monkeypatch.setattr(task_runner, "_post",
                         lambda gw, ld, text, *, dedup: posts.append(text) or True)
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway",
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway",
                         lambda *a, **k: type("G", (), {"close": lambda self: None})())
     # graph must NOT run — deadline stops first
-    monkeypatch.setattr("src.runtime.recurring_task.run_report_task",
+    monkeypatch.setattr("my_crew.runtime.recurring_task.run_report_task",
                         lambda *a, **k: pytest.fail("must not run past deadline"))
     loaded = _loaded(tmp_path)
     task_runner.run_tasks(loaded, loaded.settings)
@@ -149,16 +152,16 @@ def test_recurring_task_stops_at_deadline(tmp_path, monkeypatch):
 def test_recurring_runs_at_most_once_per_day(tmp_path, monkeypatch):
     """review M1: the service fires `tasks` hourly, but a report/qa task must recompute at
     most once per calendar day — a same-day second tick is a no-op (no LLM re-compose)."""
-    from src.runtime import task_runner
+    from my_crew.runtime import task_runner
 
     s = TaskStore(tmp_path / "tasks.sqlite3")
     s.create(kind="report", params={"kind": "daily"}, schedule="0 8 * * *")
     s.close()
     runs = {"n": 0}
-    monkeypatch.setattr("src.runtime.recurring_task.run_report_task",
+    monkeypatch.setattr("my_crew.runtime.recurring_task.run_report_task",
                         lambda *a, **k: runs.update(n=runs["n"] + 1) or ("ran", None))
     monkeypatch.setattr(task_runner, "_post", lambda *a, **k: True)
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway",
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway",
                         lambda *a, **k: type("G", (), {"close": lambda self: None})())
     loaded = _loaded(tmp_path)
     task_runner.run_tasks(loaded, loaded.settings)  # first tick today → runs
@@ -168,16 +171,16 @@ def test_recurring_runs_at_most_once_per_day(tmp_path, monkeypatch):
 
 
 def test_runner_dispatches_report_kind(tmp_path, monkeypatch):
-    from src.runtime import task_runner
+    from my_crew.runtime import task_runner
 
     s = TaskStore(tmp_path / "tasks.sqlite3")
     tid = s.create(kind="report", params={"kind": "daily"}, schedule="0 8 * * *")
     s.close()
     ran = {}
-    monkeypatch.setattr("src.runtime.recurring_task.run_report_task",
+    monkeypatch.setattr("my_crew.runtime.recurring_task.run_report_task",
                         lambda p, ld, st: ran.update(kind=p["kind"]) or ("ran daily", None))
     monkeypatch.setattr(task_runner, "_post", lambda *a, **k: True)
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway",
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway",
                         lambda *a, **k: type("G", (), {"close": lambda self: None})())
     loaded = _loaded(tmp_path)
     out = task_runner.run_tasks(loaded, loaded.settings)
@@ -202,12 +205,12 @@ def _seed(agent_dir, kind="watch", params=None):
 
 
 def _client(monkeypatch, tmp_path, ids=("pm",)):
-    from src.runtime import registry
-    from src.runtime.registry import RegistryEntry
-    from src.server import routes_tasks
-    from src.server.app import create_app
+    from my_crew.runtime import registry
+    from my_crew.runtime.registry import RegistryEntry
+    from my_crew.server import routes_tasks
+    from my_crew.server.app import create_app
 
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path)
     monkeypatch.setattr(routes_tasks, "load_registry",
                         lambda: tuple(RegistryEntry(i, True) for i in ids))
     _ = registry  # keep import
@@ -215,7 +218,7 @@ def _client(monkeypatch, tmp_path, ids=("pm",)):
 
 
 def test_board_lists_tasks(monkeypatch, tmp_path):
-    from src.runtime.agent_paths import agent_data_dir
+    from my_crew.runtime.agent_paths import agent_data_dir
 
     client = _client(monkeypatch, tmp_path)
     (agent_data_dir("pm")).mkdir(parents=True, exist_ok=True)
@@ -228,7 +231,7 @@ def test_board_lists_tasks(monkeypatch, tmp_path):
 
 
 def test_board_cancel_open_task(monkeypatch, tmp_path):
-    from src.runtime.agent_paths import agent_data_dir
+    from my_crew.runtime.agent_paths import agent_data_dir
 
     client = _client(monkeypatch, tmp_path)
     (agent_data_dir("pm")).mkdir(parents=True, exist_ok=True)
@@ -241,7 +244,7 @@ def test_board_cancel_open_task(monkeypatch, tmp_path):
 
 
 def test_board_cancel_unknown_task_404(monkeypatch, tmp_path):
-    from src.runtime.agent_paths import agent_data_dir
+    from my_crew.runtime.agent_paths import agent_data_dir
 
     client = _client(monkeypatch, tmp_path)
     (agent_data_dir("pm")).mkdir(parents=True, exist_ok=True)
@@ -260,7 +263,7 @@ def test_qa_task_reply_posts_top_level_not_a_fake_thread(tmp_path, monkeypatch):
     """review M2: a qa-task's synthetic mention has no real Slack ts, so the reply must post
     TOP-LEVEL — a fabricated thread_ts would make Slack reject/misroute it. Drive the REAL
     _post_reply path (only the gateway.execute is stubbed) and assert no thread_ts is sent."""
-    from src.agent import qa_answer
+    from my_crew.agent import qa_answer
 
     posted = {}
 

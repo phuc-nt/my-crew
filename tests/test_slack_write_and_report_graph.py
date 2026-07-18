@@ -6,12 +6,12 @@ from datetime import date
 
 import pytest
 
-from src.actions import slack_write
-from src.actions.action_gateway import ActionGateway
-from src.actions.slack_write import _dedup_key, deliver_report
-from src.agent.report_graph import ReportDeps, build_report_graph
-from src.audit.audit_log import AuditLog
-from src.tools.models import CiRun, Issue, PullRequest, Risk
+from my_crew.actions import slack_write
+from my_crew.actions.action_gateway import ActionGateway
+from my_crew.actions.slack_write import _dedup_key, deliver_report
+from my_crew.agent.report_graph import ReportDeps, build_report_graph
+from my_crew.audit.audit_log import AuditLog
+from my_crew.tools.models import CiRun, Issue, PullRequest, Risk
 
 
 class _SlackCfg:
@@ -119,7 +119,7 @@ def test_report_graph_compiles_without_network():
 
 
 def test_slack_short_with_risks_and_link():
-    from src.llm.report_prompt import build_slack_short
+    from my_crew.llm.report_prompt import build_slack_short
 
     risks = [
         Risk(kind="blocker", severity="high", subject="AB-1", detail="chặn", suggested_action="gỡ")
@@ -131,14 +131,14 @@ def test_slack_short_with_risks_and_link():
 
 
 def test_slack_short_no_risks():
-    from src.llm.report_prompt import build_slack_short
+    from my_crew.llm.report_prompt import build_slack_short
 
     out = build_slack_short([], report_date="2026-06-21", detail_url="https://x/p")
     assert "Tiến độ ổn" in out
 
 
 def test_slack_short_no_url():
-    from src.llm.report_prompt import build_slack_short
+    from my_crew.llm.report_prompt import build_slack_short
 
     out = build_slack_short([], report_date="2026-06-21", detail_url=None)
     assert "không tạo được link" in out

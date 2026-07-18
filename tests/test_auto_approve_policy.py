@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from src.actions.auto_approve_policy import (
+from my_crew.actions.auto_approve_policy import (
     RATIONALE_PREFIX,
     claim_daily_slot,
     evaluate,
 )
-from src.actions.dedup_store import DedupStore
+from my_crew.actions.dedup_store import DedupStore
 
 CFG = {
     "actions": {"slack_post": {"enabled": True, "max_per_day": 2, "channels": ["C_EXT"]}},

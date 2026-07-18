@@ -31,7 +31,7 @@ def _install_fakes(monkeypatch, capture: dict):
     fake_deepagents.create_deep_agent = _create_deep_agent
     monkeypatch.setitem(sys.modules, "deepagents", fake_deepagents)
 
-    from src.runtime_backends import deep_agent_loop as dal
+    from my_crew.runtime_backends import deep_agent_loop as dal
 
     # sanitize_bundle → identity passthrough, sanitize_ok True (an explicit `sanitize` callable is
     # passed to run_deep_agent_work by the caller, so the LlmClient default path is never hit).
@@ -39,19 +39,19 @@ def _install_fakes(monkeypatch, capture: dict):
         persona = project = memory = capability = ""
         handoff = "handoff"
 
-    import src.runtime_backends.deep_agent_sanitizer as san
+    import my_crew.runtime_backends.deep_agent_sanitizer as san
 
     monkeypatch.setattr(san, "sanitize_bundle", lambda *_a, **_k: (_Bundle(), True))
 
-    import src.runtime_backends.sandbox_backend as sb
+    import my_crew.runtime_backends.sandbox_backend as sb
 
     monkeypatch.setattr(sb, "build_sandbox_backend", lambda *_a, **_k: object())
 
-    import src.runtime_backends.sandbox_teardown as td
+    import my_crew.runtime_backends.sandbox_teardown as td
 
     monkeypatch.setattr(td, "teardown_sandbox", lambda *_a, **_k: None)
 
-    import src.runtime_backends.community_loop_core as clc
+    import my_crew.runtime_backends.community_loop_core as clc
 
     monkeypatch.setattr(clc, "invoke_capped", lambda *_a, **_k: {"messages": []})
     monkeypatch.setattr(clc, "record_loop_result", lambda *_a, **_k: ("reply text", 0.0))
@@ -77,7 +77,7 @@ class _Settings:
 def _run(monkeypatch):
     capture: dict = {}
     _install_fakes(monkeypatch, capture)
-    from src.runtime_backends.deep_agent_loop import run_deep_agent_work
+    from my_crew.runtime_backends.deep_agent_loop import run_deep_agent_work
 
     text, _cost = run_deep_agent_work(
         title="Nghiên cứu thị trường X",
@@ -92,7 +92,7 @@ def _run(monkeypatch):
 
 
 def test_compose_contract_appended_to_system_prompt(monkeypatch):
-    from src.runtime_backends.deep_agent_loop import _DEEP_AGENT_COMPOSE_CONTRACT
+    from my_crew.runtime_backends.deep_agent_loop import _DEEP_AGENT_COMPOSE_CONTRACT
 
     capture, _text = _run(monkeypatch)
     assert _DEEP_AGENT_COMPOSE_CONTRACT in capture["system_prompt"]
@@ -101,7 +101,7 @@ def test_compose_contract_appended_to_system_prompt(monkeypatch):
 
 
 def test_contract_mentions_write_early_and_bounded_loop():
-    from src.runtime_backends.deep_agent_loop import _DEEP_AGENT_COMPOSE_CONTRACT
+    from my_crew.runtime_backends.deep_agent_loop import _DEEP_AGENT_COMPOSE_CONTRACT
 
     c = _DEEP_AGENT_COMPOSE_CONTRACT
     assert "write_file" in c  # names the actual tool

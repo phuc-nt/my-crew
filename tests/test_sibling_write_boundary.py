@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from langgraph.store.memory import InMemoryStore
 
-from src.agent.memory_node import _NAMESPACE_KIND, _assert_self_namespace, make_memory_node
+from my_crew.agent.memory_node import _NAMESPACE_KIND, _assert_self_namespace, make_memory_node
 
 
 class _Settings:

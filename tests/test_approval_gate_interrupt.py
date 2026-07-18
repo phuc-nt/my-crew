@@ -15,9 +15,9 @@ from datetime import date
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 
-from src.agent.report_graph import ReportDeps, build_report_graph
-from src.profile.context import ProfileContext
-from src.tools.models import CiRun, Issue, PullRequest, Risk
+from my_crew.agent.report_graph import ReportDeps, build_report_graph
+from my_crew.profile.context import ProfileContext
+from my_crew.tools.models import CiRun, Issue, PullRequest, Risk
 
 
 def _checkpointer() -> SqliteSaver:
@@ -129,8 +129,8 @@ def test_interrupt_payload_has_no_profile():
 def test_external_summary_channel_branch_has_no_profile():
     # The channel-BEARING branch (real config, audience=external) — the summary must
     # contain only the report kind + stakeholder channel, never profile data.
-    from src.agent.approval_gate import external_summary
-    from src.config.config_builders import build_reporting_config_from_dict
+    from my_crew.agent.approval_gate import external_summary
+    from my_crew.config.config_builders import build_reporting_config_from_dict
 
     cfg = build_reporting_config_from_dict(
         {"slack_stakeholder_channel": "C_EXT", "slack_external_channels": "C_EXT"}

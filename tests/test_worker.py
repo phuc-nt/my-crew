@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from src.runtime import worker
+from my_crew.runtime import worker
 
 
 def _fake_run(result):
@@ -21,9 +21,9 @@ def _fake_run(result):
 
 def _patch_data_dir(monkeypatch, tmp_path):
     """Redirect the per-agent data dir under tmp so the worker writes nowhere real."""
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
     # the worker also migrates on startup — point that DATA_DIR at the (empty) tmp too
-    monkeypatch.setattr("src.runtime.legacy_migration.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.legacy_migration.DATA_DIR", tmp_path / ".data")
 
 
 def test_happy_dry_run_exit_0_and_run_event(monkeypatch, tmp_path):

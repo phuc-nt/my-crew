@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from src.server import routes_runs, run_manager
-from src.server.app import create_app
+from my_crew.server import routes_runs, run_manager
+from my_crew.server.app import create_app
 
 
 class _FakeGraph:
@@ -15,7 +15,7 @@ class _FakeGraph:
 
 
 def _patch(monkeypatch, ids=("acme",)):
-    from src.runtime.registry import RegistryEntry
+    from my_crew.runtime.registry import RegistryEntry
 
     monkeypatch.setattr(
         routes_runs.agent_views, "load_registry",

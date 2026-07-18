@@ -17,7 +17,7 @@ import json
 
 import pytest
 
-from src.agent.task_decomposition import (
+from my_crew.agent.task_decomposition import (
     MAX_STEPS,
     DecompositionError,
     decomposition_content_hash,
@@ -196,7 +196,7 @@ def test_decompose_prompt_instructs_needs_review_and_acceptance():
     # E2E-found regression: the decompose system prompt must tell the LLM to set
     # needs_review + acceptance, or every step ships needs_review=false and peer review
     # never fires in production (the graph/store default them false).
-    from src.llm.team_task_prompt import build_team_decompose_messages
+    from my_crew.llm.team_task_prompt import build_team_decompose_messages
 
     msgs = build_team_decompose_messages(brief="x", staff=[("a", "office")])
     system = msgs[0]["content"]

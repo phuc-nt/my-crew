@@ -16,10 +16,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from src.config.config_builders import build_reporting_config_from_dict, build_settings_from_dict
-from src.profile.loader import LoadedProfile
-from src.runtime.task_store import MAX_OPEN_TASKS, STALL_AFTER, HistoryEntry, TaskStore
-from src.runtime.watch_task import DEFAULT_DEADLINE_DAYS, check_pr_watch
+from my_crew.config.config_builders import (
+    build_reporting_config_from_dict,
+    build_settings_from_dict,
+)
+from my_crew.profile.loader import LoadedProfile
+from my_crew.runtime.task_store import MAX_OPEN_TASKS, STALL_AFTER, HistoryEntry, TaskStore
+from my_crew.runtime.watch_task import DEFAULT_DEADLINE_DAYS, check_pr_watch
 
 
 def _store(tmp_path):
@@ -152,11 +155,11 @@ def _seed_watch(tmp_path, params=None):
 
 
 def test_runner_marks_done_and_posts(tmp_path, monkeypatch):
-    from src.runtime import task_runner
+    from my_crew.runtime import task_runner
 
     tid = _seed_watch(tmp_path)
     posts = []
-    monkeypatch.setattr("src.adapters.cli_adapter.run_gh",
+    monkeypatch.setattr("my_crew.adapters.cli_adapter.run_gh",
                         lambda a: {"state": "MERGED", "title": "Feat X"})
     monkeypatch.setattr(task_runner, "_post",
                         lambda gw, ld, text, *, dedup: posts.append(text) or True)
@@ -164,7 +167,9 @@ def test_runner_marks_done_and_posts(tmp_path, monkeypatch):
     class _StubGateway:
         def close(self): pass
 
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway", lambda *a, **k: _StubGateway())
+    monkeypatch.setattr(
+        "my_crew.actions.action_gateway.ActionGateway", lambda *a, **k: _StubGateway()
+    )
     loaded = _loaded(tmp_path)
     out = task_runner.run_tasks(loaded, loaded.settings)
     assert out["checked"] == 1 and out["delivered"]
@@ -177,15 +182,15 @@ def test_runner_marks_done_and_posts(tmp_path, monkeypatch):
 
 
 def test_runner_reminds_while_open(tmp_path, monkeypatch):
-    from src.runtime import task_runner
+    from my_crew.runtime import task_runner
 
     tid = _seed_watch(tmp_path)
     posts = []
-    monkeypatch.setattr("src.adapters.cli_adapter.run_gh",
+    monkeypatch.setattr("my_crew.adapters.cli_adapter.run_gh",
                         lambda a: {"state": "OPEN", "title": "X"})
     monkeypatch.setattr(task_runner, "_post",
                         lambda gw, ld, text, *, dedup: posts.append((text, dedup)) or True)
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway",
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway",
                         lambda *a, **k: type("G", (), {"close": lambda self: None})())
     loaded = _loaded(tmp_path)
     task_runner.run_tasks(loaded, loaded.settings)
@@ -199,13 +204,13 @@ def test_runner_reminds_while_open(tmp_path, monkeypatch):
 
 
 def test_runner_stalls_after_repeated_content_errors(tmp_path, monkeypatch):
-    from src.runtime import task_runner
+    from my_crew.runtime import task_runner
 
     tid = _seed_watch(tmp_path)
-    monkeypatch.setattr("src.adapters.cli_adapter.run_gh",
+    monkeypatch.setattr("my_crew.adapters.cli_adapter.run_gh",
                         lambda a: (_ for _ in ()).throw(RuntimeError("gh: PR not found")))
     monkeypatch.setattr(task_runner, "_post", lambda gw, ld, text, *, dedup: True)
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway",
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway",
                         lambda *a, **k: type("G", (), {"close": lambda self: None})())
     loaded = _loaded(tmp_path)
     for _ in range(STALL_AFTER):
@@ -218,14 +223,14 @@ def test_runner_stalls_after_repeated_content_errors(tmp_path, monkeypatch):
 
 
 def test_runner_infra_error_holds_no_status_change(tmp_path, monkeypatch):
-    from src.llm.fallback_policy import ProviderCallError
-    from src.runtime import task_runner
+    from my_crew.llm.fallback_policy import ProviderCallError
+    from my_crew.runtime import task_runner
 
     tid = _seed_watch(tmp_path)
-    monkeypatch.setattr("src.adapters.cli_adapter.run_gh",
+    monkeypatch.setattr("my_crew.adapters.cli_adapter.run_gh",
                         lambda a: (_ for _ in ()).throw(ProviderCallError("net down")))
     monkeypatch.setattr(task_runner, "_post", lambda gw, ld, text, *, dedup: True)
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway",
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway",
                         lambda *a, **k: type("G", (), {"close": lambda self: None})())
     loaded = _loaded(tmp_path)
     task_runner.run_tasks(loaded, loaded.settings)
@@ -238,7 +243,7 @@ def test_runner_infra_error_holds_no_status_change(tmp_path, monkeypatch):
 
 
 def test_runner_no_tasks_is_noop(tmp_path):
-    from src.runtime.task_runner import run_tasks
+    from my_crew.runtime.task_runner import run_tasks
 
     loaded = _loaded(tmp_path)
     out = run_tasks(loaded, loaded.settings)
@@ -246,7 +251,7 @@ def test_runner_no_tasks_is_noop(tmp_path):
 
 
 def test_runner_write_disabled_skips(tmp_path):
-    from src.runtime.task_runner import run_tasks
+    from my_crew.runtime.task_runner import run_tasks
 
     _seed_watch(tmp_path)
     loaded = _loaded(tmp_path, write_disabled=True)
@@ -262,9 +267,9 @@ def test_schedule_adds_tasks_kind_via_service_load_path(tmp_path, monkeypatch):
     per-agent data_dir, so has_open_tasks must find the store under agent_data_dir(id), NOT
     settings.data_dir (which is the global DATA_DIR in the service). This is the exact path
     that regressed as C1 — the old test injected data_dir and never exercised it."""
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", tmp_path)
-    from src.runtime.agent_paths import agent_data_dir
-    from src.runtime.service import _effective_schedule
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path)
+    from my_crew.runtime.agent_paths import agent_data_dir
+    from my_crew.runtime.service import _effective_schedule
 
     # A profile loaded WITHOUT data_dir → settings.data_dir is NOT the agent's store dir.
     loaded = _loaded(tmp_path / "global-not-store")
@@ -284,13 +289,13 @@ def test_schedule_adds_tasks_kind_via_service_load_path(tmp_path, monkeypatch):
 
 def _patch_agent_paths(monkeypatch, tmp_path, loaded):
     """Point the ops catalog's agent lookups at the test's tmp store + loaded profile."""
-    monkeypatch.setattr("src.profile.loader.load_profile", lambda aid, **k: loaded)
-    monkeypatch.setattr("src.runtime.agent_paths.agent_data_dir", lambda aid: tmp_path)
+    monkeypatch.setattr("my_crew.profile.loader.load_profile", lambda aid, **k: loaded)
+    monkeypatch.setattr("my_crew.runtime.agent_paths.agent_data_dir", lambda aid: tmp_path)
 
 
 def test_watch_pr_assigned_via_ops_chat_confirm_flow(tmp_path, monkeypatch):
-    from src.agent.ops_chat import handle_ops_message
-    from src.agent.ops_conversation_store import OpsConversationStore
+    from my_crew.agent.ops_chat import handle_ops_message
+    from my_crew.agent.ops_conversation_store import OpsConversationStore
 
     loaded = _loaded(tmp_path)
     _patch_agent_paths(monkeypatch, tmp_path, loaded)
@@ -329,8 +334,8 @@ def test_watch_pr_assigned_via_ops_chat_confirm_flow(tmp_path, monkeypatch):
 
 
 def test_list_tasks_is_readonly_no_confirm(tmp_path, monkeypatch):
-    from src.agent.ops_chat import handle_ops_message
-    from src.agent.ops_conversation_store import OpsConversationStore
+    from my_crew.agent.ops_chat import handle_ops_message
+    from my_crew.agent.ops_conversation_store import OpsConversationStore
 
     loaded = _loaded(tmp_path)
     _patch_agent_paths(monkeypatch, tmp_path, loaded)

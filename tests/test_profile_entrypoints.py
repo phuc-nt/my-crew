@@ -23,7 +23,7 @@ def _fake_loaded(tmp_path, *, api_key="k", soul="", project="", memory=""):
 
 
 def test_cli_parse_profile_default():
-    from src.entrypoints.cli import _parse_profile
+    from my_crew.entrypoints.cli import _parse_profile
 
     assert _parse_profile([]) == "default"
     assert _parse_profile(["report", "--daily"]) == "default"
@@ -31,7 +31,7 @@ def test_cli_parse_profile_default():
 
 
 def test_cron_parse_profile_default():
-    from src.entrypoints.cron import _profile_id
+    from my_crew.entrypoints.cron import _profile_id
 
     assert _profile_id([]) == "default"
     assert _profile_id(["--okr", "--profile", "beta"]) == "beta"
@@ -41,8 +41,8 @@ def test_cron_parse_profile_default():
 
 
 def test_no_profile_flag_loads_default_and_config_reaches_graph(monkeypatch, tmp_path):
-    import src.agent.report_graph as report_graph_mod
-    from src.entrypoints import cli
+    import my_crew.agent.report_graph as report_graph_mod
+    from my_crew.entrypoints import cli
 
     seen = {}
     loaded = _fake_loaded(tmp_path, soul="PERSONA", project="PROJ", memory="MEM")
@@ -76,8 +76,8 @@ def test_no_profile_flag_loads_default_and_config_reaches_graph(monkeypatch, tmp
 
 
 def test_explicit_profile_flag_loads_that_profile(monkeypatch, tmp_path):
-    import src.agent.report_graph as report_graph_mod
-    from src.entrypoints import cli
+    import my_crew.agent.report_graph as report_graph_mod
+    from my_crew.entrypoints import cli
 
     seen = {}
     monkeypatch.setattr(
@@ -98,7 +98,7 @@ def test_explicit_profile_flag_loads_that_profile(monkeypatch, tmp_path):
 
 
 def test_cli_bad_profile_returns_error(monkeypatch, capsys):
-    from src.entrypoints import cli
+    from my_crew.entrypoints import cli
 
     def boom(profile_id):
         raise FileNotFoundError(f"Profile {profile_id!r} not found: ...")
@@ -111,7 +111,7 @@ def test_cli_bad_profile_returns_error(monkeypatch, capsys):
 
 
 def test_cron_bad_profile_returns_one(monkeypatch, capsys):
-    from src.entrypoints import cron
+    from my_crew.entrypoints import cron
 
     def boom(profile_id):
         raise FileNotFoundError(f"Profile {profile_id!r} not found")
@@ -127,7 +127,7 @@ def test_cron_bad_profile_returns_one(monkeypatch, capsys):
 def test_cli_misconfigured_profile_audit_stays_clean(monkeypatch, capsys):
     # A profile whose reporting config fails validation (stakeholder not in external)
     # must NOT crash `audit` with a traceback — it exits non-zero with a clear error.
-    from src.entrypoints import cli
+    from my_crew.entrypoints import cli
 
     def boom(profile_id):
         raise RuntimeError("SLACK_EXTERNAL_CHANNELS: stakeholder channel must be listed")
@@ -138,7 +138,7 @@ def test_cli_misconfigured_profile_audit_stays_clean(monkeypatch, capsys):
 
 
 def test_cron_misconfigured_profile_returns_one(monkeypatch, capsys):
-    from src.entrypoints import cron
+    from my_crew.entrypoints import cron
 
     monkeypatch.setattr(
         cron, "load_profile",
@@ -154,13 +154,13 @@ def test_cron_misconfigured_profile_returns_one(monkeypatch, capsys):
 def test_cli_real_default_profile_loads(monkeypatch):
     # Integration-ish: the committed profiles/default/ actually loads (no network),
     # and a missing key short-circuits to exit 1 (proves the real load path works).
-    from src.entrypoints import cli
+    from my_crew.entrypoints import cli
 
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("SLACK_STAKEHOLDER_CHANNEL", raising=False)
     monkeypatch.delenv("SLACK_EXTERNAL_CHANNELS", raising=False)
     # Block the loader's .env load so the deleted key stays absent (else the real .env
     # key would be reloaded and the hello path would hit the network).
-    monkeypatch.setattr("src.profile.loader.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr("my_crew.profile.loader.load_dotenv", lambda *a, **k: None)
     # hello path: loads the real default profile, then _require_key fails (no key) ⇒ 1.
     assert cli.main(["hello"]) == 1

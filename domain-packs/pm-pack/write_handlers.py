@@ -7,7 +7,7 @@ only *add* permitted tools here; it can NEVER widen the Lớp A red line (destru
 security markers stay in core `hard_block.py`, are checked first, and are not
 pack-overridable).
 
-Write-handler DISPATCH stays in core (`src/actions/approved_dispatch.py`): the handlers
+Write-handler DISPATCH stays in core (`my_crew/actions/approved_dispatch.py`): the handlers
 (slack/confluence/linear/email) are shared gateway primitives reused across domains (M6's
 HR pack posts to Slack too), so the pack does not own handler callables — it only
 declares the allowlist. A domain-specific handler, if ever needed, is added then (YAGNI).

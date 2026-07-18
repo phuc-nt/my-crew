@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.adapters.mcp_adapter import _coerce_result
+from my_crew.adapters.mcp_adapter import _coerce_result
 
 
 def test_coerce_json_string():

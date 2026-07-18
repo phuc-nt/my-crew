@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions.hard_block import BlockCategory, classify
-from src.packs import PackRegistry
-from src.packs.registry import _load_pack_module
-from src.tools.models import Task
+from my_crew.actions.hard_block import BlockCategory, classify
+from my_crew.packs import PackRegistry
+from my_crew.packs.registry import _load_pack_module
+from my_crew.tools.models import Task
 
 
 def _hr_module(name: str):
@@ -179,7 +179,7 @@ def test_read_raises_when_no_data_source(monkeypatch):
 
 
 def test_all_report_kinds_isolates_broken_pack(monkeypatch):
-    from src.packs import registry
+    from my_crew.packs import registry
 
     real_load = registry.PackRegistry.load
 

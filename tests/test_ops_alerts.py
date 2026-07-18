@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from src.runtime import agent_state_reader as asr
+from my_crew.runtime import agent_state_reader as asr
 
 NOW = datetime(2026, 7, 4, 12, 0, tzinfo=UTC)
 
@@ -106,7 +106,7 @@ def test_per_kind_window_survives_poll_flood(tmp_path, monkeypatch):
     window must still surface the report kind's recent events so failing/missed still fire."""
     import json as _json
 
-    from src.runtime import agent_state_reader as _asr
+    from my_crew.runtime import agent_state_reader as _asr
 
     data_dir = tmp_path / "agents" / "chatty"
     data_dir.mkdir(parents=True)
@@ -119,7 +119,7 @@ def test_per_kind_window_survives_poll_flood(tmp_path, monkeypatch):
         lines.append(_json.dumps({"ts": f"2026-07-04T10:{i % 60:02d}:00+00:00",
                                   "kind": "inbox", "status": "no_mentions"}))
     (data_dir / "runs.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    monkeypatch.setattr("src.runtime.agent_state_reader.agent_data_dir",
+    monkeypatch.setattr("my_crew.runtime.agent_state_reader.agent_data_dir",
                         lambda aid: tmp_path / "agents" / aid)
 
     events = _asr._recent_events_per_kind("chatty")
@@ -158,7 +158,7 @@ class _Settings:
 
 
 def _run(monkeypatch, tmp_path, alerts, sent):
-    monkeypatch.setattr("src.runtime.agent_state_reader.team_alerts", lambda **k: alerts)
+    monkeypatch.setattr("my_crew.runtime.agent_state_reader.team_alerts", lambda **k: alerts)
 
     def _fake_send(text, **kwargs):
         sent.append((text, kwargs["chat_id"]))
@@ -167,7 +167,7 @@ def _run(monkeypatch, tmp_path, alerts, sent):
             status = "executed"
         return R()
 
-    monkeypatch.setattr("src.actions.telegram_write.send_telegram_message", _fake_send)
+    monkeypatch.setattr("my_crew.actions.telegram_write.send_telegram_message", _fake_send)
 
     class _FakeGateway:
         def __init__(self, *a, **k):
@@ -176,8 +176,8 @@ def _run(monkeypatch, tmp_path, alerts, sent):
         def close(self):
             pass
 
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway", _FakeGateway)
-    from src.runtime.ops_alert_runner import run_ops_alerts
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway", _FakeGateway)
+    from my_crew.runtime.ops_alert_runner import run_ops_alerts
 
     return run_ops_alerts(_Loaded(), _Settings(tmp_path), now=NOW)
 
@@ -218,17 +218,17 @@ def test_push_no_operator_is_noop(monkeypatch, tmp_path):
         domain = "admin"
         config = _NoTg()
 
-    from src.runtime.ops_alert_runner import run_ops_alerts
+    from my_crew.runtime.ops_alert_runner import run_ops_alerts
     r = run_ops_alerts(_L(), _Settings(tmp_path), now=NOW)
     assert r["status"] == "no_operator" and r["delivered"] is False
 
 
 def test_writes_disabled_pushes_nothing(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.agent_state_reader.team_alerts",
+    monkeypatch.setattr("my_crew.runtime.agent_state_reader.team_alerts",
                         lambda **k: [{"kind": "failing", "agent_id": "hr",
                                       "message": "f", "severity": "high"}])
     s = _Settings(tmp_path)
     s.write_disabled = True
-    from src.runtime.ops_alert_runner import run_ops_alerts
+    from my_crew.runtime.ops_alert_runner import run_ops_alerts
     r = run_ops_alerts(_Loaded(), s, now=NOW)
     assert r["status"] == "writes_disabled" and r["delivered"] is False

@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from langgraph.store.memory import InMemoryStore
 
-from src.agent.memory_node import _NAMESPACE_KIND
-from src.agent.sibling_memory import (
+from my_crew.agent.memory_node import _NAMESPACE_KIND
+from my_crew.agent.sibling_memory import (
     MAX_SIBLING_FACTS,
     build_sibling_context,
     enumerate_siblings,
     read_sibling_facts,
 )
-from src.profile.loader import load_profile
-from src.runtime.registry import RegistryEntry
+from my_crew.profile.loader import load_profile
+from my_crew.runtime.registry import RegistryEntry
 
 
 def _write_profile(profiles_dir, agent_id, yaml_text):
@@ -121,7 +121,7 @@ def _boom_llm(*_a, **_k):
 
 
 def test_build_sibling_context_noop_no_group(monkeypatch):
-    monkeypatch.setattr("src.llm.client.LlmClient", _boom_llm)
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", _boom_llm)
     store = InMemoryStore()
     skills, selector = build_sibling_context(_Loaded(None), object(), store, ())
     assert skills == () and selector is None
@@ -129,7 +129,7 @@ def test_build_sibling_context_noop_no_group(monkeypatch):
 
 def test_build_sibling_context_noop_lone_agent(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
-    monkeypatch.setattr("src.llm.client.LlmClient", _boom_llm)
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", _boom_llm)
     profiles = tmp_path / "profiles"
     _write_profile(profiles, "A", "name: A\nproject: acme\n")
     store = InMemoryStore()
@@ -143,7 +143,7 @@ def test_build_sibling_context_noop_lone_agent(tmp_path, monkeypatch):
 def test_build_sibling_context_returns_facts_and_selector(tmp_path, monkeypatch):
     # Non-empty path: helper returns the sibling facts tuple + the real LLM ranker.
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
-    monkeypatch.setattr("src.llm.client.LlmClient", lambda *_a, **_k: object())
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", lambda *_a, **_k: object())
     profiles = tmp_path / "profiles"
     _write_profile(profiles, "A", "name: A\nproject: acme\n")
     _write_profile(profiles, "B", "name: B\nproject: acme\n")

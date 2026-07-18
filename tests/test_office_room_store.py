@@ -20,7 +20,7 @@ import threading
 
 import pytest
 
-from src.runtime.office_room_store import OFFICE_ROOM_ID, OfficeRoomStore, office_room_db_path
+from my_crew.runtime.office_room_store import OFFICE_ROOM_ID, OfficeRoomStore, office_room_db_path
 
 
 def _store(tmp_path) -> OfficeRoomStore:

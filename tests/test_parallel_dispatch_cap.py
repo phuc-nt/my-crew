@@ -12,14 +12,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
-from src.agent.task_decomposition import decomposition_content_hash
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
+from my_crew.agent.task_decomposition import decomposition_content_hash
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 @pytest.fixture(autouse=True)
 def _isolated_team_tasks_root(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
 
 def _store(tmp_path, **kw) -> TeamTaskStore:

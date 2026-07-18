@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import asyncio
 
-from src.server.graph_runner import Terminal
-from src.server.run_manager import CapReachedError, RunManager, SameThreadRunningError
+from my_crew.server.graph_runner import Terminal
+from my_crew.server.run_manager import CapReachedError, RunManager, SameThreadRunningError
 
 
 class _FakeGraph:

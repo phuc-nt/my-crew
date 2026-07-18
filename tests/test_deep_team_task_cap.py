@@ -8,7 +8,7 @@ run_deep_agent_work call).
 
 from __future__ import annotations
 
-from src.runtime_backends.deep_team_task_cap import TaskCapMiddleware
+from my_crew.runtime_backends.deep_team_task_cap import TaskCapMiddleware
 
 
 class _Req:

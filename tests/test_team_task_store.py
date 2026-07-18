@@ -27,8 +27,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agent.task_decomposition import decomposition_content_hash
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.agent.task_decomposition import decomposition_content_hash
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 def _store(tmp_path, **kw) -> TeamTaskStore:
@@ -385,7 +385,7 @@ def test_lease_expired_now_kwarg_is_honored(tmp_path):
 
 
 def test_default_lease_ttl_is_600s(tmp_path):
-    from src.runtime.team_task_store import DEFAULT_LEASE_TTL_S
+    from my_crew.runtime.team_task_store import DEFAULT_LEASE_TTL_S
 
     assert DEFAULT_LEASE_TTL_S == 600
     store = _store(tmp_path)  # no lease_ttl_s override -> uses the module default
@@ -500,7 +500,11 @@ def test_expired_but_still_alive_pid_is_killed_by_ticker_and_write_not_lost(
     (attempt-guarded with the step's own lease, matching `poll_running_step`'s real
     call). The step must land in a definite terminal state, never silently stuck
     `running` forever after the kill."""
-    from src.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
+    from my_crew.agent.coordinator_graph import (
+        CoordinatorDeps,
+        in_memory_retry_tracker,
+        run_one_tick,
+    )
 
     store = _store(tmp_path, lease_ttl_s=1)
     _plan(store)
@@ -537,7 +541,7 @@ def test_expired_but_still_alive_pid_is_killed_by_ticker_and_write_not_lost(
 def _patch_team_tasks_root(monkeypatch, tmp_path):
     """Point the shared cross-agent root at tmp_path so the worker branch/store/
     artifact helper all agree on an isolated location for this test."""
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
 
 def _fake_loaded():
@@ -567,13 +571,13 @@ def _fake_llm(monkeypatch, *, content="step output", cost=0.01):
         def complete(self, _messages):
             return result
 
-    import src.llm.client as llm_client_mod
+    import my_crew.llm.client as llm_client_mod
 
     monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)
 
 
 def test_worker_team_step_missing_flags_is_clean_no_op(tmp_path, monkeypatch):
-    from src.runtime.worker import _run_team_step_kind
+    from my_crew.runtime.worker import _run_team_step_kind
 
     _patch_team_tasks_root(monkeypatch, tmp_path)
     agent_data_dir = tmp_path / "agents" / "a1"
@@ -590,8 +594,8 @@ def test_worker_team_step_missing_flags_is_clean_no_op(tmp_path, monkeypatch):
 
 
 def test_worker_team_step_rejects_wrong_attempt_id_no_artifact(tmp_path, monkeypatch):
-    from src.agent.team_task_artifact import read_step_artifact
-    from src.runtime.worker import _run_team_step_kind
+    from my_crew.agent.team_task_artifact import read_step_artifact
+    from my_crew.runtime.worker import _run_team_step_kind
 
     _patch_team_tasks_root(monkeypatch, tmp_path)
     store = _store(tmp_path)
@@ -613,7 +617,7 @@ def test_worker_team_step_rejects_wrong_attempt_id_no_artifact(tmp_path, monkeyp
 
 
 def test_worker_team_step_absent_attempt_id_on_never_reserved_step_rejected(tmp_path, monkeypatch):
-    from src.runtime.worker import _run_team_step_kind
+    from my_crew.runtime.worker import _run_team_step_kind
 
     _patch_team_tasks_root(monkeypatch, tmp_path)
     store = _store(tmp_path)
@@ -632,9 +636,9 @@ def test_worker_team_step_absent_attempt_id_on_never_reserved_step_rejected(tmp_
 
 
 def test_worker_team_step_done_writes_artifact_and_run_event(tmp_path, monkeypatch):
-    from src.agent.team_task_artifact import read_step_artifact
-    from src.config.config_builders import build_settings_from_dict
-    from src.runtime.worker import _run_team_step_kind
+    from my_crew.agent.team_task_artifact import read_step_artifact
+    from my_crew.config.config_builders import build_settings_from_dict
+    from my_crew.runtime.worker import _run_team_step_kind
 
     _patch_team_tasks_root(monkeypatch, tmp_path)
     _fake_llm(monkeypatch, content="draft output", cost=0.03)
@@ -674,9 +678,9 @@ def test_worker_team_step_done_writes_artifact_and_run_event(tmp_path, monkeypat
 def test_worker_team_step_graph_exception_writes_failed_outcome_and_error_event(
     tmp_path, monkeypatch
 ):
-    from src.agent.team_task_artifact import read_step_artifact
-    from src.config.config_builders import build_settings_from_dict
-    from src.runtime.worker import _run_team_step_kind
+    from my_crew.agent.team_task_artifact import read_step_artifact
+    from my_crew.config.config_builders import build_settings_from_dict
+    from my_crew.runtime.worker import _run_team_step_kind
 
     _patch_team_tasks_root(monkeypatch, tmp_path)
 
@@ -687,7 +691,7 @@ def test_worker_team_step_graph_exception_writes_failed_outcome_and_error_event(
         def complete(self, _messages):
             raise RuntimeError("llm exploded")
 
-    import src.llm.client as llm_client_mod
+    import my_crew.llm.client as llm_client_mod
 
     monkeypatch.setattr(llm_client_mod, "LlmClient", _BoomLlm)
 
@@ -739,11 +743,15 @@ def test_step_paused_at_approval_gate_worker_exits_3_tick_ignores_then_resumes_a
     documented "no checkpointer -> re-run from scratch" design), the step re-runs
     perceive/work/deliver and completes normally this time.
     """
-    import src.agent.team_task_graph as team_task_graph_mod
-    from src.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
-    from src.agent.team_task_artifact import read_step_artifact
-    from src.config.config_builders import build_settings_from_dict
-    from src.runtime.worker import _run_team_step_kind
+    import my_crew.agent.team_task_graph as team_task_graph_mod
+    from my_crew.agent.coordinator_graph import (
+        CoordinatorDeps,
+        in_memory_retry_tracker,
+        run_one_tick,
+    )
+    from my_crew.agent.team_task_artifact import read_step_artifact
+    from my_crew.config.config_builders import build_settings_from_dict
+    from my_crew.runtime.worker import _run_team_step_kind
 
     _patch_team_tasks_root(monkeypatch, tmp_path)
     _fake_llm(monkeypatch, content="draft output", cost=0.01)
@@ -841,8 +849,12 @@ def test_ticker_polls_real_approval_store_pending_then_approved_respawns(tmp_pat
     `TeamTaskStore.reserve_step`)."""
     from datetime import UTC, datetime, timedelta
 
-    from src.actions.approval_store import ApprovalStore
-    from src.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
+    from my_crew.actions.approval_store import ApprovalStore
+    from my_crew.agent.coordinator_graph import (
+        CoordinatorDeps,
+        in_memory_retry_tracker,
+        run_one_tick,
+    )
 
     store = _store(tmp_path)
     _plan(store, task_id="t1")
@@ -897,8 +909,12 @@ def test_ticker_polls_real_approval_store_rejected_marks_step_failed_and_escalat
     respawn — the CEO explicitly said no, so this must never retry."""
     from datetime import UTC, datetime, timedelta
 
-    from src.actions.approval_store import ApprovalStore
-    from src.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
+    from my_crew.actions.approval_store import ApprovalStore
+    from my_crew.agent.coordinator_graph import (
+        CoordinatorDeps,
+        in_memory_retry_tracker,
+        run_one_tick,
+    )
 
     store = _store(tmp_path)
     _plan(store, task_id="t1")

@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from src.server import routes_ops_chat
-from src.server.app import create_app
+from my_crew.server import routes_ops_chat
+from my_crew.server.app import create_app
 
 
 def _client():
@@ -48,15 +48,15 @@ def test_post_chat_drives_engine_with_operator_conversation_key(monkeypatch):
     seen = {}
 
     monkeypatch.setattr(routes_ops_chat, "_find_ops_agent", lambda: ("admin", "555", _Loaded))
-    monkeypatch.setattr("src.agent.ops_conversation_store.OpsConversationStore",
+    monkeypatch.setattr("my_crew.agent.ops_conversation_store.OpsConversationStore",
                         lambda path: type("S", (), {"close": lambda self: None})())
-    monkeypatch.setattr("src.llm.client.LlmClient", lambda settings: object())
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", lambda settings: object())
 
     def fake_handle(*, message, conversation_key, store, llm, now):
         seen.update(message=message, key=conversation_key)
         return "Đội hiện có 3 agent", 0.0
 
-    monkeypatch.setattr("src.agent.ops_chat.handle_ops_message", fake_handle)
+    monkeypatch.setattr("my_crew.agent.ops_chat.handle_ops_message", fake_handle)
 
     r = _client().post("/api/ops/chat", json={"message": "đội mình sao rồi"})
     assert r.status_code == 200
@@ -82,7 +82,7 @@ def test_find_ops_agent_picks_first_deterministically_and_warns_on_multiple(monk
         tg = type("T", (), {"ops_operator_id": "555"})()
         return type("L", (), {"domain": "admin", "config": type("C", (), {"telegram": tg})()})()
 
-    monkeypatch.setattr("src.server.ops_helpers.require_agent", _fake_require)
+    monkeypatch.setattr("my_crew.server.ops_helpers.require_agent", _fake_require)
     import logging
 
     with caplog.at_level(logging.WARNING):
@@ -96,7 +96,7 @@ def test_find_ops_agent_400_when_no_admin_ops(monkeypatch):
 
     monkeypatch.setattr(routes_ops_chat, "read_all_agent_states", lambda: [{"agent_id": "pm"}])
     _pm = type("L", (), {"domain": "pm", "config": type("C", (), {"telegram": None})()})()
-    monkeypatch.setattr("src.server.ops_helpers.require_agent", lambda aid: _pm)
+    monkeypatch.setattr("my_crew.server.ops_helpers.require_agent", lambda aid: _pm)
     import pytest
 
     with pytest.raises(HTTPException) as exc:
@@ -106,10 +106,10 @@ def test_find_ops_agent_400_when_no_admin_ops(monkeypatch):
 
 def test_post_chat_empty_engine_reply_becomes_hint(monkeypatch):
     monkeypatch.setattr(routes_ops_chat, "_find_ops_agent", lambda: ("admin", "555", _Loaded))
-    monkeypatch.setattr("src.agent.ops_conversation_store.OpsConversationStore",
+    monkeypatch.setattr("my_crew.agent.ops_conversation_store.OpsConversationStore",
                         lambda path: type("S", (), {"close": lambda self: None})())
-    monkeypatch.setattr("src.llm.client.LlmClient", lambda settings: object())
-    monkeypatch.setattr("src.agent.ops_chat.handle_ops_message",
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", lambda settings: object())
+    monkeypatch.setattr("my_crew.agent.ops_chat.handle_ops_message",
                         lambda **k: ("", None))  # engine says "this was a question"
 
     r = _client().post("/api/ops/chat", json={"message": "thời tiết hôm nay"})
@@ -121,7 +121,7 @@ def test_ops_chat_commands_listing_is_descriptions_only(monkeypatch, tmp_path):
     NOTHING else (no slots internals, no handlers)."""
     from fastapi.testclient import TestClient
 
-    from src.server.app import create_app
+    from my_crew.server.app import create_app
 
     r = TestClient(create_app()).get("/api/ops/chat/commands")
     assert r.status_code == 200

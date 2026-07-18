@@ -13,8 +13,8 @@ from langgraph.store.base import BaseStore
 from langgraph.store.memory import InMemoryStore
 from typing_extensions import TypedDict
 
-from src.agent.store import get_store
-from src.config.config_builders import build_settings_from_dict
+from my_crew.agent.store import get_store
+from my_crew.config.config_builders import build_settings_from_dict
 
 
 def test_default_is_in_memory_store():

@@ -2,8 +2,8 @@
 
 Builds a `perceive → analyze → compose → deliver` graph for the HR `headcount` report,
 reusing the SAME core machinery PM uses — ReportState, the approval gate, the remember
-node, the Confluence/Slack writers, the Action Gateway — all IMPORTED from `src/`, none
-modified (the M6 `git diff src/` = empty gate). What is HR-specific lives in this pack:
+node, the Confluence/Slack writers, the Action Gateway — all IMPORTED from `my_crew/`, none
+modified (the M6 `git diff my_crew/` = empty gate). What is HR-specific lives in this pack:
 the tool provider (Confluence + Google Sheet via `gws`), the headcount analyzer, and the
 prompt assets (all in sibling `domain_pack_hr.*` modules).
 
@@ -18,20 +18,20 @@ from datetime import UTC, date, datetime
 
 from langgraph.graph import END, START, StateGraph
 
-from src.actions.action_gateway import ActionGateway
-from src.actions.confluence_write import create_report_page
-from src.actions.slack_write import deliver_report
-from src.agent.approval_gate import add_approval_gate, external_summary
-from src.agent.audience_delivery import (
+from my_crew.actions.action_gateway import ActionGateway
+from my_crew.actions.confluence_write import create_report_page
+from my_crew.actions.slack_write import deliver_report
+from my_crew.agent.approval_gate import add_approval_gate, external_summary
+from my_crew.agent.audience_delivery import (
     SLACK_OK_STATUSES,
     delivery_summary,
     resolve_audience_delivery,
 )
-from src.agent.memory_node import add_remember_node
-from src.agent.state import ReportState
-from src.llm.client import LlmClient
-from src.llm.slack_link import inject_link
-from src.profile.context import EMPTY
+from my_crew.agent.memory_node import add_remember_node
+from my_crew.agent.state import ReportState
+from my_crew.llm.client import LlmClient
+from my_crew.llm.slack_link import inject_link
+from my_crew.profile.context import EMPTY
 
 
 def _today_utc() -> date:
@@ -46,7 +46,7 @@ def build_headcount_graph(
     None ⇒ resolve the hr pack's provider so the graph is runnable standalone."""
     if config is None or settings is None:
         raise ValueError("build_headcount_graph needs config + settings.")
-    from src.packs.registry import PackRegistry
+    from my_crew.packs.registry import PackRegistry
 
     pack = PackRegistry().load("hr")
     if tools is None:

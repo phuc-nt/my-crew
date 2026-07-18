@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions import approved_dispatch, linear_write
-from src.actions.action_gateway import ActionGateway
-from src.actions.hard_block import BlockCategory, classify, needs_interrupt
-from src.audit.audit_log import AuditLog
-from src.config.config_builders import build_reporting_config_from_dict
+from my_crew.actions import approved_dispatch, linear_write
+from my_crew.actions.action_gateway import ActionGateway
+from my_crew.actions.hard_block import BlockCategory, classify, needs_interrupt
+from my_crew.audit.audit_log import AuditLog
+from my_crew.config.config_builders import build_reporting_config_from_dict
 
 _CREATE_COMMENT = {
     "type": "mcp_tool",
@@ -140,7 +140,7 @@ def test_dispatch_approved_linear_comment(monkeypatch):
         captured["args"] = args
         return {"id": "CMT-9"}
 
-    monkeypatch.setattr("src.actions.linear_write.call_tool", fake_call_tool)
+    monkeypatch.setattr("my_crew.actions.linear_write.call_tool", fake_call_tool)
     summary = approved_dispatch.dispatch_approved_action(_CREATE_COMMENT, config)
     assert captured == {
         "spec": "linear",

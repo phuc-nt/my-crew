@@ -15,14 +15,14 @@ import datetime as _dt
 
 import pytest
 
-from src.runtime import follow_up_sweep as fus
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.runtime import follow_up_sweep as fus
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
-    from src.runtime.team_task_paths import team_tasks_db_path
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
 
     s = TeamTaskStore(team_tasks_db_path())
     yield s
@@ -34,17 +34,17 @@ def fired(monkeypatch):
     """Capture every ladder rung's transport call instead of doing real I/O."""
     calls = {"event": [], "clarify": [], "notify": []}
     monkeypatch.setattr(
-        "src.runtime.office_room_append.append_office_event",
+        "my_crew.runtime.office_room_append.append_office_event",
         lambda room, *, author, kind, body, also_office=False: calls["event"].append(body),
     )
     monkeypatch.setattr(
-        "src.runtime.office_room_append.room_for_task", lambda tid: tid)
+        "my_crew.runtime.office_room_append.room_for_task", lambda tid: tid)
     monkeypatch.setattr(
-        "src.runtime.clarify_service.ask_ceo",
+        "my_crew.runtime.clarify_service.ask_ceo",
         lambda **kw: calls["clarify"].append(kw) or ("note", 1),
     )
     monkeypatch.setattr(
-        "src.runtime.operator_notify.notify_operator_best_effort",
+        "my_crew.runtime.operator_notify.notify_operator_best_effort",
         lambda text, **kw: calls["notify"].append(text) or True,
     )
     return calls
@@ -135,7 +135,7 @@ def test_recovered_task_resets_ladder(store, fired):
 def test_failed_rung_does_not_advance_level(store, fired, monkeypatch):
     _mk_task(store, "t6", "stalled")
     monkeypatch.setattr(
-        "src.runtime.office_room_append.append_office_event",
+        "my_crew.runtime.office_room_append.append_office_event",
         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("room down")),
     )
     assert fus.run_follow_up_sweep(store, now=_NOW) == 0

@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from src.config.config_builders import build_reporting_config_from_dict
-from src.profile.loader_mapping import build_reporting_dict
+from my_crew.config.config_builders import build_reporting_config_from_dict
+from my_crew.profile.loader_mapping import build_reporting_dict
 
 
 def _linear_dict(mcp_dist: str = "/tmp/linear/dist/index.js") -> dict:

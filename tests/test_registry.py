@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.runtime.registry import RegistryEntry, load_registry
+from my_crew.runtime.registry import RegistryEntry, load_registry
 
 
 def _write(tmp_path, text):
@@ -31,7 +31,7 @@ def test_example_registry_template_loads():
     # v18: registry.yaml is user data; the COMMITTED artifact is the example template a
     # fresh checkout bootstraps from — it must parse to default + admin (registering
     # admin is what turns the CEO chat-ops box on).
-    from src.runtime.registry import _EXAMPLE_PATH
+    from my_crew.runtime.registry import _EXAMPLE_PATH
 
     assert load_registry(_EXAMPLE_PATH) == (
         RegistryEntry(id="default", enabled=True),
@@ -99,7 +99,7 @@ def test_bootstrap_from_example_default_path_only(tmp_path, monkeypatch):
     """v18: a missing DEFAULT registry bootstraps from the example (atomic copy) —
     but an explicit `path` keeps the strict FileNotFoundError contract (tests,
     registry_edit tmp-validation, --registry callers)."""
-    import src.runtime.registry as reg
+    import my_crew.runtime.registry as reg
 
     example = tmp_path / "registry.example.yaml"
     example.write_text("agents:\n  - id: a1\n    enabled: true\n")

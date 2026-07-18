@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from src.config.config_builders import (
+from my_crew.config.config_builders import (
     build_reporting_config_from_dict,
     build_reporting_config_from_env,
     build_settings_from_dict,
     build_settings_from_env,
 )
-from src.config.settings import DATA_DIR, DEFAULT_MODEL
+from my_crew.config.settings import DATA_DIR, DEFAULT_MODEL
 
 # Env vars the builders read (clear all so defaults apply deterministically).
 _SETTINGS_ENV = [
@@ -37,8 +37,10 @@ def clean_env(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     # Block the .env file load so from_env sees only the (cleared) process env.
     # (settings builders + reporting builders each import load_dotenv in their own module.)
-    monkeypatch.setattr("src.config.config_builders.load_dotenv", lambda *a, **k: None)
-    monkeypatch.setattr("src.config.config_builders_reporting.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr("my_crew.config.config_builders.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "my_crew.config.config_builders_reporting.load_dotenv", lambda *a, **k: None
+    )
 
 
 # --- from_dict: defaults (pure, all-optional keys) ---

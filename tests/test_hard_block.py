@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from src.actions.hard_block import (
+from my_crew.actions.hard_block import (
     BlockCategory,
     _attachment_verdict,
     classify,

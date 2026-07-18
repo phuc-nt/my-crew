@@ -12,13 +12,13 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-from src.agent.okr_analyzer import OkrRollup
-from src.reporting.xlsx_export import (
+from my_crew.agent.okr_analyzer import OkrRollup
+from my_crew.reporting.xlsx_export import (
     artifact_path,
     build_okr_xlsx,
     build_resource_xlsx,
 )
-from src.tools.models import (
+from my_crew.tools.models import (
     AssigneeLoad,
     CostSummary,
     KeyResult,

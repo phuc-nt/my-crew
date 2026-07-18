@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.packs.registry import _load_pack_module
+from my_crew.packs.registry import _load_pack_module
 
 _az = _load_pack_module("admin", "analyzers")
 build_project_rollup = _az.build_project_rollup
@@ -66,7 +66,7 @@ def test_agent_without_project_labelled():
 
 
 def test_project_rollup_refuses_external_audience():
-    from src.config.config_builders import (
+    from my_crew.config.config_builders import (
         build_reporting_config_from_dict,
         build_settings_from_dict,
     )
@@ -85,13 +85,13 @@ def test_project_rollup_refuses_external_audience():
 def test_report_summary_stripped_from_status_views(tmp_path, monkeypatch):
     import json as _json
 
-    from src.server import agent_views
+    from my_crew.server import agent_views
 
     # a run event carrying a summary
     ev = {"ts": "2026-07-04T08:00:00+00:00", "agent_id": "hr", "kind": "daily",
           "audience": "internal", "status": "delivered", "cost_usd": 0.01,
           "delivered": True, "report_summary": "NỘI DUNG NHẠY CẢM báo cáo"}
-    monkeypatch.setattr("src.server.agent_views.read_last_run_event", lambda aid: ev)
+    monkeypatch.setattr("my_crew.server.agent_views.read_last_run_event", lambda aid: ev)
 
     public = agent_views._public_last_run("hr")
     assert "report_summary" not in public
@@ -105,13 +105,13 @@ def test_report_summary_stripped_from_timeline(tmp_path, monkeypatch):
     # it must also drop report_summary (independent code path from _public_last_run).
     import json as _json
 
-    from src.server import visualize_views
+    from my_crew.server import visualize_views
 
     ev = {"ts": "2026-07-04T08:00:00+00:00", "kind": "daily", "audience": "internal",
           "status": "delivered", "cost_usd": 0.01, "delivered": True,
           "report_summary": "NỘI DUNG NHẠY CẢM trong timeline"}
-    monkeypatch.setattr("src.server.visualize_views.read_run_events", lambda aid, **k: [ev])
-    monkeypatch.setattr("src.server.visualize_views._require_agent", lambda aid: None)
+    monkeypatch.setattr("my_crew.server.visualize_views.read_run_events", lambda aid, **k: [ev])
+    monkeypatch.setattr("my_crew.server.visualize_views._require_agent", lambda aid: None)
     out = visualize_views.runs_view("hr")
     assert all("report_summary" not in r for r in out["runs"])
     assert "NHẠY CẢM" not in _json.dumps(out, ensure_ascii=False)

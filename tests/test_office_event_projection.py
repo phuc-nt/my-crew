@@ -11,7 +11,7 @@ Load-bearing:
 
 from __future__ import annotations
 
-from src.server.office_event_projection import VALID_KINDS, summarize_office_event
+from my_crew.server.office_event_projection import VALID_KINDS, summarize_office_event
 
 
 def test_ceo_kind_keeps_only_text():

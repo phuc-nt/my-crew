@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions.action_gateway import ActionGateway
-from src.audit.audit_log import AuditLog
-from src.config.config_builders import build_settings_from_dict
-from src.entrypoints import mpm_automate_cmd
-from src.runtime.registry import RegistryEntry
+from my_crew.actions.action_gateway import ActionGateway
+from my_crew.audit.audit_log import AuditLog
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.entrypoints import mpm_automate_cmd
+from my_crew.runtime.registry import RegistryEntry
 
 _GOOD_YAML = """\
 name: blocker-note
@@ -125,7 +125,7 @@ def test_automate_bad_invocation(capsys):
 
 
 def test_automate_dispatch_via_mpm(monkeypatch):
-    from src.entrypoints import mpm
+    from my_crew.entrypoints import mpm
 
     called = {}
 
@@ -133,7 +133,7 @@ def test_automate_dispatch_via_mpm(monkeypatch):
         called["rest"] = rest
         return 0
 
-    monkeypatch.setattr("src.entrypoints.mpm_automate_cmd.run_automate", _fake)
+    monkeypatch.setattr("my_crew.entrypoints.mpm_automate_cmd.run_automate", _fake)
     rc = mpm.main(["agent", "automate", "acme", "wf.yaml", "--dry-run"])
     assert rc == 0
     assert called["rest"] == ["acme", "wf.yaml", "--dry-run"]
@@ -146,7 +146,7 @@ def test_real_analyze_fn_reads_llm_result_content(monkeypatch):
     other tests hid it. This exercises the real `_build_analyze_fn` against a fake LlmClient
     whose `.complete()` returns a real `LlmResult` shape.
     """
-    from src.llm.client import LlmResult
+    from my_crew.llm.client import LlmResult
 
     class _FakeClient:
         def __init__(self, settings):
@@ -158,7 +158,7 @@ def test_real_analyze_fn_reads_llm_result_content(monkeypatch):
                 completion_tokens=1, cost_usd=0.0,
             )
 
-    monkeypatch.setattr("src.llm.client.LlmClient", _FakeClient)
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", _FakeClient)
     analyze = mpm_automate_cmd._build_analyze_fn(settings=object())
     out = analyze("a prompt", {"issues": []})
     assert out == "summary OK"

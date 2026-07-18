@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.packs import DEFAULT_DOMAIN, Pack, PackRegistry, ToolProvider
-from src.profile.loader import load_profile
+from my_crew.packs import DEFAULT_DOMAIN, Pack, PackRegistry, ToolProvider
+from my_crew.profile.loader import load_profile
 
 
 def _write_profile(tmp_path, profile_yaml):
@@ -24,7 +24,7 @@ def _write_profile(tmp_path, profile_yaml):
 @pytest.fixture
 def no_dotenv(monkeypatch):
     """Block .env load so domain parsing is the only variable under test."""
-    monkeypatch.setattr("src.profile.loader.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr("my_crew.profile.loader.load_dotenv", lambda *a, **k: None)
 
 
 # --- domain field on the profile loader ---
@@ -79,7 +79,7 @@ def test_registry_unknown_domain_raises():
 
 def test_registry_discovers_pm_from_filesystem():
     # Discovery is filesystem-based (M6): pm is found via its pack folder, not a hardcode.
-    from src.packs.registry import discover_domains
+    from my_crew.packs.registry import discover_domains
 
     assert "pm" in discover_domains()
 
@@ -89,7 +89,7 @@ def test_pack_loads_as_importable_package():
     # modules can import siblings — needed by self-contained packs (HR), harmless to PM.
     import sys
 
-    from src.packs.registry import _load_pack_module, _pack_package_name
+    from my_crew.packs.registry import _load_pack_module, _pack_package_name
 
     _load_pack_module("pm", "graphs")
     assert _pack_package_name("pm") in sys.modules  # package registered
@@ -99,7 +99,7 @@ def test_pack_loads_as_importable_package():
 def test_all_report_kinds_is_union_across_packs():
     # Kind validation (CLI/API) uses this union so a pack's kind is valid without a core
     # edit. It must contain every PM kind plus any other installed pack's kinds.
-    from src.packs.registry import all_report_kinds
+    from my_crew.packs.registry import all_report_kinds
 
     kinds = all_report_kinds()
     assert {"daily", "weekly", "okr", "resource"} <= kinds  # PM kinds always present
@@ -117,7 +117,7 @@ def test_pm_pack_registers_all_four_report_kinds():
 def test_pm_pack_contributes_allowlist_matching_core_default():
     # S4: the pack supplies the MCP allowlist (server→tools), and PM's must equal the
     # core default so behavior is byte-identical. Normalized to lowercased frozensets.
-    from src.actions.hard_block import _DEFAULT_MCP_ALLOWLIST, _normalize_allowlist
+    from my_crew.actions.hard_block import _DEFAULT_MCP_ALLOWLIST, _normalize_allowlist
 
     pack = PackRegistry().load("pm")
     assert _normalize_allowlist(pack.allowlist) == _DEFAULT_MCP_ALLOWLIST

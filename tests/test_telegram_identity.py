@@ -18,13 +18,16 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions.action_gateway import ActionGateway
-from src.actions.hard_block import classify, needs_interrupt
-from src.actions.telegram_write import make_telegram_send_handler, send_telegram_message
-from src.config.config_builders import build_reporting_config_from_dict, build_settings_from_dict
-from src.config.telegram_config import TelegramConfig
-from src.profile.loader import LoadedProfile
-from src.runtime.telegram_inbox import load_offset, run_telegram_inbox, save_offset
+from my_crew.actions.action_gateway import ActionGateway
+from my_crew.actions.hard_block import classify, needs_interrupt
+from my_crew.actions.telegram_write import make_telegram_send_handler, send_telegram_message
+from my_crew.config.config_builders import (
+    build_reporting_config_from_dict,
+    build_settings_from_dict,
+)
+from my_crew.config.telegram_config import TelegramConfig
+from my_crew.profile.loader import LoadedProfile
+from my_crew.runtime.telegram_inbox import load_offset, run_telegram_inbox, save_offset
 
 _TOKEN_ENV = "TG_TEST_BOT_TOKEN"
 
@@ -101,7 +104,7 @@ def test_classify_telegram_send_blocks_secret_in_text():
 def test_telegram_bot_token_is_a_detected_secret():
     """The credential class M13 itself introduces must be visible to Lớp A + audit
     redaction (review M1) — and normal report text must not false-match."""
-    from src.actions.secret_patterns import find_secret
+    from my_crew.actions.secret_patterns import find_secret
 
     assert find_secret("token 123456789:AAHdqTcvbXH8s2vGoXaeqQFNvIhvbYZ6t-w lộ ra") is not None
     assert find_secret("SCRUM-123: deploy 10:35, build a1b2c3") is None
@@ -130,7 +133,7 @@ def test_handler_sends_to_allowlisted_chat(monkeypatch):
         calls.update(token=token, method=method, payload=payload)
         return {"message_id": 7}
 
-    monkeypatch.setattr("src.actions.telegram_write.api_call", fake_api)
+    monkeypatch.setattr("my_crew.actions.telegram_write.api_call", fake_api)
     handler = make_telegram_send_handler(_telegram())
     out = handler({"chat_id": "111", "text": "hi", "reply_to_message_id": 5})
     assert calls["method"] == "sendMessage" and calls["payload"]["chat_id"] == "111"
@@ -149,7 +152,7 @@ def test_send_telegram_message_truncates_and_refuses_empty(tmp_path, monkeypatch
     monkeypatch.setenv(_TOKEN_ENV, "tok")
     sent = {}
     monkeypatch.setattr(
-        "src.actions.telegram_write.api_call",
+        "my_crew.actions.telegram_write.api_call",
         lambda t, m, p=None: sent.update(p=p) or {"message_id": 1},
     )
     settings = build_settings_from_dict(
@@ -171,7 +174,7 @@ def test_send_telegram_message_truncates_and_refuses_empty(tmp_path, monkeypatch
 def test_dry_run_never_reaches_the_bot_api(tmp_path, monkeypatch):
     monkeypatch.setenv(_TOKEN_ENV, "tok")
     monkeypatch.setattr(
-        "src.actions.telegram_write.api_call",
+        "my_crew.actions.telegram_write.api_call",
         lambda *a, **k: pytest.fail("Bot API called under dry_run"),
     )
     settings = build_settings_from_dict(
@@ -197,7 +200,7 @@ def _update(uid, chat_id, text, *, chat_type="private", message_id=None):
 
 
 def test_fetch_filters_foreign_chats_but_acks_them(monkeypatch):
-    from src.tools import telegram_read
+    from my_crew.tools import telegram_read
 
     monkeypatch.setenv(_TOKEN_ENV, "tok")
     updates = [
@@ -214,7 +217,7 @@ def test_fetch_filters_foreign_chats_but_acks_them(monkeypatch):
 
 
 def test_fetch_empty_keeps_offset(monkeypatch):
-    from src.tools import telegram_read
+    from my_crew.tools import telegram_read
 
     monkeypatch.setenv(_TOKEN_ENV, "tok")
     monkeypatch.setattr(telegram_read, "api_call", lambda t, m, p=None: [])
@@ -226,7 +229,7 @@ def test_fetch_empty_keeps_offset(monkeypatch):
 
 def _poller_env(tmp_path, monkeypatch, messages, next_offset):
     monkeypatch.setattr(
-        "src.tools.telegram_read.fetch_new_updates",
+        "my_crew.tools.telegram_read.fetch_new_updates",
         lambda telegram, offset: (messages, [], next_offset),
     )
     return _loaded(tmp_path, telegram={"bot_token_env": _TOKEN_ENV, "chat_ids": ["111"]})
@@ -243,10 +246,10 @@ def test_poller_bootstrap_acks_backlog_without_answering(tmp_path, monkeypatch):
                       transport="telegram", message_id=20, chat_type="private",
                       update_id=20)], [], 21)
 
-    monkeypatch.setattr("src.tools.telegram_read.fetch_new_updates", _fetch)
+    monkeypatch.setattr("my_crew.tools.telegram_read.fetch_new_updates", _fetch)
     loaded = _loaded(tmp_path, telegram={"bot_token_env": _TOKEN_ENV, "chat_ids": ["111"]})
     monkeypatch.setattr(
-        "src.agent.qa_answer.answer_mention",
+        "my_crew.agent.qa_answer.answer_mention",
         lambda *a, **k: pytest.fail("bootstrap must not answer backlog"),
     )
     out = run_telegram_inbox(loaded, loaded.settings)
@@ -265,7 +268,7 @@ def test_poller_answers_dm_and_advances_offset(tmp_path, monkeypatch):
     save_offset(loaded.settings.data_dir, 30)
     answered = []
     monkeypatch.setattr(
-        "src.agent.qa_answer.answer_mention",
+        "my_crew.agent.qa_answer.answer_mention",
         lambda ld, st, *, mention, pack, gateway: (
             answered.append(mention["ts"]),
             (type("R", (), {"status": "executed", "summary": "ok"})(), 0.001),
@@ -286,7 +289,7 @@ def test_poller_group_message_without_mention_is_consumed_silently(tmp_path, mon
     save_offset(loaded.settings.data_dir, 40)
     answered = []
     monkeypatch.setattr(
-        "src.agent.qa_answer.answer_mention",
+        "my_crew.agent.qa_answer.answer_mention",
         lambda ld, st, *, mention, pack, gateway: (
             answered.append(mention["ts"]),
             (type("R", (), {"status": "executed", "summary": "ok"})(), None),
@@ -298,7 +301,7 @@ def test_poller_group_message_without_mention_is_consumed_silently(tmp_path, mon
 
 
 def test_poller_infra_error_holds_offset(tmp_path, monkeypatch):
-    from src.llm.fallback_policy import ProviderCallError
+    from my_crew.llm.fallback_policy import ProviderCallError
 
     loaded = _poller_env(tmp_path, monkeypatch, [_msg(50, "hỏi 1"), _msg(51, "hỏi 2")], 52)
     save_offset(loaded.settings.data_dir, 50)
@@ -306,7 +309,7 @@ def test_poller_infra_error_holds_offset(tmp_path, monkeypatch):
     def _boom(*a, **k):
         raise ProviderCallError("all models down")
 
-    monkeypatch.setattr("src.agent.qa_answer.answer_mention", _boom)
+    monkeypatch.setattr("my_crew.agent.qa_answer.answer_mention", _boom)
     out = run_telegram_inbox(loaded, loaded.settings)
     assert out["replied"] == 0
     assert load_offset(loaded.settings.data_dir) == 50  # HELD — both retried next poll
@@ -323,7 +326,7 @@ def test_poller_poison_message_is_skipped_past(tmp_path, monkeypatch):
             raise RuntimeError("this one message is broken")
         return type("R", (), {"status": "executed", "summary": "ok"})(), None
 
-    monkeypatch.setattr("src.agent.qa_answer.answer_mention", _answer)
+    monkeypatch.setattr("my_crew.agent.qa_answer.answer_mention", _answer)
     out = run_telegram_inbox(loaded, loaded.settings)
     assert calls == ["tg:111:60", "tg:111:61"] and out["replied"] == 1
     assert load_offset(loaded.settings.data_dir) == 62
@@ -336,7 +339,7 @@ def test_poller_unreachable_api_holds_offset(tmp_path, monkeypatch):
     def _down(telegram, offset):
         raise RuntimeError("telegram API getUpdates failed: 502")
 
-    monkeypatch.setattr("src.tools.telegram_read.fetch_new_updates", _down)
+    monkeypatch.setattr("my_crew.tools.telegram_read.fetch_new_updates", _down)
     out = run_telegram_inbox(loaded, loaded.settings)
     assert out["status"] == "telegram_unreachable"
     assert load_offset(loaded.settings.data_dir) == 70
@@ -351,7 +354,7 @@ def test_poller_write_disabled_holds_offset(tmp_path, monkeypatch):
     loaded = LoadedProfile(**{**loaded.__dict__, "settings": settings})
     save_offset(tmp_path, 80)
     monkeypatch.setattr(
-        "src.tools.telegram_read.fetch_new_updates",
+        "my_crew.tools.telegram_read.fetch_new_updates",
         lambda telegram, offset: ([_msg(80, "hỏi")], [], 81),
     )
     out = run_telegram_inbox(loaded, settings)
@@ -363,12 +366,12 @@ def test_poller_write_disabled_holds_offset(tmp_path, monkeypatch):
 
 
 def test_answer_mention_replies_via_telegram_send(tmp_path, monkeypatch):
-    from src.agent.qa_answer import answer_mention
+    from my_crew.agent.qa_answer import answer_mention
 
     monkeypatch.setenv(_TOKEN_ENV, "tok")
     sent = {}
     monkeypatch.setattr(
-        "src.actions.telegram_write.api_call",
+        "my_crew.actions.telegram_write.api_call",
         lambda t, m, p=None: sent.update(p=p) or {"message_id": 9},
     )
 
@@ -400,12 +403,12 @@ def test_answer_mention_replies_via_telegram_send(tmp_path, monkeypatch):
 
 def test_same_message_never_double_replies(tmp_path, monkeypatch):
     """Gateway dedup keyed on the immutable tg ts: a re-poll cannot double-send."""
-    from src.agent.qa_answer import answer_mention
+    from my_crew.agent.qa_answer import answer_mention
 
     monkeypatch.setenv(_TOKEN_ENV, "tok")
     count = {"n": 0}
     monkeypatch.setattr(
-        "src.actions.telegram_write.api_call",
+        "my_crew.actions.telegram_write.api_call",
         lambda t, m, p=None: count.update(n=count["n"] + 1) or {"message_id": 9},
     )
 
@@ -443,23 +446,23 @@ def test_same_message_never_double_replies(tmp_path, monkeypatch):
 
 
 def test_dispatch_single_transport_is_passthrough(tmp_path, monkeypatch):
-    from src.runtime import inbox_dispatch
+    from my_crew.runtime import inbox_dispatch
 
     marker = {"status": "replied_1", "replied": 1, "cost_usd": 0.1, "delivered": True}
-    monkeypatch.setattr("src.runtime.inbox.run_inbox", lambda ld, st: marker)
+    monkeypatch.setattr("my_crew.runtime.inbox.run_inbox", lambda ld, st: marker)
     loaded = _loaded(tmp_path, telegram=None, inbox={"channel": "C_IN", "poll_minutes": 2})
     assert inbox_dispatch.run_all_inboxes(loaded, loaded.settings) is marker
 
 
 def test_dispatch_merges_both_and_survives_one_crash(tmp_path, monkeypatch):
-    from src.runtime import inbox_dispatch
+    from my_crew.runtime import inbox_dispatch
 
     def _slack_boom(ld, st):
         raise RuntimeError("slack transport down")
 
-    monkeypatch.setattr("src.runtime.inbox.run_inbox", _slack_boom)
+    monkeypatch.setattr("my_crew.runtime.inbox.run_inbox", _slack_boom)
     monkeypatch.setattr(
-        "src.runtime.telegram_inbox.run_telegram_inbox",
+        "my_crew.runtime.telegram_inbox.run_telegram_inbox",
         lambda ld, st: {"status": "replied_2", "replied": 2, "cost_usd": 0.2,
                         "delivered": True},
     )
@@ -471,7 +474,7 @@ def test_dispatch_merges_both_and_survives_one_crash(tmp_path, monkeypatch):
 
 
 def test_dispatch_without_any_transport_raises(tmp_path):
-    from src.runtime.inbox_dispatch import run_all_inboxes
+    from my_crew.runtime.inbox_dispatch import run_all_inboxes
 
     loaded = _loaded(tmp_path, telegram=None, inbox=None)
     with pytest.raises(RuntimeError, match="no inbox"):
@@ -479,7 +482,7 @@ def test_dispatch_without_any_transport_raises(tmp_path):
 
 
 def test_schedule_folds_in_fastest_transport(tmp_path):
-    from src.runtime.service import _effective_schedule
+    from my_crew.runtime.service import _effective_schedule
 
     both = _loaded(tmp_path, telegram={"bot_token_env": _TOKEN_ENV, "chat_ids": ["111"],
                                        "poll_minutes": 7},
@@ -501,12 +504,12 @@ def test_schedule_folds_in_fastest_transport(tmp_path):
 
 
 def test_report_delivers_to_every_allowlisted_chat(tmp_path, monkeypatch):
-    from src.agent.channel_registry import deliver_extra_channels, resolve_channels
+    from my_crew.agent.channel_registry import deliver_extra_channels, resolve_channels
 
     monkeypatch.setenv(_TOKEN_ENV, "tok")
     sent = []
     monkeypatch.setattr(
-        "src.actions.telegram_write.api_call",
+        "my_crew.actions.telegram_write.api_call",
         lambda t, m, p=None: sent.append(p) or {"message_id": len(sent)},
     )
     config = _config({"bot_token_env": _TOKEN_ENV, "chat_ids": ["111", "222"]})
@@ -531,7 +534,7 @@ def test_report_delivers_to_every_allowlisted_chat(tmp_path, monkeypatch):
 
 
 def test_one_failing_chat_does_not_eat_the_others_report(tmp_path, monkeypatch):
-    from src.agent.channel_registry import deliver_extra_channels
+    from my_crew.agent.channel_registry import deliver_extra_channels
 
     monkeypatch.setenv(_TOKEN_ENV, "tok")
     sent = []
@@ -542,7 +545,7 @@ def test_one_failing_chat_does_not_eat_the_others_report(tmp_path, monkeypatch):
         sent.append(payload)
         return {"message_id": 1}
 
-    monkeypatch.setattr("src.actions.telegram_write.api_call", _api)
+    monkeypatch.setattr("my_crew.actions.telegram_write.api_call", _api)
     config = _config({"bot_token_env": _TOKEN_ENV, "chat_ids": ["111", "222"]})
     settings = build_settings_from_dict(
         {"openrouter_api_key": "k", "data_dir": tmp_path, "dry_run": False}

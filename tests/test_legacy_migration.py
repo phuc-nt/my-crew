@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import src.runtime.legacy_migration as lm
-from src.runtime.legacy_migration import migrate_legacy_data_dir
+import my_crew.runtime.legacy_migration as lm
+from my_crew.runtime.legacy_migration import migrate_legacy_data_dir
 
 
 def _make_legacy(data_dir):

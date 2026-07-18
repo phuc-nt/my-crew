@@ -23,9 +23,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
-from src.agent.task_decomposition import decomposition_content_hash
-from src.runtime.team_task_store import TeamTask, TeamTaskStore
+from my_crew.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
+from my_crew.agent.task_decomposition import decomposition_content_hash
+from my_crew.runtime.team_task_store import TeamTask, TeamTaskStore
 
 
 @pytest.fixture(autouse=True)
@@ -33,7 +33,7 @@ def _isolated_team_tasks_root(monkeypatch, tmp_path):
     """Every DB-backed test in this module writes through the shared cross-agent root
     (store, office-room appends) — pin it to tmp_path so no test can touch the real
     install's .data."""
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
 
 def _task(*, steps, plan_hash: str) -> TeamTask:
@@ -108,7 +108,7 @@ def test_verify_plan_hash_gate_excludes_system_inserted_rows_by_construction():
     objects (not via the DB — `TeamStep` has no `system_inserted` column yet, P2 adds
     it): a row with `system_inserted=1` must be excluded from the recompute, so its
     presence never moves the hash away from the CONFIRMED (non-inserted) subset."""
-    from src.agent.coordinator_graph import _verify_plan_hash
+    from my_crew.agent.coordinator_graph import _verify_plan_hash
 
     confirmed_step = SimpleNamespace(
         step_id="s1", title="draft", assigned_to="agent-a", deps=(), system_inserted=0,
@@ -130,7 +130,7 @@ def test_verify_plan_hash_gate_defaults_missing_system_inserted_attr_to_zero():
     """Today's `TeamStep` rows (no `system_inserted` column) must behave EXACTLY like
     `system_inserted=0` (included in the recompute) — the un-gated v12 behavior,
     unchanged, until P2 lands the column."""
-    from src.agent.coordinator_graph import _verify_plan_hash
+    from my_crew.agent.coordinator_graph import _verify_plan_hash
 
     step_without_attr = SimpleNamespace(step_id="s1", title="draft", assigned_to="agent-a", deps=())
     assert not hasattr(step_without_attr, "system_inserted")
@@ -144,7 +144,7 @@ def test_verify_plan_hash_gate_defaults_missing_system_inserted_attr_to_zero():
 def test_verify_plan_hash_still_stalls_on_a_genuine_confirmed_row_mismatch():
     """The gate must not become a blanket bypass: a mismatch among CONFIRMED
     (system_inserted=0) rows still stalls the task exactly like before."""
-    from src.agent.coordinator_graph import _verify_plan_hash
+    from my_crew.agent.coordinator_graph import _verify_plan_hash
 
     confirmed_step = SimpleNamespace(
         step_id="s1", title="draft", assigned_to="agent-a", deps=(), system_inserted=0,

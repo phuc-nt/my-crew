@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from src.agent.audience_delivery import (
+from my_crew.agent.audience_delivery import (
     SLACK_OK_STATUSES,
     delivery_summary,
     resolve_audience_delivery,
@@ -74,8 +74,8 @@ def test_delivery_summary_no_approval_id_when_executed():
 
 
 def _gateway(settings_factory, tmp_path):
-    from src.actions.action_gateway import ActionGateway
-    from src.audit.audit_log import AuditLog
+    from my_crew.actions.action_gateway import ActionGateway
+    from my_crew.audit.audit_log import AuditLog
 
     return ActionGateway(
         settings=settings_factory(dry_run=True), audit_log=AuditLog(tmp_path / "a.jsonl")
@@ -84,10 +84,10 @@ def _gateway(settings_factory, tmp_path):
 
 def _spy_writes(monkeypatch, slack_status, approval_id):
     """Patch create_report_page + deliver_report to capture channel/date + fake status."""
-    import src.actions.confluence_write as cw
-    import src.actions.slack_write as sw
-    from src.actions.action_gateway import GatewayResult
-    from src.actions.confluence_write import ConfluencePage
+    import my_crew.actions.confluence_write as cw
+    import my_crew.actions.slack_write as sw
+    from my_crew.actions.action_gateway import GatewayResult
+    from my_crew.actions.confluence_write import ConfluencePage
 
     seen: dict = {}
 
@@ -108,7 +108,7 @@ def _spy_writes(monkeypatch, slack_status, approval_id):
 
 
 def test_okr_external_deliver_pending_is_ok(settings_factory, tmp_path, monkeypatch):
-    from src.agent import okr_report_graph
+    from my_crew.agent import okr_report_graph
 
     seen = _spy_writes(monkeypatch, "pending_approval", 9)
     gw = _gateway(settings_factory, tmp_path)
@@ -124,7 +124,7 @@ def test_okr_external_deliver_pending_is_ok(settings_factory, tmp_path, monkeypa
 
 
 def test_resource_external_deliver_pending_is_ok(settings_factory, tmp_path, monkeypatch):
-    from src.agent import resource_report_graph
+    from my_crew.agent import resource_report_graph
 
     seen = _spy_writes(monkeypatch, "pending_approval", 3)
     gw = _gateway(settings_factory, tmp_path)
@@ -137,12 +137,12 @@ def test_resource_external_deliver_pending_is_ok(settings_factory, tmp_path, mon
 
 def test_resource_external_short_omits_confluence_link(settings_factory, tmp_path, monkeypatch):
     """C1 fix: the external resource short must NOT link the page (it holds per-person PII)."""
-    import src.actions.confluence_write as cw
-    import src.actions.slack_write as sw
-    from src.actions.action_gateway import GatewayResult
-    from src.actions.confluence_write import ConfluencePage
-    from src.agent import resource_report_graph
-    from src.tools.models import AssigneeLoad, CostSummary, ResourceReport
+    import my_crew.actions.confluence_write as cw
+    import my_crew.actions.slack_write as sw
+    from my_crew.actions.action_gateway import GatewayResult
+    from my_crew.actions.confluence_write import ConfluencePage
+    from my_crew.agent import resource_report_graph
+    from my_crew.tools.models import AssigneeLoad, CostSummary, ResourceReport
 
     posted: dict = {}
 
@@ -164,7 +164,7 @@ def test_resource_external_short_omits_confluence_link(settings_factory, tmp_pat
     )
     # The URL-free external short is what compose checkpoints (already strips name/labor);
     # deliver must NOT inject the page link for external (the per-person PII gate).
-    from src.llm.resource_report_prompt import build_resource_slack_short
+    from my_crew.llm.resource_report_prompt import build_resource_slack_short
 
     resource = ResourceReport(
         (AssigneeLoad("Alice", 6, 0, 0, overloaded=True),), 6.0, ("Alice",), 0
@@ -180,7 +180,7 @@ def test_resource_external_short_omits_confluence_link(settings_factory, tmp_pat
 
 
 def test_internal_deliver_keeps_channel_none(settings_factory, tmp_path, monkeypatch):
-    from src.agent import okr_report_graph
+    from my_crew.agent import okr_report_graph
 
     seen = _spy_writes(monkeypatch, "executed", None)
     gw = _gateway(settings_factory, tmp_path)
@@ -203,9 +203,9 @@ def test_external_channel_routes_to_lop_b(settings_factory, tmp_path, monkeypatc
     Real gateway + real hard_block (no edit needed); only the MCP post handler is
     faked. Confirms the stakeholder channel reaches Lớp B purely via channel selection.
     """
-    from src.actions import slack_write
-    from src.actions.action_gateway import ActionGateway
-    from src.audit.audit_log import AuditLog
+    from my_crew.actions import slack_write
+    from my_crew.actions.action_gateway import ActionGateway
+    from my_crew.audit.audit_log import AuditLog
 
     class _SlackCfg:
         slack_report_channel = "C-default"
@@ -229,7 +229,7 @@ def test_external_channel_routes_to_lop_b(settings_factory, tmp_path, monkeypatc
 
 
 def test_cli_parse_audience():
-    from src.entrypoints.cli import _parse_audience
+    from my_crew.entrypoints.cli import _parse_audience
 
     assert _parse_audience(["--audience", "external"]) == "external"
     assert _parse_audience(["--audience", "internal"]) == "internal"
@@ -238,7 +238,7 @@ def test_cli_parse_audience():
 
 
 def test_cron_audience():
-    from src.entrypoints.cron import _audience
+    from my_crew.entrypoints.cron import _audience
 
     assert _audience(["--resource", "--audience", "external"]) == "external"
     assert _audience([]) == "internal"
@@ -249,8 +249,8 @@ def test_cron_audience():
 
 def test_approved_slack_action_dispatches_to_live_handler(monkeypatch):
     """approve <id> of an external report must POST (not just authorize)."""
-    from src.actions import slack_write
-    from src.entrypoints.cli import _dispatch_approved_action
+    from my_crew.actions import slack_write
+    from my_crew.entrypoints.cli import _dispatch_approved_action
 
     posted: dict = {}
 
@@ -273,7 +273,7 @@ def test_approved_slack_action_dispatches_to_live_handler(monkeypatch):
 
 
 def test_approved_unknown_action_raises():
-    from src.entrypoints.cli import _dispatch_approved_action
+    from my_crew.entrypoints.cli import _dispatch_approved_action
 
     with pytest.raises(RuntimeError, match="No live handler"):
         _dispatch_approved_action({"type": "gh", "argv": ["pr", "merge"]}, object())
@@ -283,9 +283,9 @@ def test_approved_unknown_action_raises():
 
 
 def test_weekly_external_omits_embedded_sections(settings_factory, monkeypatch):
-    import src.agent.okr_weekly_section as okr_ws
-    import src.agent.resource_weekly_section as res_ws
-    from src.agent import report_graph
+    import my_crew.agent.okr_weekly_section as okr_ws
+    import my_crew.agent.resource_weekly_section as res_ws
+    from my_crew.agent import report_graph
 
     monkeypatch.setattr(okr_ws, "weekly_okr_section", lambda d, config: "<h2>OKR-MARKER</h2>")
     monkeypatch.setattr(
@@ -294,7 +294,7 @@ def test_weekly_external_omits_embedded_sections(settings_factory, monkeypatch):
 
     class _FakeLlm:
         def complete(self, messages):
-            from src.llm.client import LlmResult
+            from my_crew.llm.client import LlmResult
             return LlmResult(content="<p>weekly</p>", model="m",
                              prompt_tokens=0, completion_tokens=0, cost_usd=0.0)
 

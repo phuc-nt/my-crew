@@ -12,16 +12,16 @@ from types import SimpleNamespace
 
 import pytest
 
-import src.agent.ops_assign_team_task as mod
-import src.profile.loader as loader_mod
-import src.runtime.company as company_mod
-import src.runtime.registry as registry_mod
-from src.runtime.registry import RegistryEntry
+import my_crew.agent.ops_assign_team_task as mod
+import my_crew.profile.loader as loader_mod
+import my_crew.runtime.company as company_mod
+import my_crew.runtime.registry as registry_mod
+from my_crew.runtime.registry import RegistryEntry
 
 
 @pytest.fixture(autouse=True)
 def _isolated_team_tasks_root(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
 
 def _company(*, auto_confirm=False):
@@ -75,8 +75,8 @@ def _wire(monkeypatch, *, auto_confirm=False):
 
 
 def _store():
-    from src.runtime.team_task_paths import team_tasks_db_path
-    from src.runtime.team_task_store import TeamTaskStore
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
 
     return TeamTaskStore(team_tasks_db_path())
 
@@ -157,8 +157,8 @@ def test_assignment_event_carries_pic_and_task_id(monkeypatch):
     mod.preview_assign_team_task(slots)
     mod.run_assign_team_task(slots)
 
-    from src.runtime.office_room_store import OfficeRoomStore, office_room_db_path
-    from src.runtime.team_task_paths import team_tasks_root
+    from my_crew.runtime.office_room_store import OfficeRoomStore, office_room_db_path
+    from my_crew.runtime.team_task_paths import team_tasks_root
 
     store = OfficeRoomStore(office_room_db_path(team_tasks_root()))
     try:

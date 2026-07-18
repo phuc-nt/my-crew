@@ -22,15 +22,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
-from src.agent.task_decomposition import decomposition_content_hash
-from src.agent.team_task_artifact import write_step_artifact
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker, run_one_tick
+from my_crew.agent.task_decomposition import decomposition_content_hash
+from my_crew.agent.team_task_artifact import write_step_artifact
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 @pytest.fixture(autouse=True)
 def _isolated_team_tasks_root(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
 
 def _store(tmp_path) -> TeamTaskStore:
@@ -68,7 +68,7 @@ def _deps(store, **overrides) -> CoordinatorDeps:
 def test_content_rerun_after_review_minted_forces_stale_artifact_reject_and_remint(
     tmp_path, monkeypatch,
 ):
-    from src.runtime.team_task_paths import team_tasks_root
+    from my_crew.runtime.team_task_paths import team_tasks_root
 
     store = _store(tmp_path)
     steps = [
@@ -87,7 +87,7 @@ def test_content_rerun_after_review_minted_forces_stale_artifact_reject_and_remi
     store.mark_done("t1", "s1", outcome_ref="x", cost_usd=0.0, attempt_id=first_attempt)
 
     # Ticker rule mints the review-step, locked to the FIRST attempt's artifact.
-    import src.agent.team_task_roster as roster_mod
+    import my_crew.agent.team_task_roster as roster_mod
 
     monkeypatch.setattr(roster_mod, "assignable_staff",
                         lambda: [("agent-a", "pm"), ("agent-qa", "pm")])
@@ -111,10 +111,10 @@ def test_content_rerun_after_review_minted_forces_stale_artifact_reject_and_remi
     # The reviewer's own worker run (real `run_review_step`, through the SAME dispatch
     # `team_step_runner._run_review` uses) refuses to grade stale content: never calls
     # the LLM, never writes a verdict artifact.
-    import src.llm.client as llm_client_mod
-    from src.agent.review_graph import ReviewStepInput, run_review_step
-    from src.agent.team_task_artifact import read_review_verdict_artifact
-    from src.config.config_builders import build_settings_from_dict
+    import my_crew.llm.client as llm_client_mod
+    from my_crew.agent.review_graph import ReviewStepInput, run_review_step
+    from my_crew.agent.team_task_artifact import read_review_verdict_artifact
+    from my_crew.config.config_builders import build_settings_from_dict
 
     llm_calls: list[list[dict]] = []
 

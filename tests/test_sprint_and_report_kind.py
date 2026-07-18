@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from datetime import date
 
-from src.entrypoints.cli import _parse_report_kind
-from src.llm.report_prompt import REPORT_TITLES, build_detail_messages
-from src.tools.jira_read import parse_sprint
-from src.tools.models import Risk
+from my_crew.entrypoints.cli import _parse_report_kind
+from my_crew.llm.report_prompt import REPORT_TITLES, build_detail_messages
+from my_crew.tools.jira_read import parse_sprint
+from my_crew.tools.models import Risk
 
 RISKS = [Risk(kind="blocker", severity="high", subject="AB-1", detail="d", suggested_action="a")]
 
@@ -65,8 +65,8 @@ def test_cli_parse_report_kind():
 
 
 def _okr_rollup(config):
-    from src.agent.okr_analyzer import OkrRollup
-    from src.tools.models import KeyResult, Objective
+    from my_crew.agent.okr_analyzer import OkrRollup
+    from my_crew.tools.models import KeyResult, Objective
 
     obj = Objective("Tăng retention",
                     (KeyResult("KR1", ("E-1",), None, progress_pct=60.0),), progress_pct=60.0)
@@ -82,13 +82,13 @@ class _OkrCfg:
 
 
 def test_weekly_okr_section_omitted_when_unconfigured():
-    from src.agent import okr_weekly_section as okr
+    from my_crew.agent import okr_weekly_section as okr
 
     assert okr.weekly_okr_section("2026-06-22", _OkrCfg(None)) == ""
 
 
 def test_weekly_okr_section_rendered_when_configured(monkeypatch):
-    from src.agent import okr_weekly_section as okr
+    from my_crew.agent import okr_weekly_section as okr
 
     monkeypatch.setattr(okr, "build_okr_rollup", _okr_rollup)
     out = okr.weekly_okr_section("2026-06-22", _OkrCfg("12345"))
@@ -97,7 +97,7 @@ def test_weekly_okr_section_rendered_when_configured(monkeypatch):
 
 
 def test_weekly_okr_section_survives_fetch_failure(monkeypatch):
-    from src.agent import okr_weekly_section as okr
+    from my_crew.agent import okr_weekly_section as okr
 
     def boom(config):
         raise RuntimeError("confluence down")
@@ -111,7 +111,7 @@ def test_weekly_okr_section_survives_fetch_failure(monkeypatch):
 
 
 def test_weekly_okr_slack_line(monkeypatch):
-    from src.agent import okr_weekly_section as okr
+    from my_crew.agent import okr_weekly_section as okr
 
     monkeypatch.setattr(okr, "build_okr_rollup", _okr_rollup)
     line = okr.weekly_okr_slack_line(_OkrCfg("12345"))
@@ -119,15 +119,15 @@ def test_weekly_okr_slack_line(monkeypatch):
 
 
 def test_weekly_okr_slack_line_empty_when_unconfigured():
-    from src.agent import okr_weekly_section as okr
+    from my_crew.agent import okr_weekly_section as okr
 
     assert okr.weekly_okr_slack_line(_OkrCfg(None)) == ""
 
 
 def test_cron_no_key_returns_one(monkeypatch, tmp_path):
     # cron reaches the kind dispatch then exits 1 cleanly with no key (no network).
-    import src.config.settings as settings_mod
-    from src.entrypoints.cron import main as cron_main
+    import my_crew.config.settings as settings_mod
+    from my_crew.entrypoints.cron import main as cron_main
 
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     # Also clear stakeholder/external channel vars so a CI runner that exports a
@@ -136,6 +136,6 @@ def test_cron_no_key_returns_one(monkeypatch, tmp_path):
     monkeypatch.delenv("SLACK_EXTERNAL_CHANNELS", raising=False)
     monkeypatch.setattr(settings_mod, "REPO_ROOT", tmp_path)  # empty dir -> no .env
     # The profile loader load_dotenv's the real .env; block it so no key is seen.
-    monkeypatch.setattr("src.profile.loader.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setattr("my_crew.profile.loader.load_dotenv", lambda *a, **k: None)
     assert cron_main(["--weekly"]) == 1
     assert cron_main(["--daily"]) == 1

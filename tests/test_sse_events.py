@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-from src.server.graph_runner import Terminal
-from src.server.sse_events import node_event, summarize_node, terminal_event
+from my_crew.server.graph_runner import Terminal
+from my_crew.server.sse_events import node_event, summarize_node, terminal_event
 
 
 def test_summarize_node_drops_pii():

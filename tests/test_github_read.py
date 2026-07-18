@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from src.tools.github_read import _rollup_state, parse_ci, parse_pr
+from my_crew.tools.github_read import _rollup_state, parse_ci, parse_pr
 
 TODAY = date(2026, 6, 21)
 

@@ -18,10 +18,13 @@ from pathlib import Path
 
 import pytest
 
-from src.config.config_builders import build_reporting_config_from_dict, build_settings_from_dict
-from src.profile.loader import LoadedProfile, _parse_inbox
-from src.runtime import inbox as inbox_mod
-from src.runtime.service import _effective_schedule
+from my_crew.config.config_builders import (
+    build_reporting_config_from_dict,
+    build_settings_from_dict,
+)
+from my_crew.profile.loader import LoadedProfile, _parse_inbox
+from my_crew.runtime import inbox as inbox_mod
+from my_crew.runtime.service import _effective_schedule
 
 
 def _config(**over):
@@ -182,7 +185,7 @@ def test_run_inbox_caps_replies_and_advances_watermark(tmp_path, monkeypatch):
         answered.append(mention["ts"])
         return type("R", (), {"status": "executed", "summary": "ok"})(), 0.001
 
-    monkeypatch.setattr("src.agent.qa_answer.answer_mention", fake_answer)
+    monkeypatch.setattr("my_crew.agent.qa_answer.answer_mention", fake_answer)
     result = inbox_mod.run_inbox(loaded, loaded.settings)
     assert result["replied"] == 3 and len(answered) == 3  # per-poll cap
     # Watermark = last PROCESSED ts, so the 2 remaining are picked up next poll.
@@ -191,7 +194,7 @@ def test_run_inbox_caps_replies_and_advances_watermark(tmp_path, monkeypatch):
 
 
 def test_run_inbox_infra_failure_holds_watermark(tmp_path, monkeypatch):
-    from src.llm.fallback_policy import ProviderCallError
+    from my_crew.llm.fallback_policy import ProviderCallError
 
     loaded = _loaded(tmp_path, inbox={"channel": "C_IN", "poll_minutes": 2})
     inbox_mod.save_watermark(Path(tmp_path), "100")
@@ -201,7 +204,7 @@ def test_run_inbox_infra_failure_holds_watermark(tmp_path, monkeypatch):
     def fake_answer(loaded_, settings_, *, mention, pack=None, gateway=None):
         raise ProviderCallError("all models down")
 
-    monkeypatch.setattr("src.agent.qa_answer.answer_mention", fake_answer)
+    monkeypatch.setattr("my_crew.agent.qa_answer.answer_mention", fake_answer)
     result = inbox_mod.run_inbox(loaded, loaded.settings)
     assert result["replied"] == 0
     # Watermark HELD: the provider outage is not the question's fault — retry next poll.
@@ -251,7 +254,7 @@ def test_run_inbox_poison_mention_skipped_not_fatal(tmp_path, monkeypatch):
             raise RuntimeError("provider down")
         return type("R", (), {"status": "executed", "summary": "ok"})(), None
 
-    monkeypatch.setattr("src.agent.qa_answer.answer_mention", fake_answer)
+    monkeypatch.setattr("my_crew.agent.qa_answer.answer_mention", fake_answer)
     result = inbox_mod.run_inbox(loaded, loaded.settings)
     assert result["replied"] == 1
     assert inbox_mod.load_watermark(Path(tmp_path)) == "300.1"  # moved past the poison
@@ -281,8 +284,8 @@ class _FakeLlm:
 
 
 def test_answer_mention_delivers_threaded_reply_via_gateway(tmp_path):
-    from src.actions.action_gateway import ActionGateway
-    from src.agent.qa_answer import answer_mention
+    from my_crew.actions.action_gateway import ActionGateway
+    from my_crew.agent.qa_answer import answer_mention
 
     loaded = _loaded(
         tmp_path, inbox={"channel": "C_IN", "poll_minutes": 2},
@@ -295,7 +298,7 @@ def test_answer_mention_delivers_threaded_reply_via_gateway(tmp_path):
     gw = ActionGateway(settings, external_channels=frozenset(),
                        mcp_allowlist=pack.allowlist)
     posted = {}
-    import src.agent.qa_answer as qa
+    import my_crew.agent.qa_answer as qa
 
     def fake_handler_factory(server):
         def _h(action):
@@ -327,7 +330,7 @@ def test_answer_mention_delivers_threaded_reply_via_gateway(tmp_path):
 
 
 def test_answer_mention_empty_llm_reply_raises(tmp_path):
-    from src.agent.qa_answer import answer_mention
+    from my_crew.agent.qa_answer import answer_mention
 
     loaded = _loaded(tmp_path, inbox={"channel": "C_IN", "poll_minutes": 2})
     with pytest.raises(RuntimeError, match="empty"):
@@ -336,7 +339,7 @@ def test_answer_mention_empty_llm_reply_raises(tmp_path):
 
 
 def test_sanitize_reply_strips_mention_phrase_and_broadcasts():
-    from src.agent.qa_answer import sanitize_reply
+    from my_crew.agent.qa_answer import sanitize_reply
 
     dirty = "Theo tôi @ACME rất bận. <!channel> chú ý: @acme sẽ trả lời."
     clean = sanitize_reply(dirty, "acme")
@@ -347,9 +350,9 @@ def test_sanitize_reply_strips_mention_phrase_and_broadcasts():
 
 def test_answer_mention_posts_sanitized_text_even_when_llm_echoes(tmp_path):
     # The anti-loop guard must be structural: feed an LLM that DOES echo the phrase.
-    import src.agent.qa_answer as qa
-    from src.actions.action_gateway import ActionGateway
-    from src.agent.qa_answer import answer_mention
+    import my_crew.agent.qa_answer as qa
+    from my_crew.actions.action_gateway import ActionGateway
+    from my_crew.agent.qa_answer import answer_mention
 
     loaded = _loaded(tmp_path, inbox={"channel": "C_IN", "poll_minutes": 2})
     settings = build_settings_from_dict(
@@ -373,7 +376,7 @@ def test_answer_mention_posts_sanitized_text_even_when_llm_echoes(tmp_path):
 
 
 def test_render_snapshot_bounded():
-    from src.agent.qa_answer import render_snapshot
+    from my_crew.agent.qa_answer import render_snapshot
 
     text = render_snapshot({"rows": ["x" * 100] * 200})
     assert len(text) < 6200 and "cắt bớt" in text
@@ -383,14 +386,14 @@ def test_render_snapshot_bounded():
 
 
 def test_worker_inbox_kind_runs_poll_and_records_event(tmp_path, monkeypatch):
-    from src.runtime import worker
+    from my_crew.runtime import worker
 
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
     loaded = _loaded(tmp_path, inbox={"channel": "C_IN", "poll_minutes": 2})
     monkeypatch.setattr(worker, "load_profile", lambda aid, data_dir=None: loaded)
     monkeypatch.setattr(worker, "migrate_legacy_data_dir", lambda: None)
     monkeypatch.setattr(
-        "src.runtime.inbox.run_inbox",
+        "my_crew.runtime.inbox.run_inbox",
         lambda ld, st: {"status": "replied_1", "replied": 1, "cost_usd": 0.001,
                         "delivered": True},
     )

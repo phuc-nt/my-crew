@@ -11,17 +11,17 @@ import json
 
 from fastapi.testclient import TestClient
 
-from src.actions.approval_store import ApprovalStore
-from src.audit.audit_log import AuditEntry, AuditLog
-from src.config.config_builders import build_settings_from_dict
-from src.server import agent_views, visualize_views
-from src.server.app import create_app
+from my_crew.actions.approval_store import ApprovalStore
+from my_crew.audit.audit_log import AuditEntry, AuditLog
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.server import agent_views, visualize_views
+from my_crew.server.app import create_app
 
 
 def _patch(monkeypatch, tmp_path, ids=("acme",)):
     data_root = tmp_path / ".data"
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", data_root)
-    from src.runtime.registry import RegistryEntry
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", data_root)
+    from my_crew.runtime.registry import RegistryEntry
 
     reg = lambda: tuple(RegistryEntry(i, True) for i in ids)  # noqa: E731
     monkeypatch.setattr(visualize_views, "load_registry", reg)
@@ -112,11 +112,11 @@ def test_memory_internal_returns_seeded_fact(monkeypatch, tmp_path):
     _agent_dir(tmp_path / ".data")
     from langgraph.store.memory import InMemoryStore
 
-    from src.agent.memory_node import _NAMESPACE_KIND
+    from my_crew.agent.memory_node import _NAMESPACE_KIND
 
     seeded = InMemoryStore()
     seeded.put(("acme", _NAMESPACE_KIND), "k1", {"fact": "SCRUM-15 quá hạn 17 ngày"})
-    monkeypatch.setattr("src.agent.store.get_store", lambda settings: seeded)
+    monkeypatch.setattr("my_crew.agent.store.get_store", lambda settings: seeded)
     r = _client().get("/api/memory/acme?audience=internal")
     assert r.status_code == 200
     facts = r.json()["facts"]
@@ -129,11 +129,11 @@ def test_memory_external_leaks_nothing(monkeypatch, tmp_path):
     _agent_dir(tmp_path / ".data")
     from langgraph.store.memory import InMemoryStore
 
-    from src.agent.memory_node import _NAMESPACE_KIND
+    from my_crew.agent.memory_node import _NAMESPACE_KIND
 
     seeded = InMemoryStore()
     seeded.put(("acme", _NAMESPACE_KIND), "k1", {"fact": "should NOT leak"})
-    monkeypatch.setattr("src.agent.store.get_store", lambda settings: seeded)
+    monkeypatch.setattr("my_crew.agent.store.get_store", lambda settings: seeded)
     r = _client().get("/api/memory/acme?audience=external")
     assert r.status_code == 200
     assert r.json()["facts"] == []  # external gets nothing despite a seeded fact

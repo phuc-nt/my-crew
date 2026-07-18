@@ -15,9 +15,9 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from src.runtime import registry_edit
-from src.server import agent_create, template_create
-from src.server.app import create_app
+from my_crew.runtime import registry_edit
+from my_crew.server import agent_create, template_create
+from my_crew.server.app import create_app
 
 _REPO = Path(__file__).resolve().parents[1]
 _REGISTRY_TEXT = """\
@@ -37,15 +37,15 @@ def tmp_world(tmp_path, monkeypatch):
     shutil.copyfile(_REPO / "profiles" / "default" / "profile.yaml",
                     profiles / "default" / "profile.yaml")
     company = tmp_path / "company.yaml"
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
     monkeypatch.setattr(agent_create, "_REGISTRY_PATH", registry)
     monkeypatch.setattr(agent_create, "_PROFILES_DIR", profiles)
     monkeypatch.setattr(registry_edit, "_REGISTRY_PATH", registry)
-    monkeypatch.setattr("src.profile.loader._PROFILES_DIR", profiles)
-    monkeypatch.setattr("src.runtime.registry._REGISTRY_PATH", registry)
-    monkeypatch.setattr("src.runtime.company._COMPANY_PATH", company)
+    monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", profiles)
+    monkeypatch.setattr("my_crew.runtime.registry._REGISTRY_PATH", registry)
+    monkeypatch.setattr("my_crew.runtime.company._COMPANY_PATH", company)
     # per-agent skills dir resolves under profiles/<id>/skills via the pack registry
-    monkeypatch.setattr("src.packs.registry._PROFILES_DIR", profiles, raising=False)
+    monkeypatch.setattr("my_crew.packs.registry._PROFILES_DIR", profiles, raising=False)
     return registry, profiles, company
 
 
@@ -139,7 +139,7 @@ def test_crew_partial_existing_member_is_skipped_not_abort(tmp_world):
 
 
 def test_crew_never_clobbers_existing_coordinator(tmp_world, monkeypatch):
-    from src.runtime.company import save_company
+    from my_crew.runtime.company import save_company
 
     # CEO already picked a coordinator by hand — the crew must not overwrite it.
     template_create.create_from_template("phan-tich")

@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.runtime_backends import resolve_runtime
-from src.runtime_backends.config import AgentRuntimeConfig
-from src.runtime_backends.deep_agent_runtime import (
+from my_crew.runtime_backends import resolve_runtime
+from my_crew.runtime_backends.config import AgentRuntimeConfig
+from my_crew.runtime_backends.deep_agent_runtime import (
     DeepAgentRuntime,
     deepagents_available,
     require_available,
@@ -26,7 +26,7 @@ class _LP:
 
 def test_app_imports_without_deepagents():
     # Importing the app / this module must not require the optional dep (isolation, C5).
-    import src.server.app  # noqa: F401 — the import itself is the assertion
+    import my_crew.server.app  # noqa: F401 — the import itself is the assertion
 
     assert True
 

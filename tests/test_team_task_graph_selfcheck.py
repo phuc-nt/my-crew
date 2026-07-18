@@ -15,7 +15,7 @@ Load-bearing:
 
 from __future__ import annotations
 
-from src.agent.team_task_graph import TeamTaskDeps, build_team_task_graph
+from my_crew.agent.team_task_graph import TeamTaskDeps, build_team_task_graph
 
 
 def _make_deps(*, verdicts: list[tuple[bool, list[str], float]]):

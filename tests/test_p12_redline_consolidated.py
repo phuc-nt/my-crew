@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import pathlib
 
-from src.runtime import replay, run_config
+from my_crew.runtime import replay, run_config
 
-_AUTOMATION_DIR = pathlib.Path("src/automation")
+_AUTOMATION_DIR = pathlib.Path("my_crew/automation")
 _FORBIDDEN = ("slack_write", "linear_write", "email_write", "confluence_write",
              "approved_dispatch", "mcp_adapter")
 

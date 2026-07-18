@@ -12,8 +12,8 @@ from dataclasses import replace
 
 import pytest
 
-from src.actions.action_gateway import ActionGateway, HardBlockedError, WriteDisabledError
-from src.config.config_builders import build_settings_from_dict
+from my_crew.actions.action_gateway import ActionGateway, HardBlockedError, WriteDisabledError
+from my_crew.config.config_builders import build_settings_from_dict
 
 CFG = {
     "actions": {"slack_post": {"enabled": True, "max_per_day": 2, "channels": ["C_EXT"]}},

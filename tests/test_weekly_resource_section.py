@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.tools.models import AssigneeLoad, CostSummary, ResourceReport
+from my_crew.tools.models import AssigneeLoad, CostSummary, ResourceReport
 
 
 def _snapshot(config, settings):
@@ -28,7 +28,7 @@ class _ResCfg:
 
 
 def test_section_omitted_when_unconfigured(settings_factory):
-    from src.agent import resource_weekly_section as rws
+    from my_crew.agent import resource_weekly_section as rws
 
     settings = settings_factory()
     assert rws.weekly_resource_section("2026-06-22", _ResCfg(None), settings) == ""
@@ -36,7 +36,7 @@ def test_section_omitted_when_unconfigured(settings_factory):
 
 
 def test_section_rendered_when_configured(settings_factory, monkeypatch):
-    from src.agent import resource_weekly_section as rws
+    from my_crew.agent import resource_weekly_section as rws
 
     settings = settings_factory()
     monkeypatch.setattr(rws, "build_resource_rollup", _snapshot)
@@ -48,7 +48,7 @@ def test_section_rendered_when_configured(settings_factory, monkeypatch):
 
 
 def test_section_survives_fetch_failure(settings_factory, monkeypatch):
-    from src.agent import resource_weekly_section as rws
+    from my_crew.agent import resource_weekly_section as rws
 
     settings = settings_factory()
 
@@ -64,7 +64,7 @@ def test_section_survives_fetch_failure(settings_factory, monkeypatch):
 
 
 def test_assignee_escaped_in_weekly_section(settings_factory, monkeypatch):
-    from src.agent import resource_weekly_section as rws
+    from my_crew.agent import resource_weekly_section as rws
 
     settings = settings_factory()
     evil = ResourceReport(
@@ -82,9 +82,9 @@ def test_assignee_escaped_in_weekly_section(settings_factory, monkeypatch):
 
 def test_weekly_compose_includes_both_okr_and_resource(settings_factory, monkeypatch):
     """The resource hook must not displace the OKR hook in the weekly report."""
-    import src.agent.okr_weekly_section as okr_ws
-    import src.agent.resource_weekly_section as res_ws
-    from src.agent import report_graph
+    import my_crew.agent.okr_weekly_section as okr_ws
+    import my_crew.agent.resource_weekly_section as res_ws
+    from my_crew.agent import report_graph
 
     # Patch the two weekly section helpers to known markers, then drive _compose.
     monkeypatch.setattr(okr_ws, "weekly_okr_section", lambda d, config: "<h2>OKR-MARKER</h2>")
@@ -94,7 +94,7 @@ def test_weekly_compose_includes_both_okr_and_resource(settings_factory, monkeyp
 
     class _FakeLlm:
         def complete(self, messages):
-            from src.llm.client import LlmResult
+            from my_crew.llm.client import LlmResult
             return LlmResult(content="<p>weekly</p>", model="m",
                              prompt_tokens=0, completion_tokens=0, cost_usd=0.0)
 
@@ -108,8 +108,8 @@ def test_weekly_compose_includes_both_okr_and_resource(settings_factory, monkeyp
 
 def test_daily_compose_has_no_resource_section(settings_factory, monkeypatch):
     """Daily report must not include the resource section (hook is weekly-only)."""
-    import src.agent.resource_weekly_section as res_ws
-    from src.agent import report_graph
+    import my_crew.agent.resource_weekly_section as res_ws
+    from my_crew.agent import report_graph
 
     monkeypatch.setattr(
         res_ws, "weekly_resource_section", lambda d, config, settings: "<h2>RES-MARKER</h2>"
@@ -117,7 +117,7 @@ def test_daily_compose_has_no_resource_section(settings_factory, monkeypatch):
 
     class _FakeLlm:
         def complete(self, messages):
-            from src.llm.client import LlmResult
+            from my_crew.llm.client import LlmResult
             return LlmResult(content="<p>daily</p>", model="m",
                              prompt_tokens=0, completion_tokens=0, cost_usd=0.0)
 

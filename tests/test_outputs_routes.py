@@ -13,13 +13,13 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from src.runtime.team_task_store import TeamTaskStore
+from my_crew.runtime.team_task_store import TeamTaskStore
 
 
 @pytest.fixture()
 def client(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
-    from src.server.app import create_app
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    from my_crew.server.app import create_app
 
     return TestClient(create_app())
 
@@ -41,17 +41,17 @@ def agent_artifacts(monkeypatch, tmp_path):
     (art / "leak.txt").symlink_to(outside)
 
     monkeypatch.setattr(
-        "src.runtime.registry.load_registry", lambda *a, **k: [_Entry("noi-dung")]
+        "my_crew.runtime.registry.load_registry", lambda *a, **k: [_Entry("noi-dung")]
     )
     monkeypatch.setattr(
-        "src.runtime.agent_paths.agent_data_dir",
+        "my_crew.runtime.agent_paths.agent_data_dir",
         lambda agent_id: tmp_path / "agents" / agent_id,
     )
     return art
 
 
 def _seed_tasks(*, statuses=("open",)):
-    from src.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
 
     store = TeamTaskStore(team_tasks_db_path())
     for i, status in enumerate(statuses, start=1):
@@ -96,8 +96,8 @@ def test_index_includes_exported_files(client, tmp_path, agent_artifacts):
 
 
 def test_step_content_via_hub_endpoint(client, tmp_path):
-    from src.agent.team_task_artifact import write_step_artifact
-    from src.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
+    from my_crew.agent.team_task_artifact import write_step_artifact
+    from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
 
     _seed_tasks()
     store = TeamTaskStore(team_tasks_db_path())
@@ -130,13 +130,14 @@ def test_download_traversal_and_unknown_agent_404(client, agent_artifacts):
 def test_board_lanes_group_by_status(client, tmp_path):
     _seed_tasks(statuses=("open", "done", "stalled"))
     # plus a planning draft (create_task without confirm keeps planning)
-    from src.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
 
     store = TeamTaskStore(team_tasks_db_path())
     store.create_task(task_id="draft1", title="Nháp", pic_id="")
     store.close()
 
-    lanes = {l["id"]: l["cards"] for l in client.get("/api/team-tasks/board").json()["lanes"]}
+    board = client.get("/api/team-tasks/board").json()
+    lanes = {lane["id"]: lane["cards"] for lane in board["lanes"]}
     assert [c["task_id"] for c in lanes["planning"]] == ["draft1"]
     assert [c["task_id"] for c in lanes["open"]] == ["t1"]
     assert [c["task_id"] for c in lanes["done"]] == ["t2"]
@@ -149,7 +150,7 @@ def test_board_lanes_group_by_status(client, tmp_path):
 def test_board_card_counts_needs_shell_steps(client, tmp_path):
     """v50: a task with a needs_shell step reports steps_needs_shell so the FE can flag the
     deep_agent (Docker sandbox) tier."""
-    from src.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
 
     store = TeamTaskStore(team_tasks_db_path())
     store.create_task(task_id="tsh", title="Có shell", pic_id="noi-dung")
@@ -162,7 +163,8 @@ def test_board_card_counts_needs_shell_steps(client, tmp_path):
     store._conn.commit()
     store.close()
 
-    lanes = {l["id"]: l["cards"] for l in client.get("/api/team-tasks/board").json()["lanes"]}
+    board = client.get("/api/team-tasks/board").json()
+    lanes = {lane["id"]: lane["cards"] for lane in board["lanes"]}
     card = next(c for c in lanes["open"] if c["task_id"] == "tsh")
     assert card["steps_needs_shell"] == 1 and card["steps_total"] == 2
 
@@ -177,8 +179,8 @@ def test_task_cost_no_captures_returns_zero_totals(client):
 def test_task_cost_projects_steps_and_sums_totals(client):
     """v50: per-step-attempt telemetry is projected (allowlisted) + totals summed; None cost
     contributes 0 to the total."""
-    from src.runtime.capture_store import CaptureStore
-    from src.runtime.team_task_paths import capture_db_path
+    from my_crew.runtime.capture_store import CaptureStore
+    from my_crew.runtime.team_task_paths import capture_db_path
 
     store = CaptureStore(capture_db_path())
     store.record(attempt_id="a1", task_id="tc", step_id="s1", agent_id="noi-dung",

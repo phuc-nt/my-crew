@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from src.runtime.run_event import append_run_event
+from my_crew.runtime.run_event import append_run_event
 
 
 def test_one_append_one_parseable_line(tmp_path):

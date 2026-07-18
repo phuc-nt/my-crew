@@ -17,8 +17,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agent.review_graph import ReviewStepInput, parse_review_verdict, run_review_step
-from src.llm.team_task_check_prompt import parse_check_verdict
+from my_crew.agent.review_graph import (
+    ReviewStepInput,
+    ReviewVerdictError,
+    parse_review_verdict,
+    run_review_step,
+)
+from my_crew.llm.team_task_check_prompt import parse_check_verdict
 
 
 def test_check_verdict_parses_optional_criteria_checklist():
@@ -45,8 +50,7 @@ def test_review_verdict_parses_criteria_and_stays_backward_compatible():
 
 
 def test_run_review_step_threads_criteria_into_artifact_and_result(tmp_path, monkeypatch):
-    from src.agent import review_graph
-    from src.agent.team_task_artifact import write_step_artifact
+    from my_crew.agent.team_task_artifact import write_step_artifact
 
     write_step_artifact(tmp_path, "t1", 3, {
         "status": "done", "result_text": "bản nháp", "step_title": "Soạn",
@@ -66,7 +70,7 @@ def test_run_review_step_threads_criteria_into_artifact_and_result(tmp_path, mon
                 ],
             }), cost_usd=0.01, prompt_tokens=10, completion_tokens=5)
 
-    import src.llm.client as llm_client_mod
+    import my_crew.llm.client as llm_client_mod
 
     monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)
 
@@ -80,7 +84,7 @@ def test_run_review_step_threads_criteria_into_artifact_and_result(tmp_path, mon
     )
     assert out["passed"] is False and len(out["criteria"]) == 2
 
-    from src.agent.team_task_artifact import review_verdict_artifact_path
+    from my_crew.agent.team_task_artifact import review_verdict_artifact_path
 
     payload = json.loads(
         review_verdict_artifact_path(tmp_path, "t1", 4, 0).read_text(encoding="utf-8"))
@@ -88,14 +92,14 @@ def test_run_review_step_threads_criteria_into_artifact_and_result(tmp_path, mon
 
 
 def test_review_event_carries_counts_only(monkeypatch):
-    from src.runtime import team_step_runner as runner
+    from my_crew.runtime import team_step_runner as runner
 
     captured = {}
     monkeypatch.setattr(
-        "src.runtime.office_room_append.append_office_event",
+        "my_crew.runtime.office_room_append.append_office_event",
         lambda room, *, author, kind, body, also_office=False: captured.update(body),
     )
-    monkeypatch.setattr("src.runtime.office_room_append.room_for_task", lambda t: t)
+    monkeypatch.setattr("my_crew.runtime.office_room_append.room_for_task", lambda t: t)
     runner._append_review_event(
         "t1", author="kiem-dinh", task_title="T", step_title="S", passed=False,
         failures=["a", "b"],
@@ -106,7 +110,7 @@ def test_review_event_carries_counts_only(monkeypatch):
 
 
 def test_projection_passes_criteria_counts():
-    from src.server.office_event_projection import summarize_office_event
+    from my_crew.server.office_event_projection import summarize_office_event
 
     body = summarize_office_event("review", {
         "task_title": "T", "step_title": "S", "verdict": "needs_rework",
@@ -119,7 +123,7 @@ def test_projection_passes_criteria_counts():
 
 
 def test_decompose_prompt_demands_measurable_criteria():
-    from src.llm.team_task_prompt import _DECOMPOSE_SYSTEM
+    from my_crew.llm.team_task_prompt import _DECOMPOSE_SYSTEM
 
     assert "ĐO ĐƯỢC" in _DECOMPOSE_SYSTEM
     assert "CEO nêu tiêu chí" in _DECOMPOSE_SYSTEM
@@ -129,15 +133,15 @@ def test_parsers_tolerate_markdown_fences_and_leading_prose():
     """v34 UAT finding: a reviewer model wrapped its verdict in ```json fences →
     parse died → review step failed → whole task stalled. Every LLM-JSON parser now
     strips fences/prose deterministically; genuine garbage still fails loud."""
-    from src.agent.review_graph import parse_review_verdict
-    from src.agent.task_decomposition import DecompositionError, parse_decomposed_task
-    from src.llm.team_task_check_prompt import parse_check_verdict
+    from my_crew.agent.review_graph import parse_review_verdict
+    from my_crew.agent.task_decomposition import DecompositionError, parse_decomposed_task
+    from my_crew.llm.team_task_check_prompt import parse_check_verdict
 
     fenced = '```json\n{"passed": true, "failures": []}\n```'
     assert parse_review_verdict(fenced).passed is True
     prose = 'Đây là kết quả thẩm định:\n{"passed": false, "failures": ["x"], "confidence": 0.9}'
     assert parse_check_verdict(prose).passed is False
-    with pytest.raises(Exception):
+    with pytest.raises(ReviewVerdictError):
         parse_review_verdict("hoàn toàn không có JSON")
     import pytest as _pt
     with _pt.raises(DecompositionError):

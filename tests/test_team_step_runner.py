@@ -1,5 +1,5 @@
 """`team_step_runner._resolve_search_hook` — the PRODUCTION call site that wires
-`web_search`'s own `audit_log` param (`src/tools/web_search_tool.py`) into the shared
+`web_search`'s own `audit_log` param (`my_crew/tools/web_search_tool.py`) into the shared
 team-tasks audit trail.
 
 Load-bearing: before this fix, `_resolve_search_hook` called `web_search(query,
@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.runtime.team_step_runner import _resolve_search_hook
+from my_crew.runtime.team_step_runner import _resolve_search_hook
 
 
 @pytest.fixture(autouse=True)
@@ -25,7 +25,7 @@ def _isolated_team_tasks_root(monkeypatch, tmp_path):
     """Every test in this module writes through the shared cross-agent root (store,
     artifacts, office-room appends) — pin it to tmp_path so no test can touch the
     real install's .data (the office room is a real user-visible surface)."""
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
 class _FakeHttpResponse:
     def __init__(self, payload: dict) -> None:
@@ -69,9 +69,9 @@ def test_run_graph_wires_self_id_to_the_assigned_agent(monkeypatch, tmp_path):
     None, consult off). A caller that forgets this kwarg silently ships consult OFF
     with no error anywhere; this test fails loudly if that regresses.
     """
-    from src.runtime import team_step_runner
+    from my_crew.runtime import team_step_runner
 
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
 
     captured: dict = {}
 
@@ -84,7 +84,7 @@ def test_run_graph_wires_self_id_to_the_assigned_agent(monkeypatch, tmp_path):
         return _FakeGraph()
 
     monkeypatch.setattr(
-        "src.agent.team_task_graph.build_team_task_graph", _fake_build_team_task_graph
+        "my_crew.agent.team_task_graph.build_team_task_graph", _fake_build_team_task_graph
     )
 
     step = SimpleNamespace(
@@ -98,7 +98,7 @@ def test_run_graph_wires_self_id_to_the_assigned_agent(monkeypatch, tmp_path):
 
 
 def test_resolve_search_hook_writes_audit_row_with_redacted_query(tmp_path, monkeypatch):
-    from src.runtime import team_task_paths
+    from my_crew.runtime import team_task_paths
 
     monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
 

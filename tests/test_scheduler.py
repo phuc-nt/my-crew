@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from src.runtime.scheduler import due_reports
+from my_crew.runtime.scheduler import due_reports
 
 # A Wednesday 2026-06-24 at various clock times (no tz — croniter uses naive local).
 _8AM = datetime(2026, 6, 24, 8, 0, 0)

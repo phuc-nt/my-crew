@@ -7,11 +7,11 @@ EXTERNAL path, and is byte-identical to the no-docs call when `company_docs=""`.
 
 from __future__ import annotations
 
-from src.company_docs.inject import company_docs_text, render_company_docs
-from src.company_docs.store import CompanyDoc
-from src.llm import okr_report_prompt, report_prompt, resource_report_prompt
-from src.profile.context import ProfileContext
-from src.tools.models import (
+from my_crew.company_docs.inject import company_docs_text, render_company_docs
+from my_crew.company_docs.store import CompanyDoc
+from my_crew.llm import okr_report_prompt, report_prompt, resource_report_prompt
+from my_crew.profile.context import ProfileContext
+from my_crew.tools.models import (
     AssigneeLoad,
     CostSummary,
     KeyResult,

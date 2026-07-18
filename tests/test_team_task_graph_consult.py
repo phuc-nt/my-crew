@@ -15,8 +15,8 @@ Load-bearing:
 
 from __future__ import annotations
 
-from src.agent.team_task_graph import MAX_CONSULTS, TeamTaskDeps, build_team_task_graph
-from src.config.config_builders import build_settings_from_dict
+from my_crew.agent.team_task_graph import MAX_CONSULTS, TeamTaskDeps, build_team_task_graph
+from my_crew.config.config_builders import build_settings_from_dict
 
 
 def _base_deps(**overrides):
@@ -174,7 +174,7 @@ def test_consult_empty_answer_not_folded_into_handoff_or_counted_in_log():
 
 
 def test_default_team_task_deps_wires_consult_off_when_self_id_blank(tmp_path):
-    from src.agent.team_task_graph import default_team_task_deps
+    from my_crew.agent.team_task_graph import default_team_task_deps
 
     settings = build_settings_from_dict({"data_dir": tmp_path})
     deps = default_team_task_deps(
@@ -186,7 +186,7 @@ def test_default_team_task_deps_wires_consult_off_when_self_id_blank(tmp_path):
 
 
 def test_default_team_task_deps_wires_consult_on_when_self_id_given(tmp_path):
-    from src.agent.team_task_graph import default_team_task_deps
+    from my_crew.agent.team_task_graph import default_team_task_deps
 
     settings = build_settings_from_dict({"data_dir": tmp_path})
     deps = default_team_task_deps(

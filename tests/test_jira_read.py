@@ -6,7 +6,7 @@ from datetime import date
 
 import pytest
 
-from src.tools.jira_read import is_done, parse_issue
+from my_crew.tools.jira_read import is_done, parse_issue
 
 
 def test_parse_full_issue():

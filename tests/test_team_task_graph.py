@@ -13,13 +13,13 @@ Load-bearing:
 
 from __future__ import annotations
 
-from src.agent.team_task_artifact import read_step_artifact
-from src.agent.team_task_graph import (
+from my_crew.agent.team_task_artifact import read_step_artifact
+from my_crew.agent.team_task_graph import (
     TeamTaskDeps,
     build_team_task_graph,
     default_team_task_deps,
 )
-from src.config.config_builders import build_settings_from_dict
+from my_crew.config.config_builders import build_settings_from_dict
 
 
 def _fake_deps(*, handoff="", result_text="work output", cost=0.01, delivered=True):
@@ -123,9 +123,9 @@ def test_default_deps_step1_has_no_handoff_and_writes_artifact(tmp_path, monkeyp
         def complete(self, _messages):
             return _FakeResult()
 
-    # `default_team_task_deps` lazily imports LlmClient from src.llm.client — patch it
+    # `default_team_task_deps` lazily imports LlmClient from my_crew.llm.client — patch it
     # at the source module so the real wiring under test never makes a network call.
-    import src.llm.client as llm_client_mod
+    import my_crew.llm.client as llm_client_mod
 
     monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)
 
@@ -147,8 +147,8 @@ def test_default_deps_step1_has_no_handoff_and_writes_artifact(tmp_path, monkeyp
 
 
 def test_default_deps_step2_reads_step1_handoff(tmp_path, monkeypatch):
-    from src.agent.team_task_artifact import write_step_artifact
-    from src.runtime.team_task_store import TeamTaskStore
+    from my_crew.agent.team_task_artifact import write_step_artifact
+    from my_crew.runtime.team_task_store import TeamTaskStore
 
     write_step_artifact(tmp_path, "task-1", 1, {"status": "done", "result_text": "step 1 output"})
     # `_read_handoff` is DEPS-aware (maps step_ids -> seqs via the store), so the store
@@ -178,7 +178,7 @@ def test_default_deps_step2_reads_step1_handoff(tmp_path, monkeypatch):
         def complete(self, _messages):
             return _FakeResult()
 
-    import src.llm.client as llm_client_mod
+    import my_crew.llm.client as llm_client_mod
 
     monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)
 
@@ -207,7 +207,7 @@ def test_default_deps_missing_prior_artifact_yields_empty_handoff(tmp_path, monk
         def complete(self, _messages):
             return _FakeResult()
 
-    import src.llm.client as llm_client_mod
+    import my_crew.llm.client as llm_client_mod
 
     monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)
 

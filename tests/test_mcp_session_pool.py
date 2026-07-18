@@ -13,14 +13,14 @@ from typing import Any
 
 import pytest
 
-from src.adapters import mcp_session_pool as pool_mod
-from src.adapters.mcp_session_pool import (
+from my_crew.adapters import mcp_session_pool as pool_mod
+from my_crew.adapters.mcp_session_pool import (
     MIN_SERVER_VERSIONS,
     McpSessionPool,
     check_min_version,
     current_pool,
 )
-from src.config.reporting_config import McpServerSpec
+from my_crew.config.reporting_config import McpServerSpec
 
 
 def _spec(name: str = "jira") -> McpServerSpec:
@@ -248,7 +248,7 @@ def test_adapter_call_tool_uses_pool_when_active(monkeypatch):
     spawn_count: dict = {}
     _install_fake_client(monkeypatch, spawn_count=spawn_count)
 
-    from src.adapters.mcp_adapter import call_tool
+    from my_crew.adapters.mcp_adapter import call_tool
 
     with McpSessionPool() as pool:
         token = pool_mod._current_pool.set(pool)

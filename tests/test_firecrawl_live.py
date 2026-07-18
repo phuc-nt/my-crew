@@ -26,7 +26,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_scrape_example_com_real():
-    from src.tools.firecrawl_tool import FirecrawlConfig, scrape_url
+    from my_crew.tools.firecrawl_tool import FirecrawlConfig, scrape_url
 
     fc = FirecrawlConfig(base_url="http://localhost:3002", api_key="local")
     res = scrape_url("https://example.com", fc)
@@ -37,7 +37,7 @@ def test_scrape_example_com_real():
 
 def test_web_scrape_tool_returns_content_real():
     # The read_only_toolset web.scrape tool (what the runtime binds) fetches real content.
-    from src.runtime_backends.read_only_toolset import _firecrawl_tool
+    from my_crew.runtime_backends.read_only_toolset import _firecrawl_tool
 
     class _S:
         firecrawl_base_url = "http://localhost:3002"
@@ -50,7 +50,7 @@ def test_web_scrape_tool_returns_content_real():
 
 def test_web_scrape_ssrf_blocked_real():
     # Even with a live Firecrawl, the SSRF guard blocks localhost/metadata at source.
-    from src.runtime_backends.read_only_toolset import _firecrawl_tool
+    from my_crew.runtime_backends.read_only_toolset import _firecrawl_tool
 
     class _S:
         firecrawl_base_url = "http://localhost:3002"

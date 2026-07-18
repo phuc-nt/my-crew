@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from src.profile.loader import load_profile
+from my_crew.profile.loader import load_profile
 
 
 def _profile(tmp_path: Path, agent_id: str, yaml_body: str) -> None:
@@ -59,7 +59,7 @@ class _FakeGatewayResult:
 
 def test_external_write_routes_executed(monkeypatch):
     # A successful gateway post → hook returns True (deliver proceeds).
-    from src.runtime import team_step_egress as mod
+    from my_crew.runtime import team_step_egress as mod
 
     seen = {}
 
@@ -69,7 +69,7 @@ def test_external_write_routes_executed(monkeypatch):
         seen["rationale"] = kw.get("rationale")
         return _FakeGatewayResult("executed")
 
-    monkeypatch.setattr("src.actions.slack_write.deliver_report", _fake_deliver)
+    monkeypatch.setattr("my_crew.actions.slack_write.deliver_report", _fake_deliver)
     hook = mod.make_external_write(
         gateway=object(), config=object(), agent_id="noi-dung",
         channel="C1", report_date="2026-07-11",
@@ -81,10 +81,10 @@ def test_external_write_routes_executed(monkeypatch):
 
 def test_external_write_pending_approval_returns_false(monkeypatch):
     # A Lớp B queue (pending_approval) → hook returns False (deliver → awaiting_approval).
-    from src.runtime import team_step_egress as mod
+    from my_crew.runtime import team_step_egress as mod
 
     monkeypatch.setattr(
-        "src.actions.slack_write.deliver_report",
+        "my_crew.actions.slack_write.deliver_report",
         lambda text, **kw: _FakeGatewayResult("pending_approval"),
     )
     hook = mod.make_external_write(object(), object(), "a", "C1", "2026-07-11")
@@ -93,10 +93,10 @@ def test_external_write_pending_approval_returns_false(monkeypatch):
 
 def test_external_write_lop_a_deny_returns_false(monkeypatch):
     # A Lớp A hard-deny (denied) → hook returns False (step does not silently succeed).
-    from src.runtime import team_step_egress as mod
+    from my_crew.runtime import team_step_egress as mod
 
     monkeypatch.setattr(
-        "src.actions.slack_write.deliver_report",
+        "my_crew.actions.slack_write.deliver_report",
         lambda text, **kw: _FakeGatewayResult("denied"),
     )
     hook = mod.make_external_write(object(), object(), "a", "C1", "2026-07-11")
@@ -105,7 +105,7 @@ def test_external_write_lop_a_deny_returns_false(monkeypatch):
 
 def test_external_write_empty_text_noop(monkeypatch):
     # Empty result → nothing to gate; returns True without calling deliver.
-    from src.runtime import team_step_egress as mod
+    from my_crew.runtime import team_step_egress as mod
 
     called = {"n": 0}
 
@@ -113,7 +113,7 @@ def test_external_write_empty_text_noop(monkeypatch):
         called["n"] += 1
         return _FakeGatewayResult("executed")
 
-    monkeypatch.setattr("src.actions.slack_write.deliver_report", _spy)
+    monkeypatch.setattr("my_crew.actions.slack_write.deliver_report", _spy)
     hook = mod.make_external_write(object(), object(), "a", "C1", "2026-07-11")
     assert hook("   ") is True
     assert called["n"] == 0

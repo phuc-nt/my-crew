@@ -21,8 +21,8 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from src.runtime.office_room_store import OfficeRoomStore
-from src.server import routes_office_stream as ros
+from my_crew.runtime.office_room_store import OfficeRoomStore
+from my_crew.server import routes_office_stream as ros
 
 
 class _FakeRequest:
@@ -170,7 +170,7 @@ def test_initial_cursor_ignores_malformed_header():
 
 def test_list_rooms_route_returns_seeded_rooms(tmp_path):
     _seed(tmp_path, 1)
-    from src.server.app import create_app
+    from my_crew.server.app import create_app
 
     with TestClient(create_app()) as client:
         r = client.get("/api/office/rooms")
@@ -180,7 +180,7 @@ def test_list_rooms_route_returns_seeded_rooms(tmp_path):
 
 @pytest.fixture
 def auth_env(monkeypatch):
-    from src.server import auth
+    from my_crew.server import auth
 
     monkeypatch.setenv("WEB_AUTH_USERNAME", "ceo")
     monkeypatch.setenv("WEB_AUTH_PASSWORD_HASH", auth.hash_password("s3cret"))
@@ -189,7 +189,7 @@ def auth_env(monkeypatch):
 
 
 def test_office_routes_require_auth_when_enabled(auth_env):
-    from src.server.app import create_app
+    from my_crew.server.app import create_app
 
     with TestClient(create_app()) as client:
         assert client.get("/api/office/rooms").status_code == 401

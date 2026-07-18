@@ -1,4 +1,4 @@
-"""Handoff-artifact confinement + atomicity (`src/agent/team_task_artifact.py`).
+"""Handoff-artifact confinement + atomicity (`my_crew/agent/team_task_artifact.py`).
 
 Load-bearing (the two hazards the module's own docstring names):
 - Path traversal: a task id shaped like a traversal attempt is rejected before any
@@ -16,7 +16,7 @@ import json
 
 import pytest
 
-from src.agent.team_task_artifact import (
+from my_crew.agent.team_task_artifact import (
     read_step_artifact,
     step_artifact_path,
     task_artifact_dir,

@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from src.llm.budget_tracker import BudgetExceededError, BudgetTracker, _current_month
+from my_crew.llm.budget_tracker import BudgetExceededError, BudgetTracker, _current_month
 
 
 def test_accumulates_cost(settings_factory):

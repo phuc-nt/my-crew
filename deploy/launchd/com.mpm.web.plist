@@ -14,7 +14,7 @@
         <string>run</string>
         <string>python</string>
         <string>-m</string>
-        <string>src.server.app</string>
+        <string>my_crew.server.app</string>
     </array>
     <key>WorkingDirectory</key>
     <string>__REPO_DIR__</string>

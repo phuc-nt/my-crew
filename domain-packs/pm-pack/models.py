@@ -1,6 +1,6 @@
 """pm-pack entity ↔ generic model mapping (v3 M5 S6).
 
-The generic `Task` (in `src/tools/models.py`) is the cross-domain shape every pack maps
+The generic `Task` (in `my_crew/tools/models.py`) is the cross-domain shape every pack maps
 onto. PM's source entity is a Jira `Issue`; this module maps `Issue → Task` (and back),
 proving the generic model covers PM without losing any field. PM's analyzers still run on
 `Issue` (byte-identical), so this mapping is the *abstraction proof* M6 relies on: HR maps
@@ -11,7 +11,7 @@ A round-trip `task_to_issue(issue_to_task(x)) == x` holds, so nothing is lost in
 
 from __future__ import annotations
 
-from src.tools.models import Issue, Task
+from my_crew.tools.models import Issue, Task
 
 
 def issue_to_task(issue: Issue) -> Task:

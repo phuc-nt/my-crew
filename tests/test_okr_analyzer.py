@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.agent.okr_analyzer import build_objectives
-from src.tools.models import EpicProgress
+from my_crew.agent.okr_analyzer import build_objectives
+from my_crew.tools.models import EpicProgress
 
 
 def _ep(key: str, done: int, total: int) -> EpicProgress:

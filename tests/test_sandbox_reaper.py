@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from src.runtime_backends.sandbox_reaper import (
+from my_crew.runtime_backends.sandbox_reaper import (
     _parse_docker_created,
     reap_orphaned_sandboxes,
 )

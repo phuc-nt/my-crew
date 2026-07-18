@@ -12,13 +12,13 @@ from pathlib import Path
 
 import pytest
 
-from src.memory.provider import (
+from my_crew.memory.provider import (
     MemoryConfig,
     parse_memory_config,
     resolve_memory_text,
 )
-from src.memory.static_provider import StaticMemoryProvider
-from src.profile.loader import load_profile
+from my_crew.memory.static_provider import StaticMemoryProvider
+from my_crew.profile.loader import load_profile
 
 
 def _write_profile(tmp_path: Path, agent_id: str, yaml_body: str, memory_md: str = "") -> Path:

@@ -7,7 +7,7 @@ the process's command line) before signaling it.
 
 from __future__ import annotations
 
-import src.runtime.team_tick_runner as mod
+import my_crew.runtime.team_tick_runner as mod
 
 
 def test_kill_pid_signals_when_command_line_contains_attempt_id(monkeypatch):
@@ -17,7 +17,7 @@ def test_kill_pid_signals_when_command_line_contains_attempt_id(monkeypatch):
     mod._kill_pid(
         4242, "attempt-abc",
         ps_command_line=lambda pid: (
-            "/usr/bin/python3 -m src.runtime.worker --attempt-id attempt-abc --task-id t1"
+            "/usr/bin/python3 -m my_crew.runtime.worker --attempt-id attempt-abc --task-id t1"
         ),
     )
     assert killed == [(4242, 9)]

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions.send_message import SUPPORTED_CHANNELS, SendMessageError, send_message
+from my_crew.actions.send_message import SUPPORTED_CHANNELS, SendMessageError, send_message
 
 
 class _FakeGateway:
@@ -21,7 +21,7 @@ class _FakeGateway:
 
     def execute(self, action, *, handler=None, rationale=""):
         self.actions.append(action)
-        from src.actions.action_gateway import GatewayResult
+        from my_crew.actions.action_gateway import GatewayResult
 
         return GatewayResult(status="executed", summary=f"sent {action.get('type')}")
 
@@ -108,8 +108,8 @@ def test_supported_channels_are_message_channels_only():
 
 def test_dry_run_gateway_does_not_send(monkeypatch):
     """Through a REAL gateway with DRY_RUN, the send is logged, never transported."""
-    from src.actions.action_gateway import ActionGateway
-    from src.config.config_builders import build_settings_from_dict
+    from my_crew.actions.action_gateway import ActionGateway
+    from my_crew.config.config_builders import build_settings_from_dict
 
     # Minimal settings with dry_run on; slack post to internal channel = not Lớp B.
     settings = build_settings_from_dict({
@@ -129,8 +129,8 @@ def test_dry_run_gateway_does_not_send(monkeypatch):
 def test_guarded_external_send_queues_for_approval(monkeypatch):
     """A Slack post to an EXTERNAL channel is Lớp B; a guarded agent must QUEUE it, not
     send — proving send_message inherits trust_mode from the gateway with no bypass."""
-    from src.actions.action_gateway import ActionGateway
-    from src.config.config_builders import build_settings_from_dict
+    from my_crew.actions.action_gateway import ActionGateway
+    from my_crew.config.config_builders import build_settings_from_dict
 
     settings = build_settings_from_dict({
         "openrouter_api_key": "x", "openrouter_model": "m", "dry_run": False,
@@ -148,7 +148,7 @@ def test_guarded_external_send_queues_for_approval(monkeypatch):
 
 
 def test_ops_command_registered_and_slots():
-    from src.agent.ops_catalog import get_command
+    from my_crew.agent.ops_catalog import get_command
 
     cmd = get_command("send_message")
     assert cmd is not None and cmd["readonly"] is False
@@ -157,7 +157,7 @@ def test_ops_command_registered_and_slots():
 
 
 def test_ops_preview_flags_unknown_channel():
-    from src.agent.ops_send_message import preview_send_message
+    from my_crew.agent.ops_send_message import preview_send_message
 
     out = preview_send_message({"channel": "fax", "to": "x", "text": "hi"})
     assert "chỉ hỗ trợ" in out and "slack" in out
@@ -172,8 +172,8 @@ def test_ops_preview_flags_unknown_channel():
 ])
 def test_ops_reply_reports_gateway_status_honestly(status, phrase, monkeypatch):
     """Review HIGH #1: a dedup/skip/dry-run must NOT read as 'sent'."""
-    from src.actions.action_gateway import GatewayResult
-    from src.agent import ops_send_message
+    from my_crew.actions.action_gateway import GatewayResult
+    from my_crew.agent import ops_send_message
 
     class _Loaded:
         settings = object()
@@ -182,7 +182,7 @@ def test_ops_reply_reports_gateway_status_honestly(status, phrase, monkeypatch):
             slack_external_channels = frozenset()
 
     monkeypatch.setattr(ops_send_message, "_sender_profile", lambda: _Loaded())
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway", lambda *a, **k: object())
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway", lambda *a, **k: object())
     monkeypatch.setattr(ops_send_message, "send_message",
                         lambda **kw: GatewayResult(status=status, summary="x"))
     out = ops_send_message.run_send_message({"channel": "slack", "to": "C1", "text": "hi"})

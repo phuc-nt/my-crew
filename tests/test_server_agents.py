@@ -12,8 +12,8 @@ import json
 
 from fastapi.testclient import TestClient
 
-from src.server import agent_views
-from src.server.app import create_app
+from my_crew.server import agent_views
+from my_crew.server.app import create_app
 
 
 def _profile(settings, *, name="Acme", enabled=True, external=frozenset(), domain="pm"):
@@ -31,7 +31,7 @@ def _profile(settings, *, name="Acme", enabled=True, external=frozenset(), domai
 
 def _patch(monkeypatch, *, ids_enabled, profiles, last_runs):
     """ids_enabled: list[(id, registry_enabled)]; profiles: {id: LP}; last_runs: {id: dict|None}."""
-    from src.runtime.registry import RegistryEntry
+    from my_crew.runtime.registry import RegistryEntry
 
     entries = tuple(RegistryEntry(i, en) for i, en in ids_enabled)
     monkeypatch.setattr(agent_views, "load_registry", lambda: entries)
@@ -111,7 +111,7 @@ def test_status_includes_budget_and_pending(monkeypatch, settings_factory, tmp_p
         json.dumps({"month": month, "total_usd": 12.5}), encoding="utf-8"
     )
     # seed a pending Lớp B approval in the real approval store under tmp
-    from src.actions.action_gateway import ActionGateway
+    from my_crew.actions.action_gateway import ActionGateway
 
     gw = ActionGateway(s, external_channels=frozenset())
     gw.execute({"type": "gh_cli", "argv": ["pr", "merge", "1"]}, handler=lambda a: "x")
@@ -141,7 +141,7 @@ def test_list_survives_a_broken_profile(monkeypatch, settings_factory):
     # One agent's profile fails to load → that entry degrades, the list still serves
     # the healthy agent (mirrors the CLI run_list resilience, not a 500).
     s = settings_factory()
-    from src.runtime.registry import RegistryEntry
+    from my_crew.runtime.registry import RegistryEntry
 
     entries = (RegistryEntry("good", True), RegistryEntry("broken", True))
     monkeypatch.setattr(agent_views, "load_registry", lambda: entries)

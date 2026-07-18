@@ -12,8 +12,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from src.server import routes_connections
-
+from my_crew.server import routes_connections
 
 _FAKE_CHECKS = {
     "checks": [
@@ -42,14 +41,14 @@ _SECRET = "sk-or-v1-super"  # value that must NEVER round-trip into a response
 def env_file(tmp_path, monkeypatch):
     env = tmp_path / ".env"
     env.write_text(f"OPENROUTER_API_KEY={_SECRET}\n", encoding="utf-8")
-    monkeypatch.setattr("src.server.env_writer._ENV_PATH", env)
+    monkeypatch.setattr("my_crew.server.env_writer._ENV_PATH", env)
     monkeypatch.setattr(routes_connections, "integration_checks", lambda: _FAKE_CHECKS)
     monkeypatch.setattr(routes_connections, "_needs_restart", False)
     return env
 
 
 def _client():
-    from src.server.app import create_app
+    from my_crew.server.app import create_app
 
     return TestClient(create_app())
 
@@ -115,7 +114,7 @@ def test_put_blank_only_is_400(env_file):
 
 
 def test_restart_honest_when_not_launchd_managed(env_file, monkeypatch):
-    monkeypatch.setattr("src.server.routes_setup._restart_web_service", lambda: False)
+    monkeypatch.setattr("my_crew.server.routes_setup._restart_web_service", lambda: False)
     r = _client().post("/api/connections/restart")
     assert r.status_code == 200
     body = r.json()
@@ -124,13 +123,13 @@ def test_restart_honest_when_not_launchd_managed(env_file, monkeypatch):
 
 
 def test_restart_reports_managed_when_launchd_accepts(env_file, monkeypatch):
-    monkeypatch.setattr("src.server.routes_setup._restart_web_service", lambda: True)
+    monkeypatch.setattr("my_crew.server.routes_setup._restart_web_service", lambda: True)
     body = _client().post("/api/connections/restart").json()
     assert body["managed"] is True
 
 
 def test_catalog_keys_are_all_wizard_writable():
-    from src.server.env_writer import SETUP_WRITABLE_KEYS
+    from my_crew.server.env_writer import SETUP_WRITABLE_KEYS
 
     for card in routes_connections._CATALOG:
         for key in card["keys"]:

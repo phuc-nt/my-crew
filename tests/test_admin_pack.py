@@ -21,9 +21,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from src.config.config_builders import build_reporting_config_from_dict, build_settings_from_dict
-from src.packs.registry import PackRegistry, _load_pack_module, discover_domains
-from src.runtime import agent_state_reader as asr
+from my_crew.config.config_builders import (
+    build_reporting_config_from_dict,
+    build_settings_from_dict,
+)
+from my_crew.packs.registry import PackRegistry, _load_pack_module, discover_domains
+from my_crew.runtime import agent_state_reader as asr
 
 _analyzers = _load_pack_module("admin", "analyzers")
 build_audit_digest = _analyzers.build_audit_digest
@@ -127,11 +130,11 @@ def test_team_alerts_thresholds():
 
 
 def test_read_agent_state_from_disk_fixtures(tmp_path, monkeypatch):
-    from src.actions.approval_store import ApprovalStore
-    from src.llm.budget_tracker import _current_month
+    from my_crew.actions.approval_store import ApprovalStore
+    from my_crew.llm.budget_tracker import _current_month
 
     data_root = tmp_path / ".data"
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", data_root)
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", data_root)
     d = data_root / "agents" / "acme"
     (d / "budget").mkdir(parents=True)
     (d / "budget" / f"budget-{_current_month()}.json").write_text(
@@ -167,13 +170,13 @@ def test_read_agent_state_from_disk_fixtures(tmp_path, monkeypatch):
 
 def test_read_agent_state_degrades_on_corrupt_db_and_bad_profile(tmp_path, monkeypatch):
     data_root = tmp_path / ".data"
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", data_root)
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", data_root)
     profiles = tmp_path / "profiles"
     (profiles / "broken").mkdir(parents=True)
     # Malformed YAML profile: must degrade to an error row, never raise (fleet-wide
     # blindness was review H2).
     (profiles / "broken" / "profile.yaml").write_text("model_chain: [a, 2.5]\n", encoding="utf-8")
-    monkeypatch.setattr("src.profile.loader._PROFILES_DIR", profiles)
+    monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", profiles)
     d = data_root / "agents" / "broken"
     d.mkdir(parents=True)
     (d / "approvals.db").write_bytes(b"this is not a sqlite file")  # corrupt db
@@ -186,7 +189,7 @@ def test_read_pending_never_writes_into_sibling_dir(tmp_path, monkeypatch):
     # A zero-byte approvals.db must stay zero-byte: the fleet read opens sqlite
     # READ-ONLY and must not run DDL into another agent's data dir (red line).
     data_root = tmp_path / ".data"
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", data_root)
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", data_root)
     d = data_root / "agents" / "sib"
     d.mkdir(parents=True)
     (d / "approvals.db").write_bytes(b"")
@@ -199,7 +202,7 @@ def test_read_pending_never_writes_into_sibling_dir(tmp_path, monkeypatch):
 
 
 def test_admin_allowlist_cannot_reach_destructive_or_other_servers():
-    from src.actions.hard_block import BlockCategory, classify
+    from my_crew.actions.hard_block import BlockCategory, classify
 
     allowlist = PackRegistry().load("admin").allowlist
     destructive = classify(
@@ -252,8 +255,8 @@ def test_fleet_graph_runs_offline_with_fallback_narrative(tmp_path):
 def test_team_alerts_endpoint_and_cache(monkeypatch):
     from fastapi.testclient import TestClient
 
-    from src.server import routes_agents_admin
-    from src.server.app import create_app
+    from my_crew.server import routes_agents_admin
+    from my_crew.server.app import create_app
 
     monkeypatch.setattr(routes_agents_admin, "_alerts_cache", {"at": 0.0, "payload": None})
     calls = {"n": 0}
@@ -262,7 +265,7 @@ def test_team_alerts_endpoint_and_cache(monkeypatch):
         calls["n"] += 1
         return [_state("burned", spent=55.0, cap=50.0)]
 
-    monkeypatch.setattr("src.runtime.agent_state_reader.read_all_agent_states", _fake_states)
+    monkeypatch.setattr("my_crew.runtime.agent_state_reader.read_all_agent_states", _fake_states)
     client = TestClient(create_app())
     res = client.get("/api/team/alerts")
     assert res.status_code == 200
@@ -275,8 +278,8 @@ def test_team_alerts_endpoint_and_cache(monkeypatch):
 def test_pack_graphs_wire_pack_allowlist_into_gateway(monkeypatch, tmp_path):
     # Review H1: the pack's allowlist must reach the RUNTIME gateway, not just the
     # classifier — otherwise the graph runs under the wider core default allowlist.
-    from src.config.config_builders import build_reporting_config_from_dict
-    from src.packs.registry import _load_pack_module
+    from my_crew.config.config_builders import build_reporting_config_from_dict
+    from my_crew.packs.registry import _load_pack_module
 
     captured: dict = {}
 

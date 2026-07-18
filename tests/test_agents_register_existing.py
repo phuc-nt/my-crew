@@ -11,8 +11,8 @@ from fastapi.testclient import TestClient
 @pytest.fixture()
 def client(monkeypatch, tmp_path):
     # isolate registry + profiles
-    import src.profile.loader as loader_mod
-    import src.runtime.registry as reg
+    import my_crew.profile.loader as loader_mod
+    import my_crew.runtime.registry as reg
 
     profiles = tmp_path / "profiles"
     (profiles / "templates" / "x").mkdir(parents=True)
@@ -20,7 +20,7 @@ def client(monkeypatch, tmp_path):
     target = tmp_path / "registry.yaml"
     target.write_text("agents:\n  - id: da-co\n    enabled: true\n")
     monkeypatch.setattr(reg, "_REGISTRY_PATH", target)
-    from src.server.app import create_app
+    from my_crew.server.app import create_app
 
     return TestClient(create_app())
 
@@ -68,9 +68,9 @@ def test_websearch_flag_health_check(monkeypatch, tmp_path):
     has neither provider key; no opt-in ⇒ ok regardless of keys."""
     from types import SimpleNamespace
 
-    import src.profile.loader as loader_mod
-    import src.runtime.registry as reg
-    from src.server.integration_health import _websearch_flag_check
+    import my_crew.profile.loader as loader_mod
+    import my_crew.runtime.registry as reg
+    from my_crew.server.integration_health import _websearch_flag_check
 
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.delenv("BRAVE_API_KEY", raising=False)

@@ -8,15 +8,15 @@ from __future__ import annotations
 import pytest
 import yaml
 
-from src.actions.action_gateway import (
+from my_crew.actions.action_gateway import (
     AUTONOMOUS_RATIONALE,
     ActionGateway,
     HardBlockedError,
 )
-from src.actions.hard_block import BlockCategory, classify, cron_floor_error, needs_interrupt
-from src.actions.schedule_write import make_schedule_update_handler
-from src.audit.audit_log import AuditLog
-from src.config.config_builders import build_settings_from_dict
+from my_crew.actions.hard_block import BlockCategory, classify, cron_floor_error, needs_interrupt
+from my_crew.actions.schedule_write import make_schedule_update_handler
+from my_crew.audit.audit_log import AuditLog
+from my_crew.config.config_builders import build_settings_from_dict
 
 # A fake OpenRouter-shaped key, assembled at runtime so repo scanners don't flag the
 # test source itself; `contains_secret` sees the joined value exactly the same.
@@ -145,12 +145,12 @@ def agent_env(tmp_path, monkeypatch):
     """A real profiles/<id>/profile.yaml + data dir the handler can write."""
     profiles = tmp_path / "profiles"
     data_root = tmp_path / ".data"
-    monkeypatch.setattr("src.profile.loader._PROFILES_DIR", profiles)
-    monkeypatch.setattr("src.server.profile_editor._PROFILES_DIR", profiles)
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", data_root)
+    monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", profiles)
+    monkeypatch.setattr("my_crew.server.profile_editor._PROFILES_DIR", profiles)
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", data_root)
     # No CEO notice in unit tests (no registry here) — patch to a no-op recorder.
     notices = []
-    monkeypatch.setattr("src.actions.schedule_write._notify_ceo_best_effort",
+    monkeypatch.setattr("my_crew.actions.schedule_write._notify_ceo_best_effort",
                         lambda pid, changes: notices.append((pid, changes)))
     d = profiles / "acme"
     d.mkdir(parents=True)
@@ -226,14 +226,14 @@ def test_dedup_hint_state_bearing_a_b_a(tmp_path, agent_env):
 
 
 def test_legacy_dispatch_raises_named_error():
-    from src.actions.approved_dispatch import dispatch_approved_action
+    from my_crew.actions.approved_dispatch import dispatch_approved_action
 
     with pytest.raises(RuntimeError, match="agent-bound handler"):
         dispatch_approved_action(_action(), config=object())
 
 
 def test_agent_bound_dispatch_routes_schedule_update(agent_env):
-    from src.actions.approved_dispatch import make_agent_bound_dispatch
+    from my_crew.actions.approved_dispatch import make_agent_bound_dispatch
 
     summary = make_agent_bound_dispatch("acme", config=object())(
         _action({"daily": "0 6 * * *"})

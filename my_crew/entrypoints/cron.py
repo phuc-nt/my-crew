@@ -1,0 +1,150 @@
+"""Cron entrypoint — run a scheduled report (daily, weekly, okr, or resource).
+
+Invoked by launchd (see deploy/launchd/) or any scheduler:
+
+    python -m my_crew.entrypoints.cron --daily
+    python -m my_crew.entrypoints.cron --weekly
+    python -m my_crew.entrypoints.cron --resource
+
+Delegates to the same report flow as the CLI. Exit non-zero on failure so the
+scheduler can surface it. Honors DRY_RUN / AGENT_WRITE_DISABLED like every run.
+"""
+
+from __future__ import annotations
+
+import logging
+import sys
+
+from my_crew.agent.checkpoint import get_checkpointer
+from my_crew.memory.provider import resolve_memory_text
+from my_crew.profile.context import ProfileContext
+from my_crew.profile.loader import load_profile
+from my_crew.runtime.agent_paths import agent_thread_id
+
+
+def _profile_id(args: list[str]) -> str:
+    """`--profile <id>` → id; default `default` (the v1-equivalent agent)."""
+    if "--profile" in args:
+        i = args.index("--profile")
+        if i + 1 < len(args):
+            return args[i + 1]
+    return "default"
+
+
+def _report_kind(args: list[str]) -> str:
+    """Cron kind from flags; same precedence as the CLI (resource>okr>weekly>daily)."""
+    if "--resource" in args:
+        return "resource"
+    if "--okr" in args:
+        return "okr"
+    if "--weekly" in args:
+        return "weekly"
+    return "daily"
+
+
+def _audience(args: list[str]) -> str:
+    """`--audience external` → external; default internal (same as the CLI)."""
+    if "--audience" in args:
+        i = args.index("--audience")
+        if i + 1 < len(args) and args[i + 1] == "external":
+            return "external"
+    return "internal"
+
+
+def _build_graph(
+    report_kind: str, audience: str, settings, config, context, profile_id=None, store=None
+):
+    """Build the graph for a report kind (mirrors the CLI dispatch).
+
+    `store` (None ⇒ build one) lets `main` pass the SAME store it used for the sibling
+    read, so one instance serves both the sibling READ and the remember WRITE.
+    """
+    from my_crew.agent.memory_node import build_remember_node
+    from my_crew.agent.store import get_store
+
+    cp = get_checkpointer(settings)
+    st = store if store is not None else get_store(settings)  # shared with main's sibling read
+    rem = build_remember_node(profile_id, settings, audience) if profile_id else None
+    if report_kind == "resource":
+        from my_crew.agent.resource_report_graph import build_resource_graph
+
+        return build_resource_graph(
+            cp, config=config, settings=settings, context=context, audience=audience,
+            store=st, remember=rem,
+        )
+    if report_kind == "okr":
+        from my_crew.agent.okr_report_graph import build_okr_graph
+
+        return build_okr_graph(
+            cp, config=config, settings=settings, context=context, audience=audience,
+            store=st, remember=rem,
+        )
+    from my_crew.agent.report_graph import build_report_graph
+
+    return build_report_graph(
+        cp,
+        config=config,
+        settings=settings,
+        context=context,
+        report_kind=report_kind,
+        audience=audience,
+        store=st,
+        remember=rem,
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    args = argv if argv is not None else sys.argv[1:]
+    report_kind = _report_kind(args)
+    audience = _audience(args)
+
+    try:
+        loaded = load_profile(_profile_id(args))
+    except (FileNotFoundError, RuntimeError) as exc:
+        # Bad --profile id OR a config error in the profile → clean exit, no traceback.
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    settings, config = loaded.settings, loaded.config
+    from my_crew.agent.sibling_memory import build_sibling_context
+    from my_crew.agent.store import get_store
+    from my_crew.company_docs.pool import load_company_docs
+    from my_crew.runtime.registry import load_registry
+    from my_crew.skills.skill_pool import build_skill_context
+
+    st = get_store(settings)  # one store: sibling read here + remember write in _build_graph
+    skills, selector = build_skill_context(loaded, settings)
+    sib_facts, sib_sel = build_sibling_context(loaded, settings, st, load_registry())
+    context = ProfileContext(
+        persona=loaded.soul, project=loaded.project, memory=resolve_memory_text(loaded),
+        skills=skills, skill_selector=selector,
+        sibling_facts=sib_facts, sibling_selector=sib_sel,
+        sibling_project=loaded.project_group,
+        company_docs=load_company_docs(getattr(loaded, "company_docs", ())),
+        auto_approve=getattr(loaded, "auto_approve", None),
+    )
+
+    if not settings.openrouter_api_key:
+        print("OPENROUTER_API_KEY is not set; cannot run scheduled report.", file=sys.stderr)
+        return 1
+
+    # An external cron → Lớp B → pending_approval → delivered=True (queued is success),
+    # but NOT posted until a human approves: the correct guardrail for stakeholder updates.
+    graph = _build_graph(
+        report_kind, audience, settings, config, context, loaded.profile_id, store=st
+    )
+    thread_id = agent_thread_id(loaded.profile_id, report_kind, audience)
+    result = graph.invoke({}, config={"configurable": {"thread_id": thread_id}})
+    delivered = result.get("delivered", False)
+    logging.getLogger(__name__).info(
+        "cron %s/%s report: delivered=%s %s",
+        report_kind,
+        audience,
+        delivered,
+        result.get("delivery_summary", ""),
+    )
+    return 0 if delivered else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

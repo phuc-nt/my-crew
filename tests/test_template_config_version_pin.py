@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.server import agent_create, template_create, template_upgrade
+from my_crew.server import agent_create, template_create, template_upgrade
 
 _REPO = Path(__file__).resolve().parents[1]
 
@@ -22,7 +22,7 @@ _REPO = Path(__file__).resolve().parents[1]
 @pytest.fixture
 def tmp_world(tmp_path, monkeypatch):
     """Isolated registry + profiles + templates dir with one role template we can bump."""
-    from src.runtime import registry_edit
+    from my_crew.runtime import registry_edit
 
     registry = tmp_path / "registry.yaml"
     registry.write_text("agents:\n  - id: default\n    enabled: false\n", encoding="utf-8")
@@ -38,17 +38,17 @@ def tmp_world(tmp_path, monkeypatch):
         "role: Thử\ndomain: office\nreports: []\nweb_search: false\nversion: 1\n",
         encoding="utf-8")
 
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
     monkeypatch.setattr(agent_create, "_REGISTRY_PATH", registry)
     monkeypatch.setattr(agent_create, "_PROFILES_DIR", profiles)
     monkeypatch.setattr(registry_edit, "_REGISTRY_PATH", registry)
-    monkeypatch.setattr("src.runtime.registry._REGISTRY_PATH", registry)
-    monkeypatch.setattr("src.runtime.company._COMPANY_PATH", company)
-    monkeypatch.setattr("src.server.profile_editor._PROFILES_DIR", profiles)
-    monkeypatch.setattr("src.profile.loader._PROFILES_DIR", profiles)
-    monkeypatch.setattr("src.packs.registry._PROFILES_DIR", profiles, raising=False)
-    monkeypatch.setattr("src.server.routes_company._TEMPLATES_DIR", templates)
-    monkeypatch.setattr("src.server.template_create._TEMPLATES_DIR", templates)
+    monkeypatch.setattr("my_crew.runtime.registry._REGISTRY_PATH", registry)
+    monkeypatch.setattr("my_crew.runtime.company._COMPANY_PATH", company)
+    monkeypatch.setattr("my_crew.server.profile_editor._PROFILES_DIR", profiles)
+    monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", profiles)
+    monkeypatch.setattr("my_crew.packs.registry._PROFILES_DIR", profiles, raising=False)
+    monkeypatch.setattr("my_crew.server.routes_company._TEMPLATES_DIR", templates)
+    monkeypatch.setattr("my_crew.server.template_create._TEMPLATES_DIR", templates)
     return profiles, templates, role
 
 
@@ -115,7 +115,7 @@ def test_upgrade_backup_preserves_original(tmp_world):
 def test_status_flags_upgradable(tmp_world, monkeypatch):
     profiles, _, role = tmp_world
     template_create.create_from_template("vai-thu")
-    monkeypatch.setattr("src.runtime.registry.load_registry",
+    monkeypatch.setattr("my_crew.runtime.registry.load_registry",
                         lambda: (type("E", (), {"id": "vai-thu"})(),))
     _bump_template(role, version=3)
     rows = template_upgrade.agent_upgrade_status()
@@ -141,7 +141,7 @@ def test_apply_goes_through_save_door_and_raises_on_invalid_config(tmp_world, mo
     def _reject(agent_id, new_text):
         raise RuntimeError("cấu hình không hợp lệ (giả lập)")
 
-    monkeypatch.setattr("src.server.profile_editor.save_profile_yaml", _reject)
+    monkeypatch.setattr("my_crew.server.profile_editor.save_profile_yaml", _reject)
     with pytest.raises(RuntimeError):
         template_upgrade.apply_upgrade("vai-thu")
     # The live profile is untouched (save was rejected), and the pre-write backup exists

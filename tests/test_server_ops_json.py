@@ -12,10 +12,10 @@ import json
 
 from fastapi.testclient import TestClient
 
-from src.actions.approval_store import ApprovalStore
-from src.config.config_builders import build_settings_from_dict
-from src.server import agent_views
-from src.server.app import create_app
+from my_crew.actions.approval_store import ApprovalStore
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.server import agent_views
+from my_crew.server.app import create_app
 
 _SLACK_ACTION = {
     "type": "mcp_tool", "server": "slack", "tool": "post_message",
@@ -31,8 +31,8 @@ _LOP_A_ACTION = {
 
 def _patch(monkeypatch, tmp_path, ids=("acme",)):
     data_root = tmp_path / ".data"
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", data_root)
-    from src.runtime.registry import RegistryEntry
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", data_root)
+    from my_crew.runtime.registry import RegistryEntry
 
     monkeypatch.setattr(
         agent_views, "load_registry", lambda: tuple(RegistryEntry(i, True) for i in ids)
@@ -47,7 +47,7 @@ def _patch(monkeypatch, tmp_path, ids=("acme",)):
 
         return type("LP", (), {"settings": settings, "config": _Cfg()})()
 
-    monkeypatch.setattr("src.profile.loader.load_profile", _fake_load)
+    monkeypatch.setattr("my_crew.profile.loader.load_profile", _fake_load)
     return data_root
 
 
@@ -93,7 +93,7 @@ def test_approve_runs_real_gateway_path(monkeypatch, tmp_path):
     aid = _seed(data_root)
     posted = {}
     monkeypatch.setattr(
-        "src.actions.slack_write.make_slack_post_handler",
+        "my_crew.actions.slack_write.make_slack_post_handler",
         lambda server: lambda action: posted.update(action) or "posted ts=1",
     )
     r = _client().post(f"/api/agents/acme/approvals/{aid}/approve")
@@ -112,7 +112,7 @@ def test_approve_dedup_blocks_double_post(monkeypatch, tmp_path):
     aid2 = _seed(data_root)  # identical action → same dedup key
     calls = {"n": 0}
     monkeypatch.setattr(
-        "src.actions.slack_write.make_slack_post_handler",
+        "my_crew.actions.slack_write.make_slack_post_handler",
         lambda server: lambda action: calls.__setitem__("n", calls["n"] + 1) or "ts",
     )
     c = _client()
@@ -138,7 +138,7 @@ def test_approve_handler_failure_502_stays_pending(monkeypatch, tmp_path):
     data_root = _patch(monkeypatch, tmp_path)
     aid = _seed(data_root)
     monkeypatch.setattr(
-        "src.actions.slack_write.make_slack_post_handler",
+        "my_crew.actions.slack_write.make_slack_post_handler",
         lambda server: (lambda action: (_ for _ in ()).throw(RuntimeError("slack 503"))),
     )
     r = _client().post(f"/api/agents/acme/approvals/{aid}/approve")
@@ -171,7 +171,7 @@ def _seed_profile(tmp_path, monkeypatch, yaml_text="name: acme\nenabled: true\n"
     (pdir / "SOUL.md").write_text("soul")
     (pdir / "PROJECT.md").write_text("project")
     (pdir / "MEMORY.md").write_text("memory")
-    monkeypatch.setattr("src.server.profile_editor._PROFILES_DIR", tmp_path / "profiles")
+    monkeypatch.setattr("my_crew.server.profile_editor._PROFILES_DIR", tmp_path / "profiles")
     return pdir
 
 

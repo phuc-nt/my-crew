@@ -1,5 +1,5 @@
 """Web-search egress + the 4-layer prompt-injection defense
-(`src/tools/web_search_tool.py` + `src/tools/search_result_formatter.py`).
+(`my_crew/tools/web_search_tool.py` + `my_crew/tools/search_result_formatter.py`).
 
 Load-bearing:
 - `web_search` never calls a real network endpoint in this suite (`tavily_fn`/`brave_fn`
@@ -15,13 +15,13 @@ Load-bearing:
 
 from __future__ import annotations
 
-from src.tools.search_result_formatter import (
+from my_crew.tools.search_result_formatter import (
     SearchResult,
     format_internal_content,
     format_search_results,
     scan_for_injection_markers,
 )
-from src.tools.web_search_tool import WebSearchConfig, web_search
+from my_crew.tools.web_search_tool import WebSearchConfig, web_search
 
 
 def _cfg(*, tavily: str | None = "tavily-key", brave: str | None = None) -> WebSearchConfig:

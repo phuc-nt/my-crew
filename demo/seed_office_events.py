@@ -14,7 +14,7 @@ the 3D office in a LIVING end-state for a demo walk-in:
   - thiet-ke: vừa được điều phối giao bước (bàn cam "đang làm", chưa có phase)
 """
 
-from src.runtime.office_room_append import append_office_event
+from my_crew.runtime.office_room_append import append_office_event
 
 TASK_ID = "demo-ra-mat-tro-ly-ai"
 TASK = "Chuẩn bị bộ tài liệu ra mắt sản phẩm Trợ lý AI Văn Phòng"
@@ -102,8 +102,8 @@ def _seed_task_rows() -> None:
     staged scene within a minute, and a seeded `running` step has no process behind its
     lease). Live "đang chạy" demo material is created by actually assigning tasks while
     the demo service runs. Two done tasks share one room to showcase multi-task rooms."""
-    from src.runtime.team_task_paths import team_tasks_db_path
-    from src.runtime.team_task_store import TeamTaskStore
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
 
     store = TeamTaskStore(team_tasks_db_path())
     try:
@@ -130,8 +130,8 @@ def _seed_task_rows() -> None:
         # v17: write REAL handoff artifacts for the done steps so the Kết quả column
         # has content to open. seq is read back from the store (GLOBAL AUTOINCREMENT —
         # red-team M3: task 2's steps do NOT restart at 1), never hardcoded.
-        from src.agent.team_task_artifact import write_step_artifact
-        from src.runtime.team_task_paths import team_tasks_root
+        from my_crew.agent.team_task_artifact import write_step_artifact
+        from my_crew.runtime.team_task_paths import team_tasks_root
 
         samples = {
             ("demo-ra-mat-tro-ly-ai", "s1"): (

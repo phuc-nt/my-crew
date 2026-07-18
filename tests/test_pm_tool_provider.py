@@ -9,8 +9,8 @@ Proves the report graph's source reads flow through the active pack's ToolProvid
 
 from __future__ import annotations
 
-from src.agent.report_graph import default_report_deps
-from src.packs import PackRegistry
+from my_crew.agent.report_graph import default_report_deps
+from my_crew.packs import PackRegistry
 
 
 class _FakeSprint:
@@ -114,6 +114,6 @@ def test_weekly_no_active_sprint_falls_back_to_open_issues(settings_factory):
 
 
 def _config(settings):
-    from src.config.config_builders_reporting import build_reporting_config_from_dict
+    from my_crew.config.config_builders_reporting import build_reporting_config_from_dict
 
     return build_reporting_config_from_dict({})

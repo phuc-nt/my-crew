@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from src.profile.context import ProfileContext
-from src.skills.models import Skill
-from src.skills.skill_selector import (
+from my_crew.profile.context import ProfileContext
+from my_crew.skills.models import Skill
+from my_crew.skills.skill_selector import (
     make_llm_selector,
     render_skills,
     select_skill_text,

@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions import approved_dispatch
-from src.actions.action_gateway import ActionGateway
-from src.agent.okr_report_graph import default_okr_deps
-from src.agent.report_graph import default_report_deps
-from src.agent.resource_report_graph import default_resource_deps
-from src.audit.audit_log import AuditLog
-from src.config.config_builders import build_reporting_config_from_dict
+from my_crew.actions import approved_dispatch
+from my_crew.actions.action_gateway import ActionGateway
+from my_crew.agent.okr_report_graph import default_okr_deps
+from my_crew.agent.report_graph import default_report_deps
+from my_crew.agent.resource_report_graph import default_resource_deps
+from my_crew.audit.audit_log import AuditLog
+from my_crew.config.config_builders import build_reporting_config_from_dict
 
 
 def _config(*, smtp: bool):
@@ -54,9 +54,9 @@ def _fake_writes(monkeypatch):
     def _fake_slack(*a, **k):
         return type("R", (), {"status": "dry_run", "approval_id": None})()
 
-    monkeypatch.setattr("src.actions.confluence_write.create_report_page", _fake_page)
-    monkeypatch.setattr("src.actions.slack_write.deliver_report", _fake_slack)
-    monkeypatch.setattr("src.agent.report_graph.deliver_report", _fake_slack)
+    monkeypatch.setattr("my_crew.actions.confluence_write.create_report_page", _fake_page)
+    monkeypatch.setattr("my_crew.actions.slack_write.deliver_report", _fake_slack)
+    monkeypatch.setattr("my_crew.agent.report_graph.deliver_report", _fake_slack)
 
 
 _DEPS = {
@@ -98,10 +98,10 @@ def test_email_redeliver_matches_lop_b_pattern(settings_factory, tmp_path, _fake
 
 def test_approved_email_dedups_on_resend(settings_factory, tmp_path, monkeypatch):
     """The APPROVED send path dedups by (recipients, date) — a re-approve is idempotent."""
-    from src.actions.email_write import deliver_email_report
-    from src.config.smtp_config import SmtpConfig
+    from my_crew.actions.email_write import deliver_email_report
+    from my_crew.config.smtp_config import SmtpConfig
 
-    monkeypatch.setattr("src.actions.email_write.smtplib.SMTP", lambda *a, **k: _NoopSMTP())
+    monkeypatch.setattr("my_crew.actions.email_write.smtplib.SMTP", lambda *a, **k: _NoopSMTP())
     smtp = SmtpConfig(smtp_host="smtp.test", smtp_user="b@test", from_addr="b@test",
                       recipients=("lead@team.com",))
     gw = _gateway(settings_factory, tmp_path, dry_run=False)
@@ -167,7 +167,7 @@ def test_no_smtp_backward_compat(kind, settings_factory, tmp_path, _fake_writes)
 
 def test_approve_linear_comment_dispatches(monkeypatch):
     config = _config(smtp=True)
-    monkeypatch.setattr("src.actions.linear_write.call_tool", lambda s, t, a: {"id": "CMT-1"})
+    monkeypatch.setattr("my_crew.actions.linear_write.call_tool", lambda s, t, a: {"id": "CMT-1"})
     action = {
         "type": "mcp_tool", "server": "linear", "tool": "linear_createComment",
         "args": {"issueId": "ISS-1", "body": "ping"},
@@ -199,7 +199,7 @@ def test_approve_email_dispatches(monkeypatch):
         def send_message(self, m):
             sent["to"] = m["To"]
 
-    monkeypatch.setattr("src.actions.email_write.smtplib.SMTP", _FakeSMTP)
+    monkeypatch.setattr("my_crew.actions.email_write.smtplib.SMTP", _FakeSMTP)
     action = {"type": "email_send", "to": ["lead@team.com"], "subject": "s", "body": "b"}
     summary = approved_dispatch.dispatch_approved_action(action, config)
     assert "recipient" in summary and sent["to"] == "lead@team.com"

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.server.env_writer import (
+from my_crew.server.env_writer import (
     FINISH_WRITABLE_KEYS,
     SETUP_WRITABLE_KEYS,
     DisallowedEnvKey,

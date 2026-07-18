@@ -13,7 +13,7 @@ việc gửi ra ngoài công ty **chạy ngay** (mặc định) hoặc **chờ C
 ## Cách dùng tài liệu
 
 - Mở app: `http://127.0.0.1:8765` (mặc định). Bộ điều phối phải chạy:
-  `uv run python -m src.runtime.service` (hoặc dịch vụ nền đã cài).
+  `uv run python -m my_crew.runtime.service` (hoặc dịch vụ nền đã cài).
 - Muốn có sẵn công ty mẫu để thử nhanh: `scripts/demo-mode.sh on` (tắt: `off`).
 - Đánh dấu mỗi tiêu chí: ✅ đạt / ❌ lỗi (ghi chú) / ⏭ bỏ qua (thiếu điều kiện).
 - Ký hiệu điều kiện: 📱 cần Telegram · 📧 cần SMTP · 🌐 cần web-search key · 🔗 cần Jira/Slack thật.

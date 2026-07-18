@@ -80,7 +80,7 @@ def test_backup_restore_roundtrip(tmp_path):
 
 def test_web_hash_password_cli_roundtrips():
     """`mpm web` exposes hash-password; the hash verifies against the plaintext."""
-    from src.server.auth import _verify, hash_password
+    from my_crew.server.auth import _verify, hash_password
 
     h = hash_password("prod-pass")
     assert _verify("prod-pass", h) and not _verify("nope", h)

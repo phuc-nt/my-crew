@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from src.agent.okr_analyzer import OkrRollup
-from src.agent.okr_report_graph import OkrReportDeps, build_okr_graph
-from src.llm.okr_report_prompt import (
+from my_crew.agent.okr_analyzer import OkrRollup
+from my_crew.agent.okr_report_graph import OkrReportDeps, build_okr_graph
+from my_crew.llm.okr_report_prompt import (
     build_okr_slack_short,
     fallback_okr_narrative,
     render_okr_table_xhtml,
 )
-from src.tools.models import KeyResult, Objective, OkrProblem
+from my_crew.tools.models import KeyResult, Objective, OkrProblem
 
 
 def _rollup() -> OkrRollup:
@@ -114,12 +114,12 @@ def test_okr_deliver_uses_okr_dedup_namespace(settings_factory, tmp_path, monkey
     """The OKR deliver path must go through the gateway with an okr-<date> dedup key."""
     from datetime import UTC, datetime
 
-    import src.actions.confluence_write as cw
-    import src.actions.slack_write as sw
-    from src.actions.action_gateway import ActionGateway, GatewayResult
-    from src.actions.confluence_write import ConfluencePage
-    from src.agent import okr_report_graph
-    from src.audit.audit_log import AuditLog
+    import my_crew.actions.confluence_write as cw
+    import my_crew.actions.slack_write as sw
+    from my_crew.actions.action_gateway import ActionGateway, GatewayResult
+    from my_crew.actions.confluence_write import ConfluencePage
+    from my_crew.agent import okr_report_graph
+    from my_crew.audit.audit_log import AuditLog
 
     today = datetime.now(UTC).date().isoformat()
     gw = ActionGateway(
@@ -157,7 +157,7 @@ def test_okr_deliver_uses_okr_dedup_namespace(settings_factory, tmp_path, monkey
 
 
 def test_parse_report_kind_okr():
-    from src.entrypoints.cli import _parse_report_kind
+    from my_crew.entrypoints.cli import _parse_report_kind
 
     assert _parse_report_kind(["--okr"]) == "okr"
     assert _parse_report_kind(["--weekly"]) == "weekly"
@@ -179,8 +179,8 @@ def _fake_loaded(tmp_path, *, api_key):
 
 def test_cli_report_okr_dispatch(monkeypatch, tmp_path):
     """`report --okr` builds the OKR graph (not the daily/weekly one)."""
-    import src.agent.okr_report_graph as okr_graph_mod
-    from src.entrypoints import cli
+    import my_crew.agent.okr_report_graph as okr_graph_mod
+    from my_crew.entrypoints import cli
 
     called = {}
 
@@ -205,7 +205,7 @@ def test_cli_report_okr_dispatch(monkeypatch, tmp_path):
 
 def test_audit_command_still_works_without_key(monkeypatch, tmp_path):
     """Regression: non-LLM commands must not require a key after the --okr change."""
-    from src.entrypoints import cli
+    from my_crew.entrypoints import cli
 
     monkeypatch.setattr(cli, "load_profile", lambda pid: _fake_loaded(tmp_path, api_key=None))
     rc = cli.main(["audit", "--limit", "1"])

@@ -17,7 +17,7 @@ def _loaded(auto_approve):
 
 
 def test_telegram_inbox_gateway_gets_auto_approve(monkeypatch, tmp_path):
-    from src.runtime import telegram_inbox
+    from my_crew.runtime import telegram_inbox
 
     captured = {}
 
@@ -31,15 +31,17 @@ def test_telegram_inbox_gateway_gets_auto_approve(monkeypatch, tmp_path):
     # One message so the poll reaches the gateway construction, then answer_mention is stubbed.
     msg = {"transport": "telegram", "user": "555", "channel": "555", "text": "hi", "ts": "1",
            "update_id": 8}
-    monkeypatch.setattr("src.tools.telegram_read.fetch_new_updates", lambda *a, **k: ([msg], [], 9))
-    monkeypatch.setattr("src.runtime.telegram_inbox.load_offset", lambda d: 1)
-    monkeypatch.setattr("src.runtime.telegram_inbox.save_offset", lambda d, o: None)
-    monkeypatch.setattr("src.runtime.telegram_inbox._is_for_agent", lambda m, pid: True)
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway", _FakeGateway)
-    monkeypatch.setattr("src.packs.registry.PackRegistry.load",
+    monkeypatch.setattr(
+        "my_crew.tools.telegram_read.fetch_new_updates", lambda *a, **k: ([msg], [], 9)
+    )
+    monkeypatch.setattr("my_crew.runtime.telegram_inbox.load_offset", lambda d: 1)
+    monkeypatch.setattr("my_crew.runtime.telegram_inbox.save_offset", lambda d, o: None)
+    monkeypatch.setattr("my_crew.runtime.telegram_inbox._is_for_agent", lambda m, pid: True)
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway", _FakeGateway)
+    monkeypatch.setattr("my_crew.packs.registry.PackRegistry.load",
                         lambda self, dom: SimpleNamespace(allowlist=None))
     monkeypatch.setattr(
-        "src.agent.qa_answer.answer_mention",
+        "my_crew.agent.qa_answer.answer_mention",
         lambda *a, **k: (SimpleNamespace(status="executed", summary="ok"), 0.0),
     )
 
@@ -50,7 +52,7 @@ def test_telegram_inbox_gateway_gets_auto_approve(monkeypatch, tmp_path):
 
 
 def test_slack_inbox_gateway_gets_auto_approve(monkeypatch, tmp_path):
-    from src.runtime import inbox
+    from my_crew.runtime import inbox
 
     captured = {}
 
@@ -65,13 +67,15 @@ def test_slack_inbox_gateway_gets_auto_approve(monkeypatch, tmp_path):
     loaded.inbox = {"channel": "C1", "poll_minutes": 5}
     loaded.config.slack_server = SimpleNamespace()
     mention = {"transport": "slack", "user": "U1", "channel": "C1", "text": "hi", "ts": "2"}
-    monkeypatch.setattr("src.runtime.inbox.load_watermark", lambda d: "1")
-    monkeypatch.setattr("src.runtime.inbox.save_watermark", lambda d, ts: None)
-    monkeypatch.setattr("src.runtime.inbox.fetch_new_mentions", lambda *a, **k: ([mention], "2"))
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway", _FakeGateway)
-    monkeypatch.setattr("src.packs.registry.PackRegistry.load",
+    monkeypatch.setattr("my_crew.runtime.inbox.load_watermark", lambda d: "1")
+    monkeypatch.setattr("my_crew.runtime.inbox.save_watermark", lambda d, ts: None)
+    monkeypatch.setattr(
+        "my_crew.runtime.inbox.fetch_new_mentions", lambda *a, **k: ([mention], "2")
+    )
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway", _FakeGateway)
+    monkeypatch.setattr("my_crew.packs.registry.PackRegistry.load",
                         lambda self, dom: SimpleNamespace(allowlist=None))
-    monkeypatch.setattr("src.agent.qa_answer.answer_mention",
+    monkeypatch.setattr("my_crew.agent.qa_answer.answer_mention",
                         lambda *a, **k: (SimpleNamespace(status="executed", summary="ok"), 0.0))
 
     inbox.run_inbox(loaded, SimpleNamespace(data_dir=str(tmp_path), write_disabled=False))

@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions.action_gateway import ActionGateway, HardBlockedError
-from src.actions.gws_write import make_gws_handler
-from src.actions.hard_block import BlockCategory, classify, needs_interrupt
-from src.config.config_builders import build_settings_from_dict
+from my_crew.actions.action_gateway import ActionGateway, HardBlockedError
+from my_crew.actions.gws_write import make_gws_handler
+from my_crew.actions.hard_block import BlockCategory, classify, needs_interrupt
+from my_crew.config.config_builders import build_settings_from_dict
 
 _APPEND = ["sheets", "+append", "--spreadsheet", "SHEET1", "--values", "a,b,c"]
 _CREATE = ["docs", "documents", "create", "--json", '{"title": "Báo cáo"}']
@@ -135,7 +135,7 @@ def test_handler_surfaces_cli_failure(tmp_path):
 
 
 def test_handler_timeout(tmp_path, monkeypatch):
-    monkeypatch.setattr("src.actions.gws_write._GWS_TIMEOUT_S", 1)
+    monkeypatch.setattr("my_crew.actions.gws_write._GWS_TIMEOUT_S", 1)
     bin_ = _fake_gws(tmp_path, "sleep 5\n")
     with pytest.raises(RuntimeError, match="timed out"):
         make_gws_handler(bin_)(_action(_APPEND))
@@ -145,7 +145,7 @@ def test_handler_timeout(tmp_path, monkeypatch):
 
 
 def test_hr_pack_ships_gws_catalog():
-    from src.packs.registry import PackRegistry
+    from my_crew.packs.registry import PackRegistry
 
     commands = PackRegistry().load("hr").commands
     assert {"append_sheet_row", "create_doc", "write_doc"} <= set(commands)
@@ -154,7 +154,7 @@ def test_hr_pack_ships_gws_catalog():
 
 
 def test_append_args_pin_configured_sheet(monkeypatch):
-    from src.packs.registry import PackRegistry
+    from my_crew.packs.registry import PackRegistry
 
     monkeypatch.setenv("HR_SHEET_ID", "PINNED_SHEET")
     build = PackRegistry().load("hr").commands["append_sheet_row"]["build_args"]
@@ -164,10 +164,10 @@ def test_append_args_pin_configured_sheet(monkeypatch):
 
 
 def test_shared_dispatch_routes_gws(tmp_path, monkeypatch):
-    from src.actions.approved_dispatch import dispatch_approved_action
+    from my_crew.actions.approved_dispatch import dispatch_approved_action
 
     bin_ = _fake_gws(tmp_path, "echo '{}'\n")
-    monkeypatch.setattr("src.actions.gws_write.make_gws_handler",
+    monkeypatch.setattr("my_crew.actions.gws_write.make_gws_handler",
                         lambda gws_bin="gws": make_gws_handler(bin_))
     summary = dispatch_approved_action(_action(_APPEND), config=object())
     assert summary.startswith("gws sheets +append")

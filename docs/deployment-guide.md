@@ -57,15 +57,15 @@ Muốn thấy kết quả đầu tiên NGAY, không cần Atlassian/Slack/GitHub
 
 ```bash
 echo 'OPENROUTER_API_KEY=sk-or-...' >> .env
-python -m src.entrypoints.mpm quickstart      # chạy report 'daily' agent 'default', DRY-RUN
+python -m my_crew.entrypoints.mpm quickstart      # chạy report 'daily' agent 'default', DRY-RUN
 ```
 
 `quickstart` **ép dry-run** — chỉ đọc + soạn báo cáo, KHÔNG ghi ra ngoài (an toàn để thử). Thiếu key
 → in hướng dẫn + thoát. Muốn dựng cả đội mẫu THẬT (giữ lại, khác demo-mode swap tạm):
 
 ```bash
-python -m src.entrypoints.mpm crew init       # scaffold đội mẫu (idempotent, bỏ qua cái đã có)
-uv run python -m src.runtime.service          # khởi động điều phối để đội nhận việc
+python -m my_crew.entrypoints.mpm crew init       # scaffold đội mẫu (idempotent, bỏ qua cái đã có)
+uv run python -m my_crew.runtime.service          # khởi động điều phối để đội nhận việc
 ```
 
 Sau `crew init`, màn **Đội** hiện trạng thái điều phối + lệnh khởi động nếu chưa chạy (v49).
@@ -75,8 +75,8 @@ Sau `crew init`, màn **Đội** hiện trạng thái điều phối + lệnh kh
 ```bash
 uv sync
 cd web && npm install && npm run build && cd ..        # FE (dist đã commit)
-PORT=8765 uv run python -c "from src.server.app import main; main()" &   # web
-uv run python -m src.runtime.service &                                   # coordinator
+PORT=8765 uv run python -c "from my_crew.server.app import main; main()" &   # web
+uv run python -m my_crew.runtime.service &                                   # coordinator
 # http://127.0.0.1:8765
 ```
 
@@ -93,7 +93,7 @@ scripts/demo-mode.sh off     # trả data thật NGUYÊN VẸN (byte-identical, 
 scripts/demo-mode.sh status  # đang ở chế độ nào + service demo + heartbeat
 ```
 
-Lưu ý: demo REFUSE bật nếu đã có `src.runtime.service` khác chạy (2 ticker tranh store) —
+Lưu ý: demo REFUSE bật nếu đã có `my_crew.runtime.service` khác chạy (2 ticker tranh store) —
 tắt service thật trước.
 
 Preset demo đủ **3 runtime engine** để thử ngay (mỗi nhân sự 1 engine):
@@ -222,17 +222,17 @@ kèm lệnh sửa. Check "Docker (deep_agent sandbox)" probe daemon có giới h
 panel); ✗ chỉ ảnh hưởng agent deep_agent — đội no-shell bỏ qua an toàn.
 
 **Warm image sandbox (tuỳ chọn):** để bước deep_agent ĐẦU tiên không phải chờ pull image, chạy
-trước `python -m src.entrypoints.mpm sandbox prepull` (idempotent; image đã có → no-op; daemon
+trước `python -m my_crew.entrypoints.mpm sandbox prepull` (idempotent; image đã có → no-op; daemon
 tắt/offline → in thông báo rõ, không crash).
 
 ## 9. Sự cố thường gặp
 
 | Triệu chứng | Nguyên nhân | Xử lý |
 |---|---|---|
-| Giao việc xong "kẹt" không chạy | coordinator daemon không chạy | `uv run python -m src.runtime.service` |
+| Giao việc xong "kẹt" không chạy | coordinator daemon không chạy | `uv run python -m my_crew.runtime.service` |
 | Văn phòng trống, giao việc không có ai | registry thiếu agent office | trang Đội → "Hồ sơ chưa trong đội" → Thêm |
 | Nghiên cứu trả "xin phép tra cứu web" | thiếu Tavily/Brave key | thêm key ở Setup, hoặc tắt web_search |
 | Bind LAN bị từ chối lúc khởi động | web-auth chưa bật | đặt `WEB_AUTH_PASSWORD_HASH` + `WEB_SESSION_SECRET` |
 | deep_agent lỗi "Docker sandbox không khả dụng" | Docker daemon không chạy | Chạy Docker Desktop hoặc `colima start`; kiểm ở panel Sức khỏe (§8). Chỉ cần cho agent deep_agent (chạy shell) |
-| Bước deep_agent đầu tiên chậm | image sandbox chưa có, phải pull | Warm trước: `python -m src.entrypoints.mpm sandbox prepull` (§8) |
+| Bước deep_agent đầu tiên chậm | image sandbox chưa có, phải pull | Warm trước: `python -m my_crew.entrypoints.mpm sandbox prepull` (§8) |
 | Tính năng/route mới không xuất hiện sau `git pull` | server dev chạy tay không tự nạp code mới (launchd tự reload khi đổi; chạy tay thì không) | Khởi động lại web + coordinator (kill rồi chạy lại §4), hoặc `./deploy/install.sh` nếu dùng launchd |

@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import src.agent.team_task_amend_prompt as amend_mod
+import my_crew.agent.team_task_amend_prompt as amend_mod
 
 
 def _task(pic_id="", steps=()):
@@ -58,7 +58,7 @@ def test_amend_pic_task_rejects_terminal_not_owned_by_pic(monkeypatch):
         {"step_id": "n2", "title": "chốt", "assigned_to": "nghien-cuu", "deps": ["n1"]},
     ])
     task = _task(pic_id="noi-dung", steps=[_frozen("s1", "noi-dung")])
-    from src.agent.task_decomposition import DecompositionError
+    from my_crew.agent.task_decomposition import DecompositionError
 
     with pytest.raises(DecompositionError):
         amend_mod.amend_with_retries(task, "thêm bước", STAFF)
@@ -90,14 +90,14 @@ def test_amend_prompt_carries_pic_line_only_for_pic_tasks():
 
 def test_post_company_preserves_concurrency_and_auto_confirm(tmp_path, monkeypatch):
     """F7: fields the request body does not carry survive a save round-trip."""
-    from src.runtime import company as company_mod
-    from src.runtime.company import load_company, save_company
+    from my_crew.runtime import company as company_mod
+    from my_crew.runtime.company import load_company, save_company
 
     path = tmp_path / "company.yaml"
     monkeypatch.setattr(company_mod, "_COMPANY_PATH", path)
     save_company("Cty", None, 2.0, team_task_concurrency=4, team_task_auto_confirm=True)
 
-    from src.server.routes_company import post_company
+    from my_crew.server.routes_company import post_company
 
     out = post_company(name="Cty mới", coordinator_id=None, team_task_cap_usd=3.0,
                        team_task_auto_confirm=None)

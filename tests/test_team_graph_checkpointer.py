@@ -18,8 +18,8 @@ import sqlite3
 import pytest
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from src.agent.team_task_graph import TeamTaskDeps, build_team_task_graph
-from src.runtime.team_step_runner import _delete_thread_best_effort, _load_resume_state
+from my_crew.agent.team_task_graph import TeamTaskDeps, build_team_task_graph
+from my_crew.runtime.team_step_runner import _delete_thread_best_effort, _load_resume_state
 
 
 def _saver(tmp_path):
@@ -144,10 +144,10 @@ def test_delete_thread_cleans_up(tmp_path):
 
 
 def test_ticker_sweep_removes_only_terminal_task_threads(tmp_path, monkeypatch):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
-    from src.runtime.team_task_paths import team_checkpoints_db_path, team_tasks_db_path
-    from src.runtime.team_task_store import TeamTaskStore
-    from src.runtime.team_tick_runner import _sweep_team_checkpoints
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    from my_crew.runtime.team_task_paths import team_checkpoints_db_path, team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
+    from my_crew.runtime.team_tick_runner import _sweep_team_checkpoints
 
     # two real tasks: one done, one open
     store = TeamTaskStore(team_tasks_db_path())

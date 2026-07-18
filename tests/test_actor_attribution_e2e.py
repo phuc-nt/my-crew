@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions.action_gateway import ActionGateway, HardBlockedError
-from src.actions.approval_store import ApprovalStore
-from src.audit.audit_log import AuditLog
+from my_crew.actions.action_gateway import ActionGateway, HardBlockedError
+from my_crew.actions.approval_store import ApprovalStore
+from my_crew.audit.audit_log import AuditLog
 
 POST = {"type": "mcp_tool", "server": "slack", "tool": "post_message",
         "args": {"channel": "C1", "text": "hi"}}

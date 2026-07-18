@@ -11,13 +11,13 @@ import pathlib
 
 import pytest
 
-from src.actions.action_gateway import ActionGateway, HardBlockedError
-from src.audit.audit_log import AuditLog
-from src.automation.engine import run_workflow
-from src.automation.schema import ProposeStep, Workflow
-from src.config.config_builders import build_settings_from_dict
+from my_crew.actions.action_gateway import ActionGateway, HardBlockedError
+from my_crew.audit.audit_log import AuditLog
+from my_crew.automation.engine import run_workflow
+from my_crew.automation.schema import ProposeStep, Workflow
+from my_crew.config.config_builders import build_settings_from_dict
 
-_AUTOMATION_DIR = pathlib.Path("src/automation")
+_AUTOMATION_DIR = pathlib.Path("my_crew/automation")
 
 
 def _gateway(tmp_path):

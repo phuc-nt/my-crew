@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 
-from src.agent.task_decomposition import decomposition_content_hash, parse_decomposed_task
+from my_crew.agent.task_decomposition import decomposition_content_hash, parse_decomposed_task
 
 
 def _raw(steps: list[dict], requires_approval: bool = True) -> str:

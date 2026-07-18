@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.actions.action_gateway import ActionGateway, HardBlockedError, WriteDisabledError
-from src.actions.hard_block import BlockCategory, classify, needs_interrupt
-from src.audit.audit_log import AuditLog
+from my_crew.actions.action_gateway import ActionGateway, HardBlockedError, WriteDisabledError
+from my_crew.actions.hard_block import BlockCategory, classify, needs_interrupt
+from my_crew.audit.audit_log import AuditLog
 
 
 def _gw(settings_factory, tmp_path, **kw):
@@ -80,7 +80,7 @@ def test_every_email_is_lop_b():
 
 
 def test_kill_switch_refuses_linear(settings_factory, tmp_path, monkeypatch):
-    monkeypatch.setattr("src.actions.linear_write.call_tool", lambda *a, **k: {"id": "x"})
+    monkeypatch.setattr("my_crew.actions.linear_write.call_tool", lambda *a, **k: {"id": "x"})
     gw = _gw(settings_factory, tmp_path, dry_run=False, write_disabled=True)
     a = {"type": "mcp_tool", "server": "linear", "tool": "linear_createComment",
          "args": {"issueId": "I", "body": "x"}}

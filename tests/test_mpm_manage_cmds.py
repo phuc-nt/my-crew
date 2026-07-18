@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 
-from src.actions.approval_store import ApprovalStore
-from src.config.config_builders import build_settings_from_dict
-from src.entrypoints import mpm, mpm_manage_cmds
+from my_crew.actions.approval_store import ApprovalStore
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.entrypoints import mpm, mpm_manage_cmds
 
 _SLACK_ACTION = {
     "type": "mcp_tool", "server": "slack", "tool": "post_message",
@@ -21,7 +21,7 @@ def _patch(monkeypatch, tmp_path):
     stores land under .data/agents/<id>/, exactly as the real loader does.
     """
     data_root = tmp_path / ".data"
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", data_root)
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", data_root)
 
     def _fake_load(agent_id, *, data_dir=None):
         # dry_run=False so an `approve` actually dispatches the handler (real post path).
@@ -33,7 +33,7 @@ def _patch(monkeypatch, tmp_path):
 
         return type("LP", (), {"settings": settings, "config": _Cfg()})()
 
-    monkeypatch.setattr("src.profile.loader.load_profile", _fake_load)
+    monkeypatch.setattr("my_crew.profile.loader.load_profile", _fake_load)
     return data_root
 
 
@@ -65,7 +65,7 @@ def test_approve_a_does_not_touch_b(monkeypatch, tmp_path):
     aid = _seed_approval(data_root, "a")
     posted = {}
     monkeypatch.setattr(
-        "src.actions.slack_write.make_slack_post_handler",
+        "my_crew.actions.slack_write.make_slack_post_handler",
         lambda server: lambda action: posted.update(action) or "posted ts=1",
     )
     assert mpm_manage_cmds.run_manage("approve", ["a", str(aid)]) == 0
@@ -113,12 +113,12 @@ def test_audit_isolated_per_agent(monkeypatch, tmp_path, capsys):
 
 
 def test_missing_profile_exit_1(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
 
     def _boom(agent_id, *, data_dir=None):
         raise FileNotFoundError(f"Profile {agent_id!r} not found")
 
-    monkeypatch.setattr("src.profile.loader.load_profile", _boom)
+    monkeypatch.setattr("my_crew.profile.loader.load_profile", _boom)
     assert mpm_manage_cmds.run_manage("approvals", ["ghost"]) == 1
     assert "error:" in capsys.readouterr().err
 
@@ -131,7 +131,7 @@ def test_missing_agent_arg_exit_2(capsys):
 def test_malformed_id_clean_exit_1(monkeypatch, tmp_path, capsys):
     # An uppercase / path-unsafe id is rejected by _validate_agent_id (via agent_data_dir)
     # → caught in _load_agent → clean exit 1 with the "lowercase" hint, no traceback.
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
     assert mpm_manage_cmds.run_manage("approvals", ["MyAgent"]) == 1
     assert "Invalid agent id" in capsys.readouterr().err
 

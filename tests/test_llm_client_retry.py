@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.llm import client as c
+from my_crew.llm import client as c
 
 
 class _Headers:
@@ -105,7 +105,7 @@ def test_wait_clamps_exp_to_cap(monkeypatch):
 # --- _call_with_retry loop --------------------------------------------------------------
 
 def _client():
-    from src.config.config_builders import build_settings_from_dict
+    from my_crew.config.config_builders import build_settings_from_dict
 
     s = build_settings_from_dict({"openrouter_api_key": "k", "openrouter_model": "x/y"})
     return c.LlmClient(s)

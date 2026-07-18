@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.llm.cost import extract_usage
+from my_crew.llm.cost import extract_usage
 
 
 def test_cost_on_usage():

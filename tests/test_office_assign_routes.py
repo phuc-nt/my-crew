@@ -8,19 +8,19 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-import src.agent.ops_assign_team_task as assign_mod
-from src.server.app import create_app
+import my_crew.agent.ops_assign_team_task as assign_mod
+from my_crew.server.app import create_app
 
 
 @pytest.fixture()
 def client(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
     return TestClient(create_app())
 
 
 def test_staff_endpoint_lists_assignable(monkeypatch, client):
     monkeypatch.setattr(
-        "src.agent.team_task_roster.assignable_staff",
+        "my_crew.agent.team_task_roster.assignable_staff",
         lambda: [("noi-dung", "office"), ("nghien-cuu", "office")],
     )
     r = client.get("/api/office/assign/staff")
@@ -65,6 +65,6 @@ def test_confirm_stale_hash_is_409(monkeypatch, client):
 
 
 def test_assign_routes_are_not_public():
-    from src.server.auth import _PUBLIC_PREFIXES
+    from my_crew.server.auth import _PUBLIC_PREFIXES
 
     assert not any(p.startswith("/api/office") for p in _PUBLIC_PREFIXES)

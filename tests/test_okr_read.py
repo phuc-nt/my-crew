@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from src.tools import okr_read
-from src.tools.confluence_read import (
+from my_crew.tools import okr_read
+from my_crew.tools.confluence_read import (
     _blocks_text_list,
     _extract_body,
     parse_epic_keys,
     parse_okr_table,
     parse_weight,
 )
-from src.tools.models import EpicProgress, Issue
+from my_crew.tools.models import EpicProgress, Issue
 
 # The verified round-trip XHTML body (createPage → getPageContent, 2026-06-22):
 # a header row + two data rows, the second with an empty Objective cell (a

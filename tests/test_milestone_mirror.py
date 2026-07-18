@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from src.runtime.office_room_store import OFFICE_ROOM_ID, OfficeRoomStore, office_room_db_path
+from my_crew.runtime.office_room_store import OFFICE_ROOM_ID, OfficeRoomStore, office_room_db_path
 
 NOW = datetime(2026, 7, 10, 12, 0, tzinfo=UTC)
 
@@ -57,7 +57,7 @@ def _patch_send(monkeypatch, sent: list):
             status = "executed"
         return R()
 
-    monkeypatch.setattr("src.actions.telegram_write.send_telegram_message", _fake_send)
+    monkeypatch.setattr("my_crew.actions.telegram_write.send_telegram_message", _fake_send)
 
     class _FakeGateway:
         def __init__(self, *a, **k):
@@ -66,12 +66,12 @@ def _patch_send(monkeypatch, sent: list):
         def close(self):
             pass
 
-    monkeypatch.setattr("src.actions.action_gateway.ActionGateway", _FakeGateway)
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway", _FakeGateway)
 
 
 def _run(monkeypatch, tmp_path):
-    monkeypatch.setattr("src.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
-    from src.runtime.milestone_mirror_runner import run_milestone_mirror
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
+    from my_crew.runtime.milestone_mirror_runner import run_milestone_mirror
 
     return run_milestone_mirror(_Loaded(), _Settings(tmp_path), now=NOW)
 
@@ -197,8 +197,8 @@ def test_no_operator_is_noop(monkeypatch, tmp_path):
         domain = "admin"
         config = _NoTg()
 
-    monkeypatch.setattr("src.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
-    from src.runtime.milestone_mirror_runner import run_milestone_mirror
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
+    from my_crew.runtime.milestone_mirror_runner import run_milestone_mirror
 
     r = run_milestone_mirror(_L(), _Settings(tmp_path), now=NOW)
     assert r["status"] == "no_operator" and r["delivered"] is False
@@ -213,8 +213,8 @@ def test_writes_disabled_pushes_nothing(monkeypatch, tmp_path):
     )
     room.close()
 
-    monkeypatch.setattr("src.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
-    from src.runtime.milestone_mirror_runner import run_milestone_mirror
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
+    from my_crew.runtime.milestone_mirror_runner import run_milestone_mirror
 
     s = _Settings(tmp_path)
     s.write_disabled = True
@@ -239,8 +239,8 @@ def test_write_disabled_tick_does_not_advance_the_cursor_so_it_retries_next_run(
     )
     room.close()
 
-    monkeypatch.setattr("src.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
-    from src.runtime.milestone_mirror_runner import run_milestone_mirror
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
+    from my_crew.runtime.milestone_mirror_runner import run_milestone_mirror
 
     s = _Settings(tmp_path)
     s.write_disabled = True

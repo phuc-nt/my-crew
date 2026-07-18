@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.runtime_backends.read_only_toolset import (
+from my_crew.runtime_backends.read_only_toolset import (
     ToolPolicyError,
     build_read_toolset,
     tool_error_guard,
@@ -73,7 +73,7 @@ def test_guard_bounds_and_scrubs_error_message():
 
 def test_built_toolset_degrades_instead_of_raising(monkeypatch):
     """The real toolset path: a read tool whose body raises returns ⚠️ text."""
-    import src.tools.github_read as gh
+    import my_crew.tools.github_read as gh
 
     monkeypatch.setattr(gh, "get_open_prs", lambda config=None: (_ for _ in ()).throw(
         TimeoutError("api timeout")))
@@ -88,7 +88,7 @@ def test_built_toolset_degrades_instead_of_raising(monkeypatch):
 
 def test_built_toolset_policy_block_reads_as_refusal(monkeypatch):
     """classify hard-block (Lớp A) → refusal string, not a crash; classify still ran."""
-    import src.actions.hard_block as hb
+    import my_crew.actions.hard_block as hb
 
     calls = []
 
@@ -120,7 +120,7 @@ def test_create_agent_loop_survives_raising_tool():
     from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
     from langchain_core.messages import AIMessage, HumanMessage
 
-    from src.runtime_backends.react_loop import _as_lc_tools
+    from my_crew.runtime_backends.react_loop import _as_lc_tools
 
     class _ToolCallingFake(GenericFakeChatModel):
         # GenericFakeChatModel raises NotImplementedError on bind_tools; the scripted

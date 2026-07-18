@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.llm import okr_report_prompt, report_prompt, resource_report_prompt
-from src.tools.models import (
+from my_crew.llm import okr_report_prompt, report_prompt, resource_report_prompt
+from my_crew.tools.models import (
     AssigneeLoad,
     CostSummary,
     KeyResult,
@@ -204,7 +204,7 @@ def test_okr_narrative_external_business_tone():
 
 
 def test_okr_slack_short_external_drops_problems_line():
-    from src.tools.models import OkrProblem
+    from my_crew.tools.models import OkrProblem
 
     rollup = okr_report_prompt.OkrRollup(
         objectives=_rollup().objectives, problems=(OkrProblem("r", "bad"),), at_risk=()
@@ -273,7 +273,7 @@ def test_resource_external_fallback_no_names():
 def _build_config(*, stakeholder, external):
     """Build reporting config from a pure dict (no env, no cache) to exercise the
     stakeholder-channel cross-validation guardrail."""
-    from src.config.config_builders import build_reporting_config_from_dict
+    from my_crew.config.config_builders import build_reporting_config_from_dict
 
     return build_reporting_config_from_dict(
         {"slack_stakeholder_channel": stakeholder, "slack_external_channels": external}

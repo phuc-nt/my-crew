@@ -10,9 +10,9 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from src.runtime import company as company_module
-from src.server import auth, routes_company
-from src.server.app import create_app
+from my_crew.runtime import company as company_module
+from my_crew.server import auth, routes_company
+from my_crew.server.app import create_app
 
 
 @pytest.fixture()
@@ -51,7 +51,7 @@ def test_post_company_writes_name_and_no_coordinator(client, tmp_company):
 
 
 def test_post_company_accepts_known_coordinator(client, monkeypatch):
-    from src.runtime.registry import RegistryEntry
+    from my_crew.runtime.registry import RegistryEntry
 
     monkeypatch.setattr(
         routes_company, "load_registry", lambda: (RegistryEntry(id="default", enabled=True),)
@@ -62,7 +62,7 @@ def test_post_company_accepts_known_coordinator(client, monkeypatch):
 
 
 def test_post_company_rejects_unknown_coordinator(client, monkeypatch):
-    from src.runtime.registry import RegistryEntry
+    from my_crew.runtime.registry import RegistryEntry
 
     monkeypatch.setattr(
         routes_company, "load_registry", lambda: (RegistryEntry(id="default", enabled=True),)

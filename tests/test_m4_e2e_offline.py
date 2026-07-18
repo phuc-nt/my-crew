@@ -2,7 +2,7 @@
 
 Proves the M4 surface coheres after htmx removal: FastAPI serves the SPA at `/`, the 5 JSON
 APIs return seeded data, the approve red line runs the real gateway path (stubbed post), and
-no Jinja2/TemplateResponse code remains in src/server/. No network, no live keys.
+no Jinja2/TemplateResponse code remains in my_crew/server/. No network, no live keys.
 
 (Trigger + SSE are unchanged by M4-S5 and stay covered by their own suites —
 `test_server_trigger.py` + `test_server_stream.py` — so they are not re-exercised here.)
@@ -16,12 +16,12 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from src.actions.approval_store import ApprovalStore
-from src.config.config_builders import build_settings_from_dict
-from src.server import agent_views
-from src.server.app import create_app
+from my_crew.actions.approval_store import ApprovalStore
+from my_crew.config.config_builders import build_settings_from_dict
+from my_crew.server import agent_views
+from my_crew.server.app import create_app
 
-_SERVER_DIR = Path(__file__).resolve().parents[1] / "src" / "server"
+_SERVER_DIR = Path(__file__).resolve().parents[1] / "my_crew" / "server"
 _SLACK_ACTION = {
     "type": "mcp_tool", "server": "slack", "tool": "post_message",
     "args": {"channel": "C_STAKE", "text": "Báo cáo external xin duyệt"},
@@ -30,13 +30,13 @@ _SLACK_ACTION = {
 
 def _patch(monkeypatch, tmp_path, ids=("acme",)):
     data_root = tmp_path / ".data"
-    monkeypatch.setattr("src.runtime.agent_paths.DATA_DIR", data_root)
-    from src.runtime.registry import RegistryEntry
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", data_root)
+    from my_crew.runtime.registry import RegistryEntry
 
     reg = lambda: tuple(RegistryEntry(i, True) for i in ids)  # noqa: E731
     monkeypatch.setattr(agent_views, "load_registry", reg)
-    monkeypatch.setattr("src.server.visualize_views.load_registry", reg)
-    monkeypatch.setattr("src.server.ops_helpers.agent_views.load_registry", reg)
+    monkeypatch.setattr("my_crew.server.visualize_views.load_registry", reg)
+    monkeypatch.setattr("my_crew.server.ops_helpers.agent_views.load_registry", reg)
 
     def _fake_load(agent_id, *, data_dir=None, **k):
         settings = build_settings_from_dict({"data_dir": data_dir, "dry_run": False})
@@ -47,8 +47,8 @@ def _patch(monkeypatch, tmp_path, ids=("acme",)):
 
         return type("LP", (), {"settings": settings, "config": _Cfg()})()
 
-    monkeypatch.setattr("src.profile.loader.load_profile", _fake_load)
-    monkeypatch.setattr("src.server.visualize_views.load_profile", _fake_load)
+    monkeypatch.setattr("my_crew.profile.loader.load_profile", _fake_load)
+    monkeypatch.setattr("my_crew.server.visualize_views.load_profile", _fake_load)
     return data_root
 
 
@@ -56,7 +56,7 @@ def _patch(monkeypatch, tmp_path, ids=("acme",)):
 
 
 def test_no_jinja_template_code_in_server():
-    """No Jinja2/TemplateResponse CODE remains in src/server/ (htmx UI fully removed).
+    """No Jinja2/TemplateResponse CODE remains in my_crew/server/ (htmx UI fully removed).
 
     Checks for the actual rendering constructs, not the word 'htmx' in a migration comment
     (a few docstrings reference the old htmx UI by name — that's history, not live code).
@@ -106,7 +106,7 @@ def test_e2e_approve_red_line(monkeypatch, tmp_path):
     aid = ApprovalStore(d / "approvals.db").enqueue(dict(_SLACK_ACTION), reason="external report")
     posted = {}
     monkeypatch.setattr(
-        "src.actions.slack_write.make_slack_post_handler",
+        "my_crew.actions.slack_write.make_slack_post_handler",
         lambda server: lambda action: posted.update(action) or "ts=1",
     )
     r = TestClient(create_app()).post(f"/api/agents/acme/approvals/{aid}/approve")
