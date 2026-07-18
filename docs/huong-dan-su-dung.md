@@ -264,6 +264,26 @@ Trợ lý sẽ:
 
 > **An toàn:** sửa đổi chỉ áp cho phần chờ chạy; phần đã xong không bị thay đổi. CEO (bạn) **luôn** xác nhận trước khi kế hoạch đổi.
 
+## B.3a. Hai ống kính: chế độ Thường vs Kỹ thuật (dual-lens)
+
+Trên header có nút chuyển ống kính — **👁 Thường** (cho CEO) vs **🔬 Kỹ thuật** (cho
+người vận hành). Nút chỉ đổi thứ BẠN THẤY, không đổi quyền (trang nâng cao vẫn vào
+được bằng URL trực tiếp như trước).
+
+**Cả hai chế độ** đều thấy ở màn Văn phòng: bàn làm việc **đỏ nhấp nháy + bong bóng ⚠**
+khi bước của nhân sự đó lỗi (tự hết khi nhân sự nhận lệnh mới), và **vòng sáng dưới
+sàn** sau mỗi lượt kiểm định chéo — xanh = đạt, cam = cần sửa (kèm số lỗi).
+
+**Chế độ Kỹ thuật thêm, ngay trong Văn phòng:**
+- **dải sức khỏe**: nhịp tim điều phối, các kết nối ✓/✗, và **chip ngân sách** đội
+  (chi tháng/trần; đỏ khi chạm 80%, tooltip từng nhân sự);
+- huy hiệu **🔒** trên bàn/phòng có bước chạy sandbox Docker (deep_agent);
+- bấm một bàn → **ngăn Chi tiết**: bước + pha hiện tại, engine, chi phí việc này,
+  link trang nhân sự + Captures của việc;
+- **Captures** (nav Nâng cao): bảng telemetry từng lượt chạy bước — engine, tokens,
+  chi phí (exact/estimated), thời lượng, lỗi; lọc theo việc/nhân sự;
+- **ô tìm lịch sử** trên header (tìm toàn văn việc đã làm; bấm kết quả nhảy tới phòng).
+
 ## B.4. Chat với trợ lý điều hành
 
 Vào **Trợ lý** (hoặc nhắn qua Telegram). Gõ câu hỏi/lệnh vào ô "Nhắn cho trợ lý…" rồi **Gửi**. Ví dụ:

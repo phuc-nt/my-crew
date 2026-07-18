@@ -269,6 +269,27 @@ Click **"What can the assistant do?"** → system lists all available commands w
 
 ---
 
+## Two Lenses: Normal vs Technical Mode (dual-lens)
+
+The header has a lens toggle — **👁 Thường** (normal, for the CEO) vs **🔬 Kỹ thuật**
+(technical, for the maintainer). It changes what you SEE, never what you MAY do
+(permissions are unchanged; advanced pages stay reachable by direct URL).
+
+**Everyone (both modes)** sees on the Office screen: a desk turns **pulsing red with a
+⚠ bubble** when that agent's step failed (it clears on the agent's next dispatch), and
+a **floor ring flash** after a peer review — green = passed, orange = needs rework.
+
+**Technical mode adds, without leaving the Office:**
+- a **health strip**: coordinator heartbeat, integration checks as ✓/✗ chips, and a
+  fleet **budget chip** (month spend vs cap; red at 80%, per-agent tooltip);
+- **🔒 sandbox badges** on desks/rooms whose task has Docker-sandbox (deep_agent) steps;
+- click a desk → the **Inspector drawer**: current step + phase, engine tier, task
+  cost so far, links to the agent page and this task's Captures;
+- **Captures** (advanced nav): the per-attempt telemetry table — engine, tokens, cost
+  (exact/estimated), duration, errors; filter by task or agent;
+- a **history search box** in the header (full-text over past work; a result jumps to
+  its office room).
+
 ## Advanced Features (Optional Settings)
 
 ### Theme (Light / Dark / Auto)

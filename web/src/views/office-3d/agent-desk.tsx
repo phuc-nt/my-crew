@@ -92,9 +92,11 @@ export function deskTooltipText(desk: AgentDeskState): string {
 }
 
 // Age-based flash opacity [0..1]; exported for unit tests (pure, no Fiber needed).
+// Slight client-behind-server clock skew yields a small negative age — clamp to 0
+// (full flash) instead of suppressing the flash entirely (review Low#2).
 export function verdictFlashStrength(ts: string, now: number): number {
-  const age = now - Date.parse(ts)
-  if (!Number.isFinite(age) || age < 0 || age >= VERDICT_FLASH_MS) return 0
+  const age = Math.max(0, now - Date.parse(ts))
+  if (!Number.isFinite(age) || age >= VERDICT_FLASH_MS) return 0
   return 1 - age / VERDICT_FLASH_MS
 }
 

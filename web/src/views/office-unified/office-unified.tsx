@@ -64,10 +64,16 @@ export function OfficeUnified() {
   // high mode and refetched on the same guarded signal as the rooms list.
   const { isHigh } = useUiMode()
   const [boardLanes, setBoardLanes] = useState<TeamBoardLane[]>([])
+  // Resolve-time gate (review Low#1): a board response landing AFTER the user toggled
+  // back to low mode must not repopulate the lanes and leak 🔒 badges into low mode.
+  const isHighRef = useRef(isHigh)
   const loadBoard = useCallback(() => {
-    api.getTeamTaskBoard().then((p) => setBoardLanes(p.lanes)).catch(() => undefined)
+    api.getTeamTaskBoard()
+      .then((p) => { if (isHighRef.current) setBoardLanes(p.lanes) })
+      .catch(() => undefined)
   }, [])
   useEffect(() => {
+    isHighRef.current = isHigh
     if (isHigh) loadBoard()
     else setBoardLanes([])
   }, [isHigh, loadBoard])

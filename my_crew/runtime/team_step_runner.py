@@ -121,7 +121,7 @@ def run_team_step(
             _append_step_event(
                 task_id, author=step.assigned_to, task_title=task.title,
                 step_title=step.title, kind="step_status", status="waiting_clarify",
-                message="Đang chờ CEO trả lời câu hỏi làm rõ.",
+                message="Đang chờ CEO trả lời câu hỏi làm rõ.", attempt_id=attempt_id,
             )
             return {"status": STATUS_PAUSED, "pause_reason": "clarify",
                     "cost_usd": result.get("cost_usd"),
@@ -192,7 +192,7 @@ def run_team_step(
             task_id, author=_step.assigned_to if _step is not None else "coordinator",
             task_title=_task.title if _task is not None else task_id,
             step_title=_step.title if _step is not None else step_id,
-            kind="step_status", status="failed", message="",
+            kind="step_status", status="failed", message="", attempt_id=attempt_id,
         )
         raise
     finally:
@@ -241,7 +241,7 @@ def _record_capture(
 
 def _append_step_event(
     task_id: str, *, author: str, task_title: str, step_title: str, kind: str, status: str,
-    message: str,
+    message: str, attempt_id: str | None = None,
 ) -> None:
     """try/degrade room-event append for one step's outcome (done → `handoff` with the
     graph's own `room_message`; failed → `step_status`) — never raises, matching
@@ -257,6 +257,13 @@ def _append_step_event(
 
     body: dict[str, str] = {"task_title": task_title, "step_title": step_title, "status": status,
                             "assigned_to": author}
+    # Carry the attempt_id whenever the caller has one (failed/waiting_clarify — the
+    # phase events already do): the FE's zombie-attempt guard can only drop a
+    # superseded worker's event if the event NAMES its attempt. Without it, a stale
+    # `failed` from a re-reserved step paints a false red desk over the live retry
+    # (review M1). `attempt_id` is already an allowlisted step_status field.
+    if attempt_id:
+        body["attempt_id"] = attempt_id
     if kind == "handoff":
         body["message"] = message
     append_office_event(room_for_task(task_id), author=author, kind=kind, body=body,

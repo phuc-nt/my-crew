@@ -16,6 +16,7 @@ to empty payloads when a store file does not exist yet (fresh install ≠ 500).
 from __future__ import annotations
 
 import logging
+import time
 
 from fastapi import APIRouter, HTTPException
 
@@ -31,6 +32,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["observability"])
 
 _SEARCH_QUERY_MAX_CHARS = 200
+
+# Sweep throttle (review M2): a sweep re-reads every agent's audit log before the
+# watermark filters rows, so per-keystroke sweeps grow O(total audit bytes). One sweep
+# per interval keeps results fresh enough for a human search box.
+_SWEEP_MIN_INTERVAL_S = 30.0
+_last_sweep_at = 0.0
 
 
 @router.get("/budget")
@@ -107,12 +114,16 @@ def capture_detail(attempt_id: str) -> dict:
 def search_history(q: str = "", agent: str = "", days: int = 0, limit: int = 8) -> dict:
     """FTS5 history search for the high-mode UI box. Sweep-then-search mirrors the
     ops-chat catalog's own usage so results include the newest events."""
+    global _last_sweep_at
     query = q.strip()[:_SEARCH_QUERY_MAX_CHARS]
     if not query:
         return {"hits": []}
     idx = HistorySearchIndex()
     try:
-        idx.sweep()
+        now = time.monotonic()
+        if now - _last_sweep_at >= _SWEEP_MIN_INTERVAL_S:
+            _last_sweep_at = now
+            idx.sweep()
         hits = idx.search(query, days=max(0, days), agent=agent, limit=max(1, min(limit, 25)))
     finally:
         idx.close()
