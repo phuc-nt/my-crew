@@ -1,9 +1,11 @@
 # Build context = the repo; keep user data, secrets, and heavyweight dev dirs out.
+# NOTE dockerignore semantics: patterns are anchored to the context root (unlike
+# .gitignore) — nested matches need the `**/` prefix. Last matching pattern wins.
 .git
 .venv
 .pytest_cache
-__pycache__
-*.pyc
+**/__pycache__
+**/*.pyc
 dist
 plans
 .data
@@ -13,10 +15,12 @@ node_modules
 web/node_modules
 web/dist
 
-# User data / secrets (never bake into an image)
-.env
-.env.*
-*.env
+# User data / secrets (never bake into an image) — recursive on purpose: the
+# compose flow writes deploy/docker/my-crew.env with REAL secrets next to the
+# Dockerfile, and a rebuild must never copy it in.
+**/.env
+**/.env.*
+**/*.env
 !.env.example
 !deploy/docker/my-crew.env.example
 registry.yaml

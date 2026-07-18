@@ -23,6 +23,8 @@ services:
       - my-crew.env
     volumes:
       - my-crew-data:/data
+    # `my-crew serve` runs as PID 1; init reaps reparented MCP node grandchildren.
+    init: true
     restart: unless-stopped
 
 volumes:

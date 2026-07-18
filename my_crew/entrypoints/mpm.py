@@ -2,6 +2,9 @@
 
     my-crew quickstart
     my-crew crew init
+    my-crew serve [--web-only | --scheduler-only]
+    my-crew doctor
+    my-crew upgrade [--check]
     my-crew agent list | register <id> | run <id> --report <kind> [--audience ...] [--dry-run]
     my-crew agent resume <id> <thread_id> --decision approve|reject
     my-crew agent replay <id> <thread_id> [--checkpoint <id>]
@@ -89,7 +92,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("rest", nargs=argparse.REMAINDER)
 
     p = sub.add_parser("upgrade", help="show the upgrade path; --check compares against PyPI")
-    p.add_argument("--check", action="store_true", help="exit 3 when an update is available")
+    p.add_argument(
+        "--check",
+        action="store_true",
+        help="exit 3 when an update is available, 1 when PyPI is unreachable/unpublished",
+    )
 
     p = sub.add_parser("web", help="web helpers (hash-password: bcrypt for WEB_AUTH_PASSWORD_HASH)")
     p.add_argument("action", metavar="hash-password")

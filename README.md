@@ -74,7 +74,7 @@ Full setup — integrations, cron, trust modes: **[docs/deployment-guide.md](doc
 
 ```bash
 git clone git@github.com:phuc-nt/my-crew.git && cd my-crew && uv sync
-uv run pytest    # 2360 BE + 201 FE tests pass, no secrets needed
+uv run pytest    # 2364 BE + 201 FE tests pass, no secrets needed
 ```
 
 `DRY_RUN=true` by default everywhere — the agent logs what it *would* do, posts nothing, until you flip it.

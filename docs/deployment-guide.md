@@ -101,7 +101,9 @@ On first run, the browser opens a **Setup Wizard** with interactive steps. Each 
 Want to see results immediately without setting up all integrations?
 
 ```bash
-echo 'OPENROUTER_API_KEY=sk-or-...' >> .env
+# .env lives in your user-state root: the repo dir for a checkout,
+# ~/.my-crew/ for a pipx/uvx install (see MY_CREW_HOME below).
+echo 'OPENROUTER_API_KEY=sk-or-...' >> ~/.my-crew/.env    # checkout: >> .env
 my-crew quickstart      # or: python -m my_crew.entrypoints.mpm quickstart
 ```
 

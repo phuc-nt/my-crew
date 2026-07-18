@@ -5,7 +5,7 @@
 ```bash
 git clone git@github.com:phuc-nt/my-crew.git && cd my-crew
 uv sync --extra deep        # deep = optional Docker-sandbox tier (needs Docker to run, not to test)
-uv run pytest -q            # 2360+ BE tests — no secrets, no network, no Docker required
+uv run pytest -q            # 2364+ BE tests — no secrets, no network, no Docker required
 uv run ruff check .
 cd web && npm install && npm test   # 201 FE tests
 ```

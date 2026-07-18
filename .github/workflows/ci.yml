@@ -36,7 +36,9 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       # Build for real, not just --noEmit: a stale committed dist bit us before
-      # (v32); tsc -b + vite build is the honest gate.
+      # (v32); tsc -b + vite build is the honest gate. NOTE: this does NOT diff the
+      # rebuilt output against the committed dist (vite hash stability across
+      # runners is unverified) — docs/releasing.md step 2 is the stale-dist guard.
       - run: npx tsc -b
       - run: npm test
       - run: npm run build

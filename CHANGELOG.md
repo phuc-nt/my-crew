@@ -10,8 +10,8 @@ across v1–v50 (see journals); 0.1.0 packages it as a product.
 
 ### Added
 - `my-crew` console script (PyPI package `my-crew`): `--help`, `--version`, and the
-  full command surface — `quickstart`, `crew init`, `serve`, `agent *`,
-  `web hash-password`, `sandbox prepull`.
+  full command surface — `quickstart`, `crew init`, `serve`, `doctor`, `upgrade`,
+  `agent *`, `web hash-password`, `sandbox prepull`.
 - `my-crew serve`: foreground web + coordinator supervisor for Docker Compose,
   systemd, or a plain terminal. `deploy/docker/` ships a Dockerfile + compose file.
 - `MY_CREW_HOME`: user state (.env, registry, profiles, data) resolves to the env

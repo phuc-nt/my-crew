@@ -63,9 +63,7 @@ def run_serve(args: list[str]) -> int:
         for n in _CHILD_MODULES
         if not (web_only and n != "web") and not (scheduler_only and n != "scheduler")
     ]
-    procs = {name: _spawn(name) for name in names}
-    print(f"my-crew serve: running {', '.join(procs)} (Ctrl-C to stop)", flush=True)
-
+    procs: dict[str, subprocess.Popen] = {}
     stop_requested = False
 
     def _on_signal(signum: int, _frame: object) -> None:
@@ -75,8 +73,17 @@ def run_serve(args: list[str]) -> int:
             if proc.poll() is None:
                 proc.terminate()
 
+    # Handlers BEFORE the first spawn: a signal in the spawn window must not kill the
+    # supervisor via the default disposition and orphan already-started children.
     previous = {s: signal.signal(s, _on_signal) for s in (signal.SIGTERM, signal.SIGINT)}
     try:
+        for name in names:
+            procs[name] = _spawn(name)
+        print(f"my-crew serve: running {', '.join(procs)} (Ctrl-C to stop)", flush=True)
+        if stop_requested:  # signal raced the spawn loop — children spawned after it
+            _terminate_all(procs)
+            return 0
+
         while True:
             exited = _poll_exited(procs)
             if exited is None:
