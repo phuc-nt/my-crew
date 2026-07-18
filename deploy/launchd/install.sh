@@ -30,7 +30,10 @@ for name in "${PLISTS[@]}"; do
   dst="$DEST/$name"
   # Substitute the placeholder with this clone's absolute path. launchd needs absolute
   # paths and does not expand variables, so we bake the path in at install time.
-  sed -e "s#__REPO_DIR__#$REPO_DIR#g" -e "s#__UV_BIN__#$(command -v uv || echo /opt/homebrew/bin/uv)#g" "$src" > "$dst"
+  sed -e "s#__REPO_DIR__#$REPO_DIR#g" \
+      -e "s#__UV_BIN__#$(command -v uv || echo /opt/homebrew/bin/uv)#g" \
+      -e "s#__BIN_PATH__#/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin#g" \
+      "$src" > "$dst"
   # Reload: unload any prior copy (ignore error if not loaded), then load the new one.
   launchctl unload "$dst" 2>/dev/null || true
   launchctl load "$dst"

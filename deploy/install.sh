@@ -29,6 +29,24 @@ cd "$REPO_DIR"
 # brew and manual installs differ, so resolve it here instead of hardcoding.
 UV_BIN="$(command -v uv || echo /opt/homebrew/bin/uv)"
 
+# launchd jobs start with a minimal PATH that excludes Homebrew + Docker Desktop, so
+# workers can't find node/docker/gh/gws. Build a PATH from the ACTUAL dirs of the tools
+# this deploy needs (deduped), then append the minimal default. Resolve at install time
+# so an Apple-Silicon (/opt/homebrew), Intel (/usr/local), or Docker-Desktop
+# (/usr/local/bin) layout each bakes in the right dirs.
+BIN_PATH=""
+for _tool in uv node npm docker gh gws; do
+  _p="$(command -v "$_tool" 2>/dev/null)" || continue
+  _dir="$(dirname "$_p")"
+  case ":$BIN_PATH:" in *":$_dir:"*) ;; *) BIN_PATH="${BIN_PATH:+$BIN_PATH:}$_dir" ;; esac
+done
+# Always include the two common Homebrew prefixes (even if a tool above missed them) and
+# the minimal system PATH launchd would otherwise give.
+for _dir in /opt/homebrew/bin /usr/local/bin; do
+  case ":$BIN_PATH:" in *":$_dir:"*) ;; *) BIN_PATH="${BIN_PATH:+$BIN_PATH:}$_dir" ;; esac
+done
+BIN_PATH="${BIN_PATH}:/usr/bin:/bin:/usr/sbin:/sbin"
+
 # v18: registry.yaml là user data (gitignored) — lần cài đầu tạo từ template.
 # Idempotent: KHÔNG bao giờ đè registry đang có (đội thật của CEO).
 if [ ! -f registry.yaml ] && [ -f registry.example.yaml ]; then
@@ -276,7 +294,7 @@ mkdir -p "$DEST"
 reload_service() { # plist-name  force-reload(0/1)
   local name="$1" force="$2"
   local src="deploy/launchd/$name" dst="$DEST/$name"
-  local rendered; rendered="$(sed -e "s#__REPO_DIR__#$REPO_DIR#g" -e "s#__UV_BIN__#$UV_BIN#g" "$src")"
+  local rendered; rendered="$(sed -e "s#__REPO_DIR__#$REPO_DIR#g" -e "s#__UV_BIN__#$UV_BIN#g" -e "s#__BIN_PATH__#$BIN_PATH#g" "$src")"
   local changed=1
   if [ -f "$dst" ] && [ "$rendered" = "$(cat "$dst")" ]; then changed=0; fi
   if [ "$changed" -eq 0 ] && [ "$force" -eq 0 ]; then

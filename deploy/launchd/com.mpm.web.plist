@@ -18,6 +18,14 @@
     </array>
     <key>WorkingDirectory</key>
     <string>__REPO_DIR__</string>
+    <!-- Same minimal-PATH problem as the coordinator: the web process runs the Setup
+         Wizard's connection tests + the doctor/health checks, which probe `node`,
+         `docker`, `gh`, `gws`. __BIN_PATH__ is rendered by the installer. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__BIN_PATH__</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>

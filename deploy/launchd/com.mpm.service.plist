@@ -20,6 +20,16 @@
     </array>
     <key>WorkingDirectory</key>
     <string>__REPO_DIR__</string>
+    <!-- launchd starts jobs with a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) that
+         does NOT include Homebrew or Docker Desktop. Workers spawned by this service
+         shell out to `node` (the MCP servers), `docker` (the deep_agent sandbox), `gh`,
+         and `gws`; without those dirs on PATH they fail with "No such file or directory".
+         The installer renders __BIN_PATH__ from the actual locations of those binaries. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__BIN_PATH__</string>
+    </dict>
     <!-- Start at load and restart on crash: the service is meant to run continuously. -->
     <key>RunAtLoad</key>
     <true/>
