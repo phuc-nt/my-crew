@@ -14,6 +14,10 @@ from __future__ import annotations
 import os
 import sys
 
+from dotenv import load_dotenv
+
+from my_crew.config.settings import MY_CREW_HOME
+
 
 def run_quickstart(args: list[str]) -> int:
     """`mpm quickstart` — run the `default` agent's daily report in dry-run, OpenRouter-only.
@@ -22,6 +26,9 @@ def run_quickstart(args: list[str]) -> int:
     optional for a dry-run report. Dry-run is FORCED here so quickstart never triggers an external
     write — the fastest safe first output.
     """
+    # The guard must see .env values (the printed hint tells users to put the key
+    # there) — the run path loads .env only later, inside the config builders.
+    load_dotenv(MY_CREW_HOME / ".env")
     if not os.environ.get("OPENROUTER_API_KEY"):
         print(
             "Chưa có OPENROUTER_API_KEY. Đặt nó trong .env (hoặc export) rồi chạy lại:\n"

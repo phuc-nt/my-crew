@@ -10,12 +10,37 @@ from my_crew.entrypoints import mpm_onboarding_cmds as onb
 # --- quickstart -----------------------------------------------------------------------
 
 
-def test_quickstart_without_openrouter_key_exits_nonzero(monkeypatch, capsys):
+def test_quickstart_without_openrouter_key_exits_nonzero(monkeypatch, capsys, tmp_path):
+    # Point the .env probe at an empty home so the dev machine's real .env can't
+    # satisfy the guard mid-test.
+    monkeypatch.setattr(onb, "MY_CREW_HOME", tmp_path)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     rc = onb.run_quickstart([])
     assert rc == 2
     err = capsys.readouterr().err
     assert "OPENROUTER_API_KEY" in err  # actionable hint, not a traceback
+
+
+def test_quickstart_reads_key_from_env_file(monkeypatch, tmp_path):
+    # The printed hint says "put the key in .env" — the guard must honor exactly that.
+    import os
+
+    monkeypatch.setattr(onb, "MY_CREW_HOME", tmp_path)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    (tmp_path / ".env").write_text("OPENROUTER_API_KEY=sk-or-from-file\n", encoding="utf-8")
+    seen = {}
+
+    def _fake_run_agent(argv):
+        seen["argv"] = argv
+        return 0
+
+    monkeypatch.setattr("my_crew.entrypoints.mpm_run_cmd.run_agent", _fake_run_agent)
+    try:
+        assert onb.run_quickstart([]) == 0
+        assert seen["argv"] == ["default", "--report", "daily", "--dry-run"]
+    finally:
+        # load_dotenv wrote into os.environ outside monkeypatch's bookkeeping.
+        os.environ.pop("OPENROUTER_API_KEY", None)
 
 
 def test_quickstart_runs_default_daily_dry_run(monkeypatch):
