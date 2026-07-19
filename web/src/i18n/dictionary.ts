@@ -81,6 +81,12 @@ const vi = {
   'activityFeed.connected': 'Hoạt động trực tiếp',
   'activityFeed.connecting': 'Đang kết nối…',
   'activityFeed.empty': 'Chưa có hoạt động nào.',
+  'activityFeed.filterAll': 'Tất cả',
+  'activityFeed.filterStep': 'Bước',
+  'activityFeed.filterExternal': 'Ra ngoài',
+  'activityFeed.filterAriaLabel': 'Lọc hoạt động',
+  'activityFeed.emptyExternal': 'Chưa có hành động ra ngoài nào.',
+  'activityFeed.emptyStep': 'Chưa có tiến độ bước nào.',
 
   // office-shared/office-message-line.ts (used by activity-feed.tsx; OfficeRoom.tsx/
   // Timeline tab keeps the vi-default fallback this batch — out of scope)
@@ -103,11 +109,20 @@ const vi = {
   'officeMessageLine.verdictFailed': 'cần sửa ({n} lỗi)',
   'officeMessageLine.criteriaSuffix': ' — {passed}/{total} tiêu chí đạt',
   'officeMessageLine.reviewLine': '{taskTitle} / {stepTitle}: {verdict}{checklist}',
+  'officeMessageLine.externalActionLine': '{actor} → {tool}{detail} · {outcome}',
+  'officeMessageLine.outcomeAllow': '✓ cho phép',
+  'officeMessageLine.outcomeDeny': '✗ từ chối',
 
   // artifact-panel.tsx
   'artifactPanel.title': 'Kết quả',
   'artifactPanel.selectRoomHint': 'Chọn một phòng việc để xem kết quả bàn giao.',
   'artifactPanel.empty': 'Chưa có bàn giao nào trong phòng này.',
+
+  // Review detail tray (v54 P3)
+  'reviewDetailTray.title': 'Chi tiết soát chéo',
+  'reviewDetailTray.ariaLabel': 'Chi tiết soát chéo {stepTitle}',
+  'reviewDetailTray.unavailable': 'Chưa có chi tiết từng tiêu chí lưu lại cho lần soát này — hệ thống hiện chỉ ghi số lượng đạt/không đạt (không lưu nội dung từng tiêu chí).',
+  'reviewDetailTray.summary': '{taskTitle} / {stepTitle}: {verdict}',
 
   // artifact-viewer.tsx
   'artifactViewer.fallbackTitle': 'Kết quả bước',
@@ -1021,6 +1036,12 @@ const en = {
   'activityFeed.connected': 'Live activity',
   'activityFeed.connecting': 'Connecting…',
   'activityFeed.empty': 'No activity yet.',
+  'activityFeed.filterAll': 'All',
+  'activityFeed.filterStep': 'Steps',
+  'activityFeed.filterExternal': 'External',
+  'activityFeed.filterAriaLabel': 'Filter activity',
+  'activityFeed.emptyExternal': 'No external actions yet.',
+  'activityFeed.emptyStep': 'No step progress yet.',
 
   // office-shared/office-message-line.ts
   'officeMessageLine.kindCeo': 'CEO assignment',
@@ -1042,11 +1063,20 @@ const en = {
   'officeMessageLine.verdictFailed': 'needs fixes ({n} issues)',
   'officeMessageLine.criteriaSuffix': ' — {passed}/{total} criteria passed',
   'officeMessageLine.reviewLine': '{taskTitle} / {stepTitle}: {verdict}{checklist}',
+  'officeMessageLine.externalActionLine': '{actor} → {tool}{detail} · {outcome}',
+  'officeMessageLine.outcomeAllow': '✓ allowed',
+  'officeMessageLine.outcomeDeny': '✗ denied',
 
   // artifact-panel.tsx
   'artifactPanel.title': 'Outputs',
   'artifactPanel.selectRoomHint': 'Select a workroom to see its delivered outputs.',
   'artifactPanel.empty': 'No handoffs in this room yet.',
+
+  // Review detail tray (v54 P3)
+  'reviewDetailTray.title': 'Review detail',
+  'reviewDetailTray.ariaLabel': 'Review detail for {stepTitle}',
+  'reviewDetailTray.unavailable': 'No per-criterion detail was kept for this review — the system currently records only pass/fail counts, not each criterion\'s text.',
+  'reviewDetailTray.summary': '{taskTitle} / {stepTitle}: {verdict}',
 
   // artifact-viewer.tsx
   'artifactViewer.fallbackTitle': 'Step result',

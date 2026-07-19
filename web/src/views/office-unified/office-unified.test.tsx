@@ -10,7 +10,7 @@
 // v54 P2: OfficeUnified now renders the action rail (ActionRail) as part of layout A, so
 // every render needs PendingApprovalsProvider (the rail reads the shared aggregate) —
 // api.getAgents is mocked empty so the fan-out resolves instantly with no items.
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { UiModeProvider } from '../../ui-mode-context'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
@@ -123,4 +123,21 @@ test('v54 layout A: renders the left action rail alongside the canvas/feed cente
   expect(screen.getByText(DICT.vi['actionRail.upcomingTitle'])).toBeInTheDocument()
   // The 2D fallback table (center column) still renders alongside the rail.
   expect(screen.getAllByText(DICT.vi['agentStatusTable.empty']).length).toBeGreaterThan(0)
+})
+
+test('v54 P3: clicking a review feed line opens the detail tray in the right column', async () => {
+  stubReducedMotion(true)
+  mockStream([
+    {
+      seq: 1, ts: 't', author: 'reviewer', kind: 'review',
+      body: {
+        task_title: 'Ra mắt', step_title: 'soát bản nháp', verdict: 'needs_rework',
+        failure_count: 1, assigned_to: 'reviewer',
+      },
+    },
+  ])
+  renderOffice()
+  fireEvent.click(screen.getByText(/Ra mắt \/ soát bản nháp: cần sửa/))
+  expect(await screen.findByText(DICT.vi['reviewDetailTray.title'])).toBeInTheDocument()
+  expect(screen.getByText(DICT.vi['reviewDetailTray.unavailable'])).toBeInTheDocument()
 })

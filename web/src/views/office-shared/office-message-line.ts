@@ -93,7 +93,30 @@ export function messageLine(m: OfficeMessage, t: Translate = defaultT): string {
         taskTitle: b.task_title ?? '', stepTitle: b.step_title ?? '', verdict: verdictLabel, checklist,
       })
     }
+    case 'external_action': {
+      // v54 P3: "actor → tool detail · outcome" — detail is already a short non-content
+      // target (see OfficeEventBody.detail's docstring), so this is a straight join, no
+      // truncation logic of its own.
+      const outcomeLabel = b.outcome === 'allow'
+        ? t('officeMessageLine.outcomeAllow')
+        : b.outcome === 'deny'
+          ? t('officeMessageLine.outcomeDeny')
+          : (b.outcome ?? '')
+      return t('officeMessageLine.externalActionLine', {
+        actor: b.actor ?? '', tool: b.tool ?? '',
+        detail: b.detail ? ` ${b.detail}` : '', outcome: outcomeLabel,
+      })
+    }
     default:
       return ''
   }
+}
+
+// v54 P3: presentation-only tone for an external_action line's outcome — mirrors
+// feedStatusClass's per-kind flavor (allow=ok, deny=danger, everything else neutral;
+// pending/dry_run/skipped/reject read fine unstyled — no dedicated tone requested).
+export function externalActionTone(outcome: string | undefined): 'ok' | 'danger' | 'neutral' {
+  if (outcome === 'allow') return 'ok'
+  if (outcome === 'deny') return 'danger'
+  return 'neutral'
 }

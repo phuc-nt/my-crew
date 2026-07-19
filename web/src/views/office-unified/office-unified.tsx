@@ -21,7 +21,7 @@ import { OfficeCanvas } from '../office-3d/office-canvas'
 import { use3dFallback } from '../office-3d/use-3d-fallback'
 import { Button } from '../../components/ui/button'
 import { PageHeader } from '../../components/ui/page-header'
-import type { TeamBoardLane, Workroom } from '../../types'
+import type { OfficeMessage, TeamBoardLane, Workroom } from '../../types'
 import { ActionRail } from './action-rail'
 import { ActivityFeed } from './activity-feed'
 import { ArtifactPanel } from './artifact-panel'
@@ -29,6 +29,7 @@ import { AssignComposer } from './assign-composer'
 import { CoordinatorHealthBanner } from './coordinator-health-banner'
 import { DeskInspector } from './desk-inspector'
 import { OfficeHealthStrip } from './office-health-strip'
+import { ReviewDetailTray } from './review-detail-tray'
 import { WorkroomList } from './workroom-list'
 
 const OFFICE_ROOM_ID = 'office'
@@ -138,6 +139,11 @@ export function OfficeUnified() {
   useEffect(() => {
     if (!isHigh) setInspectorAgent(null) // leaving high mode closes the drawer
   }, [isHigh])
+  // v54 P3: clicking a review feed line opens the per-criterion tray in the right
+  // column — closes itself whenever the selected room changes so a stale review from a
+  // different room's stream never lingers behind a new selection.
+  const [reviewSelected, setReviewSelected] = useState<OfficeMessage | null>(null)
+  useEffect(() => { setReviewSelected(null) }, [activeRoom])
   // v32 desk click: a PIC desk opens its task's workroom (room id = task id for a
   // standalone task; a child task's events mirror into its parent room via room_for_task
   // server-side, so the task id is still the room the FEED knows). A desk with no PIC
@@ -217,6 +223,7 @@ export function OfficeUnified() {
         )}
         <ActivityFeed
           messages={room.messages} connected={room.connected} errored={room.errored}
+          onReviewSelect={setReviewSelected}
         />
       </div>
 
@@ -227,6 +234,9 @@ export function OfficeUnified() {
           needsShellRooms={needsShellRooms}
         />
         <ArtifactPanel activeRoom={activeRoom} roomMessages={room.messages} />
+        {reviewSelected && (
+          <ReviewDetailTray message={reviewSelected} onClose={() => setReviewSelected(null)} />
+        )}
       </div>
 
       <AssignComposer activeRoom={activeRoom} onTaskCreated={(taskId) => selectRoom(taskId)} />

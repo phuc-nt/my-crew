@@ -2,7 +2,7 @@
 // carries `pic` but never duplicate a backend summary that already leads with it.
 import { expect, test } from 'vitest'
 import type { OfficeMessage } from '../../types'
-import { messageLine } from './office-message-line'
+import { externalActionTone, messageLine } from './office-message-line'
 
 function msg(kind: OfficeMessage['kind'], body: OfficeMessage['body']): OfficeMessage {
   return { seq: 1, ts: 't', author: 'coordinator', kind, body }
@@ -35,4 +35,32 @@ test('recover phase renders its label via the shared PHASE_LABEL', () => {
     task_title: 'T', step_title: 'S', status: 'started', phase: 'nho-tro-giup',
   }))
   expect(line).toContain('(nhờ trợ giúp)')
+})
+
+test('external_action renders "actor → tool detail · outcome" with a translated verdict', () => {
+  const line = messageLine(msg('external_action', {
+    actor: 'hr', tool: 'slack_send', action_type: 'send', outcome: 'allow', detail: '#general',
+  }))
+  expect(line).toBe('hr → slack_send #general · ✓ cho phép')
+})
+
+test('external_action with a deny outcome and no detail omits the extra space', () => {
+  const line = messageLine(msg('external_action', {
+    actor: 'ops', tool: 'gh_pr_merge', action_type: 'write', outcome: 'deny',
+  }))
+  expect(line).toBe('ops → gh_pr_merge · ✗ từ chối')
+})
+
+test('external_action with a non-allow/deny outcome passes the raw string through', () => {
+  const line = messageLine(msg('external_action', {
+    actor: 'ops', tool: 'jira_create', action_type: 'write', outcome: 'pending',
+  }))
+  expect(line).toBe('ops → jira_create · pending')
+})
+
+test('externalActionTone maps allow/deny/other to ok/danger/neutral', () => {
+  expect(externalActionTone('allow')).toBe('ok')
+  expect(externalActionTone('deny')).toBe('danger')
+  expect(externalActionTone('pending')).toBe('neutral')
+  expect(externalActionTone(undefined)).toBe('neutral')
 })
