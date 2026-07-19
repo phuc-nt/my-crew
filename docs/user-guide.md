@@ -154,23 +154,31 @@ Use the **Assistant** tab → ask "create an agent that…" → answer questions
 
 ## Reading Reports & Insights
 
-### Office Display (v17)
+### Office Display (v54 Cockpit)
 
-The **Office** main screen has **3 columns + 3D workspace + chat**:
+The **Office** main screen is a **3-zone grid** (adapts to single column ≤1100px):
 
-| Column | Shows |
+| Zone | Shows |
 |---|---|
-| **Workroom list** (left) | All tasks in progress/stuck/done, organized by workroom. |
-| **Live activity** (middle) | Real-time log of agent actions (who did what, when, result). |
-| **Deliverables** (right) | Final outputs from each completed step. Click to see full markdown, copy it, or download as `.md` file. |
+| **Left rail** (260px) | Action queue: "Chờ anh/chị" (pending approvals + clarify questions, answer in-place with buttons or free text) + "Sắp chạy" (upcoming schedule, 60s refresh). Empty state shows one ✓ check mark. |
+| **Center** (canvas + feed) | 3D workspace (collapsible) showing team desks. Below: live activity feed with filter chips [Tất cả \| Bước \| Ra ngoài]. |
+| **Right column** (≤300px) | Workroom list (● in-progress / ⚠ stuck / ✓ done), per-room cost chip (lazy-loaded). Outputs (step artifacts). Review tray (click a review line to see per-criterion ✓/✗ + note). |
 
-**3D Workspace (top, collapsible):**
+**3D Workspace:**
 
 - Each agent has a desk with their avatar color.
 - **PIC's desk** has a ⭐.
+- **✋ waiting-hand** badge on desks with pending approvals/clarifications.
+- **×N badge** when ≥2 concurrent steps running on that agent.
+- **Translucent ghost figure** shows while a deep_team sandboxed step runs.
 - When agents consult each other, avatars walk toward each other.
-- Agent's desk lights up when they're actively working.
 - Click a desk to open that agent's workroom.
+
+**Activity Feed:**
+
+- Real-time log of step status, milestones, reviews, and external actions (actions sent outside the company).
+- Filter chips show "Tất cả" (all events), "Bước" (step events only), or "Ra ngoài" (outbound actions only — no message bodies, just actor/tool/outcome/target).
+- Tail shows last 40 events; full history in **Office → Timeline**.
 
 ### Activity Log
 

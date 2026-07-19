@@ -129,6 +129,9 @@ function PendingQueue({ clarifyQuestions: liftedClarify, onClarifyAnswered }: Pe
   const { items: approvals, refresh: refreshApprovals } = useSharedPendingApprovals()
   const [ownClarifyQuestions, setOwnClarifyQuestions] = useState<ClarifyQuestion[]>([])
   const [busyApprovalId, setBusyApprovalId] = useState<number | null>(null)
+  // Review M3: a failed approve/reject (409, network) must say so — otherwise the card
+  // just sits there until the next 30s poll and the CEO can't tell the click was lost.
+  const [actError, setActError] = useState<string | null>(null)
   const isLifted = liftedClarify !== undefined
   const clarifyQuestions = isLifted ? liftedClarify : ownClarifyQuestions
 
@@ -150,15 +153,21 @@ function PendingQueue({ clarifyQuestions: liftedClarify, onClarifyAnswered }: Pe
   const act = useCallback(
     async (approval: AgentApproval, action: 'approve' | 'reject') => {
       setBusyApprovalId(approval.id)
+      setActError(null)
       try {
         if (action === 'approve') await api.approve(approval.agentId, approval.id)
         else await api.reject(approval.agentId, approval.id)
-        await refreshApprovals()
+      } catch (e: unknown) {
+        // Backend detail (e.g. a 409 "already handled") is data — shown untranslated.
+        setActError(e instanceof Error ? e.message : t('actionRail.actFailed'))
       } finally {
+        // Refresh either way: on failure the list re-syncs (an already-handled item
+        // disappears); on success the item leaves the queue.
+        await refreshApprovals().catch(() => undefined)
         setBusyApprovalId(null)
       }
     },
-    [refreshApprovals],
+    [refreshApprovals, t],
   )
 
   const items: RailItem[] = [
@@ -174,6 +183,7 @@ function PendingQueue({ clarifyQuestions: liftedClarify, onClarifyAnswered }: Pe
         {t('actionRail.pendingTitle')}
         {items.length > 0 && <span className="badge">{items.length}</span>}
       </h3>
+      {actError && <p className="error">{actError}</p>}
       {items.length === 0 ? (
         <p className="office-rail-empty">{t('actionRail.pendingEmpty')}</p>
       ) : (

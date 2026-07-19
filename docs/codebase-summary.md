@@ -9,7 +9,7 @@
 > **Triết lý runtime-tier + routing xem [system-architecture](system-architecture.md) §3.9** (nguồn chuẩn).
 > Đọc cùng [project-overview-pdr](project-overview-pdr.md), [project-roadmap](project-roadmap.md).
 >
-> **Mốc v40–v53 (tóm tắt — chi tiết ở `docs/journals/`):** v40–v42 deep_agent hardening · v43 deep_team
+> **Mốc v40–v54 (tóm tắt — chi tiết ở `docs/journals/`):** v40–v42 deep_agent hardening · v43 deep_team
 > in-sandbox subagent · v44 benchmark-hardening · **v45 tier-0 routing** (no-shell→create_agent 0-Docker) ·
 > **v46 central-audit actor** (`AuditEntry.actor`, 1 choke point `_record`, migrate-free) ·
 > **v47 Docker-UX** (health probe, `prepull_sandbox_image`, `SANDBOX_DEFAULT_IMAGE`) ·
@@ -17,7 +17,8 @@
 > **v49 barrier-to-entry** (`mpm quickstart`, `mpm crew init`, CoordinatorHealthBanner ở Đội) ·
 > **v50 UI catch-up** (surface backend actor/tier/cost/deep_team FE) ·
 > **v51–v52 polish** (minor fixes) ·
-> **v53 UI discipline + language mode** (design tokens refactor, 6 UI primitives, VN/EN toggle).
+> **v53 UI discipline + language mode** (design tokens refactor, 6 UI primitives, VN/EN toggle) ·
+> **v54 office cockpit** (3-zone layout, action rail merge approvals/clarify, schedule endpoint, review tray criteria, 3D pending badges).
 
 ## Trạng thái hiện tại (v2 COMPLETE: M1+M2+M3)
 
@@ -517,6 +518,15 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 ## Next Phase
 
 **M7 (admin-pack):** Third domain to validate "git diff my_crew/ = ∅" gate (M6 seam patches should suffice). Candidate: billing/cost-center reports via API integrations.
+
+### v54: Office cockpit (2026-07-19)
+
+**3-zone layout redesign** (`web/src/views/office-unified/`, 8 commits):
+- **Left rail** (260px, stacking ≤1100px): Merged "Chờ anh/chị" queue (approvals + clarify in-place, reusing `api.approve/reject` + `api.answerClarify` write paths — zero new backend routes). "Sắp chạy" read-only schedule (GET `/api/schedule/upcoming`, EFFECTIVE service schedule incl. synthesized watch, 60s refresh).
+- **Center + canvas**: Activity feed (tail 40) with filter chips [Tất cả | Bước | Ra ngoài] — presentation-only on merged seq stream (no re-fetch). "Ra ngoài" = `external_action` events from Action Gateway `_record` choke point ({actor, tool, outcome, short target}, no message bodies).
+- **Right column** (≤300px): Workroom list + lazy `formatCost` chip per room. Outputs (step artifacts). Review tray: click review feed line → per-criterion rows (✓/✗ + note), persisted in `captures.criteria_json` (detail endpoint only).
+- **3D badges**: ✋ waiting-hand on desks + coordinator table (has pending items). ×N fan-out count ≥2 concurrent steps. Translucent ghost figure during deep_team step (step events carry `deep_team` flag).
+- **Mobile stacking**: Rail-first single column ≤1100px (minmax(0,1fr) CSS lesson).
 
 ## Deferred
 

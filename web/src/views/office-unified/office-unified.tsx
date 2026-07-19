@@ -259,7 +259,7 @@ export function OfficeUnified() {
         />
         <ArtifactPanel activeRoom={activeRoom} roomMessages={room.messages} />
         {reviewSelected && (
-          <ReviewDetailTray message={reviewSelected} onClose={() => setReviewSelected(null)} />
+          <ReviewDetailTray message={reviewSelected} taskId={activeRoom} onClose={() => setReviewSelected(null)} />
         )}
       </div>
 

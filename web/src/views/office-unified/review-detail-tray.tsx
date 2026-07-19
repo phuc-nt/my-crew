@@ -28,6 +28,8 @@ import type { CaptureDetail, OfficeMessage } from '../../types'
 
 interface ReviewDetailTrayProps {
   message: OfficeMessage
+  // The workroom the tray was opened from (room id == task id); null from the overview.
+  taskId?: string | null
   onClose: () => void
 }
 
@@ -50,6 +52,7 @@ function _countsMatch(detail: CaptureDetail, body: OfficeMessage['body']): boole
  * directly against a mocked `api` without needing full DOM interaction timing. */
 export async function resolveReviewCapture(
   body: OfficeMessage['body'],
+  taskId?: string | null,
 ): Promise<CaptureDetail | null> {
   if (!body.assigned_to || !body.criteria_total) return null
   let rows
@@ -59,7 +62,17 @@ export async function resolveReviewCapture(
   } catch {
     return null
   }
-  const reviewRows = rows.filter((r) => r.step_type === 'review' && r.status === 'done')
+  // Review M1: when the tray is opened from a specific workroom, the room id IS the
+  // task id — filtering candidates to it removes the cross-task-coincidence residual
+  // (same reviewer + same counts + same verdict on another task) and shrinks the
+  // detail-fetch fan-out. From the overview ('office' room) there is no task context,
+  // so the exactly-one-match rule below remains the only guard.
+  const reviewRows = rows.filter(
+    (r) =>
+      r.step_type === 'review' &&
+      r.status === 'done' &&
+      (!taskId || r.task_id === taskId),
+  )
   const details = await Promise.all(
     reviewRows.map((r) =>
       api.getCaptureDetail(r.attempt_id).then(
@@ -72,7 +85,7 @@ export async function resolveReviewCapture(
   return matches.length === 1 ? matches[0] : null
 }
 
-export function ReviewDetailTray({ message, onClose }: ReviewDetailTrayProps) {
+export function ReviewDetailTray({ message, taskId, onClose }: ReviewDetailTrayProps) {
   const { t } = useLanguage()
   const b = message.body
   const verdictLabel = b.verdict === 'passed'
@@ -88,7 +101,7 @@ export function ReviewDetailTray({ message, onClose }: ReviewDetailTrayProps) {
     let cancelled = false
     setLoading(true)
     setCapture(null)
-    resolveReviewCapture(b).then((found) => {
+    resolveReviewCapture(b, taskId).then((found) => {
       if (!cancelled) { setCapture(found); setLoading(false) }
     })
     return () => { cancelled = true }

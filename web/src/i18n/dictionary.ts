@@ -70,6 +70,7 @@ const vi = {
   // action-rail.tsx (v54 P2)
   'actionRail.pendingTitle': 'Chờ anh/chị',
   'actionRail.pendingEmpty': '✓ Không có gì chờ',
+  'actionRail.actFailed': 'Thao tác không thành công — thử lại.',
   'actionRail.approve': 'Duyệt',
   'actionRail.reject': 'Từ chối',
   'actionRail.upcomingTitle': 'Sắp chạy',
@@ -1028,6 +1029,7 @@ const en = {
   // action-rail.tsx (v54 P2)
   'actionRail.pendingTitle': 'Waiting on you',
   'actionRail.pendingEmpty': '✓ Nothing pending',
+  'actionRail.actFailed': 'Action failed — try again.',
   'actionRail.approve': 'Approve',
   'actionRail.reject': 'Reject',
   'actionRail.upcomingTitle': 'Coming up',

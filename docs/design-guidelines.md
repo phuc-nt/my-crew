@@ -1,6 +1,6 @@
 # Design Guidelines — my-crew
 
-**Status:** Updated 2026-07-12 (v30 autonomy-first; web UI design system + trust model).
+**Status:** Updated 2026-07-19 (v54 office cockpit layout; web UI design system + trust model).
 
 > Đây là agent backend + web frontend (React SPA). "Design" bao gồm: (1) nguyên tắc thiết kế HÀNH VI agent (agent cư xử như PM/SM đáng tin), (2) thiết kế UI/UX web dashboard (dark mode, responsive, WCAG AA).
 
@@ -155,7 +155,7 @@ Agent đóng vai management → phải hành xử như một PM/SM **giỏi và 
 - `web/src/components/charts/chart-theme.ts` — `getChartColors()` reads computed `--color-{status}` values, returns chart.js dataset config.
 - Components use `key={resolvedTheme}` to remount when theme flips → refetch colors.
 
-### 5.10 Responsive design (v9 M4)
+### 5.10 Responsive design (v9 M4 + v54)
 
 **Mobile-first card-list**: `@media (max-width: 640px)` transforms CEO tables (Team/Tasks/Approvals) into card layouts:
 - `<tr>` → card div; `<td>` → flex row with `data-label` label prefix.
@@ -165,6 +165,28 @@ Agent đóng vai management → phải hành xử như một PM/SM **giỏi và 
 **Touch-friendly**: `min-height: 44px` for buttons; `font-size: ≥16px` on inputs (iOS Safari zoom prevention).
 
 **Wrap**: nav, quick-action chips, approval lists wrap on mobile.
+
+### 5.11 Office Cockpit Layout (v54)
+
+**3-zone grid design** (`web/src/views/office-unified/`): Fixed left action rail (260px) + center canvas/feed + right column (≤300px) + full-width composer. Layout shifts to single-column stacking (rail-first) at ≤1100px viewport.
+
+**Left rail primitives:**
+- **"Chờ anh/chị" queue:** Merged approval + clarify items (approve/reject + answer in place), shared `useSharedPendingApprovals` + `getClarifyPending` endpoints. Empty state shows one ✓ check mark.
+- **"Sắp chạy" schedule:** GET `/api/schedule/upcoming` (service EFFECTIVE schedule incl. synthesized watch tasks), refreshed every 60s.
+
+**Center columns:**
+- **Canvas:** 3D scene (collapsible).
+- **Activity feed:** Step + milestone + review + external_action events, filtered by chips [Tất cả | Bước | Ra ngoài] (presentation-only, no re-fetch).
+
+**Right column:**
+- **Workroom list + cost chips** (lazy per-room cost via `formatCost`).
+- **Outputs:** Completed step artifacts.
+- **Review tray:** Click a review line → per-criterion rows (✓/✗ + note), persisted in `captures.criteria_json` (detail endpoint only).
+
+**3D badges:**
+- **✋ waiting-hand** on desks with pending approvals/clarifications (coordinator table included).
+- **×N fan-out count** when ≥2 concurrent steps.
+- **Translucent ghost figure** while deep_team step runs (step events carry `deep_team` flag).
 
 ## 6. Giọng UI (v9 M1)
 

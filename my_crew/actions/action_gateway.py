@@ -119,8 +119,11 @@ def _label(action: dict[str, Any]) -> str:
     if atype == "mcp_tool":
         return f"{action.get('server', '?')}:{action.get('tool', '?')}"
     if atype == "gh_cli":
+        # argv[:2] = subcommand pair only ("pr merge", "issue comment") — index 2 can
+        # already be caller-composed free text (e.g. a search query), which would break
+        # the no-content-echo posture, so it never enters the office event.
         argv = action.get("argv", [])
-        return "gh " + " ".join(str(a) for a in argv[:3])
+        return "gh " + " ".join(str(a) for a in argv[:2])
     if atype == "email_send":
         return f"email:{action.get('to', '?')}"
     if atype == "telegram_send":

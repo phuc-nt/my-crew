@@ -156,7 +156,9 @@ def schedule_upcoming() -> dict:
             continue
         try:
             loaded = load_profile(entry.id)
-        except (FileNotFoundError, RuntimeError) as exc:
+        except Exception as exc:  # noqa: BLE001 — fleet-gauge resilience: one corrupted
+            # profile.yaml (yaml.YAMLError escapes load_profile unwrapped) must skip that
+            # agent, never 500 the whole fleet's schedule (the route's own contract).
             logger.warning("schedule/upcoming: skipping agent %r: %s", entry.id, exc)
             continue
         if not loaded.enabled:
