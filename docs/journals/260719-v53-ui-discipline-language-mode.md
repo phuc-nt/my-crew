@@ -30,4 +30,4 @@ Audit lộ App.css 767 dòng xếp theo niên đại → drift: 8 kiểu button 
 
 ## Còn treo
 
-- CEO restart web live để nạp bundle mới; 9→11 commit chưa push (v53 xứng 0.3.0).
+- PUBLISHED PyPI 0.3.0 (CI 4/8 xanh, pip install verified); dashboard live nạp bundle mới; screenshot docs refresh qua chrome-devtools headed Chrome (agent-browser headless không chụp được máy này).
