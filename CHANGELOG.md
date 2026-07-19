@@ -3,6 +3,28 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.3.0] — 2026-07-19
+
+UI discipline + a Vietnamese/English language mode for the dashboard.
+
+### Added
+- **Language toggle (VN/EN)** in the header, next to the theme and lens toggles.
+  Every static interface string switches; backend-origin messages (health checks,
+  API errors) and LLM-authored content stay Vietnamese, and technical terms
+  (Captures, Guardrail, PIC, deep_agent, engine, tokens…) stay English in both. Zero
+  external i18n library — a typed dictionary where a missing translation is a compile
+  error.
+- **Shared UI primitives** (Button, Card, Badge, Input, EmptyState, PageHeader) so
+  every screen draws buttons, cards, badges, and headers from one place; the
+  stylesheet gained a section structure and a rule against ad-hoc component classes.
+
+### Changed
+- One cost format app-wide (4 decimals under $1, 2 from $1) and one timestamp format.
+
+### Fixed
+- The office error-state colour now inverts correctly in dark mode (was pinned to a
+  literal); mobile header no longer overflows once the language chip is present.
+
 ## [0.2.0] — 2026-07-18
 
 Office dual-lens: one office screen serving both the CEO (normal) and the maintainer
