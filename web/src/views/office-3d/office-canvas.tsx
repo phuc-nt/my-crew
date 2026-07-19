@@ -84,7 +84,19 @@ export function OfficeCanvas({
         />
         <OfficeFloor dark={dark} />
         <OfficeProps />
-        <CoordinatorDesk dark={dark} t={t} />
+        <CoordinatorDesk
+          dark={dark}
+          t={t}
+          // Pending items owned by an id with no staff desk (the coordinator asking on a
+          // task's behalf) land on the round table — otherwise they'd be invisible in 3D.
+          pendingCount={
+            pendingCounts
+              ? [...pendingCounts.entries()]
+                  .filter(([id]) => !visible.includes(id))
+                  .reduce((sum, [, n]) => sum + n, 0)
+              : 0
+          }
+        />
         {visible.map((id, i) => {
           const desk = desks.get(id)
           if (!desk) return null
