@@ -4,8 +4,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { LanguageProvider } from '../i18n/language-context'
 import { Connections } from './Connections'
 import type { ConnectionsPayload } from '../types'
+
+function renderConnections() {
+  return render(
+    <LanguageProvider>
+      <Connections />
+    </LanguageProvider>,
+  )
+}
 
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -40,7 +49,7 @@ const payload: ConnectionsPayload = {
 
 test('renders cards with presence state, never an input value', async () => {
   vi.spyOn(api, 'getConnections').mockResolvedValue(payload)
-  render(<Connections />)
+  renderConnections()
 
   expect(await screen.findByText('Tìm kiếm web (Tavily / Brave)')).toBeInTheDocument()
   expect(screen.getByText('TAVILY_API_KEY')).toBeInTheDocument()
@@ -66,7 +75,7 @@ test('saves entered keys and reloads with the restart banner', async () => {
     written: ['TAVILY_API_KEY'],
     needs_restart: true,
   })
-  render(<Connections />)
+  renderConnections()
 
   const input = await screen.findByPlaceholderText('chưa đặt — nhập giá trị')
   fireEvent.change(input, { target: { value: 'tvly-abc' } })
@@ -87,7 +96,7 @@ test('restart asks for confirmation and shows the honest dev message', async () 
     message: 'Dịch vụ không chạy qua launchd — hãy khởi động lại thủ công.',
   })
   vi.spyOn(window, 'confirm').mockReturnValue(true)
-  render(<Connections />)
+  renderConnections()
 
   fireEvent.click(await screen.findByRole('button', { name: 'Khởi động lại' }))
   await waitFor(() => expect(restart).toHaveBeenCalled())
@@ -98,7 +107,7 @@ test('restart is not called when the user cancels the confirm', async () => {
   vi.spyOn(api, 'getConnections').mockResolvedValue({ ...payload, needs_restart: true })
   const restart = vi.spyOn(api, 'restartService')
   vi.spyOn(window, 'confirm').mockReturnValue(false)
-  render(<Connections />)
+  renderConnections()
 
   fireEvent.click(await screen.findByRole('button', { name: 'Khởi động lại' }))
   expect(restart).not.toHaveBeenCalled()

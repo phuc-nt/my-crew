@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { LanguageProvider } from '../i18n/language-context'
 import { AgentPage } from './AgentPage'
 
 beforeEach(() => {
@@ -33,9 +34,11 @@ beforeEach(() => {
 function renderAt(id: string) {
   return render(
     <MemoryRouter initialEntries={[`/agents/${id}`]}>
-      <Routes>
-        <Route path="/agents/:id" element={<AgentPage />} />
-      </Routes>
+      <LanguageProvider>
+        <Routes>
+          <Route path="/agents/:id" element={<AgentPage />} />
+        </Routes>
+      </LanguageProvider>
     </MemoryRouter>,
   )
 }

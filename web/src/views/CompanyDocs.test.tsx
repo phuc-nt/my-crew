@@ -2,7 +2,16 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { LanguageProvider } from '../i18n/language-context'
 import { CompanyDocs } from './CompanyDocs'
+
+function renderDocs() {
+  return render(
+    <LanguageProvider>
+      <CompanyDocs />
+    </LanguageProvider>,
+  )
+}
 
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -12,7 +21,7 @@ beforeEach(() => {
 })
 
 test('lists docs and opens an editor with the body', async () => {
-  render(<CompanyDocs />)
+  renderDocs()
   fireEvent.click(await screen.findByText('Nghỉ phép'))
   expect(await screen.findByDisplayValue('12 ngày')).toBeInTheDocument()
 })
@@ -21,7 +30,7 @@ test('creates a new doc', async () => {
   const create = vi
     .spyOn(api, 'createCompanyDoc')
     .mockResolvedValue({ slug: 'new', title: 'New', updated: '', body: 'B' })
-  render(<CompanyDocs />)
+  renderDocs()
   await screen.findByText('Nghỉ phép')
   fireEvent.click(screen.getByText('+ Tài liệu mới'))
   fireEvent.change(screen.getByPlaceholderText('Quy trình nghỉ phép'), {
@@ -35,7 +44,7 @@ test('creates a new doc', async () => {
 test('deletes a doc after confirm', async () => {
   vi.spyOn(window, 'confirm').mockReturnValue(true)
   const del = vi.spyOn(api, 'deleteCompanyDoc').mockResolvedValue({ ok: true })
-  render(<CompanyDocs />)
+  renderDocs()
   fireEvent.click(await screen.findByText('Nghỉ phép'))
   fireEvent.click(await screen.findByText('Xóa'))
   await waitFor(() => expect(del).toHaveBeenCalledWith('leave'))

@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { AgentProvider } from '../agent-context'
 import { ApiError, api } from '../api/client'
+import { LanguageProvider } from '../i18n/language-context'
 import { Approvals } from './Approvals'
 import { Config } from './Config'
 
@@ -15,7 +16,11 @@ beforeEach(() => {
 })
 
 function wrap(ui: React.ReactElement) {
-  return render(<AgentProvider>{ui}</AgentProvider>)
+  return render(
+    <LanguageProvider>
+      <AgentProvider>{ui}</AgentProvider>
+    </LanguageProvider>,
+  )
 }
 
 const PENDING = {

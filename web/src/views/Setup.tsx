@@ -11,74 +11,77 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from '../api/client'
 import { Card } from '../components/ui/card'
+import type { UiKey } from '../i18n/dictionary'
+import { useLanguage } from '../i18n/language-context'
 import type { AgentSummary } from '../types'
 import { SetupCompanyStep } from './setup-company-step'
 
 interface Field {
   key: string
-  label: string
+  labelKey: UiKey
   type?: 'password' | 'text'
 }
 
 interface Group {
   id: string
-  title: string
+  titleKey: UiKey
   fields: Field[]
   testable: boolean
-  hint?: string
+  hintKey?: UiKey
 }
 
 // The steps. GitHub is auth'd via the `gh` CLI (no key field) — just a Test.
 const GROUPS: Group[] = [
   {
     id: 'openrouter',
-    title: 'OpenRouter (bộ não LLM)',
-    fields: [{ key: 'OPENROUTER_API_KEY', label: 'API key', type: 'password' }],
+    titleKey: 'setup.group.openrouter.title',
+    fields: [{ key: 'OPENROUTER_API_KEY', labelKey: 'setup.group.openrouter.apiKey', type: 'password' }],
     testable: true,
-    hint: 'Lấy key tại openrouter.ai → Keys.',
+    hintKey: 'setup.group.openrouter.hint',
   },
   {
     id: 'atlassian',
-    title: 'Atlassian (Jira + Confluence)',
+    titleKey: 'setup.group.atlassian.title',
     fields: [
-      { key: 'ATLASSIAN_SITE_NAME', label: 'Site (vd acme.atlassian.net)' },
-      { key: 'ATLASSIAN_USER_EMAIL', label: 'Email' },
-      { key: 'ATLASSIAN_API_TOKEN', label: 'API token', type: 'password' },
-      { key: 'JIRA_PROJECT_KEY', label: 'Mã Jira project (vd SCRUM)' },
+      { key: 'ATLASSIAN_SITE_NAME', labelKey: 'setup.group.atlassian.site' },
+      { key: 'ATLASSIAN_USER_EMAIL', labelKey: 'setup.group.atlassian.email' },
+      { key: 'ATLASSIAN_API_TOKEN', labelKey: 'setup.group.atlassian.apiToken', type: 'password' },
+      { key: 'JIRA_PROJECT_KEY', labelKey: 'setup.group.atlassian.jiraProjectKey' },
     ],
     testable: true,
   },
   {
     id: 'slack',
-    title: 'Slack',
+    titleKey: 'setup.group.slack.title',
     fields: [
-      { key: 'SLACK_XOXC_TOKEN', label: 'xoxc token', type: 'password' },
-      { key: 'SLACK_XOXD_TOKEN', label: 'xoxd token', type: 'password' },
-      { key: 'SLACK_TEAM_DOMAIN', label: 'Team domain (vd acme.slack.com)' },
-      { key: 'SLACK_REPORT_CHANNEL', label: 'Kênh báo cáo (id hoặc #tên)' },
+      { key: 'SLACK_XOXC_TOKEN', labelKey: 'setup.group.slack.xoxc', type: 'password' },
+      { key: 'SLACK_XOXD_TOKEN', labelKey: 'setup.group.slack.xoxd', type: 'password' },
+      { key: 'SLACK_TEAM_DOMAIN', labelKey: 'setup.group.slack.teamDomain' },
+      { key: 'SLACK_REPORT_CHANNEL', labelKey: 'setup.group.slack.reportChannel' },
     ],
     testable: true,
   },
   {
     id: 'github',
-    title: 'GitHub',
-    fields: [{ key: 'GITHUB_REPO', label: 'Repo (owner/tên)' }],
+    titleKey: 'setup.group.github.title',
+    fields: [{ key: 'GITHUB_REPO', labelKey: 'setup.group.github.repo' }],
     testable: true,
-    hint: 'Đăng nhập GitHub CLI trên máy chủ: chạy `gh auth login` một lần.',
+    hintKey: 'setup.group.github.hint',
   },
   {
     id: 'websearch',
-    title: 'Tìm kiếm web (tuỳ chọn)',
+    titleKey: 'setup.group.websearch.title',
     fields: [
-      { key: 'TAVILY_API_KEY', label: 'Tavily API key', type: 'password' },
-      { key: 'BRAVE_API_KEY', label: 'Brave Search API key', type: 'password' },
+      { key: 'TAVILY_API_KEY', labelKey: 'setup.group.websearch.tavily', type: 'password' },
+      { key: 'BRAVE_API_KEY', labelKey: 'setup.group.websearch.brave', type: 'password' },
     ],
     testable: false,
-    hint: 'Chỉ cần cho nhân sự bật "tìm kiếm web". Bỏ trống nếu không dùng.',
+    hintKey: 'setup.group.websearch.hint',
   },
 ]
 
 export function Setup({ onDone }: { onDone: () => void }) {
+  const { t } = useLanguage()
   const [step, setStep] = useState(0) // 0..GROUPS.length-1 = key groups; then company; then password
   const [values, setValues] = useState<Record<string, string>>({})
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; detail: string }>>({})
@@ -108,11 +111,11 @@ export function Setup({ onDone }: { onDone: () => void }) {
       await api.saveCompany(companyName.trim(), coordinatorId || null)
       setStep((s) => s + 1)
     } catch (e: unknown) {
-      setError(e instanceof ApiError ? e.message : 'lưu tên công ty thất bại')
+      setError(e instanceof ApiError ? e.message : t('setup.saveCompanyFailed'))
     } finally {
       setBusy(false)
     }
-  }, [companyName, coordinatorId])
+  }, [companyName, coordinatorId, t])
 
   const setField = (key: string, v: string) => setValues((s) => ({ ...s, [key]: v }))
 
@@ -134,12 +137,12 @@ export function Setup({ onDone }: { onDone: () => void }) {
         const r = await api.setupTest(g.id)
         setTestResult((s) => ({ ...s, [g.id]: { ok: r.ok, detail: r.detail } }))
       } catch (e: unknown) {
-        setError(e instanceof ApiError ? e.message : 'kiểm tra thất bại')
+        setError(e instanceof ApiError ? e.message : t('setup.testFailed'))
       } finally {
         setBusy(false)
       }
     },
-    [saveGroup],
+    [saveGroup, t],
   )
 
   const next = useCallback(
@@ -150,17 +153,17 @@ export function Setup({ onDone }: { onDone: () => void }) {
         await saveGroup(g)
         setStep((s) => s + 1)
       } catch (e: unknown) {
-        setError(e instanceof ApiError ? e.message : 'lưu thất bại')
+        setError(e instanceof ApiError ? e.message : t('setup.saveFailed'))
       } finally {
         setBusy(false)
       }
     },
-    [saveGroup],
+    [saveGroup, t],
   )
 
   const finish = useCallback(async () => {
     if (password.length < 6) {
-      setError('Mật khẩu tối thiểu 6 ký tự.')
+      setError(t('setup.passwordTooShort'))
       return
     }
     setBusy(true)
@@ -171,17 +174,17 @@ export function Setup({ onDone }: { onDone: () => void }) {
       // give launchd ~6s to restart, then re-check (App will show Login)
       setTimeout(onDone, 6000)
     } catch (e: unknown) {
-      setError(e instanceof ApiError ? e.message : 'hoàn tất thất bại')
+      setError(e instanceof ApiError ? e.message : t('setup.finishFailed'))
       setBusy(false)
     }
-  }, [password, username, onDone])
+  }, [password, username, onDone, t])
 
   if (finished) {
     return (
       <div className="setup-screen">
         <Card className="setup-box">
-          <h1>Đang khởi động lại…</h1>
-          <p>Đã lưu cấu hình. Dịch vụ đang khởi động lại — đợi vài giây rồi đăng nhập.</p>
+          <h1>{t('setup.restartingTitle')}</h1>
+          <p>{t('setup.restartingBody')}</p>
         </Card>
       </div>
     )
@@ -191,7 +194,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
     <div className="setup-screen">
       <Card className="setup-box">
         <div className="setup-progress">
-          Bước {step + 1}/{GROUPS.length + 2}
+          {t('setup.progress', { step: step + 1, total: GROUPS.length + 2 })}
         </div>
         {companyStep ? (
           <SetupCompanyStep
@@ -207,11 +210,11 @@ export function Setup({ onDone }: { onDone: () => void }) {
           />
         ) : !passwordStep ? (
           <>
-            <h1>{GROUPS[step].title}</h1>
-            {GROUPS[step].hint && <p className="setup-hint">{GROUPS[step].hint}</p>}
+            <h1>{t(GROUPS[step].titleKey)}</h1>
+            {GROUPS[step].hintKey && <p className="setup-hint">{t(GROUPS[step].hintKey!)}</p>}
             {GROUPS[step].fields.map((f) => (
               <label key={f.key}>
-                {f.label}
+                {t(f.labelKey)}
                 <input
                   type={f.type ?? 'text'}
                   value={values[f.key] ?? ''}
@@ -221,7 +224,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
             ))}
             {testResult[GROUPS[step].id] && (
               <p className={testResult[GROUPS[step].id].ok ? 'setup-ok' : 'error'}>
-                {testResult[GROUPS[step].id].ok ? '✓ Kết nối OK' : '✗ '}
+                {testResult[GROUPS[step].id].ok ? t('setup.connectionOk') : '✗ '}
                 {testResult[GROUPS[step].id].detail}
               </p>
             )}
@@ -230,12 +233,12 @@ export function Setup({ onDone }: { onDone: () => void }) {
               {/* v53: styled by container element selector (.setup-actions button) — unify in a later pass */}
               {GROUPS[step].testable && (
                 <button type="button" disabled={busy} onClick={() => void test(GROUPS[step])}>
-                  Kiểm tra kết nối
+                  {t('setup.testConnection')}
                 </button>
               )}
               {step > 0 && (
                 <button type="button" disabled={busy} onClick={() => setStep((s) => s - 1)}>
-                  Quay lại
+                  {t('setup.back')}
                 </button>
               )}
               <button
@@ -244,20 +247,20 @@ export function Setup({ onDone }: { onDone: () => void }) {
                 disabled={busy}
                 onClick={() => void next(GROUPS[step])}
               >
-                Tiếp tục
+                {t('setup.continue')}
               </button>
             </div>
           </>
         ) : (
           <>
-            <h1>Đặt mật khẩu đăng nhập</h1>
-            <p className="setup-hint">Mật khẩu này bảo vệ dashboard — bạn dùng để đăng nhập.</p>
+            <h1>{t('setup.passwordTitle')}</h1>
+            <p className="setup-hint">{t('setup.passwordHint')}</p>
             <label>
-              Tên đăng nhập
+              {t('setup.username')}
               <input value={username} onChange={(e) => setUsername(e.target.value)} />
             </label>
             <label>
-              Mật khẩu (tối thiểu 6 ký tự)
+              {t('setup.passwordFieldLabel')}
               <input
                 type="password"
                 value={password}
@@ -267,7 +270,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
             {error && <p className="error">{error}</p>}
             <div className="setup-actions">
               <button type="button" disabled={busy} onClick={() => setStep((s) => s - 1)}>
-                Quay lại
+                {t('setup.back')}
               </button>
               <button
                 type="button"
@@ -275,7 +278,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
                 disabled={busy || password.length < 6}
                 onClick={() => void finish()}
               >
-                Hoàn tất & khởi động
+                {t('setup.finish')}
               </button>
             </div>
           </>

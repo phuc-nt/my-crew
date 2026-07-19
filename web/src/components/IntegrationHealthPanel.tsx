@@ -5,6 +5,7 @@
 // the backend caches for 30s so polling is not needed.
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { useLanguage } from '../i18n/language-context'
 import { Button } from './ui/button'
 import type { IntegrationCheck } from '../types'
 
@@ -27,6 +28,7 @@ function renderHint(hint: string) {
 }
 
 export function IntegrationHealthPanel() {
+  const { t } = useLanguage()
   const [checks, setChecks] = useState<IntegrationCheck[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -37,8 +39,9 @@ export function IntegrationHealthPanel() {
     api
       .getIntegrationHealth()
       .then((res) => setChecks(res.checks))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'không kiểm tra được kết nối'))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('integrationHealth.checkFailed')))
       .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -52,17 +55,17 @@ export function IntegrationHealthPanel() {
     // directly here to keep the semantic <section>).
     <section className="card health-panel">
       <h3>
-        Sức khỏe hệ thống{' '}
+        {t('integrationHealth.title')}{' '}
         <Button variant="ghost" disabled={loading} onClick={load}>
-          {loading ? 'Đang kiểm tra…' : 'Làm mới'}
+          {loading ? t('integrationHealth.checking') : t('integrationHealth.refresh')}
         </Button>
       </h3>
-      {error && <p className="error">Lỗi: {error}</p>}
+      {error && <p className="error">{t('integrationHealth.errorPrefix', { message: error })}</p>}
       {!error && !loading && (
         <p className="muted">
           {failing === 0
-            ? '✓ Tất cả kết nối đều sẵn sàng.'
-            : `${failing} mục cần khắc phục — làm theo gợi ý bên dưới.`}
+            ? t('integrationHealth.allOk')
+            : t('integrationHealth.someFailing', { n: failing })}
         </p>
       )}
       <ul className="health-checks">

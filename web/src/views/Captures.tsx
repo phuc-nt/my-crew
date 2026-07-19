@@ -8,6 +8,7 @@ import { api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { PageHeader } from '../components/ui/page-header'
+import { useLanguage } from '../i18n/language-context'
 import { formatCost } from '../labels'
 import type { CaptureRow } from '../types'
 
@@ -22,6 +23,7 @@ function fmtTokens(row: CaptureRow): string {
 }
 
 export function Captures() {
+  const { t } = useLanguage()
   const [searchParams, setSearchParams] = useSearchParams()
   const taskFilter = searchParams.get('task_id') ?? ''
   const [agentFilter, setAgentFilter] = useState('')
@@ -42,31 +44,32 @@ export function Captures() {
 
   return (
     <section>
-      <PageHeader title="Captures (telemetry từng bước)" />
-      <p className="ops-chat-hint">
-        Mỗi dòng = một lượt chạy bước (attempt): engine, tokens, chi phí (exact/estimated),
-        thời lượng. Nguồn: bảng captures v26 — chỉ đọc.
-      </p>
+      {/* "Captures" stays literal English (a technical term, matching the rest of the codebase) —
+          only the parenthetical suffix is translated. */}
+      <PageHeader title={`Captures${t('captures.titleSuffix')}`} />
+      <p className="ops-chat-hint">{t('captures.hint')}</p>
       <div className="captures-filters">
         {taskFilter && (
           <Button variant="chip" onClick={() => setSearchParams({})}>
-            Việc: {taskFilter.slice(0, 12)}… ✕
+            {t('captures.taskFilterChip', { task: taskFilter.slice(0, 12) })}
           </Button>
         )}
         <input
-          placeholder="lọc theo nhân sự (agent id)"
+          placeholder={t('captures.agentFilterPlaceholder')}
           value={agentFilter}
           onChange={(e) => setAgentFilter(e.target.value)}
         />
       </div>
       {rows.length === 0 ? (
-        <EmptyState>Chưa có capture nào khớp bộ lọc.</EmptyState>
+        <EmptyState>{t('captures.empty')}</EmptyState>
       ) : (
         <table className="captures-table">
           <thead>
             <tr>
-              <th>Lúc</th><th>Nhân sự</th><th>Việc/Bước</th><th>Engine</th>
-              <th>Tokens</th><th>Chi phí</th><th>Thời lượng</th><th>Trạng thái</th>
+              <th>{t('captures.colTime')}</th><th>{t('captures.colAgent')}</th>
+              <th>{t('captures.colTaskStep')}</th><th>{t('captures.colEngine')}</th>
+              <th>{t('captures.colTokens')}</th><th>{t('captures.colCost')}</th>
+              <th>{t('captures.colDuration')}</th><th>{t('captures.colStatus')}</th>
             </tr>
           </thead>
           <tbody>
@@ -82,9 +85,13 @@ export function Captures() {
                   {r.task_id.slice(0, 8)}…/{r.step_id.slice(0, 10)}
                   {expanded === r.attempt_id && (
                     <div className="captures-detail">
-                      attempt <code>{r.attempt_id}</code> · loại: {r.step_type}
-                      {r.review_round > 0 && ` · vòng review ${r.review_round}`}
-                      {r.error && <div className="captures-error">lỗi: {r.error}</div>}
+                      attempt <code>{r.attempt_id}</code> · {t('captures.attemptType', { type: r.step_type })}
+                      {r.review_round > 0 && t('captures.reviewRound', { n: r.review_round })}
+                      {r.error && (
+                        <div className="captures-error">
+                          {t('captures.errorPrefix', { message: r.error })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </td>

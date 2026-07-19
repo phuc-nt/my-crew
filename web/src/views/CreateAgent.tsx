@@ -7,6 +7,8 @@
 import { DomainPicker } from '../components/DomainPicker'
 import { Button } from '../components/ui/button'
 import { PageHeader } from '../components/ui/page-header'
+import type { UiKey } from '../i18n/dictionary'
+import { useLanguage } from '../i18n/language-context'
 import { BindingsStep } from '../wizard/BindingsStep'
 import { IdentityStep } from '../wizard/IdentityStep'
 import { ReportsStep } from '../wizard/ReportsStep'
@@ -14,9 +16,17 @@ import { ReviewStep } from '../wizard/ReviewStep'
 import { StaffTemplatePicker } from '../wizard/staff-template-picker'
 import { ID_PATTERN, useCreateAgentWizard } from '../wizard/use-create-agent-wizard'
 
-const STEP_LABELS = ['Mẫu nhân sự', 'Loại nhân sự', 'Danh tính', 'Báo cáo', 'Kết nối', 'Xem lại']
+const STEP_LABEL_KEYS: UiKey[] = [
+  'createAgent.step.template',
+  'createAgent.step.domain',
+  'createAgent.step.identity',
+  'createAgent.step.reports',
+  'createAgent.step.bindings',
+  'createAgent.step.review',
+]
 
 export function CreateAgent() {
+  const { t } = useLanguage()
   const wizard = useCreateAgentWizard()
   const {
     state,
@@ -41,11 +51,11 @@ export function CreateAgent() {
 
   return (
     <section>
-      <PageHeader title="Tạo nhân sự ảo" />
+      <PageHeader title={t('createAgent.title')} />
       <ol className="wizard-steps">
-        {STEP_LABELS.map((label, i) => (
-          <li key={label} className={state.step === i ? 'wizard-step-active' : undefined}>
-            {i}. {label}
+        {STEP_LABEL_KEYS.map((key, i) => (
+          <li key={key} className={state.step === i ? 'wizard-step-active' : undefined}>
+            {i}. {t(key)}
           </li>
         ))}
       </ol>
@@ -78,12 +88,12 @@ export function CreateAgent() {
       <div className="wizard-nav">
         {state.step > 0 && (
           <Button variant="ghost" onClick={() => goTo(state.step - 1)}>
-            Quay lại
+            {t('createAgent.back')}
           </Button>
         )}{' '}
         {state.step > 0 && state.step < 5 && (
           <Button variant="ghost" disabled={!canAdvanceFrom[state.step]} onClick={() => goTo(state.step + 1)}>
-            Tiếp
+            {t('createAgent.next')}
           </Button>
         )}
       </div>

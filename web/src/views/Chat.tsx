@@ -9,6 +9,7 @@ import { api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { PageHeader } from '../components/ui/page-header'
+import { useLanguage } from '../i18n/language-context'
 import { useSharedPendingApprovals } from '../pending-approvals-context'
 
 interface Turn {
@@ -16,11 +17,8 @@ interface Turn {
   text: string
 }
 
-// v7 M20: fixed quick-action prompts on the assistant home so a CEO isn't staring at a blank
-// box. Clicking one sends that message. A dynamic "duyệt" chip appears only when work waits.
-const QUICK_CHIPS = ['Đội mình đang thế nào?', 'Tạo nhân sự ảo mới', 'Tổng chi phí tháng này?']
-
 export function Chat() {
+  const { t } = useLanguage()
   const [available, setAvailable] = useState<boolean | null>(null)
   // v32 discoverability: the real ops catalog, shown up front instead of only after a miss.
   const [commands, setCommands] = useState<{ id: string; description: string }[]>([])
@@ -31,14 +29,17 @@ export function Chat() {
   // clobber the CEO's later typing if searchParams changes reference.
   const [searchParams] = useSearchParams()
   const [draft, setDraft] = useState(() =>
-    searchParams.get('intent') === 'create-agent'
-      ? 'Tạo nhân sự ảo mới. Hãy hỏi mình từng bước cần thiết.'
-      : '',
+    searchParams.get('intent') === 'create-agent' ? t('chat.createAgentPrefill') : '',
   )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const { count: pendingCount } = useSharedPendingApprovals()
+
+  // v7 M20: fixed quick-action prompts on the assistant home so a CEO isn't staring at a
+  // blank box. Clicking one sends that message. A dynamic "duyệt" chip appears only when
+  // work waits.
+  const quickChips = [t('chat.quickChipStatus'), t('chat.quickChipCreateAgent'), t('chat.quickChipCost')]
 
   useEffect(() => {
     api.getOpsChatCommands().then((r) => setCommands(r.commands)).catch(() => setCommands([]))
@@ -50,8 +51,9 @@ export function Chat() {
       })
       .catch((e: unknown) => {
         setAvailable(false)
-        setUnavailableReason(e instanceof Error ? e.message : 'không kiểm tra được')
+        setUnavailableReason(e instanceof Error ? e.message : t('chat.checkFailed'))
       })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -62,20 +64,20 @@ export function Chat() {
   const sendText = useCallback(
     async (message: string) => {
       if (!message.trim() || busy) return
-      setTurns((t) => [...t, { who: 'ceo', text: message }])
+      setTurns((prev) => [...prev, { who: 'ceo', text: message }])
       setDraft('')
       setBusy(true)
       setError(null)
       try {
         const res = await api.opsChat(message)
-        setTurns((t) => [...t, { who: 'agent', text: res.reply }])
+        setTurns((prev) => [...prev, { who: 'agent', text: res.reply }])
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : 'gửi thất bại')
+        setError(e instanceof Error ? e.message : t('chat.sendFailed'))
       } finally {
         setBusy(false)
       }
     },
-    [busy],
+    [busy, t],
   )
   const send = useCallback(() => sendText(draft), [sendText, draft])
 
@@ -86,15 +88,16 @@ export function Chat() {
     }
   }
 
-  if (available === null) return <p>Đang kiểm tra…</p>
+  if (available === null) return <p>{t('chat.checking')}</p>
   if (available === false) {
     return (
       <section>
-        <PageHeader title="Trợ lý điều hành" />
-        <p className="error">Chưa dùng được: {unavailableReason}</p>
+        <PageHeader title={t('chat.title')} />
+        <p className="error">{t('chat.unavailablePrefix', { reason: unavailableReason })}</p>
         {/* v9 P2: never a dead-end — the CEO can always create an agent via the wizard. */}
         <p>
-          Bạn vẫn có thể <Link to="/create">tạo nhân sự ảo bằng biểu mẫu →</Link>
+          {t('chat.createViaWizardPrefix')}
+          <Link to="/create">{t('chat.createViaWizardLink')}</Link>
         </p>
       </section>
     )
@@ -102,14 +105,11 @@ export function Chat() {
 
   return (
     <section className="ops-chat">
-      <PageHeader title="Trợ lý điều hành" />
-      <p className="ops-chat-hint">
-        Nhắn tiếng Việt để quản lý đội: tạo agent, bật/tắt, xem trạng thái, xem chi phí. Mọi
-        thay đổi đều được xem trước và cần bạn xác nhận.
-      </p>
+      <PageHeader title={t('chat.title')} />
+      <p className="ops-chat-hint">{t('chat.hint')}</p>
       {commands.length > 0 && (
         <details className="ops-chat-commands">
-          <summary>Trợ lý làm được gì? ({commands.length} việc)</summary>
+          <summary>{t('chat.commandsSummary', { n: commands.length })}</summary>
           <ul>
             {commands.map((c) => (
               <li key={c.id}>{c.description}</li>
@@ -118,16 +118,13 @@ export function Chat() {
         </details>
       )}
       <div className="ops-chat-log">
-        {turns.length === 0 && (
-          <EmptyState>
-            Ví dụ: “đội mình đang có mấy agent, tốn bao nhiêu?” hoặc “tạo agent mã sales-pm,
-            vai trò quản lý dự án”.
-          </EmptyState>
-        )}
-        {turns.map((t, i) => (
-          <div key={i} className={`ops-chat-turn ops-chat-${t.who}`}>
-            <span className="ops-chat-who">{t.who === 'ceo' ? 'Bạn' : 'Trợ lý'}</span>
-            <pre className="ops-chat-text">{t.text}</pre>
+        {turns.length === 0 && <EmptyState>{t('chat.emptyExample')}</EmptyState>}
+        {turns.map((turn, i) => (
+          <div key={i} className={`ops-chat-turn ops-chat-${turn.who}`}>
+            <span className="ops-chat-who">
+              {turn.who === 'ceo' ? t('chat.who.ceo') : t('chat.who.agent')}
+            </span>
+            <pre className="ops-chat-text">{turn.text}</pre>
           </div>
         ))}
         <div ref={endRef} />
@@ -136,10 +133,10 @@ export function Chat() {
       <div className="quick-chips">
         {pendingCount > 0 && (
           <Link to="/work" className="chip chip-alert">
-            ⚠️ {pendingCount} việc chờ duyệt
+            {t('chat.pendingChip', { n: pendingCount })}
           </Link>
         )}
-        {QUICK_CHIPS.map((c) => (
+        {quickChips.map((c) => (
           <Button key={c} variant="chip" disabled={busy} onClick={() => void sendText(c)}>
             {c}
           </Button>
@@ -149,13 +146,13 @@ export function Chat() {
         <input
           type="text"
           value={draft}
-          placeholder="Nhắn cho trợ lý…"
+          placeholder={t('chat.inputPlaceholder')}
           disabled={busy}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
         />
         <Button variant="primary" onClick={() => void send()} disabled={busy || !draft.trim()}>
-          {busy ? 'Đang gửi…' : 'Gửi'}
+          {busy ? t('chat.sending') : t('chat.send')}
         </Button>
       </div>
     </section>

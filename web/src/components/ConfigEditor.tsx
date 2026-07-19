@@ -1,6 +1,7 @@
 // Editor for one profile file. MEMORY.md is rendered read-only (the agent self-writes it;
 // no save route exists). Save surfaces the backend's EXACT validation message on a 400.
 import { useState } from 'react'
+import { useLanguage } from '../i18n/language-context'
 import { Button } from './ui/button'
 
 export function ConfigEditor({
@@ -14,6 +15,7 @@ export function ConfigEditor({
   readOnly?: boolean
   onSave?: (text: string) => Promise<void>
 }) {
+  const { t } = useLanguage()
   const [text, setText] = useState(initial)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -26,9 +28,9 @@ export function ConfigEditor({
     setError(null)
     try {
       await onSave(text)
-      setStatus('Đã lưu.')
+      setStatus(t('configEditor.saved'))
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'lưu thất bại')
+      setError(e instanceof Error ? e.message : t('configEditor.saveFailed'))
     } finally {
       setBusy(false)
     }
@@ -38,7 +40,7 @@ export function ConfigEditor({
     <div className="config-editor">
       <h3>
         {label}
-        {readOnly ? ' (chỉ đọc)' : ''}
+        {readOnly ? t('configEditor.readOnlySuffix') : ''}
       </h3>
       <textarea
         value={text}
@@ -49,7 +51,7 @@ export function ConfigEditor({
       {!readOnly && (
         <div>
           <Button variant="ghost" disabled={busy} onClick={save}>
-            {busy ? 'Đang lưu…' : 'Lưu'}
+            {busy ? t('configEditor.saving') : t('configEditor.save')}
           </Button>
           {status && <span className="ok"> {status}</span>}
           {error && <span className="error"> {error}</span>}

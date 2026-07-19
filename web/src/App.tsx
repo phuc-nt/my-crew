@@ -6,6 +6,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import './App.css'
 import { AgentProvider } from './agent-context'
 import { api, setUnauthorizedHandler } from './api/client'
+import { useLanguage } from './i18n/language-context'
 import { AdvancedAgentView } from './components/AdvancedAgentView'
 import { Layout } from './components/Layout'
 import { PendingApprovalsProvider } from './pending-approvals-context'
@@ -33,6 +34,7 @@ import { Trigger } from './views/Trigger'
 import { Work } from './views/Work'
 
 function App() {
+  const { t } = useLanguage()
   // null = still checking; true/false = authenticated or not.
   const [authed, setAuthed] = useState<boolean | null>(null)
   // v7 M17: first-run setup. null = unknown; false = needs wizard; true = done.
@@ -66,9 +68,9 @@ function App() {
     setUnauthorizedHandler(() => setAuthed(false)) // any 401 → back to login
   }, [check])
 
-  if (setupDone === null) return <p style={{ padding: '2rem' }}>Đang tải…</p>
+  if (setupDone === null) return <p style={{ padding: '2rem' }}>{t('app.loading')}</p>
   if (!setupDone) return <Setup onDone={check} />
-  if (authed === null) return <p style={{ padding: '2rem' }}>Đang tải…</p>
+  if (authed === null) return <p style={{ padding: '2rem' }}>{t('app.loading')}</p>
   if (!authed) return <Login onLoggedIn={check} />
 
   return (

@@ -6,10 +6,12 @@ import { Link } from 'react-router'
 import { api, ApiError } from '../api/client'
 import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
+import { useLanguage } from '../i18n/language-context'
 import type { CreateAgentResult, CreateAgentSpec } from '../types'
 import { buildEnvTemplate } from './env-template'
 
 export function ReviewStep({ spec, pack }: { spec: CreateAgentSpec; pack: { servers: string[] } | null }) {
+  const { t } = useLanguage()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<CreateAgentResult | null>(null)
@@ -24,7 +26,7 @@ export function ReviewStep({ spec, pack }: { spec: CreateAgentSpec; pack: { serv
       const res = await api.createAgent(spec)
       setResult(res)
     } catch (e: unknown) {
-      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'tạo thất bại')
+      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : t('reviewStep.createFailed'))
     } finally {
       setBusy(false)
     }
@@ -41,32 +43,31 @@ export function ReviewStep({ spec, pack }: { spec: CreateAgentSpec; pack: { serv
 
   return (
     <section>
-      <h3>Bước 5: Xem lại + tạo</h3>
+      <h3>{t('reviewStep.title')}</h3>
       <pre className="review-spec">{JSON.stringify(spec, null, 2)}</pre>
 
       <Card className="token-setup-box">
-        <h4>Cài đặt token</h4>
-        <p className="muted">
-          Đây chỉ là TÊN biến môi trường — đừng nhập giá trị bí mật ở đây. Người phụ trách kỹ
-          thuật sẽ điền giá trị thật vào file .env trên máy chủ.
-        </p>
+        <h4>{t('reviewStep.tokenSetupTitle')}</h4>
+        <p className="muted">{t('reviewStep.tokenSetupHint')}</p>
         <pre className="env-template">{envTemplate}</pre>
         <Button variant="ghost" onClick={copyEnv}>
-          {copied ? 'Đã chép!' : 'Chép mẫu .env'}
+          {copied ? t('reviewStep.envCopied') : t('reviewStep.envCopy')}
         </Button>
       </Card>
 
-      {error && <p className="error">Lỗi: {error}</p>}
+      {error && <p className="error">{t('reviewStep.errorPrefix', { message: error })}</p>}
       {!result && (
         <Button variant="ghost" disabled={busy} onClick={create}>
-          {busy ? 'Đang tạo…' : 'Tạo agent'}
+          {busy ? t('reviewStep.creating') : t('reviewStep.createAgent')}
         </Button>
       )}
       {result && (
         <p className="ok">
-          Đã tạo agent <strong>{result.created.id}</strong>.{' '}
-          <Link to={`/agents/${result.created.id}`}>Mở trang agent</Link> để gắn bot Telegram
-          (nhắn được ngay) và quản lý.
+          {t('reviewStep.createdPrefix')}
+          <strong>{result.created.id}</strong>
+          {t('reviewStep.createdSuffix')}{' '}
+          <Link to={`/agents/${result.created.id}`}>{t('reviewStep.openAgentPage')}</Link>
+          {t('reviewStep.openAgentPageSuffix')}
         </p>
       )}
     </section>

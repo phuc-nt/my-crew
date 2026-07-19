@@ -3,7 +3,16 @@
 // <details>, and modal a11y (aria-modal + Esc closes).
 import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
+import { LanguageProvider } from '../i18n/language-context'
 import { ConfirmDialog } from './ConfirmDialog'
+
+function renderDialog(props: Parameters<typeof ConfirmDialog>[0]) {
+  return render(
+    <LanguageProvider>
+      <ConfirmDialog {...props} />
+    </LanguageProvider>,
+  )
+}
 
 const EXTERNAL_ITEM = {
   id: 7,
@@ -27,7 +36,7 @@ const INTERNAL_ITEM = {
 } as never
 
 test('renders Vietnamese title + summary + keeps raw JSON in details', () => {
-  render(<ConfirmDialog item={INTERNAL_ITEM} busy={false} onApprove={vi.fn()} onCancel={vi.fn()} />)
+  renderDialog({ item: INTERNAL_ITEM, busy: false, onApprove: vi.fn(), onCancel: vi.fn() })
   expect(screen.getByText('Duyệt việc #3')).toBeInTheDocument()
   expect(screen.getByText(/Tạo ticket Jira 'Fix bug' trong dự án SCRUM/)).toBeInTheDocument()
   expect(screen.getByText('Chi tiết kỹ thuật')).toBeInTheDocument()
@@ -38,14 +47,14 @@ test('renders Vietnamese title + summary + keeps raw JSON in details', () => {
 })
 
 test('external action surfaces a prominent warning outside the details', () => {
-  render(<ConfirmDialog item={EXTERNAL_ITEM} busy={false} onApprove={vi.fn()} onCancel={vi.fn()} />)
+  renderDialog({ item: EXTERNAL_ITEM, busy: false, onApprove: vi.fn(), onCancel: vi.fn() })
   expect(screen.getByText(/Đăng tin RA NGOÀI, tới kênh Slack C999/)).toBeInTheDocument()
   expect(screen.getByText(/gửi thông tin RA NGOÀI công ty/)).toBeInTheDocument()
 })
 
 test('modal a11y: aria-modal and Esc closes', () => {
   const onCancel = vi.fn()
-  render(<ConfirmDialog item={INTERNAL_ITEM} busy={false} onApprove={vi.fn()} onCancel={onCancel} />)
+  renderDialog({ item: INTERNAL_ITEM, busy: false, onApprove: vi.fn(), onCancel })
   const dialog = screen.getByRole('dialog')
   expect(dialog).toHaveAttribute('aria-modal', 'true')
   fireEvent.keyDown(window, { key: 'Escape' })
@@ -54,7 +63,7 @@ test('modal a11y: aria-modal and Esc closes', () => {
 
 test('busy disables the buttons and Esc does not close mid-action', () => {
   const onCancel = vi.fn()
-  render(<ConfirmDialog item={INTERNAL_ITEM} busy={true} onApprove={vi.fn()} onCancel={onCancel} />)
+  renderDialog({ item: INTERNAL_ITEM, busy: true, onApprove: vi.fn(), onCancel })
   expect(screen.getByText('Đang thực hiện…')).toBeInTheDocument()
   fireEvent.keyDown(window, { key: 'Escape' })
   expect(onCancel).not.toHaveBeenCalled()

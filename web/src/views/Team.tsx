@@ -339,7 +339,7 @@ export function Team() {
                   </td>
                   <td data-label={t('team.colLastRun')}>
                     {a.last_run
-                      ? `${labelFor(KIND_LABEL, a.last_run.kind)} · ${labelFor(RUN_STATUS_LABEL, a.last_run.status)}`
+                      ? `${labelFor(KIND_LABEL, a.last_run.kind, t)} · ${labelFor(RUN_STATUS_LABEL, a.last_run.status, t)}`
                       : t('team.neverRun')}
                   </td>
                   <td data-label={t('team.colBudget')}>

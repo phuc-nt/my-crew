@@ -2,14 +2,16 @@
 // The global agent picker was removed from the top nav, but these views still query one
 // selected agent — so the picker rides here, only on the pages that actually need it.
 import { Link, Outlet } from 'react-router'
+import { useLanguage } from '../i18n/language-context'
 import { AgentPicker } from './AgentPicker'
 
 export function AdvancedAgentView() {
+  const { t } = useLanguage()
   return (
     <div className="advanced-agent-view">
       <div className="advanced-bar">
         <Link to="/settings" className="muted">
-          ← Cài đặt
+          {t('advancedAgentView.backToSettings')}
         </Link>
         <AgentPicker />
       </div>

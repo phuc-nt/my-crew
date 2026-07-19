@@ -1,6 +1,7 @@
 // Setup wizard's company step: name + optional coordinator select, written via
 // POST /api/company. Split out of Setup.tsx to keep that file under the project's
 // modularization guideline — this is pure presentation, all state/fetch stays in Setup.tsx.
+import { useLanguage } from '../i18n/language-context'
 import type { AgentSummary } from '../types'
 
 export function SetupCompanyStep({
@@ -24,18 +25,23 @@ export function SetupCompanyStep({
   onBack: () => void
   onNext: () => void
 }) {
+  const { t } = useLanguage()
   return (
     <>
-      <h1>Công ty</h1>
-      <p className="setup-hint">Đặt tên công ty và chọn trưởng phòng điều phối (không bắt buộc).</p>
+      <h1>{t('setupCompany.title')}</h1>
+      <p className="setup-hint">{t('setupCompany.hint')}</p>
       <label>
-        Tên công ty
-        <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Acme JSC" />
+        {t('setupCompany.nameLabel')}
+        <input
+          value={companyName}
+          onChange={(e) => setCompanyName(e.target.value)}
+          placeholder={t('setupCompany.namePlaceholder')}
+        />
       </label>
       <label>
-        Trưởng phòng điều phối (không bắt buộc)
+        {t('setupCompany.coordinatorLabel')}
         <select value={coordinatorId} onChange={(e) => setCoordinatorId(e.target.value)}>
-          <option value="">(chưa chọn)</option>
+          <option value="">{t('setupCompany.coordinatorNone')}</option>
           {agents.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name} ({a.id})
@@ -47,10 +53,10 @@ export function SetupCompanyStep({
       <div className="setup-actions">
         {/* v53: styled by container element selector (.setup-actions button) — unify in a later pass */}
         <button type="button" disabled={busy} onClick={onBack}>
-          Quay lại
+          {t('setupCompany.back')}
         </button>
         <button type="button" className="setup-primary" disabled={busy} onClick={onNext}>
-          Tiếp tục
+          {t('setupCompany.continue')}
         </button>
       </div>
     </>

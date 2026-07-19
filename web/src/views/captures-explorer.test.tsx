@@ -19,7 +19,13 @@ const ROW: CaptureRow = {
 
 test('captures table renders rows with engine/cost-source and expands detail on click', async () => {
   vi.spyOn(api, 'getCaptures').mockResolvedValue({ captures: [ROW] })
-  render(<MemoryRouter><Captures /></MemoryRouter>)
+  render(
+    <MemoryRouter>
+      <LanguageProvider>
+        <Captures />
+      </LanguageProvider>
+    </MemoryRouter>,
+  )
   await waitFor(() => expect(screen.getByText('deep_agent')).toBeTruthy())
   expect(screen.getByText('$0.1234 (exact)')).toBeTruthy()
   expect(screen.getByText('900→120')).toBeTruthy()
@@ -31,7 +37,9 @@ test('captures passes the task_id filter from the URL through to the API', async
   const spy = vi.spyOn(api, 'getCaptures').mockResolvedValue({ captures: [] })
   render(
     <MemoryRouter initialEntries={['/captures?task_id=t9']}>
-      <Captures />
+      <LanguageProvider>
+        <Captures />
+      </LanguageProvider>
     </MemoryRouter>,
   )
   await waitFor(() =>

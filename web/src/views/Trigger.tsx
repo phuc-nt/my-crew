@@ -9,6 +9,7 @@ import { api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { PageHeader } from '../components/ui/page-header'
 import { useSse } from '../hooks/use-sse'
+import { useLanguage } from '../i18n/language-context'
 import { AUDIENCE_LABEL, KIND_LABEL, labelFor } from '../labels'
 
 const AUDIENCES = ['internal', 'external']
@@ -16,6 +17,7 @@ const AUDIENCES = ['internal', 'external']
 const FALLBACK_KINDS = ['daily', 'weekly', 'okr', 'resource']
 
 export function Trigger() {
+  const { t } = useLanguage()
   const { selected, agents } = useAgent()
   const kinds = useMemo(() => {
     const a = agents.find((x) => x.id === selected)
@@ -45,60 +47,66 @@ export function Trigger() {
       const res = await api.triggerRun(selected, { kind, audience, dry_run: dryRun })
       setRunId(res.run_id)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'chạy thất bại')
+      setError(e instanceof Error ? e.message : t('trigger.runFailed'))
     } finally {
       setBusy(false)
     }
-  }, [selected, kind, audience, dryRun])
+  }, [selected, kind, audience, dryRun, t])
 
   return (
     <section>
-      <PageHeader title="Chạy báo cáo thủ công" />
+      <PageHeader title={t('trigger.title')} />
       <div className="trigger-form">
         <label>
-          Loại:{' '}
+          {t('trigger.kindLabel')}{' '}
           <select value={kind} onChange={(e) => setKind(e.target.value)}>
             {kinds.map((k) => (
               <option key={k} value={k}>
-                {labelFor(KIND_LABEL, k)}
+                {labelFor(KIND_LABEL, k, t)}
               </option>
             ))}
           </select>
         </label>{' '}
         <label>
-          Đối tượng:{' '}
+          {t('trigger.audienceLabel')}{' '}
           <select value={audience} onChange={(e) => setAudience(e.target.value)}>
             {AUDIENCES.map((a) => (
               <option key={a} value={a}>
-                {labelFor(AUDIENCE_LABEL, a)}
+                {labelFor(AUDIENCE_LABEL, a, t)}
               </option>
             ))}
           </select>
         </label>{' '}
         <label>
           <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />{' '}
-          chạy thử (dry-run)
+          {t('trigger.dryRun')}
         </label>{' '}
         <Button variant="ghost" disabled={busy || !selected} onClick={start}>
-          {busy ? 'Đang chạy…' : 'Chạy'}
+          {busy ? t('trigger.running') : t('trigger.run')}
         </Button>
       </div>
-      {error && <p className="error">Lỗi: {error}</p>}
+      {error && <p className="error">{t('trigger.errorPrefix', { message: error })}</p>}
       {runId && (
         <div className="run-stream">
           <h3>
-            Lần chạy {runId}{' '}
-            {errored ? '(mất kết nối)' : done ? '(xong)' : '(đang chạy…)'}
+            {t('trigger.runTitle', {
+              runId,
+              status: errored
+                ? t('trigger.statusDisconnected')
+                : done
+                  ? t('trigger.statusDone')
+                  : t('trigger.statusRunning'),
+            })}
           </h3>
           {errored && (
-            <p className="error">Mất kết nối luồng theo dõi — lần chạy có thể vẫn tiếp tục ở nền.</p>
+            <p className="error">{t('trigger.streamDisconnected')}</p>
           )}
           <ul>
             {events.map((ev, i) => (
               <li key={i}>
                 {ev.event === 'node'
                   ? `${ev.node}: ${JSON.stringify(ev.data)}`
-                  : `kết thúc · ${ev.status} ${JSON.stringify(ev.data)}`}
+                  : `${t('trigger.eventDone')} · ${ev.status} ${JSON.stringify(ev.data)}`}
               </li>
             ))}
           </ul>

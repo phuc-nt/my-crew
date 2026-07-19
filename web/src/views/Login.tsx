@@ -22,7 +22,7 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
         await api.login(username, password)
         onLoggedIn()
       } catch (err: unknown) {
-        setError(err instanceof ApiError ? err.message : 'đăng nhập thất bại')
+        setError(err instanceof ApiError ? err.message : t('login.failed'))
       } finally {
         setBusy(false)
       }
@@ -37,7 +37,7 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
       <form className="card login-box" onSubmit={submit}>
         <h1>{t('login.submit')}</h1>
         <label>
-          Tên đăng nhập
+          {t('login.username')}
           <input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
         </label>
         <label>

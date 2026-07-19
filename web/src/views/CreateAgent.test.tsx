@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api, ApiError } from '../api/client'
+import { LanguageProvider } from '../i18n/language-context'
 import { CreateAgent } from './CreateAgent'
 
 const PM_PACK = {
@@ -28,7 +29,11 @@ beforeEach(() => {
 })
 
 function wrap(ui: React.ReactElement) {
-  return render(<MemoryRouter>{ui}</MemoryRouter>)
+  return render(
+    <MemoryRouter>
+      <LanguageProvider>{ui}</LanguageProvider>
+    </MemoryRouter>,
+  )
 }
 
 // Step 0 is the optional staff-template picker — these tests exercise the manual path,

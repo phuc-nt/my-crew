@@ -8,9 +8,11 @@ import { api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
 import { PageHeader } from '../components/ui/page-header'
+import { useLanguage } from '../i18n/language-context'
 import type { ConnectionCard } from '../types'
 
 function CardForm({ card, onSaved }: { card: ConnectionCard; onSaved: () => void }) {
+  const { t } = useLanguage()
   const [values, setValues] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -31,7 +33,7 @@ function CardForm({ card, onSaved }: { card: ConnectionCard; onSaved: () => void
         setSavedAt(Date.now())
         onSaved()
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'lưu thất bại'))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('connections.saveFailed')))
       .finally(() => setBusy(false))
   }
 
@@ -43,13 +45,13 @@ function CardForm({ card, onSaved }: { card: ConnectionCard; onSaved: () => void
           <span className="connection-key-name">
             {k.name}
             <span className={k.set ? 'key-set' : 'key-unset'}>
-              {k.set ? ' đã đặt' : ' chưa đặt'}
+              {k.set ? t('connections.set') : t('connections.unset')}
             </span>
           </span>
           <input
             type="password"
             autoComplete="off"
-            placeholder={k.set ? 'đã đặt — nhập để thay' : 'chưa đặt — nhập giá trị'}
+            placeholder={k.set ? t('connections.placeholderSet') : t('connections.placeholderUnset')}
             value={values[k.name] ?? ''}
             onChange={(e) => setValues((v) => ({ ...v, [k.name]: e.target.value }))}
           />
@@ -57,9 +59,9 @@ function CardForm({ card, onSaved }: { card: ConnectionCard; onSaved: () => void
       ))}
       <div className="connection-form-actions">
         <Button variant="ghost" disabled={!dirty || busy} onClick={save}>
-          {busy ? 'Đang lưu…' : 'Lưu'}
+          {busy ? t('connections.saving') : t('connections.save')}
         </Button>
-        {savedAt > 0 && !dirty && <span className="muted">Đã lưu.</span>}
+        {savedAt > 0 && !dirty && <span className="muted">{t('connections.saved')}</span>}
         {error && <span className="error">{error}</span>}
       </div>
     </div>
@@ -67,6 +69,7 @@ function CardForm({ card, onSaved }: { card: ConnectionCard; onSaved: () => void
 }
 
 export function Connections() {
+  const { t } = useLanguage()
   const [cards, setCards] = useState<ConnectionCard[]>([])
   const [needsRestart, setNeedsRestart] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -83,10 +86,9 @@ export function Connections() {
         setCards(res.cards)
         setNeedsRestart(res.needs_restart)
       })
-      .catch((e: unknown) =>
-        setError(e instanceof Error ? e.message : 'không tải được danh sách kết nối'),
-      )
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('connections.loadFailed')))
       .finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -94,37 +96,32 @@ export function Connections() {
   }, [load])
 
   const restart = () => {
-    if (!window.confirm('Khởi động lại máy chủ? Nhân sự đang chạy dở sẽ bị ngắt.')) return
+    if (!window.confirm(t('connections.restartConfirm'))) return
     setRestarting(true)
     setRestartMsg(null)
     api
       .restartService()
       .then((res) => setRestartMsg(res.message))
-      .catch((e: unknown) =>
-        setRestartMsg(e instanceof Error ? e.message : 'không gọi được khởi động lại'),
-      )
+      .catch((e: unknown) => setRestartMsg(e instanceof Error ? e.message : t('connections.restartCallFailed')))
       .finally(() => setRestarting(false))
   }
 
   return (
     <section className="connections-page">
-      <PageHeader title="Kết nối" />
-      <p className="muted">
-        Trạng thái và khoá API của các dịch vụ công ty dùng. Giá trị đã lưu không bao giờ
-        hiển thị lại — chỉ báo "đã đặt / chưa đặt".
-      </p>
+      <PageHeader title={t('connections.title')} />
+      <p className="muted">{t('connections.intro')}</p>
 
       {needsRestart && (
         <div className="connection-restart-banner" role="status">
-          <span>Đã lưu khoá mới — cần khởi động lại máy chủ để áp dụng.</span>
+          <span>{t('connections.restartBannerText')}</span>
           <Button variant="ghost" disabled={restarting} onClick={restart}>
-            {restarting ? 'Đang gửi…' : 'Khởi động lại'}
+            {restarting ? t('connections.restarting') : t('connections.restart')}
           </Button>
         </div>
       )}
       {restartMsg && <p className="muted">{restartMsg}</p>}
 
-      {loading && <p className="muted">Đang kiểm tra kết nối…</p>}
+      {loading && <p className="muted">{t('connections.checking')}</p>}
       {error && <p className="error">{error}</p>}
 
       <div className="connection-grid">

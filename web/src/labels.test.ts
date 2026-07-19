@@ -1,6 +1,10 @@
 // v9 P1: label maps + formatters. The critical invariant is that a missing/undefined key
 // NEVER renders blank (a run event can carry an undefined kind/status).
+// v53: labelFor() takes an optional `t` (language-aware translate fn); with no `t` it
+// falls back to DICT.vi. Assertions read DICT.vi directly (not hardcoded literals) so a
+// dictionary wording change can't silently desync from what the test expects.
 import { expect, test } from 'vitest'
+import { DICT } from './i18n/dictionary'
 import {
   KIND_LABEL,
   RUN_STATUS_LABEL,
@@ -9,15 +13,21 @@ import {
   labelFor,
 } from './labels'
 
-test('labelFor maps a known key', () => {
-  expect(labelFor(KIND_LABEL, 'daily')).toBe('Báo cáo hằng ngày')
-  expect(labelFor(RUN_STATUS_LABEL, 'delivered')).toBe('đã gửi')
+test('labelFor maps a known key (DICT.vi fallback, no t passed)', () => {
+  expect(labelFor(KIND_LABEL, 'daily')).toBe(DICT.vi['labels.kind.daily'])
+  expect(labelFor(RUN_STATUS_LABEL, 'delivered')).toBe(DICT.vi['labels.runStatus.delivered'])
 })
 
-test('labelFor returns "—" for undefined/null/empty, never blank', () => {
-  expect(labelFor(KIND_LABEL, undefined)).toBe('—')
-  expect(labelFor(KIND_LABEL, null)).toBe('—')
-  expect(labelFor(KIND_LABEL, '')).toBe('—')
+test('labelFor maps a known key via an explicit t (English)', () => {
+  const t = (key: keyof typeof DICT.en) => DICT.en[key]
+  expect(labelFor(KIND_LABEL, 'daily', t)).toBe(DICT.en['labels.kind.daily'])
+  expect(labelFor(RUN_STATUS_LABEL, 'delivered', t)).toBe(DICT.en['labels.runStatus.delivered'])
+})
+
+test('labelFor returns the missing-marker for undefined/null/empty, never blank', () => {
+  expect(labelFor(KIND_LABEL, undefined)).toBe(DICT.vi['labels.missing'])
+  expect(labelFor(KIND_LABEL, null)).toBe(DICT.vi['labels.missing'])
+  expect(labelFor(KIND_LABEL, '')).toBe(DICT.vi['labels.missing'])
 })
 
 test('labelFor shows an unknown-but-present key raw rather than hiding it', () => {

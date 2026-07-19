@@ -4,10 +4,9 @@
 // unit-testable in plain vitest. PHASE_LABEL is re-used from the 3D bubble (same
 // closed-set backend vocabulary, one source of truth).
 //
-// v53 i18n: both KIND_LABEL and messageLine take an optional `t` (useLanguage()'s
-// translate fn). Callers with language-context access (activity-feed.tsx) pass it;
-// callers without it (OfficeRoom.tsx/Timeline tab — out of scope this batch) omit it and
-// get the vi-default text via DICT.vi, same fallback pattern as agent-desk.tsx.
+// v53 i18n: both kindLabel and messageLine take an optional `t` (useLanguage()'s
+// translate fn), defaulting to DICT.vi (same fallback pattern as agent-desk.tsx) for any
+// caller without language-context access.
 import { DICT } from '../../i18n/dictionary'
 import type { UiKey } from '../../i18n/dictionary'
 import type { OfficeEventKind, OfficeMessage } from '../../types'
@@ -34,11 +33,6 @@ const KIND_LABEL_KEY: Record<OfficeEventKind, UiKey> = {
 export function kindLabel(kind: OfficeEventKind, t: Translate = defaultT): string {
   return t(KIND_LABEL_KEY[kind])
 }
-
-// Kept for existing callers that read a plain map (vi-default only) — OfficeRoom.tsx.
-export const KIND_LABEL: Record<OfficeEventKind, string> = Object.fromEntries(
-  (Object.keys(KIND_LABEL_KEY) as OfficeEventKind[]).map((k) => [k, defaultT(KIND_LABEL_KEY[k])]),
-) as Record<OfficeEventKind, string>
 
 export function messageLine(m: OfficeMessage, t: Translate = defaultT): string {
   const b = m.body

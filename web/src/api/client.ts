@@ -1,6 +1,14 @@
 // The single fetch surface for the SPA. Every view imports these — no view calls fetch
 // directly. Centralizes the base URL, JSON parsing, and error mapping. The base is relative
 // (''), so requests hit the same origin whether served by FastAPI static or the vite dev proxy.
+//
+// v53 i18n: friendlyError()/request()/mutate() sit below any component/hook context (no `t`
+// to thread through ~60 API call sites), so they read the language directly from localStorage
+// (same key/fallback as language-context.tsx's readStored()) and look up DICT[lang] — this
+// keeps friendlyError/auth messages consistent with whatever the user has picked, without a
+// React dependency at this layer.
+import { DICT } from '../i18n/dictionary'
+import type { Language } from '../i18n/dictionary'
 import type {
   AssignPreviewPayload,
   AssignStaffPayload,
@@ -74,17 +82,28 @@ export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn
 }
 
-// v9 P1: map an HTTP status to a friendly Vietnamese line for a low-tech CEO, instead of the
-// raw "500 Internal Server Error for /api/…". A backend-provided `detail` is appended small.
+// Same storage key/fallback as language-context.tsx's readStored() — this module has no
+// React context, so it reads the persisted preference directly.
+function currentLang(): Language {
+  try {
+    return localStorage.getItem('ui-lang') === 'en' ? 'en' : 'vi'
+  } catch {
+    return 'vi'
+  }
+}
+
+// v9 P1: map an HTTP status to a friendly line for a low-tech CEO, instead of the raw
+// "500 Internal Server Error for /api/…". A backend-provided `detail` is appended small.
 function friendlyError(status: number, detail?: string): string {
+  const dict = DICT[currentLang()]
   const base =
     status >= 500
-      ? 'Máy chủ đang gặp lỗi, thử lại sau.'
+      ? dict['api.friendlyServerError']
       : status === 404
-        ? 'Không tìm thấy dữ liệu.'
+        ? dict['api.friendlyNotFound']
         : status === 403
-          ? 'Bạn không có quyền làm việc này.'
-          : `Có lỗi (${status}).`
+          ? dict['api.friendlyForbidden']
+          : dict['api.friendlyGeneric'].replaceAll('{status}', String(status))
   return detail && detail !== `${status}` ? `${base} (${detail})` : base
 }
 
@@ -92,7 +111,7 @@ async function request<T>(path: string): Promise<T> {
   const res = await fetch(path, { headers: { Accept: 'application/json' } })
   if (res.status === 401) {
     onUnauthorized?.()
-    throw new ApiError(401, 'chưa đăng nhập')
+    throw new ApiError(401, DICT[currentLang()]['api.notLoggedIn'])
   }
   if (!res.ok) {
     throw new ApiError(res.status, friendlyError(res.status))
@@ -120,7 +139,7 @@ async function mutate<T>(
   })
   if (res.status === 401 && path !== '/api/login') {
     onUnauthorized?.()
-    throw new ApiError(401, 'chưa đăng nhập')
+    throw new ApiError(401, DICT[currentLang()]['api.notLoggedIn'])
   }
   if (!res.ok) {
     // Prefer the backend's exact detail (e.g. a config-validation message the CEO should see),

@@ -1,6 +1,7 @@
 // Wizard Step 4: binding fields per selected pack's servers. All optional except the
 // client-side hint that stakeholder_channel should be included in external_channels
 // (backend enforces this for real — see agent_create.py's stakeholder cross-check).
+import { useLanguage } from '../i18n/language-context'
 import type { WizardState } from './use-create-agent-wizard'
 
 export function BindingsStep({
@@ -12,16 +13,17 @@ export function BindingsStep({
   update: <K extends keyof WizardState>(key: K, value: WizardState[K]) => void
   stakeholderChannelMissing: boolean
 }) {
+  const { t } = useLanguage()
   const servers = new Set(state.pack?.servers ?? [])
 
   return (
     <section>
-      <h3>Bước 4: Kết nối (không bắt buộc)</h3>
+      <h3>{t('bindingsStep.title')}</h3>
       {servers.has('jira') && (
         <fieldset>
           <legend>Jira</legend>
           <label>
-            Mã dự án (project key):{' '}
+            {t('bindingsStep.jiraProjectKey')}{' '}
             <input value={state.jiraProjectKey} onChange={(e) => update('jiraProjectKey', e.target.value)} />
           </label>
         </fieldset>
@@ -30,21 +32,21 @@ export function BindingsStep({
         <fieldset>
           <legend>Confluence</legend>
           <label>
-            Mã space:{' '}
+            {t('bindingsStep.confluenceSpaceKey')}{' '}
             <input
               value={state.confluenceSpaceKey}
               onChange={(e) => update('confluenceSpaceKey', e.target.value)}
             />
           </label>{' '}
           <label>
-            ID space:{' '}
+            {t('bindingsStep.confluenceSpaceId')}{' '}
             <input
               value={state.confluenceSpaceId}
               onChange={(e) => update('confluenceSpaceId', e.target.value)}
             />
           </label>{' '}
           <label>
-            ID trang OKR:{' '}
+            {t('bindingsStep.confluenceOkrPageId')}{' '}
             <input
               value={state.confluenceOkrPageId}
               onChange={(e) => update('confluenceOkrPageId', e.target.value)}
@@ -56,7 +58,7 @@ export function BindingsStep({
         <fieldset>
           <legend>GitHub</legend>
           <label>
-            Repo (owner/name):{' '}
+            {t('bindingsStep.githubRepo')}{' '}
             <input value={state.githubRepo} onChange={(e) => update('githubRepo', e.target.value)} />
           </label>
         </fieldset>
@@ -65,35 +67,31 @@ export function BindingsStep({
         <fieldset>
           <legend>Slack</legend>
           <label>
-            Kênh báo cáo:{' '}
+            {t('bindingsStep.slackReportChannel')}{' '}
             <input
               value={state.slackReportChannel}
               onChange={(e) => update('slackReportChannel', e.target.value)}
             />
           </label>{' '}
           <label>
-            Kênh cho khách/sếp:{' '}
+            {t('bindingsStep.slackStakeholderChannel')}{' '}
             <input
               value={state.slackStakeholderChannel}
               onChange={(e) => update('slackStakeholderChannel', e.target.value)}
             />
           </label>{' '}
           <label>
-            Kênh bên ngoài (cách nhau dấu phẩy):{' '}
+            {t('bindingsStep.slackExternalChannels')}{' '}
             <input
               value={state.slackExternalChannels}
               onChange={(e) => update('slackExternalChannels', e.target.value)}
               placeholder="C123,C456"
             />
           </label>
-          {stakeholderChannelMissing && (
-            <p className="muted">
-              Gợi ý: kênh khách/sếp thường cũng nằm trong danh sách kênh bên ngoài
-            </p>
-          )}
+          {stakeholderChannelMissing && <p className="muted">{t('bindingsStep.stakeholderMissingHint')}</p>}
         </fieldset>
       )}
-      {servers.size === 0 && <p className="muted">Loại nhân sự này không cần kết nối ghi.</p>}
+      {servers.size === 0 && <p className="muted">{t('bindingsStep.noBindingsNeeded')}</p>}
     </section>
   )
 }

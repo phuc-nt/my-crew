@@ -1,11 +1,13 @@
 // Remembered facts list (internal-only payload from /api/memory). Shows a clear notice
 // when there are no facts rather than fabricating any.
+import { useLanguage } from '../i18n/language-context'
 import type { Fact } from '../types'
 
 export function FactsList({ facts }: { facts: Fact[] }) {
+  const { t } = useLanguage()
   if (facts.length === 0) {
     return (
-      <p className="muted">Chưa ghi nhớ điều gì (chỉ nội bộ; trống khi tiến trình vừa khởi động).</p>
+      <p className="muted">{t('factsList.empty')}</p>
     )
   }
   return (

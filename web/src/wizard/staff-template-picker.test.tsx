@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { LanguageProvider } from '../i18n/language-context'
 import { StaffTemplatePicker } from './staff-template-picker'
 
 const PM_PACK = { id: 'pm', name: 'Project Management', report_kinds: ['daily', 'weekly'], servers: ['jira'] }
@@ -37,7 +38,9 @@ const CREW = {
 function renderPicker(onApply = vi.fn(), onSkip = vi.fn()) {
   return render(
     <MemoryRouter>
-      <StaffTemplatePicker onApply={onApply} onSkip={onSkip} />
+      <LanguageProvider>
+        <StaffTemplatePicker onApply={onApply} onSkip={onSkip} />
+      </LanguageProvider>
     </MemoryRouter>,
   )
 }

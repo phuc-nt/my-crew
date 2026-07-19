@@ -3,28 +3,31 @@
 // AgentPage.tsx to keep that view focused; the tab is self-contained (own state + api calls).
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from '../api/client'
+import type { UiKey } from '../i18n/dictionary'
+import { useLanguage } from '../i18n/language-context'
 import type { KnowledgePayload, SkillsPayload } from '../types'
 
 // Form field labels MIRROR src/agent/knowledge_template.py — same keys, same order. The
 // backend owns the markdown shape; the UI only collects the values keyed by these names.
-const KNOWLEDGE_FIELDS: Record<'soul' | 'project', { key: string; label: string; big: boolean }[]> = {
+const KNOWLEDGE_FIELDS: Record<'soul' | 'project', { key: string; labelKey: UiKey; big: boolean }[]> = {
   soul: [
-    { key: 'role', label: 'Vai trò của agent (1 câu)', big: false },
-    { key: 'tone', label: 'Giọng điệu khi trả lời', big: false },
-    { key: 'rules', label: 'Quy tắc riêng (mỗi dòng một ý)', big: true },
+    { key: 'role', labelKey: 'agentKnowledge.soulRole', big: false },
+    { key: 'tone', labelKey: 'agentKnowledge.soulTone', big: false },
+    { key: 'rules', labelKey: 'agentKnowledge.soulRules', big: true },
   ],
   project: [
-    { key: 'team', label: 'Thành viên đội + vai trò', big: true },
-    { key: 'conventions', label: 'Quy ước (nhãn, quy trình…)', big: true },
-    { key: 'notes', label: 'Ghi chú khác', big: true },
+    { key: 'team', labelKey: 'agentKnowledge.projectTeam', big: true },
+    { key: 'conventions', labelKey: 'agentKnowledge.projectConventions', big: true },
+    { key: 'notes', labelKey: 'agentKnowledge.projectNotes', big: true },
   ],
 }
 
 export function KnowledgeTab({ id }: { id: string }) {
+  const { t } = useLanguage()
   return (
     <div className="knowledge-tab">
-      <KnowledgeDoc id={id} doc="soul" title="Tính cách (SOUL)" />
-      <KnowledgeDoc id={id} doc="project" title="Bối cảnh dự án (PROJECT)" />
+      <KnowledgeDoc id={id} doc="soul" title={t('agentKnowledge.soulTitle')} />
+      <KnowledgeDoc id={id} doc="project" title={t('agentKnowledge.projectTitle')} />
       <SkillsPicker id={id} />
       <CompanyDocsPicker id={id} />
     </div>
@@ -34,6 +37,7 @@ export function KnowledgeTab({ id }: { id: string }) {
 // v7 M19: tick which company-library docs THIS agent reads. Writes the profile's
 // `company_docs:` list; the ticked docs inject into the agent's internal prompt.
 function CompanyDocsPicker({ id }: { id: string }) {
+  const { t } = useLanguage()
   const [docs, setDocs] = useState<{ slug: string; title: string; selected: boolean }[] | null>(
     null,
   )
@@ -51,8 +55,8 @@ function CompanyDocsPicker({ id }: { id: string }) {
         setChosen(new Set(d.docs.filter((x) => x.selected).map((x) => x.slug)))
         setDirty(false)
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'lỗi'))
-  }, [id])
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('agentKnowledge.docLoadFailed')))
+  }, [id, t])
 
   const toggle = (slug: string) => {
     setDirty(true)
@@ -74,22 +78,20 @@ function CompanyDocsPicker({ id }: { id: string }) {
       setSaved(true)
       setDirty(false)
     } catch (e: unknown) {
-      setError(e instanceof ApiError ? e.message : 'lưu thất bại')
+      setError(e instanceof ApiError ? e.message : t('agentKnowledge.saveDocsFailed'))
     } finally {
       setBusy(false)
     }
-  }, [id, chosen])
+  }, [id, chosen, t])
 
-  if (error) return <p className="error">Lỗi tài liệu: {error}</p>
-  if (!docs) return <p>Đang tải tài liệu…</p>
+  if (error) return <p className="error">{t('agentKnowledge.docErrorPrefix', { message: error })}</p>
+  if (!docs) return <p>{t('agentKnowledge.docLoading', { title: t('agentKnowledge.companyDocsTitle') })}</p>
 
   return (
     <section className="company-docs-picker">
-      <h3>Tài liệu công ty</h3>
+      <h3>{t('agentKnowledge.companyDocsTitle')}</h3>
       {docs.length === 0 ? (
-        <p className="muted">
-          Chưa có tài liệu nào trong kho. Thêm ở mục Tài liệu công ty (trong Đội) rồi tick cho agent tại đây.
-        </p>
+        <p className="muted">{t('agentKnowledge.companyDocsEmpty')}</p>
       ) : (
         <ul className="skills-list">
           {docs.map((d) => (
@@ -109,10 +111,10 @@ function CompanyDocsPicker({ id }: { id: string }) {
       <div className="agent-actions">
         {/* v53: styled by container element selector (.agent-actions button) — unify in a later pass */}
         <button type="button" disabled={busy} onClick={() => void save()}>
-          {busy ? 'Đang lưu…' : 'Lưu tài liệu'}
+          {busy ? t('agentKnowledge.savingDocs') : t('agentKnowledge.saveDocs')}
         </button>
-        {dirty && <span className="unsaved">● Chưa lưu</span>}
-        {saved && <span className="ok">✓ Đã lưu</span>}
+        {dirty && <span className="unsaved">{t('agentKnowledge.unsaved')}</span>}
+        {saved && <span className="ok">{t('agentKnowledge.saved')}</span>}
       </div>
     </section>
   )
@@ -122,6 +124,7 @@ function CompanyDocsPicker({ id }: { id: string }) {
 // the backend returns raw_mode — we then show the raw markdown textarea instead of guessing a
 // form (matches the backend contract; the form must never clobber prose it can't represent).
 function KnowledgeDoc({ id, doc, title }: { id: string; doc: 'soul' | 'project'; title: string }) {
+  const { t } = useLanguage()
   const [data, setData] = useState<KnowledgePayload | null>(null)
   const [fields, setFields] = useState<Record<string, string>>({})
   const [rawText, setRawText] = useState('')
@@ -139,8 +142,8 @@ function KnowledgeDoc({ id, doc, title }: { id: string; doc: 'soul' | 'project';
         setRawText(d.raw)
         setDirty(false)
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'lỗi'))
-  }, [id, doc])
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('agentKnowledge.docLoadFailed')))
+  }, [id, doc, t])
   useEffect(load, [load])
 
   const edit = () => {
@@ -159,23 +162,21 @@ function KnowledgeDoc({ id, doc, title }: { id: string; doc: 'soul' | 'project';
       setDirty(false)
       load() // re-read so raw_mode flips correctly if the edit changed the markers
     } catch (e: unknown) {
-      setError(e instanceof ApiError ? e.message : 'lưu thất bại')
+      setError(e instanceof ApiError ? e.message : t('agentKnowledge.docSaveFailed'))
     } finally {
       setBusy(false)
     }
-  }, [id, doc, data, fields, rawText, load])
+  }, [id, doc, data, fields, rawText, load, t])
 
-  if (error) return <p className="error">Lỗi: {error}</p>
-  if (!data) return <p>Đang tải {title}…</p>
+  if (error) return <p className="error">{t('agentKnowledge.docErrorPrefix', { message: error })}</p>
+  if (!data) return <p>{t('agentKnowledge.docLoading', { title })}</p>
 
   return (
     <section className="knowledge-doc">
       <h3>{title}</h3>
       {data.raw_mode ? (
         <>
-          <p className="muted">
-            File này đã được sửa tay (chế độ nâng cao) — chỉnh trực tiếp markdown bên dưới.
-          </p>
+          <p className="muted">{t('agentKnowledge.rawModeHint')}</p>
           <textarea
             rows={8}
             value={rawText}
@@ -188,7 +189,7 @@ function KnowledgeDoc({ id, doc, title }: { id: string; doc: 'soul' | 'project';
       ) : (
         KNOWLEDGE_FIELDS[doc].map((f) => (
           <label key={f.key}>
-            {f.label}
+            {t(f.labelKey)}
             {f.big ? (
               <textarea
                 rows={4}
@@ -212,16 +213,17 @@ function KnowledgeDoc({ id, doc, title }: { id: string; doc: 'soul' | 'project';
       )}
       <div className="agent-actions">
         <button type="button" disabled={busy} onClick={() => void save()}>
-          {busy ? 'Đang lưu…' : 'Lưu'}
+          {busy ? t('agentKnowledge.saving') : t('agentKnowledge.save')}
         </button>
-        {dirty && <span className="unsaved">● Chưa lưu</span>}
-        {saved && <span className="ok">✓ Đã lưu</span>}
+        {dirty && <span className="unsaved">{t('agentKnowledge.unsaved')}</span>}
+        {saved && <span className="ok">{t('agentKnowledge.saved')}</span>}
       </div>
     </section>
   )
 }
 
 function SkillsPicker({ id }: { id: string }) {
+  const { t } = useLanguage()
   const [data, setData] = useState<SkillsPayload | null>(null)
   const [chosen, setChosen] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -237,8 +239,8 @@ function SkillsPicker({ id }: { id: string }) {
         setChosen(new Set(d.skills.filter((s) => s.selected).map((s) => s.name)))
         setDirty(false)
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'lỗi'))
-  }, [id])
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('agentKnowledge.skillsLoadFailed')))
+  }, [id, t])
 
   const toggle = (name: string) => {
     setDirty(true)
@@ -260,20 +262,20 @@ function SkillsPicker({ id }: { id: string }) {
       setSaved(true)
       setDirty(false)
     } catch (e: unknown) {
-      setError(e instanceof ApiError ? e.message : 'lưu thất bại')
+      setError(e instanceof ApiError ? e.message : t('agentKnowledge.skillsSaveFailed'))
     } finally {
       setBusy(false)
     }
-  }, [id, chosen])
+  }, [id, chosen, t])
 
-  if (error) return <p className="error">Lỗi kỹ năng: {error}</p>
-  if (!data) return <p>Đang tải kỹ năng…</p>
+  if (error) return <p className="error">{t('agentKnowledge.skillsErrorPrefix', { message: error })}</p>
+  if (!data) return <p>{t('agentKnowledge.skillsLoading')}</p>
 
   return (
     <section className="skills-picker">
-      <h3>Kỹ năng</h3>
+      <h3>{t('agentKnowledge.skillsTitle')}</h3>
       {data.skills.length === 0 ? (
-        <p className="muted">Domain này chưa có kỹ năng nào.</p>
+        <p className="muted">{t('agentKnowledge.skillsEmpty')}</p>
       ) : (
         <ul className="skills-list">
           {data.skills.map((s) => (
@@ -292,10 +294,10 @@ function SkillsPicker({ id }: { id: string }) {
       )}
       <div className="agent-actions">
         <button type="button" disabled={busy} onClick={() => void save()}>
-          {busy ? 'Đang lưu…' : 'Lưu kỹ năng'}
+          {busy ? t('agentKnowledge.skillsSaving') : t('agentKnowledge.skillsSave')}
         </button>
-        {dirty && <span className="unsaved">● Chưa lưu</span>}
-        {saved && <span className="ok">✓ Đã lưu</span>}
+        {dirty && <span className="unsaved">{t('agentKnowledge.unsaved')}</span>}
+        {saved && <span className="ok">{t('agentKnowledge.saved')}</span>}
       </div>
     </section>
   )

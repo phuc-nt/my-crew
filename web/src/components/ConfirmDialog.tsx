@@ -5,6 +5,7 @@
 // a blank. Detail comes from the API, never constructed client-side. Modal: focus + Esc + scroll.
 import { useEffect, useRef } from 'react'
 import { summarizeAction } from '../action-summary'
+import { useLanguage } from '../i18n/language-context'
 import { Button } from './ui/button'
 import type { ApprovalItem } from '../types'
 
@@ -19,6 +20,7 @@ export function ConfirmDialog({
   onApprove: () => void
   onCancel: () => void
 }) {
+  const { t } = useLanguage()
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export function ConfirmDialog({
     return () => window.removeEventListener('keydown', onKey)
   }, [busy, onCancel])
 
-  const summary = summarizeAction(item.action, item.reason)
+  const summary = summarizeAction(item.action, item.reason, t)
 
   return (
     <div
@@ -41,27 +43,27 @@ export function ConfirmDialog({
       className="confirm-dialog"
       role="dialog"
       aria-modal="true"
-      aria-label={`Duyệt việc ${item.id}`}
+      aria-label={t('confirmDialog.ariaLabel', { id: item.id })}
       tabIndex={-1}
     >
-      <h3>Duyệt việc #{item.id}</h3>
-      <p>Duyệt để agent thực hiện hành động này thật:</p>
+      <h3>{t('confirmDialog.title', { id: item.id })}</h3>
+      <p>{t('confirmDialog.body')}</p>
       <p className={summary.external ? 'confirm-summary confirm-external' : 'confirm-summary'}>
         {summary.text}
       </p>
       {summary.external && (
-        <p className="confirm-external-note">Hành động này gửi thông tin RA NGOÀI công ty.</p>
+        <p className="confirm-external-note">{t('confirmDialog.externalNote')}</p>
       )}
       <details className="action-detail-wrap">
-        <summary>Chi tiết kỹ thuật</summary>
+        <summary>{t('confirmDialog.techDetail')}</summary>
         <pre className="action-detail">{JSON.stringify(item.action, null, 2)}</pre>
       </details>
       <div className="confirm-actions">
         <Button variant="primary" disabled={busy} onClick={onApprove}>
-          {busy ? 'Đang thực hiện…' : 'Duyệt & thực hiện'}
+          {busy ? t('confirmDialog.processing') : t('confirmDialog.approve')}
         </Button>{' '}
         <Button variant="ghost" disabled={busy} onClick={onCancel}>
-          Huỷ
+          {t('confirmDialog.cancel')}
         </Button>
       </div>
     </div>

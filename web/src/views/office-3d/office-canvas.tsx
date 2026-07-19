@@ -80,7 +80,7 @@ export function OfficeCanvas({
         />
         <OfficeFloor dark={dark} />
         <OfficeProps />
-        <CoordinatorDesk dark={dark} />
+        <CoordinatorDesk dark={dark} t={t} />
         {visible.map((id, i) => {
           const desk = desks.get(id)
           if (!desk) return null

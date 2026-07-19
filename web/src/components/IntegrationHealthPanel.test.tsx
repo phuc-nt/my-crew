@@ -3,9 +3,18 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { LanguageProvider } from '../i18n/language-context'
 import { IntegrationHealthPanel } from './IntegrationHealthPanel'
 
 beforeEach(() => vi.restoreAllMocks())
+
+function renderPanel() {
+  return render(
+    <LanguageProvider>
+      <IntegrationHealthPanel />
+    </LanguageProvider>,
+  )
+}
 
 test('renders a failing check hint with a backtick command as <code>', async () => {
   vi.spyOn(api, 'getIntegrationHealth').mockResolvedValue({
@@ -15,7 +24,7 @@ test('renders a failing check hint with a backtick command as <code>', async () 
       { id: 'openrouter', label: 'OpenRouter (LLM)', ok: true, detail: 'set', hint: '' },
     ],
   })
-  render(<IntegrationHealthPanel />)
+  renderPanel()
   await waitFor(() => expect(screen.getByText('GitHub CLI')).toBeInTheDocument())
   // the command inside backticks becomes a code element with the exact command text
   const code = screen.getByText('gh auth login')
@@ -29,6 +38,6 @@ test('shows an all-ready summary when nothing fails', async () => {
     checked_at: 0,
     checks: [{ id: 'openrouter', label: 'OpenRouter (LLM)', ok: true, detail: 'set', hint: '' }],
   })
-  render(<IntegrationHealthPanel />)
+  renderPanel()
   await waitFor(() => expect(screen.getByText(/Tất cả kết nối đều sẵn sàng/)).toBeInTheDocument())
 })

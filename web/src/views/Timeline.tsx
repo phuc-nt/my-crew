@@ -5,16 +5,18 @@ import { RunList } from '../components/RunList'
 import { api } from '../api/client'
 import { PageHeader } from '../components/ui/page-header'
 import { useAgentData } from '../hooks/use-agent-data'
+import { useLanguage } from '../i18n/language-context'
 import type { RunsPayload } from '../types'
 
 export function Timeline() {
+  const { t } = useLanguage()
   const { data, loading, error } = useAgentData<RunsPayload>(api.getRuns)
-  if (loading) return <p>Đang tải…</p>
-  if (error) return <p className="error">Lỗi: {error}</p>
+  if (loading) return <p>{t('timeline.loading')}</p>
+  if (error) return <p className="error">{t('timeline.errorPrefix', { message: error })}</p>
   if (!data) return null
   return (
     <section>
-      <PageHeader title="Dòng thời gian hoạt động" />
+      <PageHeader title={t('timeline.title')} />
       <RunList runs={data.runs} />
     </section>
   )

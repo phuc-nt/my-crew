@@ -1,56 +1,72 @@
 // v9 P1 — shared i18n labels for CEO-facing views (DRY; extends the STATUS_LABEL pattern
 // from Tasks.tsx). Every lookup goes through labelFor() so a missing/undefined key renders a
 // safe "—" instead of blank (a run event can have kind/status undefined — Team uses `?? '?'`).
+//
+// v53 i18n: these are FE-static maps over backend enum values (the enum values themselves
+// — 'delivered', 'daily', etc — are wire vocabulary and never translate; only the human
+// label does). Each map is now `Record<string, UiKey>`; labelFor() takes an optional `t`
+// (useLanguage()'s translate fn) and falls back to DICT.vi when omitted, matching the
+// pattern in office-shared/office-message-line.ts.
+import { DICT } from './i18n/dictionary'
+import type { UiKey } from './i18n/dictionary'
+
+type Translate = (key: UiKey, params?: Record<string, string | number>) => string
 
 // Run-event status vocab (verify worker.py) — 5 terminal + a few pseudo-kind statuses.
-export const RUN_STATUS_LABEL: Record<string, string> = {
-  delivered: 'đã gửi',
-  not_delivered: 'chưa gửi',
-  error: 'lỗi',
-  load_error: 'lỗi cấu hình',
-  interrupted: 'chờ duyệt',
+export const RUN_STATUS_LABEL: Record<string, UiKey> = {
+  delivered: 'labels.runStatus.delivered',
+  not_delivered: 'labels.runStatus.notDelivered',
+  error: 'labels.runStatus.error',
+  load_error: 'labels.runStatus.loadError',
+  interrupted: 'labels.runStatus.interrupted',
   // pseudo-kinds (inbox/tasks/ops-alerts runners)
-  no_mentions: 'không có câu hỏi mới',
-  no_tasks: 'không có việc',
-  no_new_alerts: 'không có cảnh báo mới',
-  bootstrapped: 'đã khởi tạo',
-  writes_disabled: 'ghi bị tắt',
+  no_mentions: 'labels.runStatus.noMentions',
+  no_tasks: 'labels.runStatus.noTasks',
+  no_new_alerts: 'labels.runStatus.noNewAlerts',
+  bootstrapped: 'labels.runStatus.bootstrapped',
+  writes_disabled: 'labels.runStatus.writesDisabled',
 }
 
-export const KIND_LABEL: Record<string, string> = {
-  daily: 'Báo cáo hằng ngày',
-  weekly: 'Báo cáo tuần',
-  okr: 'Báo cáo OKR',
-  resource: 'Báo cáo nhân sự & chi phí',
-  inbox: 'Trả lời câu hỏi',
-  tasks: 'Việc đã giao',
-  'ops-alerts': 'Cảnh báo đội',
-  'project-rollup': 'Tổng quan dự án',
-  'cost-rollup': 'Chi phí toàn đội',
-  'guardrail-health': 'Sức khoẻ rào chắn',
-  'audit-digest': 'Nhật ký hoạt động',
+export const KIND_LABEL: Record<string, UiKey> = {
+  daily: 'labels.kind.daily',
+  weekly: 'labels.kind.weekly',
+  okr: 'labels.kind.okr',
+  resource: 'labels.kind.resource',
+  inbox: 'labels.kind.inbox',
+  tasks: 'labels.kind.tasks',
+  'ops-alerts': 'labels.kind.opsAlerts',
+  'project-rollup': 'labels.kind.projectRollup',
+  'cost-rollup': 'labels.kind.costRollup',
+  'guardrail-health': 'labels.kind.guardrailHealth',
+  'audit-digest': 'labels.kind.auditDigest',
 }
 
-export const VERDICT_LABEL: Record<string, string> = {
-  allow: 'đã chạy',
-  deny: 'bị chặn',
-  pending: 'chờ duyệt',
-  reject: 'đã từ chối',
-  dry_run: 'chạy thử',
-  skipped: 'bỏ qua',
+export const VERDICT_LABEL: Record<string, UiKey> = {
+  allow: 'labels.verdict.allow',
+  deny: 'labels.verdict.deny',
+  pending: 'labels.verdict.pending',
+  reject: 'labels.verdict.reject',
+  dry_run: 'labels.verdict.dryRun',
+  skipped: 'labels.verdict.skipped',
 }
 
 // Audience of a run/report (internal team vs external stakeholders). Used by the advanced
 // Trigger form + run tables (v10 M25).
-export const AUDIENCE_LABEL: Record<string, string> = {
-  internal: 'nội bộ',
-  external: 'đối ngoại',
+export const AUDIENCE_LABEL: Record<string, UiKey> = {
+  internal: 'labels.audience.internal',
+  external: 'labels.audience.external',
 }
 
 /** Look up a label; a missing/undefined key returns "—" (never a blank cell). */
-export function labelFor(map: Record<string, string>, key: string | undefined | null): string {
-  if (!key) return '—'
-  return map[key] ?? key // unknown-but-present key → show it raw rather than hide
+export function labelFor(
+  map: Record<string, UiKey>,
+  key: string | undefined | null,
+  t?: Translate,
+): string {
+  if (!key) return t ? t('labels.missing') : DICT.vi['labels.missing']
+  const dictKey = map[key]
+  if (!dictKey) return key // unknown-but-present key → show it raw rather than hide
+  return t ? t(dictKey) : DICT.vi[dictKey]
 }
 
 /** ISO datetime → "HH:mm dd/MM" in VN locale. Empty/invalid input → "". */

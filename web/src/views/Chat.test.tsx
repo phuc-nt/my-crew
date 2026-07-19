@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { LanguageProvider } from '../i18n/language-context'
 import { Chat } from './Chat'
 
 beforeEach(() => {
@@ -15,7 +16,9 @@ beforeEach(() => {
 function renderChat(initialPath = '/chat') {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <Chat />
+      <LanguageProvider>
+        <Chat />
+      </LanguageProvider>
     </MemoryRouter>,
   )
 }

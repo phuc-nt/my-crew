@@ -3,7 +3,16 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { LanguageProvider } from '../i18n/language-context'
 import { Setup } from './Setup'
+
+function renderSetup(onDone: () => void) {
+  return render(
+    <LanguageProvider>
+      <Setup onDone={onDone} />
+    </LanguageProvider>,
+  )
+}
 
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -33,7 +42,7 @@ test('renders the first group and can test the connection', async () => {
   const setupTest = vi
     .spyOn(api, 'setupTest')
     .mockResolvedValue({ group: 'openrouter', ok: true, detail: 'OK', hint: '' })
-  render(<Setup onDone={vi.fn()} />)
+  renderSetup(vi.fn())
   expect(screen.getByText('OpenRouter (bộ não LLM)')).toBeInTheDocument()
 
   fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-x' } })
@@ -50,7 +59,7 @@ test('advances through groups to the password step and finishes', async () => {
     message: 'restarting',
   })
   const onDone = vi.fn()
-  render(<Setup onDone={onDone} />)
+  renderSetup(onDone)
 
   // click "Tiếp tục" through the 4 groups + company step → password step
   await advanceThroughGroupsAndCompany()
@@ -64,7 +73,7 @@ test('advances through groups to the password step and finishes', async () => {
 
 test('short password blocks finish', async () => {
   const finish = vi.spyOn(api, 'setupFinish')
-  render(<Setup onDone={vi.fn()} />)
+  renderSetup(vi.fn())
   await advanceThroughGroupsAndCompany()
   await screen.findByText('Đặt mật khẩu đăng nhập')
   fireEvent.change(screen.getByLabelText(/Mật khẩu/), { target: { value: '12' } })
@@ -82,7 +91,7 @@ test('company step writes name + chosen coordinator via POST /api/company', asyn
     coordinator_id: 'default',
     team_task_cap_usd: 2.0,
   })
-  render(<Setup onDone={vi.fn()} />)
+  renderSetup(vi.fn())
 
   for (let i = 0; i < 5; i++) {
     fireEvent.click(screen.getByText('Tiếp tục'))

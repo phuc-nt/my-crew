@@ -8,13 +8,15 @@ import { api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { useOfficeStream } from '../hooks/use-office-stream'
+import { useLanguage } from '../i18n/language-context'
 // v15: line rendering shared with the unified office screen's activity feed — one
 // vocabulary, one place to extend (see office-shared/office-message-line.ts).
-import { KIND_LABEL, messageLine } from './office-shared/office-message-line'
+import { kindLabel, messageLine } from './office-shared/office-message-line'
 
 const OFFICE_ROOM_ID = 'office'
 
 export function OfficeRoom() {
+  const { t } = useLanguage()
   const [rooms, setRooms] = useState<string[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -24,8 +26,8 @@ export function OfficeRoom() {
     api
       .getOfficeRooms()
       .then((p) => setRooms(p.rooms))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'tải thất bại'))
-  }, [])
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('officeRoom.loadFailed')))
+  }, [t])
 
   useEffect(() => {
     loadRooms()
@@ -37,20 +39,17 @@ export function OfficeRoom() {
 
   return (
     <section className="office-room">
-      <h2>Văn phòng</h2>
-      <p className="ops-chat-hint">
-        Dòng thời gian hoạt động của cả đội: giao việc, phân công, tiến độ, bàn giao và các cột
-        mốc quan trọng.
-      </p>
-      {error && <p className="error">Lỗi: {error}</p>}
+      <h2>{t('officeRoom.title')}</h2>
+      <p className="ops-chat-hint">{t('officeRoom.hint')}</p>
+      {error && <p className="error">{t('officeRoom.errorPrefix', { message: error })}</p>}
       <div className="office-room-layout">
-        <nav className="office-room-picker" aria-label="Danh sách phòng">
+        <nav className="office-room-picker" aria-label={t('officeRoom.roomsAriaLabel')}>
           <Button
             variant="chip"
             className={activeRoom === OFFICE_ROOM_ID ? 'chip-active' : undefined}
             onClick={() => selectRoom(OFFICE_ROOM_ID)}
           >
-            Tổng quan
+            {t('officeRoom.overview')}
           </Button>
           {rooms
             ?.filter((r) => r !== OFFICE_ROOM_ID)
@@ -61,23 +60,25 @@ export function OfficeRoom() {
                 className={activeRoom === r ? 'chip-active' : undefined}
                 onClick={() => selectRoom(r)}
               >
-                Việc #{r}
+                {t('officeRoom.roomLabel', { room: r })}
               </Button>
             ))}
         </nav>
         <div className="office-room-timeline">
           <p className="office-room-status">
-            {errored ? 'Mất kết nối luồng — thử tải lại trang.' : connected ? 'Đang theo dõi trực tiếp' : 'Đang kết nối…'}
+            {errored
+              ? t('officeRoom.disconnected')
+              : connected
+                ? t('officeRoom.connected')
+                : t('officeRoom.connecting')}
           </p>
-          {messages.length === 0 && !errored && (
-            <EmptyState>Chưa có hoạt động nào trong phòng này.</EmptyState>
-          )}
+          {messages.length === 0 && !errored && <EmptyState>{t('officeRoom.empty')}</EmptyState>}
           <ul className="office-room-log">
             {messages.map((m) => (
               <li key={m.seq} className={`office-room-entry office-room-${m.kind}`}>
-                <span className="office-room-kind">{KIND_LABEL[m.kind] ?? m.kind}</span>
+                <span className="office-room-kind">{kindLabel(m.kind, t)}</span>
                 <span className="office-room-author">{m.author}</span>
-                <p className="office-room-text">{messageLine(m)}</p>
+                <p className="office-room-text">{messageLine(m, t)}</p>
               </li>
             ))}
           </ul>

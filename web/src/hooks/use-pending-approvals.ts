@@ -4,6 +4,7 @@
 // The badge uses just the count; the Work page uses the full items (agent id attached).
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { DICT } from '../i18n/dictionary'
 import type { ApprovalItem } from '../types'
 
 export interface AgentApproval extends ApprovalItem {
@@ -31,7 +32,7 @@ export function usePendingApprovals(pollMs = 30_000) {
       setItems(per.flat())
       setError(null)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'lỗi')
+      setError(e instanceof Error ? e.message : DICT.vi['usePendingApprovals.loadFailed'])
     } finally {
       setLoading(false)
     }

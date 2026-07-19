@@ -4,16 +4,18 @@
 // day-selection means "no schedule" (manual-only report kind) — the parent omits the
 // kind from the schedule map entirely in that case.
 import { useMemo, useState } from 'react'
+import type { UiKey } from '../i18n/dictionary'
+import { useLanguage } from '../i18n/language-context'
 import { formatCron } from '../labels'
 
-const DAYS: { label: string; value: number }[] = [
-  { label: 'CN', value: 0 },
-  { label: 'T2', value: 1 },
-  { label: 'T3', value: 2 },
-  { label: 'T4', value: 3 },
-  { label: 'T5', value: 4 },
-  { label: 'T6', value: 5 },
-  { label: 'T7', value: 6 },
+const DAYS: { labelKey: UiKey; value: number }[] = [
+  { labelKey: 'scheduleBuilder.daySun', value: 0 },
+  { labelKey: 'scheduleBuilder.dayMon', value: 1 },
+  { labelKey: 'scheduleBuilder.dayTue', value: 2 },
+  { labelKey: 'scheduleBuilder.dayWed', value: 3 },
+  { labelKey: 'scheduleBuilder.dayThu', value: 4 },
+  { labelKey: 'scheduleBuilder.dayFri', value: 5 },
+  { labelKey: 'scheduleBuilder.daySat', value: 6 },
 ]
 
 export function buildCron(time: string, days: number[]): string | null {
@@ -33,6 +35,7 @@ export function ScheduleBuilder({
   kind: string
   onChange: (cron: string | null) => void
 }) {
+  const { t } = useLanguage()
   const [time, setTime] = useState('09:00')
   const [days, setDays] = useState<number[]>([])
 
@@ -59,12 +62,12 @@ export function ScheduleBuilder({
               checked={days.includes(d.value)}
               onChange={() => toggleDay(d.value)}
             />{' '}
-            {d.label}
+            {t(d.labelKey)}
           </label>
         ))}
       </div>
       <label>
-        Giờ:{' '}
+        {t('scheduleBuilder.timeLabel')}{' '}
         <input
           type="time"
           value={time}
@@ -75,7 +78,7 @@ export function ScheduleBuilder({
       <p className="schedule-builder-when">{formatCron(cron)}</p>
       {/* keep the raw cron visible so the operator can verify exactly what will run */}
       <p className="muted schedule-builder-cron">
-        cron: {cron ?? 'manual only (no days selected)'}
+        cron: {cron ?? t('scheduleBuilder.cronManualOnly')}
       </p>
     </div>
   )

@@ -3,27 +3,29 @@
 import { useAgent } from '../agent-context'
 import { EmptyState } from '../components/ui/empty-state'
 import { PageHeader } from '../components/ui/page-header'
+import { useLanguage } from '../i18n/language-context'
 import { KIND_LABEL, RUN_STATUS_LABEL, labelFor } from '../labels'
 
 export function Overview() {
+  const { t } = useLanguage()
   const { agents, loading, error } = useAgent()
-  if (loading) return <p>Đang tải…</p>
-  if (error) return <p className="error">Lỗi: {error}</p>
-  if (agents.length === 0) return <EmptyState>Chưa có nhân sự ảo nào.</EmptyState>
+  if (loading) return <p>{t('overview.loading')}</p>
+  if (error) return <p className="error">{t('overview.errorPrefix', { message: error })}</p>
+  if (agents.length === 0) return <EmptyState>{t('overview.empty')}</EmptyState>
 
   return (
     <section>
-      <PageHeader title="Tổng quan đội" />
+      <PageHeader title={t('overview.title')} />
       {/* Advanced (technical) view — a distinct class so it does NOT inherit the mobile
           card-list transform meant for the CEO tables; it just scrolls horizontally. */}
       <div className="table-scroll">
         <table className="agents-table-advanced">
           <thead>
             <tr>
-              <th>Mã</th>
-              <th>Tên</th>
-              <th>Bật</th>
-              <th>Lần chạy gần nhất</th>
+              <th>{t('overview.colCode')}</th>
+              <th>{t('overview.colName')}</th>
+              <th>{t('overview.colEnabled')}</th>
+              <th>{t('overview.colLastRun')}</th>
             </tr>
           </thead>
           <tbody>
@@ -34,8 +36,8 @@ export function Overview() {
                 <td>{a.enabled ? '✓' : '—'}</td>
                 <td>
                   {a.last_run
-                    ? `${labelFor(KIND_LABEL, a.last_run.kind)} · ${labelFor(RUN_STATUS_LABEL, a.last_run.status)}`
-                    : 'chưa chạy lần nào'}
+                    ? `${labelFor(KIND_LABEL, a.last_run.kind, t)} · ${labelFor(RUN_STATUS_LABEL, a.last_run.status, t)}`
+                    : t('overview.neverRun')}
                 </td>
               </tr>
             ))}

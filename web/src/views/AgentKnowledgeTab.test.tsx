@@ -5,7 +5,16 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { LanguageProvider } from '../i18n/language-context'
 import { KnowledgeTab } from './AgentKnowledgeTab'
+
+function renderTab(id: string) {
+  return render(
+    <LanguageProvider>
+      <KnowledgeTab id={id} />
+    </LanguageProvider>,
+  )
+}
 
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -25,7 +34,7 @@ beforeEach(() => {
 
 test('editing a skills checkbox marks the section unsaved, clearing after save', async () => {
   const putSkills = vi.spyOn(api, 'putSkills').mockResolvedValue({ skills: [] } as never)
-  render(<KnowledgeTab id="acme" />)
+  renderTab('acme')
 
   // toggle the skill → its section shows "● Chưa lưu"
   fireEvent.click(await screen.findByText('triage'))
@@ -38,7 +47,7 @@ test('editing a skills checkbox marks the section unsaved, clearing after save',
 })
 
 test('a fresh tab has no unsaved badges', async () => {
-  render(<KnowledgeTab id="acme" />)
+  renderTab('acme')
   await screen.findByText('triage')
   expect(screen.queryByText(/Chưa lưu/)).not.toBeInTheDocument()
 })

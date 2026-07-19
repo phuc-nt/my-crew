@@ -11,11 +11,13 @@ import {
 } from 'chart.js'
 import { Line } from 'react-chartjs-2'
 import type { CostMonth } from '../../types'
+import { useLanguage } from '../../i18n/language-context'
 import { accentColor, chartChrome, dangerColor } from './chart-theme'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
 
 export function CostChart({ series, cap }: { series: CostMonth[]; cap: number }) {
+  const { t } = useLanguage()
   const labels = series.map((m) => m.month)
   const accent = accentColor()
   const chrome = chartChrome()
@@ -23,14 +25,14 @@ export function CostChart({ series, cap }: { series: CostMonth[]; cap: number })
     labels,
     datasets: [
       {
-        label: 'Chi phí (USD)',
+        label: t('costChart.datasetCost'),
         data: series.map((m) => m.total_usd),
         borderColor: accent,
         backgroundColor: accent,
         tension: 0.2,
       },
       {
-        label: 'Ngân sách trần',
+        label: t('costChart.datasetBudgetCap'),
         data: labels.map(() => cap),
         borderColor: dangerColor(),
         borderDash: [6, 4],
@@ -51,5 +53,5 @@ export function CostChart({ series, cap }: { series: CostMonth[]; cap: number })
     },
     plugins: { legend: { labels: { color: chrome.legend } } },
   }
-  return <Line data={data} options={options} aria-label="Chi phí hằng tháng so với ngân sách trần" />
+  return <Line data={data} options={options} aria-label={t('costChart.ariaLabel')} />
 }

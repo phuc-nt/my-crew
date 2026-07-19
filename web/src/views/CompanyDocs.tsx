@@ -6,9 +6,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { PageHeader } from '../components/ui/page-header'
+import { useLanguage } from '../i18n/language-context'
 import type { CompanyDoc } from '../types'
 
 export function CompanyDocs() {
+  const { t } = useLanguage()
   const [docs, setDocs] = useState<CompanyDoc[] | null>(null)
   const [selected, setSelected] = useState<CompanyDoc | 'new' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -17,31 +19,28 @@ export function CompanyDocs() {
     api
       .listCompanyDocs()
       .then((r) => setDocs(r.docs))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'lỗi'))
-  }, [])
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('companyDocs.loadError')))
+  }, [t])
   useEffect(load, [load])
 
-  if (error) return <p className="error">Lỗi: {error}</p>
-  if (!docs) return <p>Đang tải…</p>
+  if (error) return <p className="error">{t('companyDocs.errorPrefix', { message: error })}</p>
+  if (!docs) return <p>{t('companyDocs.loading')}</p>
 
   return (
     <section className="company-docs">
       <PageHeader
-        title="Tài liệu công ty"
+        title={t('companyDocs.title')}
         actions={
           <Button variant="ghost" onClick={() => setSelected('new')}>
-            + Tài liệu mới
+            {t('companyDocs.new')}
           </Button>
         }
       />
-      <p className="muted">
-        Tài liệu ở đây được tick cho từng agent (trong trang agent → tab Kiến thức) và chỉ
-        đưa vào ngữ cảnh nội bộ — báo cáo gửi ra ngoài không bao giờ chứa nội dung này.
-      </p>
+      <p className="muted">{t('companyDocs.intro')}</p>
       <div className="company-docs-body">
         <ul className="company-docs-list">
           {/* v53: styled by container element selector (.company-docs-list button) — unify in a later pass */}
-          {docs.length === 0 && <li className="muted">Chưa có tài liệu nào.</li>}
+          {docs.length === 0 && <li className="muted">{t('companyDocs.empty')}</li>}
           {docs.map((d) => (
             <li key={d.slug}>
               <button
@@ -85,6 +84,7 @@ function DocEditor({
   onDeleted: () => void
   onCancel: () => void
 }) {
+  const { t } = useLanguage()
   const [title, setTitle] = useState(doc?.title ?? '')
   const [body, setBody] = useState(doc?.body ?? '')
   const [busy, setBusy] = useState(false)
@@ -99,49 +99,53 @@ function DocEditor({
       else await api.createCompanyDoc(title, body, today)
       onSaved()
     } catch (e: unknown) {
-      setError(e instanceof ApiError ? e.message : 'lưu thất bại')
+      setError(e instanceof ApiError ? e.message : t('companyDocs.saveFailed'))
     } finally {
       setBusy(false)
     }
-  }, [doc, title, body, onSaved])
+  }, [doc, title, body, onSaved, t])
 
   const remove = useCallback(async () => {
     if (!doc) return
-    if (!window.confirm(`Xóa tài liệu "${doc.title}"?`)) return
+    if (!window.confirm(t('companyDocs.deleteConfirm', { title: doc.title }))) return
     setBusy(true)
     setError(null)
     try {
       await api.deleteCompanyDoc(doc.slug)
       onDeleted()
     } catch (e: unknown) {
-      setError(e instanceof ApiError ? e.message : 'xóa thất bại')
+      setError(e instanceof ApiError ? e.message : t('companyDocs.deleteFailed'))
     } finally {
       setBusy(false)
     }
-  }, [doc, onDeleted])
+  }, [doc, onDeleted, t])
 
   return (
     <div className="company-doc-editor">
       <label>
-        Tiêu đề
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Quy trình nghỉ phép" />
+        {t('companyDocs.titleLabel')}
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={t('companyDocs.titlePlaceholder')}
+        />
       </label>
       <label>
-        Nội dung
+        {t('companyDocs.bodyLabel')}
         <textarea rows={16} value={body} onChange={(e) => setBody(e.target.value)} />
       </label>
       {error && <p className="error">{error}</p>}
       <div className="agent-actions">
         {/* v53: styled by container element selector (.agent-actions button) — unify in a later pass */}
         <button type="button" disabled={busy || !title.trim()} onClick={() => void save()}>
-          {busy ? 'Đang lưu…' : 'Lưu'}
+          {busy ? t('companyDocs.saving') : t('companyDocs.save')}
         </button>
         <button type="button" onClick={onCancel}>
-          Hủy
+          {t('companyDocs.cancel')}
         </button>
         {doc && (
           <button type="button" className="danger" disabled={busy} onClick={() => void remove()}>
-            Xóa
+            {t('companyDocs.delete')}
           </button>
         )}
       </div>

@@ -11,18 +11,21 @@
 import { Component, Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Button } from '../components/ui/button'
+import { useLanguage } from '../i18n/language-context'
 
 const OfficeUnified = lazy(() => import('../views/office-unified/office-unified'))
 
 function OfficeLoadEscape() {
+  const { t } = useLanguage()
   return (
     <div style={{ padding: '2rem' }}>
-      <p className="error">Không tải được màn hình văn phòng.</p>
+      <p className="error">{t('officeLazy.loadFailedTitle')}</p>
       <p>
         <Button variant="ghost" onClick={() => window.location.reload()}>
-          Tải lại
+          {t('officeLazy.reload')}
         </Button>{' '}
-        hoặc xem <Link to="/office/timeline">nhật ký văn phòng dạng bảng</Link>.
+        {t('officeLazy.loadFailedHint')}{' '}
+        <Link to="/office/timeline">{t('officeLazy.tableViewLink')}</Link>.
       </p>
     </div>
   )
@@ -39,12 +42,13 @@ class OfficeErrorBoundary extends Component<{ children: ReactNode }, { failed: b
 }
 
 function LoadingWithWatchdog() {
+  const { t } = useLanguage()
   const [stuck, setStuck] = useState(false)
   useEffect(() => {
-    const t = setTimeout(() => setStuck(true), 12_000)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => setStuck(true), 12_000)
+    return () => clearTimeout(timer)
   }, [])
-  return stuck ? <OfficeLoadEscape /> : <p style={{ padding: '2rem' }}>Đang tải văn phòng…</p>
+  return stuck ? <OfficeLoadEscape /> : <p style={{ padding: '2rem' }}>{t('officeLazy.loadingTitle')}</p>
 }
 
 export function OfficeUnifiedLazy() {

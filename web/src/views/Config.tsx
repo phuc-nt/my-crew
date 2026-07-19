@@ -7,21 +7,23 @@ import { ConfigEditor } from '../components/ConfigEditor'
 import { api } from '../api/client'
 import { PageHeader } from '../components/ui/page-header'
 import { useAgentData } from '../hooks/use-agent-data'
+import { useLanguage } from '../i18n/language-context'
 import type { ConfigPayload } from '../types'
 
 export function Config() {
+  const { t } = useLanguage()
   const { selected } = useAgent()
   const get = useCallback((id: string) => api.getConfig(id), [])
   const { data, loading, error } = useAgentData<ConfigPayload>(get)
 
-  if (loading) return <p>Đang tải…</p>
-  if (error) return <p className="error">Lỗi: {error}</p>
+  if (loading) return <p>{t('config.loading')}</p>
+  if (error) return <p className="error">{t('config.errorPrefix', { message: error })}</p>
   if (!data || !selected) return null
 
   const f = data.files
   return (
     <section>
-      <PageHeader title={`Cấu hình — ${selected}`} />
+      <PageHeader title={t('config.title', { agent: selected })} />
       <ConfigEditor
         label="profile.yaml"
         initial={f.profile ?? ''}

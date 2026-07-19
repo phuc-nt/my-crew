@@ -9,22 +9,25 @@ import { Link } from 'react-router'
 import { ApiError, api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
+import type { UiKey } from '../i18n/dictionary'
+import { useLanguage } from '../i18n/language-context'
 import type { CrewCreateResult, CrewPreview, Pack, StaffTemplate } from '../types'
 
-const RUNTIME_LABEL: Record<string, string> = {
-  native: 'suy nghĩ 1 lượt',
-  create_agent: 'tự dùng công cụ đọc',
-  deep_agent: 'hộp cát chuyên sâu',
+const RUNTIME_LABEL_KEY: Record<string, UiKey> = {
+  native: 'staffTemplatePicker.runtimeNative',
+  create_agent: 'staffTemplatePicker.runtimeCreateAgent',
+  deep_agent: 'staffTemplatePicker.runtimeDeepAgent',
 }
 
 /** Chips describing the template's pre-attached tools — the "tool gắn sẵn" contract. */
-function toolChips(t: StaffTemplate): string[] {
+function toolChips(template: StaffTemplate, t: (key: UiKey, params?: Record<string, string | number>) => string): string[] {
   const chips: string[] = []
-  if (t.web_search) chips.push('tìm web')
-  if (t.academic_search) chips.push('tra cứu paper')
-  if (t.has_skills) chips.push('kỹ năng riêng')
-  if (t.reports.length > 0) chips.push(`báo cáo: ${t.reports.join(', ')}`)
-  chips.push(RUNTIME_LABEL[t.recommended_runtime] ?? t.recommended_runtime)
+  if (template.web_search) chips.push(t('staffTemplatePicker.chipWebSearch'))
+  if (template.academic_search) chips.push(t('staffTemplatePicker.chipAcademicSearch'))
+  if (template.has_skills) chips.push(t('staffTemplatePicker.chipSkills'))
+  if (template.reports.length > 0) chips.push(t('staffTemplatePicker.chipReports', { kinds: template.reports.join(', ') }))
+  const runtimeKey = RUNTIME_LABEL_KEY[template.recommended_runtime]
+  chips.push(runtimeKey ? t(runtimeKey) : template.recommended_runtime)
   return chips
 }
 
@@ -35,6 +38,7 @@ export function StaffTemplatePicker({
   onApply: (template: StaffTemplate, pack: Pack) => void
   onSkip: () => void
 }) {
+  const { t } = useLanguage()
   const [templates, setTemplates] = useState<StaffTemplate[]>([])
   const [packs, setPacks] = useState<Pack[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,25 +58,26 @@ export function StaffTemplatePicker({
 
   useEffect(() => {
     Promise.all([api.getStaffTemplates(), api.getPacks()])
-      .then(([t, p]) => {
-        setTemplates(t.templates)
-        setPacks(p.packs)
+      .then(([templatesRes, packsRes]) => {
+        setTemplates(templatesRes.templates)
+        setPacks(packsRes.packs)
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'không tải được mẫu nhân sự'))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('staffTemplatePicker.loadFailed')))
       .finally(() => setLoading(false))
     api.getCrewPreview().then(setCrew).catch(() => setCrew(null)) // no crew.yaml ⇒ no banner
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (loading) return <p>Đang tải…</p>
+  if (loading) return <p>{t('staffTemplatePicker.loading')}</p>
 
   // A fetch failure must not dead-end the wizard: manual path stays reachable.
   if (error && templates.length === 0) {
     return (
       <section>
-        <p className="error">Lỗi: {error}</p>
+        <p className="error">{t('staffTemplatePicker.errorPrefix', { message: error })}</p>
         <div className="wizard-nav">
           <Button variant="ghost" onClick={onSkip}>
-            Bỏ qua, tự chọn
+            {t('staffTemplatePicker.skipChoose')}
           </Button>
         </div>
       </section>
@@ -82,26 +87,29 @@ export function StaffTemplatePicker({
   function customize(template: StaffTemplate) {
     const pack = packs.find((p) => p.id === template.domain)
     if (!pack) {
-      setError(`mẫu "${template.role}" dùng loại nhân sự "${template.domain}" chưa cài — chọn thủ công`)
+      setError(t('staffTemplatePicker.packMissing', { role: template.role, domain: template.domain }))
       return
     }
     onApply(template, pack)
   }
 
-  async function quickCreate(t: StaffTemplate, idOverride?: string) {
-    setBusy(t.role_id)
+  async function quickCreate(template: StaffTemplate, idOverride?: string) {
+    setBusy(template.role_id)
     setError(null)
     try {
       const out = idOverride
-        ? await api.createFromTemplate(t.role_id, idOverride)
-        : await api.createFromTemplate(t.role_id)
-      setCreatedMsg((m) => ({ ...m, [t.role_id]: `Đã tạo "${out.id}". ${out.hint}` }))
+        ? await api.createFromTemplate(template.role_id, idOverride)
+        : await api.createFromTemplate(template.role_id)
+      setCreatedMsg((m) => ({
+        ...m,
+        [template.role_id]: t('staffTemplatePicker.createdMsg', { id: out.id, hint: out.hint }),
+      }))
       setConfirming(null)
       setConflictOf(null)
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'tạo từ mẫu thất bại'
+      const msg = e instanceof Error ? e.message : t('staffTemplatePicker.createFromTemplateFailed')
       if (!idOverride && e instanceof ApiError && e.status === 409) {
-        setConflictOf(t.role_id)
+        setConflictOf(template.role_id)
       }
       setError(msg)
     } finally {
@@ -115,7 +123,7 @@ export function StaffTemplatePicker({
     try {
       setCrewResult(await api.createCrew())
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'tạo đội thất bại')
+      setError(e instanceof Error ? e.message : t('staffTemplatePicker.crewCreateFailed'))
     } finally {
       setCrewBusy(false)
     }
@@ -125,31 +133,34 @@ export function StaffTemplatePicker({
 
   return (
     <section>
-      <h3>Chọn mẫu nhân sự</h3>
-      {error && <p className="error">Lỗi: {error}</p>}
+      <h3>{t('staffTemplatePicker.title')}</h3>
+      {error && <p className="error">{t('staffTemplatePicker.errorPrefix', { message: error })}</p>}
 
       {crew && missingCount > 0 && !crewResult && (
         <div className="crew-banner">
-          <strong>{crew.crew}</strong> — tạo cả đội {missingCount} nhân sự trong một lần
+          <strong>{crew.crew}</strong>{' '}
           {!crewOpen ? (
             <Button variant="ghost" onClick={() => setCrewOpen(true)}>
-              Tạo cả đội ({missingCount})
+              {t('staffTemplatePicker.crewCreateAll', { n: missingCount })}
             </Button>
           ) : (
             <div className="crew-preview">
               <ul>
                 {crew.members.map((m) => (
                   <li key={m.role_id}>
-                    {m.role} ({m.role_id}){m.role_id === crew.coordinator ? ' — trưởng phòng điều phối' : ''}
-                    {m.exists ? ' · đã có, bỏ qua' : ''}
+                    {m.role} ({m.role_id})
+                    {m.role_id === crew.coordinator ? t('staffTemplatePicker.coordinatorSuffix') : ''}
+                    {m.exists ? t('staffTemplatePicker.existingSuffix') : ''}
                   </li>
                 ))}
               </ul>
               <Button variant="ghost" disabled={crewBusy} onClick={() => void crewCreate()}>
-                {crewBusy ? 'Đang tạo…' : `Xác nhận tạo ${missingCount} nhân sự`}
+                {crewBusy
+                  ? t('staffTemplatePicker.creating')
+                  : t('staffTemplatePicker.crewConfirmCreate', { n: missingCount })}
               </Button>{' '}
               <Button variant="ghost" onClick={() => setCrewOpen(false)}>
-                Thôi
+                {t('staffTemplatePicker.crewCancel')}
               </Button>
             </div>
           )}
@@ -157,66 +168,78 @@ export function StaffTemplatePicker({
       )}
       {crewResult && (
         <div className="crew-banner">
-          ✅ Đã tạo {crewResult.created.length} nhân sự
-          {crewResult.skipped.length > 0 ? ` (bỏ qua ${crewResult.skipped.length} đã có)` : ''}
-          {crewResult.coordinator_id ? ` — trưởng phòng: ${crewResult.coordinator_id}` : ''}
+          {t('staffTemplatePicker.crewCreatedMsg', { n: crewResult.created.length })}
+          {crewResult.skipped.length > 0
+            ? t('staffTemplatePicker.crewSkippedSuffix', { n: crewResult.skipped.length })
+            : ''}
+          {crewResult.coordinator_id
+            ? t('staffTemplatePicker.crewCoordinatorSuffix', { id: crewResult.coordinator_id })
+            : ''}
           {crewResult.failed.length > 0 && (
             <p className="error">
-              Lỗi: {crewResult.failed.map((f) => `${f.role_id} (${f.error})`).join('; ')}
+              {t('staffTemplatePicker.crewFailedPrefix')}
+              {crewResult.failed.map((f) => `${f.role_id} (${f.error})`).join('; ')}
             </p>
           )}
           <p>
-            Điền token vào .env nếu vai cần, rồi xem <Link to="/team">trang Đội</Link>.
+            {t('staffTemplatePicker.envTokenHint')}
+            <Link to="/team">{t('staffTemplatePicker.teamPageLink')}</Link>
           </p>
         </div>
       )}
 
       {templates.length === 0 ? (
-        <p className="muted">Chưa có mẫu nhân sự nào — tự chọn ở bước tiếp theo.</p>
+        <p className="muted">{t('staffTemplatePicker.noTemplates')}</p>
       ) : (
         <div className="staff-template-grid">
-          {templates.map((t) => (
-            <Card key={t.role_id} className="staff-template-card">
-              <strong>{t.role}</strong>
-              <div className="muted">loại nhân sự: {t.domain}</div>
+          {templates.map((template) => (
+            <Card key={template.role_id} className="staff-template-card">
+              <strong>{template.role}</strong>
+              <div className="muted">{t('staffTemplatePicker.domainLabel', { domain: template.domain })}</div>
               <div className="template-chips">
-                {toolChips(t).map((c) => (
+                {toolChips(template, t).map((c) => (
                   <span key={c} className="chip">
                     {c}
                   </span>
                 ))}
               </div>
-              {createdMsg[t.role_id] ? (
-                <p className="muted">✅ {createdMsg[t.role_id]}</p>
-              ) : confirming === t.role_id ? (
+              {createdMsg[template.role_id] ? (
+                <p className="muted">✅ {createdMsg[template.role_id]}</p>
+              ) : confirming === template.role_id ? (
                 <div>
-                  <p className="muted">Tạo nhân sự "{t.role_id}" với cấu hình chuẩn của mẫu?</p>
-                  <Button variant="ghost" disabled={busy === t.role_id} onClick={() => void quickCreate(t)}>
-                    {busy === t.role_id ? 'Đang tạo…' : 'Xác nhận'}
+                  <p className="muted">
+                    {t('staffTemplatePicker.confirmCreatePrompt', { id: template.role_id })}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    disabled={busy === template.role_id}
+                    onClick={() => void quickCreate(template)}
+                  >
+                    {busy === template.role_id ? t('staffTemplatePicker.creating') : t('staffTemplatePicker.confirm')}
                   </Button>{' '}
                   <Button variant="ghost" onClick={() => setConfirming(null)}>
-                    Thôi
+                    {t('staffTemplatePicker.crewCancel')}
                   </Button>
-                  {conflictOf === t.role_id && (
+                  {conflictOf === template.role_id && (
                     <p className="muted">
-                      Đã có "{t.role_id}" rồi.{' '}
+                      {t('staffTemplatePicker.alreadyExists', { id: template.role_id })}{' '}
                       <Button
                         variant="ghost"
-                        disabled={busy === t.role_id}
-                        onClick={() => void quickCreate(t, `${t.role_id}-2`)}
+                        disabled={busy === template.role_id}
+                        onClick={() => void quickCreate(template, `${template.role_id}-2`)}
                       >
-                        Tạo thêm "{t.role_id}-2"
+                        {t('staffTemplatePicker.createAnother', { id: `${template.role_id}-2` })}
                       </Button>
                     </p>
                   )}
                 </div>
               ) : (
                 <div>
-                  <Button variant="ghost" onClick={() => setConfirming(t.role_id)}>
-                    Tạo ngay
+                  <Button variant="ghost" onClick={() => setConfirming(template.role_id)}>
+                    {t('staffTemplatePicker.createNow')}
                   </Button>{' '}
-                  <Button variant="chip" onClick={() => customize(t)}>
-                    Tuỳ chỉnh…
+                  <Button variant="chip" onClick={() => customize(template)}>
+                    {t('staffTemplatePicker.customize')}
                   </Button>
                 </div>
               )}
@@ -226,7 +249,7 @@ export function StaffTemplatePicker({
       )}
       <div className="wizard-nav">
         <Button variant="ghost" onClick={onSkip}>
-          Bỏ qua, tự chọn
+          {t('staffTemplatePicker.skipChoose')}
         </Button>
       </div>
     </section>

@@ -7,6 +7,7 @@ import { Link, useParams } from 'react-router'
 import { ApiError, api } from '../api/client'
 import { Badge } from '../components/ui/badge'
 import { EmptyState } from '../components/ui/empty-state'
+import { useLanguage } from '../i18n/language-context'
 import { KIND_LABEL, RUN_STATUS_LABEL, formatCost, formatDateTime, labelFor } from '../labels'
 import type { AgentStatus, CostPayload, RunsPayload } from '../types'
 import { KnowledgeTab } from './AgentKnowledgeTab'
@@ -14,6 +15,7 @@ import { KnowledgeTab } from './AgentKnowledgeTab'
 type Tab = 'activity' | 'telegram' | 'knowledge'
 
 export function AgentPage() {
+  const { t } = useLanguage()
   const { id = '' } = useParams()
   const [tab, setTab] = useState<Tab>('activity')
   const [status, setStatus] = useState<AgentStatus | null>(null)
@@ -23,47 +25,49 @@ export function AgentPage() {
     api
       .getAgentStatus(id)
       .then(setStatus)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'lỗi'))
-  }, [id])
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('agentPage.loadError')))
+  }, [id, t])
 
   if (error)
     return (
       <section>
-        <p className="error">Lỗi: {error}</p>
+        <p className="error">{t('agentPage.errorPrefix', { message: error })}</p>
         <p>
-          Nếu nhân sự này có hồ sơ trên máy nhưng chưa nằm trong đội (ví dụ vừa xoá hoặc
-          chép từ máy khác), vào <Link to="/team">trang Đội</Link> — mục "hồ sơ chưa đăng
-          ký" có nút thêm lại bằng một bấm.
+          {t('agentPage.orphanHint')}
+          <Link to="/team">{t('agentPage.orphanHintLink')}</Link>
+          {t('agentPage.orphanHintSuffix')}
         </p>
       </section>
     )
-  if (!status) return <p>Đang tải…</p>
+  if (!status) return <p>{t('agentPage.loading')}</p>
 
   return (
     <section className="agent-page">
       <header className="agent-page-head">
-        <p className="agent-back"><Link to="/team">← Đội</Link></p>
+        <p className="agent-back">
+          <Link to="/team">{t('agentPage.back')}</Link>
+        </p>
         <h2>
           {status.name} <span className="muted">({id})</span>
         </h2>
         <Badge tone={status.enabled ? 'ok' : 'neutral'}>
-          {status.enabled ? 'đang bật' : 'đang tắt'}
+          {status.enabled ? t('agentPage.enabled') : t('agentPage.disabled')}
         </Badge>
         {status.trust_mode && (
           <Badge
             tone={status.trust_mode === 'autonomous' ? 'accent' : 'warn'}
             title={
               status.trust_mode === 'autonomous'
-                ? 'Tự chủ: hành động ngay, hậu kiểm qua nhật ký audit. Lưới cứng (chống xoá dữ liệu, lộ khoá) luôn bật.'
-                : 'Có duyệt: việc nhạy cảm chờ bạn duyệt ở tab Duyệt.'
+                ? t('agentPage.trustAutonomousTitle')
+                : t('agentPage.trustGuardedTitle')
             }
           >
-            {status.trust_mode === 'autonomous' ? 'tự chủ' : 'có duyệt'}
+            {status.trust_mode === 'autonomous' ? t('agentPage.trustAutonomous') : t('agentPage.trustGuarded')}
           </Badge>
         )}
         {status.pending_approvals > 0 && (
           <Link to="/work" className="agent-pending">
-            {status.pending_approvals} việc chờ duyệt
+            {t('agentPage.pendingApprovals', { n: status.pending_approvals })}
           </Link>
         )}
       </header>
@@ -74,21 +78,21 @@ export function AgentPage() {
           className={tab === 'activity' ? 'tab-active' : undefined}
           onClick={() => setTab('activity')}
         >
-          Hoạt động
+          {t('agentPage.tabActivity')}
         </button>
         <button
           type="button"
           className={tab === 'telegram' ? 'tab-active' : undefined}
           onClick={() => setTab('telegram')}
         >
-          Kênh Telegram
+          {t('agentPage.tabTelegram')}
         </button>
         <button
           type="button"
           className={tab === 'knowledge' ? 'tab-active' : undefined}
           onClick={() => setTab('knowledge')}
         >
-          Kiến thức
+          {t('agentPage.tabKnowledge')}
         </button>
       </nav>
 
@@ -100,6 +104,7 @@ export function AgentPage() {
 }
 
 function ActivityTab({ id, status }: { id: string; status: AgentStatus }) {
+  const { t } = useLanguage()
   const [cost, setCost] = useState<CostPayload | null>(null)
   const [runs, setRuns] = useState<RunsPayload | null>(null)
   useEffect(() => {
@@ -110,8 +115,7 @@ function ActivityTab({ id, status }: { id: string; status: AgentStatus }) {
   return (
     <div>
       <p>
-        Chi phí tháng này:{' '}
-        <strong>{cost ? formatCost(cost.spent_this_month) : '…'}</strong>
+        {t('agentPage.costThisMonth')} <strong>{cost ? formatCost(cost.spent_this_month) : '…'}</strong>
         {cost && cost.cap > 0 && (
           <>
             {' '}/ {formatCost(cost.cap)} ({(ratio * 100).toFixed(0)}%
@@ -120,19 +124,18 @@ function ActivityTab({ id, status }: { id: string; status: AgentStatus }) {
         )}
       </p>
       <p>
-        Lần chạy gần nhất:{' '}
-        {status.last_run
-          ? `${status.last_run.kind} — ${status.last_run.status}`
-          : 'chưa có'}
+        {t('agentPage.lastRun')}{' '}
+        {status.last_run ? `${status.last_run.kind} — ${status.last_run.status}` : t('agentPage.lastRunNone')}
       </p>
-      <h4>Lịch sử chạy</h4>
+      <h4>{t('agentPage.runHistory')}</h4>
       {!runs || runs.runs.length === 0 ? (
-        <EmptyState>Chưa có lần chạy nào.</EmptyState>
+        <EmptyState>{t('agentPage.noRuns')}</EmptyState>
       ) : (
         <ul className="agent-runs">
           {runs.runs.slice(0, 10).map((r, i) => (
             <li key={i}>
-              {labelFor(KIND_LABEL, r.kind)} · {labelFor(RUN_STATUS_LABEL, r.status)} · {formatDateTime(r.ts)}
+              {labelFor(KIND_LABEL, r.kind, t)} · {labelFor(RUN_STATUS_LABEL, r.status, t)} ·{' '}
+              {formatDateTime(r.ts)}
             </li>
           ))}
         </ul>
@@ -142,6 +145,7 @@ function ActivityTab({ id, status }: { id: string; status: AgentStatus }) {
 }
 
 function TelegramTab({ id }: { id: string }) {
+  const { t } = useLanguage()
   const [token, setToken] = useState('')
   const [chatId, setChatId] = useState('')
   const [busy, setBusy] = useState(false)
@@ -156,16 +160,16 @@ function TelegramTab({ id }: { id: string }) {
       const r = await api.bindTelegram(id, token, chatId.trim() ? [chatId.trim()] : [])
       setResult({ bot_username: r.bot_username })
     } catch (e: unknown) {
-      setError(e instanceof ApiError ? e.message : 'gắn bot thất bại')
+      setError(e instanceof ApiError ? e.message : t('agentPage.telegramBindFailed'))
     } finally {
       setBusy(false)
     }
-  }, [id, token, chatId])
+  }, [id, token, chatId, t])
 
   const loadChats = useCallback(async () => {
     setError(null)
     if (!token.trim()) {
-      setError('Nhập token bot trước, rồi bấm "Lấy chat gần đây".')
+      setError(t('agentPage.telegramNeedTokenFirst'))
       return
     }
     try {
@@ -173,18 +177,17 @@ function TelegramTab({ id }: { id: string }) {
       const r = await api.telegramRecentChats(id, token)
       setChats(r.chats)
     } catch (e: unknown) {
-      setError(e instanceof ApiError ? e.message : 'không lấy được chat')
+      setError(e instanceof ApiError ? e.message : t('agentPage.telegramChatsFailed'))
     }
-  }, [id, token])
+  }, [id, token, t])
 
   return (
     <div className="telegram-tab">
       <p className="muted">
-        Tạo bot qua @BotFather (gửi <code>/newbot</code>, đặt tên + ảnh), copy token rồi dán
-        vào đây. Agent sẽ có danh tính Telegram riêng — nhận câu hỏi + lệnh + báo cáo.
+        {t('agentPage.telegramIntro')}
       </p>
       <label>
-        Bot token (từ BotFather)
+        {t('agentPage.telegramTokenLabel')}
         <input
           type="password"
           value={token}
@@ -193,7 +196,7 @@ function TelegramTab({ id }: { id: string }) {
         />
       </label>
       <label>
-        Chat id (DM của bạn — bấm "Lấy chat" sau khi nhắn bot 1 câu)
+        {t('agentPage.telegramChatIdLabel')}
         <input value={chatId} onChange={(e) => setChatId(e.target.value)} placeholder="5248565986" />
       </label>
       {chats && chats.length > 0 && (
@@ -210,26 +213,22 @@ function TelegramTab({ id }: { id: string }) {
       )}
       {error && <p className="error">{error}</p>}
       {result && (
-        <p className="ok">
-          ✓ Đã gắn bot <strong>@{result.bot_username}</strong>. Nhắn thử cho bot — agent sẽ trả
-          lời trong ~1 phút (dịch vụ poll theo nhịp).
-        </p>
+        <p className="ok">{t('agentPage.telegramBoundNote', { username: result.bot_username ?? '' })}</p>
       )}
       <div className="agent-actions">
         {/* v53: styled by container element selector (.agent-actions button) — unify in a later pass */}
         <button type="button" onClick={() => void loadChats()}>
-          Lấy chat gần đây
+          {t('agentPage.telegramLoadChats')}
         </button>
         <button
           type="button"
           disabled={busy || !token.trim() || !chatId.trim()}
           onClick={() => void bind()}
-          title={!chatId.trim() ? 'Cần chat id — nhắn bot rồi bấm "Lấy chat gần đây"' : undefined}
+          title={!chatId.trim() ? t('agentPage.telegramBindTitleHint') : undefined}
         >
-          {busy ? 'Đang gắn…' : 'Gắn bot'}
+          {busy ? t('agentPage.telegramBinding') : t('agentPage.telegramBind')}
         </button>
       </div>
     </div>
   )
 }
-
