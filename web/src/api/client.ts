@@ -12,7 +12,7 @@ import type { Language } from '../i18n/dictionary'
 import type {
   AssignPreviewPayload,
   AssignStaffPayload,
-  CaptureRow,
+  CaptureDetail,
   CapturesPayload,
   CoordinatorHealthPayload,
   FleetBudgetPayload,
@@ -261,7 +261,7 @@ export const api = {
     return request<CapturesPayload>(`/api/captures${qs ? `?${qs}` : ''}`)
   },
   getCaptureDetail: (attemptId: string) =>
-    request<CaptureRow>(`/api/captures/${encodeURIComponent(attemptId)}`),
+    request<CaptureDetail>(`/api/captures/${encodeURIComponent(attemptId)}`),
   searchHistory: (q: string, params?: { agent?: string; days?: number; limit?: number }) => {
     const usp = new URLSearchParams({ q })
     if (params?.agent) usp.set('agent', params.agent)

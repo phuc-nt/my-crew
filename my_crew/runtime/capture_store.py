@@ -14,18 +14,25 @@ write to it concurrently.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-#: Every column of the captures table, in declared order (used by read helpers to build dicts).
-_COLUMNS = (
+#: Columns the LIST reads (`list_for_task`/`list_recent`) return — deliberately excludes
+#: `criteria_json` (v54 P4b) so the fleet/task list views stay lean; the detail read
+#: (`get`, below) is the only one that also returns criteria.
+_LIST_COLUMNS = (
     "attempt_id", "task_id", "step_id", "agent_id", "engine", "status",
     "step_type", "review_round", "cost_usd", "cost_source",
     "input_tokens", "output_tokens", "started_at", "ended_at", "duration_ms",
     "error", "ts",
 )
+
+#: Every column of the captures table, in declared order — used by `get()` (the DETAIL
+#: read), which is the one read helper that also surfaces `criteria_json`.
+_COLUMNS = (*_LIST_COLUMNS, "criteria_json")
 
 
 class CaptureStore:
@@ -63,6 +70,17 @@ class CaptureStore:
             "  ts TEXT NOT NULL"
             ")"
         )
+        # v54 P4b: per-criterion review detail (JSON dump of the `{criterion, passed, note}`
+        # list `team_task_check_prompt`'s rubric produces, computed in `_run_review` and
+        # otherwise discarded after being folded into counts for the office event). Same
+        # migrate-free ALTER pattern as `approvals.actor` (v46) / `team_steps` columns — a
+        # store opened before this column existed gets it added once; the second (and every
+        # later) `_create_schema()` call on the same file hits "duplicate column" and is
+        # swallowed, so re-opening the store is idempotent.
+        try:
+            self._conn.execute("ALTER TABLE captures ADD COLUMN criteria_json TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         from my_crew.runtime.store_schema_meta import ensure_schema_meta
 
         ensure_schema_meta(self._conn)
@@ -94,19 +112,28 @@ class CaptureStore:
         ended_at: str | None = None,
         duration_ms: int | None = None,
         error: str | None = None,
+        criteria: list[dict[str, Any]] | None = None,
     ) -> None:
-        """Upsert one attempt's telemetry row (idempotent on `attempt_id`)."""
+        """Upsert one attempt's telemetry row (idempotent on `attempt_id`).
+
+        `criteria` (v54 P4b): the review step's per-criterion list (`{criterion, passed,
+        note}`, from `team_task_check_prompt`'s rubric via `review_graph.run_review_step`)
+        — JSON-dumped verbatim, or NULL when absent (every non-review attempt, and any
+        review attempt that produced no criteria). Never touched by non-review callers.
+        """
+        criteria_json = json.dumps(criteria, ensure_ascii=False) if criteria else None
         self._conn.execute(
             "INSERT OR REPLACE INTO captures ("
             "  attempt_id, task_id, step_id, agent_id, engine, status,"
             "  step_type, review_round, cost_usd, cost_source,"
-            "  input_tokens, output_tokens, started_at, ended_at, duration_ms, error, ts"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "  input_tokens, output_tokens, started_at, ended_at, duration_ms, error, ts,"
+            "  criteria_json"
+            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 attempt_id, task_id, step_id, agent_id, engine, status,
                 step_type, review_round, cost_usd, cost_source,
                 input_tokens, output_tokens, started_at, ended_at, duration_ms,
-                error, datetime.now(UTC).isoformat(),
+                error, datetime.now(UTC).isoformat(), criteria_json,
             ),
         )
         self._conn.commit()
@@ -120,11 +147,14 @@ class CaptureStore:
         return dict(zip(_COLUMNS, row, strict=True)) if row else None
 
     def list_for_task(self, task_id: str) -> list[dict[str, Any]]:
-        """Return all rows for a task, oldest-first by write time (read helper for tests/UAT)."""
+        """Return all rows for a task, oldest-first by write time (read helper for tests/UAT).
+
+        Lean column set (no `criteria_json` — see `get()` for the detail read)."""
         cur = self._conn.execute(
-            f"SELECT {', '.join(_COLUMNS)} FROM captures WHERE task_id = ? ORDER BY ts", (task_id,)
+            f"SELECT {', '.join(_LIST_COLUMNS)} FROM captures WHERE task_id = ? ORDER BY ts",
+            (task_id,),
         )
-        return [dict(zip(_COLUMNS, row, strict=True)) for row in cur.fetchall()]
+        return [dict(zip(_LIST_COLUMNS, row, strict=True)) for row in cur.fetchall()]
 
     def list_recent(
         self,
@@ -138,7 +168,8 @@ class CaptureStore:
         `since` compares against the row's write time `ts` (ISO prefix, same convention
         as AuditLog.query). The clamp mirrors the run-event read bound so a fleet view
         can never pull an unbounded history in one call.
-        """
+
+        Lean column set (no `criteria_json` — see `get()` for the detail read)."""
         clauses: list[str] = []
         params: list[Any] = []
         if since:
@@ -150,10 +181,10 @@ class CaptureStore:
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
         clamp = max(1, min(int(limit), 500))
         cur = self._conn.execute(
-            f"SELECT {', '.join(_COLUMNS)} FROM captures{where} ORDER BY ts DESC LIMIT ?",
+            f"SELECT {', '.join(_LIST_COLUMNS)} FROM captures{where} ORDER BY ts DESC LIMIT ?",
             (*params, clamp),
         )
-        return [dict(zip(_COLUMNS, row, strict=True)) for row in cur.fetchall()]
+        return [dict(zip(_LIST_COLUMNS, row, strict=True)) for row in cur.fetchall()]
 
     def close(self) -> None:
         self._conn.close()

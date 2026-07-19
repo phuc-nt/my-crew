@@ -73,3 +73,54 @@ def test_missing_attempt_returns_none(tmp_path):
     cs = _store(tmp_path)
     assert cs.get("nope") is None
     cs.close()
+
+
+def test_criteria_json_migration_is_idempotent_on_reopen(tmp_path):
+    # Same posture as v46's `approvals.actor` ALTER: opening the store twice against the
+    # same file must not raise "duplicate column" — the second `_create_schema()` call
+    # hits the guarded ALTER and swallows it.
+    path = tmp_path / "captures.sqlite3"
+    a = CaptureStore(path)
+    a.record(attempt_id="a1", task_id="t1", step_id="S1", agent_id="x", engine="native",
+              status="done")
+    a.close()
+    b = CaptureStore(path)  # re-open — must not raise
+    assert b.get("a1")["status"] == "done"
+    b.close()
+
+
+def test_criteria_written_on_review_capture_and_returned_by_get(tmp_path):
+    cs = _store(tmp_path)
+    criteria = [
+        {"criterion": "handles empty input", "passed": True, "note": "ok"},
+        {"criterion": "returns typed errors", "passed": False, "note": "missing validation"},
+    ]
+    cs.record(
+        attempt_id="r1", task_id="t1", step_id="S1-review-0-0", agent_id="reviewer",
+        engine="native", status="done", step_type="review", review_round=1,
+        criteria=criteria,
+    )
+    row = cs.get("r1")
+    assert row["criteria_json"] is not None
+    import json
+    assert json.loads(row["criteria_json"]) == criteria
+
+
+def test_criteria_absent_on_work_capture_is_null(tmp_path):
+    cs = _store(tmp_path)
+    cs.record(attempt_id="w1", task_id="t1", step_id="S1", agent_id="a", engine="native",
+              status="done", step_type="work")
+    assert cs.get("w1")["criteria_json"] is None
+
+
+def test_list_reads_exclude_criteria_json(tmp_path):
+    cs = _store(tmp_path)
+    cs.record(
+        attempt_id="r1", task_id="t1", step_id="S1-review-0-0", agent_id="reviewer",
+        engine="native", status="done", step_type="review", review_round=1,
+        criteria=[{"criterion": "x", "passed": True, "note": ""}],
+    )
+    rows = cs.list_for_task("t1")
+    assert "criteria_json" not in rows[0]
+    rows = cs.list_recent(limit=10)
+    assert "criteria_json" not in rows[0]

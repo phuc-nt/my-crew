@@ -19,6 +19,7 @@ to empty payloads when a store file does not exist yet (fresh install ≠ 500).
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from datetime import datetime
@@ -106,6 +107,14 @@ def list_captures(
 
 @router.get("/captures/{attempt_id}")
 def capture_detail(attempt_id: str) -> dict:
+    """One capture row, DETAIL shape — the only capture read that also parses
+    `criteria_json` (v54 P4b) into a `criteria` list (the review tray's data source).
+    Absent/NULL (every non-review attempt, and any pre-P4b row) -> `criteria: null`,
+    never `[]` (an empty list would misreport "reviewed, zero criteria" instead of
+    "no criteria data for this attempt"). A malformed JSON blob (should not happen —
+    only this route's own `CaptureStore.record` ever writes the column) degrades to
+    `null` rather than 500ing the whole detail read.
+    """
     path = capture_db_path()
     if not path.exists():
         raise HTTPException(status_code=404, detail="capture not found")
@@ -116,6 +125,16 @@ def capture_detail(attempt_id: str) -> dict:
         store.close()
     if row is None:
         raise HTTPException(status_code=404, detail="capture not found")
+    raw_criteria = row.pop("criteria_json", None)
+    criteria = None
+    if raw_criteria:
+        try:
+            parsed = json.loads(raw_criteria)
+            if isinstance(parsed, list):
+                criteria = parsed
+        except (TypeError, ValueError):
+            logger.warning("capture %s: malformed criteria_json, returning null", attempt_id)
+    row["criteria"] = criteria
     return row
 
 

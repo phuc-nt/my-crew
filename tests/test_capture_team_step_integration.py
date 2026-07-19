@@ -120,3 +120,75 @@ def test_review_step_path_threads_telemetry(monkeypatch):
     )
     assert out["status"] == "done"
     assert captured["telemetry"] is sentinel  # telemetry threaded through, no TypeError
+
+
+def test_review_step_run_writes_criteria_to_its_own_capture_row(tmp_path, monkeypatch):
+    """v54 P4b end-to-end: running a REVIEW step through the real worker entrypoint
+    persists the per-criterion list to ITS capture row (keyed by the review's own
+    attempt_id) — the content step's capture row (a different attempt_id) is untouched."""
+    from my_crew.runtime.worker import _run_team_step_kind
+
+    _patch_root(monkeypatch, tmp_path)
+    _fake_llm(monkeypatch, cost=0.02)
+
+    # Content step delivered through the real worker path — it gets its own capture row.
+    store = TeamTaskStore(tmp_path / "team_tasks.sqlite3")
+    _plan(store)
+    content_attempt = store.reserve_step("t1", "s1")
+    store.close()
+    settings = build_settings_from_dict({"data_dir": tmp_path})
+    rc = _run_team_step_kind(
+        ["--report", "team-step", "--task-id", "t1", "--step-id", "s1",
+         "--attempt-id", content_attempt],
+        agent_id="a1", loaded=_fake_loaded(), settings=settings,
+        data_dir=tmp_path / "agents" / "a1",
+    )
+    assert rc == 0
+
+    # Mint the review row exactly like the ticker's review-insert rule would.
+    store = TeamTaskStore(tmp_path / "team_tasks.sqlite3")
+    store.insert_step(
+        "t1",
+        {
+            "step_id": "s1-review-0-0", "title": "Soát chéo: Do it", "assigned_to": "a1",
+            "deps": ["s1"], "step_type": "review", "parent_step_id": "s1", "review_round": 0,
+        },
+    )
+    review_attempt = store.reserve_step("t1", "s1-review-0-0")
+    store.close()
+
+    criteria = [
+        {"criterion": "handles empty input", "passed": True, "note": ""},
+        {"criterion": "returns typed errors", "passed": False, "note": "missing validation"},
+    ]
+
+    def _fake_run_review_step(loaded, settings, *, data_dir, review_input, telemetry=None):
+        return {
+            "status": "done", "cost_usd": 0.001, "delivered": True, "room_message": "",
+            "passed": False, "failures": ["returns typed errors"], "criteria": criteria,
+        }
+
+    monkeypatch.setattr(
+        "my_crew.agent.review_graph.run_review_step", _fake_run_review_step,
+    )
+
+    rc = _run_team_step_kind(
+        ["--report", "team-step", "--task-id", "t1", "--step-id", "s1-review-0-0",
+         "--attempt-id", review_attempt],
+        agent_id="a1", loaded=_fake_loaded(), settings=settings,
+        data_dir=tmp_path / "agents" / "a1",
+    )
+    assert rc == 0
+
+    cs = CaptureStore(tmp_path / "captures.sqlite3")
+    review_row = cs.get(review_attempt)
+    content_row = cs.get(content_attempt)
+    cs.close()
+
+    assert review_row is not None
+    assert review_row["step_type"] == "review"
+    import json
+    assert json.loads(review_row["criteria_json"]) == criteria
+    # the reviewed content step's OWN capture row must stay untouched (no criteria)
+    assert content_row is not None
+    assert content_row["criteria_json"] is None

@@ -756,6 +756,22 @@ export interface CapturesPayload {
   captures: CaptureRow[]
 }
 
+// v54 P4b: one per-criterion review row (`{criterion, passed, note}`, the rubric
+// `team_task_check_prompt` produces) — persisted only on a review step's own capture row.
+export interface CaptureCriterion {
+  criterion: string
+  passed: boolean
+  note: string
+}
+
+// The DETAIL endpoint's shape (`GET /api/captures/{attempt_id}`): every `CaptureRow`
+// field plus `criteria` — `null` for a non-review attempt or a pre-P4b row (never `[]`,
+// which would misreport "reviewed, zero criteria"). The LIST endpoint never returns this
+// field at all, so it lives on its own type rather than widening `CaptureRow`.
+export interface CaptureDetail extends CaptureRow {
+  criteria: CaptureCriterion[] | null
+}
+
 export interface HistorySearchHit {
   excerpt: string
   source: 'step' | 'audit'

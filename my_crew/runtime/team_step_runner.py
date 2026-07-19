@@ -150,6 +150,11 @@ def run_team_step(
             attempt_id=attempt_id, task_id=task_id, step=step, engine=engine,
             status="done", telemetry=telemetry, cost_usd=cost,
             started_at=started_at, t0=t0, error=None,
+            # v54 P4b: attach the review's own per-criterion list to ITS capture row —
+            # `result.get("criteria")` is only ever non-empty for a review-step's result
+            # (see `_run_review`/`review_graph.run_review_step`); `None` for every other
+            # step_type keeps the column NULL exactly like before this phase existed.
+            criteria=result.get("criteria") if step.step_type == "review" else None,
         )
         room_message = result.get("room_message", "")
         if step.step_type == "review":
@@ -202,6 +207,7 @@ def run_team_step(
 def _record_capture(
     *, attempt_id: str, task_id: str, step, engine: str, status: str, telemetry,
     cost_usd, started_at: str, t0: float, error: str | None,
+    criteria: list[dict] | None = None,
 ) -> None:
     """Write one per-attempt telemetry row — best-effort, must NEVER fail the step.
 
@@ -209,6 +215,9 @@ def _record_capture(
     (with the exception, not silently) but does not abort the step, which has already done its
     real work and recorded its outcome in the team-task store. `ended_at`/`duration_ms` are
     computed here from the monotonic clock started in the caller's own process.
+
+    `criteria` (v54 P4b): the review step's per-criterion list, or `None` for every other
+    caller/step_type — see `CaptureStore.record`'s own docstring for the storage contract.
     """
     import time
     from datetime import UTC, datetime
@@ -229,6 +238,7 @@ def _record_capture(
                 cost_usd=cost_usd, cost_source=telemetry.cost_source,
                 input_tokens=telemetry.input_tokens, output_tokens=telemetry.output_tokens,
                 started_at=started_at, ended_at=ended_at, duration_ms=duration_ms, error=error,
+                criteria=criteria,
             )
         finally:
             cs.close()

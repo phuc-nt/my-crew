@@ -61,6 +61,32 @@ def test_captures_list_and_detail_roundtrip(client, tmp_path, monkeypatch):
     assert [r["agent_id"] for r in by_agent] == ["hr"]
     detail = client.get("/api/captures/a1").json()
     assert detail["engine"] == "create_agent" and detail["cost_source"] == "estimated"
+    # v54 P4b: a pre-P4b / non-review row has no criteria — detail returns null, and the
+    # list endpoint never exposes the raw column name.
+    assert detail["criteria"] is None
+    assert "criteria_json" not in detail
+    assert all("criteria" not in r and "criteria_json" not in r for r in all_rows)
+
+
+def test_capture_detail_returns_criteria_for_a_review_row(client, tmp_path, monkeypatch):
+    from my_crew.runtime.team_task_paths import capture_db_path
+
+    criteria = [
+        {"criterion": "validates input", "passed": True, "note": ""},
+        {"criterion": "handles timeout", "passed": False, "note": "not covered"},
+    ]
+    store = CaptureStore(capture_db_path())
+    store.record(**_capture_row(
+        attempt="r1", step_id="S1-review-0-0", step_type="review", review_round=1,
+        criteria=criteria,
+    ))
+    store.close()
+
+    detail = client.get("/api/captures/r1").json()
+    assert detail["criteria"] == criteria
+    # the list endpoint stays lean — no criteria field at all
+    listing = client.get("/api/captures", params={"task_id": "t1"}).json()["captures"]
+    assert all("criteria" not in r for r in listing)
 
 
 def test_budget_skips_missing_profiles_and_sums(client, monkeypatch, tmp_path):

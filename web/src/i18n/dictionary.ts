@@ -118,11 +118,12 @@ const vi = {
   'artifactPanel.selectRoomHint': 'Chọn một phòng việc để xem kết quả bàn giao.',
   'artifactPanel.empty': 'Chưa có bàn giao nào trong phòng này.',
 
-  // Review detail tray (v54 P3)
+  // Review detail tray (v54 P3, criteria rows added P4b)
   'reviewDetailTray.title': 'Chi tiết soát chéo',
   'reviewDetailTray.ariaLabel': 'Chi tiết soát chéo {stepTitle}',
   'reviewDetailTray.unavailable': 'Chưa có chi tiết từng tiêu chí lưu lại cho lần soát này — hệ thống hiện chỉ ghi số lượng đạt/không đạt (không lưu nội dung từng tiêu chí).',
   'reviewDetailTray.summary': '{taskTitle} / {stepTitle}: {verdict}',
+  'reviewDetailTray.loading': 'Đang tải chi tiết…',
 
   // artifact-viewer.tsx
   'artifactViewer.fallbackTitle': 'Kết quả bước',
@@ -1074,11 +1075,12 @@ const en = {
   'artifactPanel.selectRoomHint': 'Select a workroom to see its delivered outputs.',
   'artifactPanel.empty': 'No handoffs in this room yet.',
 
-  // Review detail tray (v54 P3)
+  // Review detail tray (v54 P3, criteria rows added P4b)
   'reviewDetailTray.title': 'Review detail',
   'reviewDetailTray.ariaLabel': 'Review detail for {stepTitle}',
   'reviewDetailTray.unavailable': 'No per-criterion detail was kept for this review — the system currently records only pass/fail counts, not each criterion\'s text.',
   'reviewDetailTray.summary': '{taskTitle} / {stepTitle}: {verdict}',
+  'reviewDetailTray.loading': 'Loading detail…',
 
   // artifact-viewer.tsx
   'artifactViewer.fallbackTitle': 'Step result',
