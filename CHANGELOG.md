@@ -3,6 +3,27 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.4.0] — 2026-07-19
+
+Office cockpit: the 3D office becomes the place the CEO acts from, not just watches.
+
+### Added
+- **Action rail** (left column): pending approvals and clarify questions from the whole
+  fleet merge into one "waiting on you" queue — approve/reject and answer questions in
+  place, through the existing write paths, without leaving the office. Below it, "Sắp
+  chạy" lists the fleet's next scheduled runs (`GET /api/schedule/upcoming`).
+- **Outward-action feed**: the activity feed gains a [All | Steps | External] filter;
+  "External" surfaces the Action Gateway's real-world writes (agent → tool → outcome),
+  bridged from the gateway's single audit choke point — identifier-only targets, never
+  message content.
+- **Review detail tray**: clicking a review line shows each acceptance criterion with a
+  pass/fail mark and note. Per-criterion results are now persisted
+  (`captures.criteria_json`, exposed only on the capture detail endpoint).
+- **3D desk cues**: a ✋ badge on desks (and the coordinator table) with something waiting
+  on you, a ×N badge when an agent runs steps in parallel, and a translucent ghost figure
+  while a deep_team step is delegating in its sandbox.
+- Per-workroom cost chip (lazy) and a mobile single-column stacking of the cockpit.
+
 ## [0.3.0] — 2026-07-19
 
 UI discipline + a Vietnamese/English language mode for the dashboard.
