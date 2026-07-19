@@ -114,21 +114,38 @@ function ClarifyCard({ question, onDone }: { question: ClarifyQuestion; onDone: 
   )
 }
 
-function PendingQueue() {
+interface PendingQueueProps {
+  // v54 P4: office-unified.tsx lifts the clarify fetch (its own poll feeds BOTH this
+  // rail and the 3D ✋ badge via agent-office-state's derivePendingCounts — one source,
+  // no double-poll). When the prop is omitted (e.g. ActionRail rendered standalone in a
+  // test or any future caller outside office-unified), PendingQueue falls back to its
+  // own self-contained fetch — same behavior as before this phase.
+  clarifyQuestions?: ClarifyQuestion[]
+  onClarifyAnswered?: () => void
+}
+
+function PendingQueue({ clarifyQuestions: liftedClarify, onClarifyAnswered }: PendingQueueProps) {
   const { t } = useLanguage()
   const { items: approvals, refresh: refreshApprovals } = useSharedPendingApprovals()
-  const [clarifyQuestions, setClarifyQuestions] = useState<ClarifyQuestion[]>([])
+  const [ownClarifyQuestions, setOwnClarifyQuestions] = useState<ClarifyQuestion[]>([])
   const [busyApprovalId, setBusyApprovalId] = useState<number | null>(null)
+  const isLifted = liftedClarify !== undefined
+  const clarifyQuestions = isLifted ? liftedClarify : ownClarifyQuestions
 
-  const loadClarify = useCallback(() => {
-    api.getClarifyPending().then((res) => setClarifyQuestions(res.questions)).catch(() => undefined)
+  const loadOwnClarify = useCallback(() => {
+    api.getClarifyPending().then((res) => setOwnClarifyQuestions(res.questions)).catch(() => undefined)
   }, [])
 
   useEffect(() => {
-    loadClarify()
-    const timer = setInterval(loadClarify, CLARIFY_POLL_MS)
+    if (isLifted) return // parent owns the fetch — no second poll
+    loadOwnClarify()
+    const timer = setInterval(loadOwnClarify, CLARIFY_POLL_MS)
     return () => clearInterval(timer)
-  }, [loadClarify])
+  }, [isLifted, loadOwnClarify])
+
+  // Both branches must refresh the list after an answer: the lifted case tells the
+  // parent (its own poll/refetch owns the state); the self-fetch case just reloads.
+  const onDone = onClarifyAnswered ?? loadOwnClarify
 
   const act = useCallback(
     async (approval: AgentApproval, action: 'approve' | 'reject') => {
@@ -146,7 +163,9 @@ function PendingQueue() {
 
   const items: RailItem[] = [
     ...approvals.map((approval): RailItem => ({ kind: 'approval', ts: approval.created_at, approval })),
-    ...clarifyQuestions.map((question): RailItem => ({ kind: 'clarify', ts: question.asked_at, question })),
+    ...(clarifyQuestions ?? []).map(
+      (question): RailItem => ({ kind: 'clarify', ts: question.asked_at, question }),
+    ),
   ].sort((a, b) => a.ts.localeCompare(b.ts))
 
   return (
@@ -172,7 +191,7 @@ function PendingQueue() {
               <ClarifyCard
                 key={`clarify-${item.question.id}`}
                 question={item.question}
-                onDone={loadClarify}
+                onDone={onDone}
               />
             ),
           )}
@@ -215,10 +234,17 @@ function UpcomingSchedule() {
   )
 }
 
-export function ActionRail() {
+interface ActionRailProps {
+  // v54 P4: lifted from office-unified.tsx so the 3D ✋ badge and this rail read the
+  // SAME clarify poll (see PendingQueueProps doc comment above).
+  clarifyQuestions?: ClarifyQuestion[]
+  onClarifyAnswered?: () => void
+}
+
+export function ActionRail({ clarifyQuestions, onClarifyAnswered }: ActionRailProps) {
   return (
     <aside className="office-rail">
-      <PendingQueue />
+      <PendingQueue clarifyQuestions={clarifyQuestions} onClarifyAnswered={onClarifyAnswered} />
       <UpcomingSchedule />
     </aside>
   )

@@ -28,6 +28,10 @@ interface OfficeCanvasProps {
   // Dual-lens P1 (high-mode only — the unified screen gates it): PIC agents of tasks
   // that have sandbox (needs_shell) steps. Board-API truth, not the event stream.
   needsShellAgents?: Set<string>
+  // v54 P4: ✋ pending-count badge, SAME source as the action rail (agent-office-state's
+  // derivePendingCounts, computed once in office-unified.tsx) — props-in only, no
+  // context inside <Canvas> (r3f rule).
+  pendingCounts?: Map<string, number>
 }
 
 // Roster filter runs BEFORE ring-index math (red-team m-visibleDesks): positions are
@@ -55,7 +59,7 @@ function useThemeIsDark(): boolean {
 }
 
 export function OfficeCanvas({
-  agentIds, desks, rosterIds, dimmedIds, onDeskSelect, needsShellAgents,
+  agentIds, desks, rosterIds, dimmedIds, onDeskSelect, needsShellAgents, pendingCounts,
 }: OfficeCanvasProps) {
   const { t } = useLanguage()
   const visible = visibleDesks(agentIds, rosterIds)
@@ -97,6 +101,7 @@ export function OfficeCanvas({
               dark={dark}
               onSelect={onDeskSelect}
               needsShell={needsShellAgents?.has(id) ?? false}
+              pendingCount={pendingCounts?.get(id) ?? 0}
               t={t}
             />
           )

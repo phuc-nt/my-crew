@@ -15,13 +15,14 @@ import { api } from '../../api/client'
 import { useLanguage } from '../../i18n/language-context'
 import { useUiMode } from '../../ui-mode-context'
 import { useOfficeStream } from '../../hooks/use-office-stream'
-import { agentIdsInOrder, deriveAgentDesks } from '../office-3d/agent-office-state'
+import { useSharedPendingApprovals } from '../../pending-approvals-context'
+import { agentIdsInOrder, deriveAgentDesks, derivePendingCounts } from '../office-3d/agent-office-state'
 import { AgentStatusTable } from '../office-3d/agent-status-table'
 import { OfficeCanvas } from '../office-3d/office-canvas'
 import { use3dFallback } from '../office-3d/use-3d-fallback'
 import { Button } from '../../components/ui/button'
 import { PageHeader } from '../../components/ui/page-header'
-import type { OfficeMessage, TeamBoardLane, Workroom } from '../../types'
+import type { ClarifyQuestion, OfficeMessage, TeamBoardLane, Workroom } from '../../types'
 import { ActionRail } from './action-rail'
 import { ActivityFeed } from './activity-feed'
 import { ArtifactPanel } from './artifact-panel'
@@ -34,6 +35,8 @@ import { WorkroomList } from './workroom-list'
 
 const OFFICE_ROOM_ID = 'office'
 const PANEL_COLLAPSE_KEY = 'office3dCollapsed'
+// v54 P4: same cadence action-rail.tsx used for its own (now-removed) self-fetch.
+const CLARIFY_POLL_MS = 30_000
 
 export function OfficeUnified() {
   const { t } = useLanguage()
@@ -55,6 +58,26 @@ export function OfficeUnified() {
 
   const agentIds = useMemo(() => agentIdsInOrder(office.messages), [office.messages])
   const desks = useMemo(() => deriveAgentDesks(office.messages), [office.messages])
+
+  // v54 P4: clarify fetch lifted here (was self-contained inside ActionRail) so the ✋
+  // pending badge on the 3D desk reads the SAME poll the action rail displays — one
+  // source of truth, no second EventSource/interval. Approvals already have a single
+  // shared poll (usePendingApprovals via the context); this puts clarify on equal
+  // footing before merging both into a per-agent count.
+  const [clarifyQuestions, setClarifyQuestions] = useState<ClarifyQuestion[]>([])
+  const loadClarify = useCallback(() => {
+    api.getClarifyPending().then((res) => setClarifyQuestions(res.questions)).catch(() => undefined)
+  }, [])
+  useEffect(() => {
+    loadClarify()
+    const timer = setInterval(loadClarify, CLARIFY_POLL_MS)
+    return () => clearInterval(timer)
+  }, [loadClarify])
+  const { items: approvals } = useSharedPendingApprovals()
+  const pendingCounts = useMemo(
+    () => derivePendingCounts(approvals, clarifyQuestions),
+    [approvals, clarifyQuestions],
+  )
 
   // Registry roster — the ghost-desk filter. Coordinator is not assignable but owns the
   // center desk component, so only agent desks are filtered by this list.
@@ -202,7 +225,7 @@ export function OfficeUnified() {
 
       {/* v54 layout A: rail trái (LÀM) — mobile DOM order puts this first so blocking
           items stack above the canvas/feed on narrow screens. */}
-      <ActionRail />
+      <ActionRail clarifyQuestions={clarifyQuestions} onClarifyAnswered={loadClarify} />
 
       {/* center column (XEM): 3D canvas + live feed of the selected room. */}
       <div className="office-unified-center">
@@ -217,6 +240,7 @@ export function OfficeUnified() {
               <OfficeCanvas
                 agentIds={agentIds} desks={desks} rosterIds={rosterIds} dimmedIds={dimmedIds}
                 onDeskSelect={openDesk} needsShellAgents={needsShellAgents}
+                pendingCounts={pendingCounts}
               />
             )}
           </div>

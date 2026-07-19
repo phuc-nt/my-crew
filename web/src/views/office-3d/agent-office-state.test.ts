@@ -9,7 +9,7 @@
 // `handoff` KIND, not a `step_status` status value.
 import { describe, expect, test } from 'vitest'
 import type { OfficeMessage } from '../../types'
-import { agentIdsInOrder, deriveAgentDesks, shouldShowBubble } from './agent-office-state'
+import { agentIdsInOrder, deriveAgentDesks, derivePendingCounts, shouldShowBubble } from './agent-office-state'
 
 function msg(partial: Partial<OfficeMessage> & Pick<OfficeMessage, 'kind' | 'author'>): OfficeMessage {
   return { seq: 1, ts: 't', body: {}, ...partial }
@@ -37,6 +37,8 @@ describe('deriveAgentDesks', () => {
       consultWith: null,
       lastVerdict: null,
       picTasks: new Set(),
+      concurrentSteps: 1,
+      deepTeamActive: false,
     })
     expect(desks.has('coordinator')).toBe(false)
   })
@@ -93,6 +95,8 @@ describe('deriveAgentDesks', () => {
       consultWith: null,
       lastVerdict: null,
       picTasks: new Set(),
+      concurrentSteps: 0,
+      deepTeamActive: false,
     })
   })
 
@@ -400,5 +404,172 @@ describe('dual-lens P1: error state + verdict', () => {
       msg({ kind: 'review', author: 'r', body: { verdict: '', assigned_to: 'r' } as never }),
     ])
     expect(desks.get('r')?.lastVerdict).toBeNull()
+  })
+})
+
+// --- v54 P4: concurrentSteps (×N fan-out badge) + deepTeamActive (ghost figure) ---
+
+describe('v54 P4: concurrentSteps fan-out counter', () => {
+  test('a fresh desk with no events has concurrentSteps 0', () => {
+    const desks = deriveAgentDesks([
+      msg({ kind: 'consult', author: 'a', body: { from: 'a', to: 'agent-a' } }),
+    ])
+    expect(desks.get('agent-a')?.concurrentSteps).toBe(0)
+  })
+
+  test('one dispatch (started, no attempt_id) sets concurrentSteps to 1 — below the ×N threshold', () => {
+    const desks = deriveAgentDesks([
+      msg({
+        kind: 'step_status', author: 'coordinator',
+        body: { status: 'started', assigned_to: 'agent-a' },
+      }),
+    ])
+    expect(desks.get('agent-a')?.concurrentSteps).toBe(1)
+  })
+
+  test('two dispatches to the same agent (parallel fan-out) sets concurrentSteps to 2', () => {
+    const desks = deriveAgentDesks([
+      msg({
+        kind: 'step_status', author: 'coordinator',
+        body: { status: 'started', assigned_to: 'agent-a', step_title: 's1' },
+      }),
+      msg({
+        kind: 'step_status', author: 'coordinator',
+        body: { status: 'started', assigned_to: 'agent-a', step_title: 's2' },
+      }),
+    ])
+    expect(desks.get('agent-a')?.concurrentSteps).toBe(2)
+  })
+
+  test('a handoff resolves one dispatched step — counter decrements back toward 0', () => {
+    const desks = deriveAgentDesks([
+      msg({ kind: 'step_status', author: 'coordinator', body: { status: 'started', assigned_to: 'agent-a' } }),
+      msg({ kind: 'step_status', author: 'coordinator', body: { status: 'started', assigned_to: 'agent-a' } }),
+      msg({ kind: 'handoff', author: 'agent-a', body: { assigned_to: 'agent-a', message: 'xong' } }),
+    ])
+    expect(desks.get('agent-a')?.concurrentSteps).toBe(1)
+  })
+
+  test('a failed step also resolves one dispatched step', () => {
+    const desks = deriveAgentDesks([
+      msg({ kind: 'step_status', author: 'coordinator', body: { status: 'started', assigned_to: 'agent-a' } }),
+      msg({ kind: 'step_status', author: 'agent-a', body: { status: 'failed', assigned_to: 'agent-a' } }),
+    ])
+    expect(desks.get('agent-a')?.concurrentSteps).toBe(0)
+  })
+
+  test('a review verdict (reviewer desk terminal) also resolves one dispatched step', () => {
+    const desks = deriveAgentDesks([
+      msg({ kind: 'step_status', author: 'coordinator', body: { status: 'started', assigned_to: 'reviewer' } }),
+      msg({ kind: 'review', author: 'reviewer', body: { verdict: 'passed', assigned_to: 'reviewer' } }),
+    ])
+    expect(desks.get('reviewer')?.concurrentSteps).toBe(0)
+  })
+
+  test('a terminal event with nothing outstanding floors at 0, never negative', () => {
+    const desks = deriveAgentDesks([
+      msg({ kind: 'handoff', author: 'agent-a', body: { assigned_to: 'agent-a', message: 'xong' } }),
+    ])
+    expect(desks.get('agent-a')?.concurrentSteps).toBe(0)
+  })
+})
+
+describe('v54 P4: deepTeamActive ghost figure', () => {
+  test('a plain phase event (no deep_team) leaves deepTeamActive false', () => {
+    const desks = deriveAgentDesks([
+      msg({ kind: 'step_status', author: 'coordinator', body: { status: 'started', assigned_to: 'agent-a' } }),
+      msg({
+        kind: 'step_status', author: 'agent-a',
+        body: { status: 'started', assigned_to: 'agent-a', phase: 'dang-lam', attempt_id: 'att-1' },
+      }),
+    ])
+    expect(desks.get('agent-a')?.deepTeamActive).toBe(false)
+  })
+
+  test('a phase event carrying deep_team: true turns the ghost on for the current attempt', () => {
+    const desks = deriveAgentDesks([
+      msg({ kind: 'step_status', author: 'coordinator', body: { status: 'started', assigned_to: 'agent-a' } }),
+      msg({
+        kind: 'step_status', author: 'agent-a',
+        body: { status: 'started', assigned_to: 'agent-a', phase: 'dang-lam', attempt_id: 'att-1', deep_team: true },
+      }),
+    ])
+    expect(desks.get('agent-a')?.deepTeamActive).toBe(true)
+  })
+
+  test('the step resolving (handoff) turns the ghost back off', () => {
+    const desks = deriveAgentDesks([
+      msg({ kind: 'step_status', author: 'coordinator', body: { status: 'started', assigned_to: 'agent-a' } }),
+      msg({
+        kind: 'step_status', author: 'agent-a',
+        body: { status: 'started', assigned_to: 'agent-a', phase: 'dang-lam', attempt_id: 'att-1', deep_team: true },
+      }),
+      msg({ kind: 'handoff', author: 'agent-a', body: { assigned_to: 'agent-a', message: 'xong' } }),
+    ])
+    expect(desks.get('agent-a')?.deepTeamActive).toBe(false)
+  })
+
+  test('a fresh re-dispatch (new attempt) clears the previous attempt\'s ghost until its own phase event opts in', () => {
+    const desks = deriveAgentDesks([
+      msg({ kind: 'step_status', author: 'coordinator', body: { status: 'started', assigned_to: 'agent-a' } }),
+      msg({
+        kind: 'step_status', author: 'agent-a',
+        body: { status: 'started', assigned_to: 'agent-a', phase: 'dang-lam', attempt_id: 'att-1', deep_team: true },
+      }),
+      // ticker re-dispatch (retry) — no attempt_id — starts a NEW attempt's window
+      msg({ kind: 'step_status', author: 'coordinator', body: { status: 'started', assigned_to: 'agent-a' } }),
+    ])
+    expect(desks.get('agent-a')?.deepTeamActive).toBe(false)
+  })
+
+  test('a stale attempt\'s deep_team phase event is dropped like any other stale phase event', () => {
+    const desks = deriveAgentDesks([
+      msg({ kind: 'step_status', author: 'coordinator', body: { status: 'started', assigned_to: 'agent-a' } }),
+      msg({
+        kind: 'step_status', author: 'agent-a',
+        body: { status: 'started', assigned_to: 'agent-a', phase: 'dang-lam', attempt_id: 'att-2' },
+      }),
+      // late-arriving event from a SUPERSEDED attempt — must not turn the ghost on
+      msg({
+        kind: 'step_status', author: 'agent-a',
+        body: { status: 'started', assigned_to: 'agent-a', phase: 'dang-sua', attempt_id: 'att-1', deep_team: true },
+      }),
+    ])
+    expect(desks.get('agent-a')?.deepTeamActive).toBe(false)
+  })
+})
+
+describe('v54 P4: derivePendingCounts', () => {
+  test('no approvals and no clarify questions yields an empty map (0 pending everywhere)', () => {
+    const counts = derivePendingCounts([], [])
+    expect(counts.size).toBe(0)
+    expect(counts.get('agent-a')).toBeUndefined()
+  })
+
+  test('one approval for an agent counts 1', () => {
+    const counts = derivePendingCounts([{ agentId: 'agent-a' }], [])
+    expect(counts.get('agent-a')).toBe(1)
+  })
+
+  test('one clarify question for an agent counts 1', () => {
+    const counts = derivePendingCounts([], [{ agent_id: 'agent-a' }])
+    expect(counts.get('agent-a')).toBe(1)
+  })
+
+  test('approvals and clarify questions for the same agent merge into one count (N >= 2)', () => {
+    const counts = derivePendingCounts(
+      [{ agentId: 'agent-a' }, { agentId: 'agent-a' }],
+      [{ agent_id: 'agent-a' }],
+    )
+    expect(counts.get('agent-a')).toBe(3)
+  })
+
+  test('different agents get independent counts', () => {
+    const counts = derivePendingCounts(
+      [{ agentId: 'agent-a' }],
+      [{ agent_id: 'agent-b' }],
+    )
+    expect(counts.get('agent-a')).toBe(1)
+    expect(counts.get('agent-b')).toBe(1)
   })
 })

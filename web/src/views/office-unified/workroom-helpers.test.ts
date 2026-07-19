@@ -41,6 +41,7 @@ test('shouldShowBubble: only running/consulting desks speak (v17 Q4)', () => {
   const base = {
     id: 'a', taskTitle: 'T', stepTitle: 'S', phase: null, attemptId: null,
     consultWith: null, lastVerdict: null, picTasks: new Set<string>(),
+    concurrentSteps: 0, deepTeamActive: false,
   }
   expect(shouldShowBubble({ ...base, state: 'working' })).toBe(true)
   expect(shouldShowBubble({ ...base, state: 'assigned' })).toBe(true)

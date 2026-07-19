@@ -209,6 +209,8 @@ const vi = {
   'agentDesk.stateError': 'gặp lỗi',
   'agentDesk.stateIdle': 'đang rảnh',
   'agentDesk.clickToOpen': 'bấm để mở',
+  'agentDesk.pendingBadgeTitle': '{n} việc đang chờ anh/chị',
+  'agentDesk.fanOutBadgeTitle': 'đang làm {n} bước cùng lúc',
 
   // office-3d/speech-bubble.tsx (PHASE_LABEL + consult title)
   'speechBubble.phaseWork': 'đang làm',
@@ -1163,6 +1165,8 @@ const en = {
   'agentDesk.stateError': 'has an error',
   'agentDesk.stateIdle': 'idle',
   'agentDesk.clickToOpen': 'click to open',
+  'agentDesk.pendingBadgeTitle': '{n} item(s) waiting on you',
+  'agentDesk.fanOutBadgeTitle': 'running {n} steps at once',
 
   // office-3d/speech-bubble.tsx (PHASE_LABEL + consult title)
   'speechBubble.phaseWork': 'working',

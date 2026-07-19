@@ -283,6 +283,15 @@ input, textarea, select { font-size: var(--fs-body); }
   margin-bottom: 2px; }
 .office-3d-label { font-size: var(--fs-2xs); font-weight: 700; white-space: nowrap;
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9); }
+/* v54 P4: ✋ pending / ×N fan-out desk badges — small pill row above the agent label,
+   same fixed-light-color posture as the tooltip/bubble (the canvas background always
+   tracks the app theme, but these overlay chips read best with a constant contrast). */
+.office-3d-desk-badges { display: flex; gap: 3px; }
+.office-3d-badge { display: inline-flex; align-items: center; font-size: var(--fs-2xs);
+  font-weight: 700; padding: 1px 5px; border-radius: 8px; color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); white-space: nowrap; }
+.office-3d-badge-pending { background: #d97706; }
+.office-3d-badge-fanout { background: #2563eb; }
 
 /* v54 layout A: rail trái (LÀM, 260px) | giữa (XEM, 1fr) | phải (TRA, ~300px), header +
    composer span the full width. Grid areas keep the JSX's DOM order meaningful (rail first)

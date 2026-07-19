@@ -67,7 +67,7 @@ test('desk inspector: fetches status always, task cost only when the desk is PIC
   const desk = {
     id: 'hr', state: 'working' as const, taskTitle: 'Demo', stepTitle: 'draft',
     phase: null, attemptId: null, consultWith: null, lastVerdict: null,
-    picTasks: new Set(['t9']),
+    picTasks: new Set(['t9']), concurrentSteps: 0, deepTeamActive: false,
   }
   render(
     <MemoryRouter>
@@ -94,7 +94,7 @@ test('desk inspector without a PIC task never calls the cost endpoint', async ()
   const desk = {
     id: 'hr', state: 'idle' as const, taskTitle: null, stepTitle: null,
     phase: null, attemptId: null, consultWith: null, lastVerdict: null,
-    picTasks: new Set<string>(),
+    picTasks: new Set<string>(), concurrentSteps: 0, deepTeamActive: false,
   }
   render(
     <MemoryRouter>

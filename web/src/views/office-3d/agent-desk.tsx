@@ -17,6 +17,7 @@ import type { UiKey } from '../../i18n/dictionary'
 import { DICT } from '../../i18n/dictionary'
 import { shouldShowBubble } from './agent-office-state'
 import type { AgentDeskState } from './agent-office-state'
+import { DeepTeamGhost, DeskStatusBadges } from './desk-badges'
 import { DESK_EDGE_COLOR, VERDICT_FLASH_COLOR, agentColor, agentHash, officeTheme } from './desk-colors'
 import { consultMeetPoint } from './desk-layout'
 import { SpeechBubble } from './speech-bubble'
@@ -40,6 +41,10 @@ interface AgentDeskProps {
   // Dual-lens P1 (high-mode only — parent gates it): this agent is PIC of a task with
   // sandbox (needs_shell) steps. Task-level truth from the board API, not the stream.
   needsShell?: boolean
+  // v54 P4: ✋ pending-count badge — SAME source as the action rail (derivePendingCounts
+  // in agent-office-state.ts, computed once in office-unified.tsx and threaded down
+  // through OfficeCanvas so there is exactly one poll, not a second one per desk).
+  pendingCount?: number
   // v53 i18n: this component renders inside <Canvas> (react-three-fiber), so it cannot
   // call useLanguage() itself — the translate function is threaded down as a prop from
   // office-unified.tsx via OfficeCanvas.
@@ -113,7 +118,7 @@ export function verdictFlashStrength(ts: string, now: number): number {
 }
 
 export function AgentDesk({
-  position, label, desk, consultPos, dimmed, dark, onSelect, needsShell, t,
+  position, label, desk, consultPos, dimmed, dark, onSelect, needsShell, pendingCount, t,
 }: AgentDeskProps) {
   const avatarRef = useRef<THREE.Group>(null)
   const bobRef = useRef<THREE.Group>(null) // inner group: bob rides here, NOT inside the lerp
@@ -260,8 +265,20 @@ export function AgentDesk({
       >
         <group ref={bobRef}>
           <AgentAvatar id={label} skin={theme.skin} />
+          {/* v54 P4: deep_team ghost sits just beside the avatar's own body, inside the
+              SAME lerp/bob group so it moves with the desk↔consult tween for free
+              (no separate useFrame) — static offset, no independent animation. */}
+          {desk.deepTeamActive && (
+            <DeepTeamGhost position={[0.35, 0, 0]} color={agentColor(label)} skin={theme.skin} />
+          )}
         </group>
       </group>
+      <DeskStatusBadges
+        position={[position[0], position[1] + 2.05, position[2]]}
+        pendingCount={pendingCount ?? 0}
+        concurrentSteps={desk.concurrentSteps}
+        t={t}
+      />
       <Html position={[position[0], position[1] + 1.7, position[2]]} center distanceFactor={10} occlude={false}>
         <div className="office-3d-label" style={{ color: agentColor(label) }}>
           {desk.picTasks.size > 0 ? '⭐ ' : ''}

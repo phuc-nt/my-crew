@@ -4,6 +4,17 @@
 // decides what "idle / assigned / working / done" means for an agent, derived ONLY from the
 // office room's OfficeMessage stream (no polling, no local-only state).
 //
+// v54 P4: three CHEAP 3D desk indicators (CEO decision — no new geometry/animation
+// systems). All derivation logic lives HERE (pure, unit-tested); agent-desk.tsx only
+// reads the resulting numbers/booleans off AgentDeskState and renders Html overlays /
+// one static translucent mesh. `concurrentSteps`/`deepTeamActive` come from the SAME
+// office event stream deriveAgentDesks already walks (no second source of truth);
+// `pendingCount` is computed by a SEPARATE pure function (derivePendingCounts) because
+// its inputs (approvals + clarify questions) are REST-polled, not stream-derived — the
+// office-unified screen calls both and threads the resulting Map<agentId, count> down
+// as its own prop (desks stays the stream-derived map; pendingCounts is layered
+// alongside it, not merged into it, so this module needs no knowledge of the REST types).
+//
 // Desks are keyed by `assigned_to`, NEVER by `author`: the ticker authors a step's `started`
 // event as "coordinator" (it is the one dispatching, not the one doing the work) — the
 // assignee identity rides in the body's `assigned_to` field instead (see
@@ -62,6 +73,22 @@ export interface AgentDeskState {
   // message text. Badge shows while the set is non-empty. Multiple concurrent tasks
   // ⇒ multiple desks legitimately badged at once.
   picTasks: Set<string>
+  // v54 P4: count of this desk's step_status dispatches (`started`, no attempt_id yet —
+  // the ticker's own dispatch event, see tick_actions.reserve_and_spawn) that have not
+  // been matched by a later terminal event (`failed`, `handoff`, or a `review` "done").
+  // The dispatch/terminal events in this data model carry no per-step correlation id
+  // (attempt_id only appears on the phase events AFTER dispatch — see the zombie-attempt
+  // guard above), so this is a running counter, not an id-keyed set: it floors at 0
+  // (a terminal event with nothing outstanding is a no-op, never negative). ×N fan-out
+  // badge (agent-desk.tsx) shows while this is >= 2 — the agent has more than one step
+  // dispatched to it at once (parallel fan-out).
+  concurrentSteps: number
+  // v54 P4: true while the desk's CURRENT attempt (per `attemptId` above) was dispatched
+  // with `deep_team: true` on its phase event (P1's in-sandbox subagent-delegation
+  // opt-in). Cleared whenever a fresh dispatch resets `attemptId`/`phase` (same moment
+  // the zombie-attempt guard above clears the stale phase) or a terminal event resolves
+  // this desk's work.
+  deepTeamActive: boolean
 }
 
 function nextState(prev: AgentState, status: string | undefined): AgentState {
@@ -95,6 +122,7 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
       d = {
         id, state: 'idle', taskTitle: null, stepTitle: null, phase: null, attemptId: null,
         consultWith: null, lastVerdict: null, picTasks: new Set<string>(),
+        concurrentSteps: 0, deepTeamActive: false,
       }
       desks.set(id, d)
     }
@@ -139,12 +167,30 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
         // things, delivered late by SSE reconnect-replay) get dropped instead of
         // silently overwriting the new attempt's live phase.
         if (!incomingAttempt && m.body.status === 'started') {
+          // v54 P4: this IS the ticker's dispatch event (tick_actions.reserve_and_spawn)
+          // — one more step is now live on this desk. Counted here (not on the phase
+          // event) because the dispatch is the only event guaranteed to fire exactly
+          // once per step, whereas phase events repeat mid-run.
+          d.concurrentSteps += 1
           d.attemptId = null
           d.phase = null // a fresh dispatch invalidates the previous attempt's phase text
+          d.deepTeamActive = false // the new attempt's own phase event will re-set this
         } else if (incomingAttempt && d.attemptId && incomingAttempt !== d.attemptId) {
           break // stale attempt's phase event — drop
         } else if (incomingAttempt) {
           d.attemptId = incomingAttempt
+        }
+        if (m.body.status === 'failed') {
+          // Terminal for one dispatched step — floor at 0 so an out-of-order/replayed
+          // failed (no matching outstanding dispatch counted, e.g. mid-stream join)
+          // never goes negative.
+          d.concurrentSteps = Math.max(0, d.concurrentSteps - 1)
+          d.deepTeamActive = false
+        }
+        // v54 P1/P4: deep_team rides the PHASE event (carries attempt_id), never the
+        // bare dispatch — only set it while it belongs to the desk's CURRENT attempt.
+        if (m.body.deep_team && incomingAttempt && incomingAttempt === d.attemptId) {
+          d.deepTeamActive = true
         }
         d.taskTitle = m.body.task_title ?? d.taskTitle
         d.stepTitle = m.body.step_title ?? d.stepTitle
@@ -156,6 +202,10 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
         const assignedTo = m.body.assigned_to ?? m.author
         const d = ensure(assignedTo)
         endConsult(d) // this desk moved on — the consult is over for BOTH parties
+        // v54 P4: a handoff resolves one dispatched step (the "done" terminal for
+        // step_status's "started"/"failed" pair) — same floor-at-0 posture as failed.
+        d.concurrentSteps = Math.max(0, d.concurrentSteps - 1)
+        d.deepTeamActive = false
         d.taskTitle = m.body.task_title ?? d.taskTitle
         d.stepTitle = m.body.step_title ?? d.stepTitle
         // A handoff marks the step as delivered to the next person — the desk shows "done"
@@ -180,6 +230,9 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
         const assignedTo = m.body.assigned_to ?? m.author
         const d = ensure(assignedTo)
         endConsult(d) // this desk moved on — the consult is over for BOTH parties
+        // v54 P4: a review-step's verdict is its own terminal, same accounting as handoff.
+        d.concurrentSteps = Math.max(0, d.concurrentSteps - 1)
+        d.deepTeamActive = false
         d.taskTitle = m.body.task_title ?? d.taskTitle
         d.stepTitle = m.body.step_title ?? d.stepTitle
         d.state = 'done'
@@ -255,4 +308,24 @@ export function agentIdsInOrder(messages: OfficeMessage[]): string[] {
     if (m.kind === 'assignment') add(m.body.pic)
   }
   return seen
+}
+
+// v54 P4: ✋ pending-count badge — SAME source of truth as the action rail (P2), so the
+// desk badge and the rail list can never disagree. Pure merge of the two REST-polled
+// lists the rail already reads (useSharedPendingApprovals' items + clarify questions);
+// office-unified.tsx calls this once and passes the resulting map to BOTH the rail and
+// the canvas (no second poll — see the office-unified.tsx wiring for the lifted clarify
+// fetch). `agentId`/`agent_id` are the two lists' own field names (approvals are
+// decorated with `agentId` by usePendingApprovals; clarify rows are server payloads
+// using snake_case) — kept as loose shape params here (not the full imported types) so
+// this module stays a leaf with no dependency on the hooks/api layer.
+export function derivePendingCounts(
+  approvalItems: { agentId: string }[],
+  clarifyItems: { agent_id: string }[],
+): Map<string, number> {
+  const counts = new Map<string, number>()
+  const bump = (id: string) => counts.set(id, (counts.get(id) ?? 0) + 1)
+  for (const a of approvalItems) bump(a.agentId)
+  for (const c of clarifyItems) bump(c.agent_id)
+  return counts
 }
