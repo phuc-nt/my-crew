@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ApiError, api } from '../api/client'
+import { Badge } from '../components/ui/badge'
 import { EmptyState } from '../components/ui/empty-state'
 import { KIND_LABEL, RUN_STATUS_LABEL, formatCost, formatDateTime, labelFor } from '../labels'
 import type { AgentStatus, CostPayload, RunsPayload } from '../types'
@@ -45,12 +46,12 @@ export function AgentPage() {
         <h2>
           {status.name} <span className="muted">({id})</span>
         </h2>
-        <span className={status.enabled ? 'badge-on' : 'badge-off'}>
+        <Badge tone={status.enabled ? 'ok' : 'neutral'}>
           {status.enabled ? 'đang bật' : 'đang tắt'}
-        </span>
+        </Badge>
         {status.trust_mode && (
-          <span
-            className={status.trust_mode === 'autonomous' ? 'badge-trust-auto' : 'badge-trust-guarded'}
+          <Badge
+            tone={status.trust_mode === 'autonomous' ? 'accent' : 'warn'}
             title={
               status.trust_mode === 'autonomous'
                 ? 'Tự chủ: hành động ngay, hậu kiểm qua nhật ký audit. Lưới cứng (chống xoá dữ liệu, lộ khoá) luôn bật.'
@@ -58,7 +59,7 @@ export function AgentPage() {
             }
           >
             {status.trust_mode === 'autonomous' ? 'tự chủ' : 'có duyệt'}
-          </span>
+          </Badge>
         )}
         {status.pending_approvals > 0 && (
           <Link to="/work" className="agent-pending">

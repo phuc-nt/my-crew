@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { api, ApiError } from '../api/client'
 import { Button } from '../components/ui/button'
+import { Card } from '../components/ui/card'
 import type { CreateAgentResult, CreateAgentSpec } from '../types'
 import { buildEnvTemplate } from './env-template'
 
@@ -43,7 +44,7 @@ export function ReviewStep({ spec, pack }: { spec: CreateAgentSpec; pack: { serv
       <h3>Bước 5: Xem lại + tạo</h3>
       <pre className="review-spec">{JSON.stringify(spec, null, 2)}</pre>
 
-      <div className="token-setup-box">
+      <Card className="token-setup-box">
         <h4>Cài đặt token</h4>
         <p className="muted">
           Đây chỉ là TÊN biến môi trường — đừng nhập giá trị bí mật ở đây. Người phụ trách kỹ
@@ -53,7 +54,7 @@ export function ReviewStep({ spec, pack }: { spec: CreateAgentSpec; pack: { serv
         <Button variant="ghost" onClick={copyEnv}>
           {copied ? 'Đã chép!' : 'Chép mẫu .env'}
         </Button>
-      </div>
+      </Card>
 
       {error && <p className="error">Lỗi: {error}</p>}
       {!result && (

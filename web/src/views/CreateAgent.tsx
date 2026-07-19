@@ -6,6 +6,7 @@
 // wizard state, buildSpec()/api.createAgent are unchanged.
 import { DomainPicker } from '../components/DomainPicker'
 import { Button } from '../components/ui/button'
+import { PageHeader } from '../components/ui/page-header'
 import { BindingsStep } from '../wizard/BindingsStep'
 import { IdentityStep } from '../wizard/IdentityStep'
 import { ReportsStep } from '../wizard/ReportsStep'
@@ -40,7 +41,7 @@ export function CreateAgent() {
 
   return (
     <section>
-      <h2>Tạo nhân sự ảo</h2>
+      <PageHeader title="Tạo nhân sự ảo" />
       <ol className="wizard-steps">
         {STEP_LABELS.map((label, i) => (
           <li key={label} className={state.step === i ? 'wizard-step-active' : undefined}>

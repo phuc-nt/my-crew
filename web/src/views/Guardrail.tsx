@@ -3,6 +3,7 @@
 import { AuditTable } from '../components/AuditTable'
 import { VerdictChart } from '../components/charts/VerdictChart'
 import { api } from '../api/client'
+import { PageHeader } from '../components/ui/page-header'
 import { useAgentData } from '../hooks/use-agent-data'
 import { useTheme } from '../theme-context'
 import type { AuditPayload } from '../types'
@@ -18,7 +19,7 @@ export function Guardrail() {
   const total = Object.values(data.counts).reduce((a, b) => a + b, 0)
   return (
     <section>
-      <h2>Guardrail &amp; nhật ký</h2>
+      <PageHeader title="Guardrail & nhật ký" />
       <p>{total} quyết định đã ghi qua rào chắn.</p>
       {total > 0 && (
         <div className="chart-box">

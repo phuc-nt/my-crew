@@ -2,6 +2,7 @@
 // status from /api/agents. The first end-to-end proof: FastAPI static → React → /api/agents.
 import { useAgent } from '../agent-context'
 import { EmptyState } from '../components/ui/empty-state'
+import { PageHeader } from '../components/ui/page-header'
 import { KIND_LABEL, RUN_STATUS_LABEL, labelFor } from '../labels'
 
 export function Overview() {
@@ -12,7 +13,7 @@ export function Overview() {
 
   return (
     <section>
-      <h2>Tổng quan đội</h2>
+      <PageHeader title="Tổng quan đội" />
       {/* Advanced (technical) view — a distinct class so it does NOT inherit the mobile
           card-list transform meant for the CEO tables; it just scrolls horizontally. */}
       <div className="table-scroll">

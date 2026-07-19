@@ -3,6 +3,7 @@
 // the live trigger+stream surface lands with the S4 ops view.
 import { RunList } from '../components/RunList'
 import { api } from '../api/client'
+import { PageHeader } from '../components/ui/page-header'
 import { useAgentData } from '../hooks/use-agent-data'
 import type { RunsPayload } from '../types'
 
@@ -13,7 +14,7 @@ export function Timeline() {
   if (!data) return null
   return (
     <section>
-      <h2>Dòng thời gian hoạt động</h2>
+      <PageHeader title="Dòng thời gian hoạt động" />
       <RunList runs={data.runs} />
     </section>
   )

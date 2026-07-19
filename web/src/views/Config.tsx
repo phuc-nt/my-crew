@@ -5,6 +5,7 @@ import { useCallback } from 'react'
 import { useAgent } from '../agent-context'
 import { ConfigEditor } from '../components/ConfigEditor'
 import { api } from '../api/client'
+import { PageHeader } from '../components/ui/page-header'
 import { useAgentData } from '../hooks/use-agent-data'
 import type { ConfigPayload } from '../types'
 
@@ -20,7 +21,7 @@ export function Config() {
   const f = data.files
   return (
     <section>
-      <h2>Cấu hình — {selected}</h2>
+      <PageHeader title={`Cấu hình — ${selected}`} />
       <ConfigEditor
         label="profile.yaml"
         initial={f.profile ?? ''}

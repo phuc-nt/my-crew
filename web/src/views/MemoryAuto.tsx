@@ -4,6 +4,7 @@
 import { FactsList } from '../components/FactsList'
 import { PendingProposals } from '../components/PendingProposals'
 import { api } from '../api/client'
+import { PageHeader } from '../components/ui/page-header'
 import { useAgentData } from '../hooks/use-agent-data'
 import type { AutomationPayload, MemoryPayload } from '../types'
 
@@ -13,7 +14,7 @@ export function MemoryAutomation() {
 
   return (
     <section>
-      <h2>Bộ nhớ &amp; tự động hoá</h2>
+      <PageHeader title="Bộ nhớ & tự động hoá" />
 
       <h3>Sự kiện đã ghi nhớ</h3>
       {mem.loading ? (

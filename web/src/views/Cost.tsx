@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import { useAgentData } from '../hooks/use-agent-data'
 import { useTheme } from '../theme-context'
 import { EmptyState } from '../components/ui/empty-state'
+import { PageHeader } from '../components/ui/page-header'
 import { formatCost } from '../labels'
 import type { CostPayload } from '../types'
 
@@ -19,7 +20,7 @@ export function Cost() {
   const ratio = data.cap > 0 ? data.spent_this_month / data.cap : 0
   return (
     <section>
-      <h2>Chi phí so với ngân sách</h2>
+      <PageHeader title="Chi phí so với ngân sách" />
       <p>
         Tháng này: <strong>{formatCost(data.spent_this_month)}</strong> trên hạn mức{' '}
         {formatCost(data.cap)} ({(ratio * 100).toFixed(0)}%

@@ -7,6 +7,7 @@ import { api } from '../api/client'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
+import { PageHeader } from '../components/ui/page-header'
 import { formatDateTime } from '../labels'
 import { useAutoApproved } from '../hooks/use-auto-approved'
 import { type AgentApproval, usePendingApprovals } from '../hooks/use-pending-approvals'
@@ -44,7 +45,7 @@ export function Work() {
 
   return (
     <section className="work-page">
-      <h2>Việc</h2>
+      <PageHeader title="Việc" />
 
       {/* v33 P4: clarify questions — the CEO's other inbox besides approvals. */}
       <ClarifySection />

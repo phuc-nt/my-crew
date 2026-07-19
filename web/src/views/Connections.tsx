@@ -6,6 +6,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { Button } from '../components/ui/button'
+import { Card } from '../components/ui/card'
+import { PageHeader } from '../components/ui/page-header'
 import type { ConnectionCard } from '../types'
 
 function CardForm({ card, onSaved }: { card: ConnectionCard; onSaved: () => void }) {
@@ -106,7 +108,7 @@ export function Connections() {
 
   return (
     <section className="connections-page">
-      <h2>Kết nối</h2>
+      <PageHeader title="Kết nối" />
       <p className="muted">
         Trạng thái và khoá API của các dịch vụ công ty dùng. Giá trị đã lưu không bao giờ
         hiển thị lại — chỉ báo "đã đặt / chưa đặt".
@@ -127,7 +129,7 @@ export function Connections() {
 
       <div className="connection-grid">
         {cards.map((card) => (
-          <article key={card.id} className="connection-card">
+          <Card key={card.id} className="connection-card">
             <header className="connection-card-header">
               <span
                 className={card.ok ? 'health-dot health-dot-ok' : 'health-dot health-dot-fail'}
@@ -139,7 +141,7 @@ export function Connections() {
             {!card.ok && card.hint && <p className="connection-hint">{card.hint}</p>}
             {card.note && <p className="muted connection-note">{card.note}</p>}
             <CardForm card={card} onSaved={load} />
-          </article>
+          </Card>
         ))}
       </div>
     </section>

@@ -7,6 +7,7 @@ import { useSearchParams } from 'react-router'
 import { api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
+import { PageHeader } from '../components/ui/page-header'
 import { formatCost } from '../labels'
 import type { CaptureRow } from '../types'
 
@@ -41,7 +42,7 @@ export function Captures() {
 
   return (
     <section>
-      <h2>Captures (telemetry từng bước)</h2>
+      <PageHeader title="Captures (telemetry từng bước)" />
       <p className="ops-chat-hint">
         Mỗi dòng = một lượt chạy bước (attempt): engine, tokens, chi phí (exact/estimated),
         thời lượng. Nguồn: bảng captures v26 — chỉ đọc.

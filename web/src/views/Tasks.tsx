@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
+import { PageHeader } from '../components/ui/page-header'
 import type { AgentTasks, AssignedTask } from '../types'
 
 const STATUS_LABEL: Record<AssignedTask['status'], string> = {
@@ -58,14 +59,14 @@ export function Tasks() {
   if (agents.length === 0)
     return (
       <section>
-        <h2>Việc đã giao</h2>
+        <PageHeader title="Việc đã giao" />
         <EmptyState>Chưa có việc nào được giao. Giao việc qua khung Trợ lý (chat).</EmptyState>
       </section>
     )
 
   return (
     <section className="tasks-board">
-      <h2>Việc đã giao</h2>
+      <PageHeader title="Việc đã giao" />
       {agents.map((a) => (
         <div key={a.agent_id} className="tasks-agent">
           <h3>{a.agent_id}</h3>

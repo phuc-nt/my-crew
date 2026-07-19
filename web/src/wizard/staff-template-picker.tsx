@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { ApiError, api } from '../api/client'
 import { Button } from '../components/ui/button'
+import { Card } from '../components/ui/card'
 import type { CrewCreateResult, CrewPreview, Pack, StaffTemplate } from '../types'
 
 const RUNTIME_LABEL: Record<string, string> = {
@@ -175,7 +176,7 @@ export function StaffTemplatePicker({
       ) : (
         <div className="staff-template-grid">
           {templates.map((t) => (
-            <div key={t.role_id} className="staff-template-card">
+            <Card key={t.role_id} className="staff-template-card">
               <strong>{t.role}</strong>
               <div className="muted">loại nhân sự: {t.domain}</div>
               <div className="template-chips">
@@ -219,7 +220,7 @@ export function StaffTemplatePicker({
                   </Button>
                 </div>
               )}
-            </div>
+            </Card>
           ))}
         </div>
       )}

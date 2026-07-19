@@ -30,7 +30,9 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
 
   return (
     <div className="login-screen">
-      <form className="login-box" onSubmit={submit}>
+      {/* v53: card padding/border/radius/shadow via .card (Card only renders a <div>;
+          applied directly here to keep the <form> semantics). */}
+      <form className="card login-box" onSubmit={submit}>
         <h1>Đăng nhập</h1>
         <label>
           Tên đăng nhập

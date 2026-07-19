@@ -38,7 +38,10 @@ export function DeskInspector({ agentId, desk, onClose }: DeskInspectorProps) {
     : null
 
   return (
-    <aside className="desk-inspector" aria-label={`Chi tiết ${agentId}`}>
+    // v53: card padding/border/radius/shadow via .card; position:fixed etc stay on
+    // .desk-inspector (Card only renders a <div>, so the class is applied directly here
+    // to keep the semantic <aside> element).
+    <aside className="card desk-inspector" aria-label={`Chi tiết ${agentId}`}>
       <header className="desk-inspector-head">
         <strong>{agentId}</strong>
         <Button variant="chip" onClick={onClose}>Đóng</Button>

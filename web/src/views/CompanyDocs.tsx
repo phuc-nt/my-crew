@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from '../api/client'
 import { Button } from '../components/ui/button'
+import { PageHeader } from '../components/ui/page-header'
 import type { CompanyDoc } from '../types'
 
 export function CompanyDocs() {
@@ -25,12 +26,14 @@ export function CompanyDocs() {
 
   return (
     <section className="company-docs">
-      <header className="page-head">
-        <h2>Tài liệu công ty</h2>
-        <Button variant="ghost" onClick={() => setSelected('new')}>
-          + Tài liệu mới
-        </Button>
-      </header>
+      <PageHeader
+        title="Tài liệu công ty"
+        actions={
+          <Button variant="ghost" onClick={() => setSelected('new')}>
+            + Tài liệu mới
+          </Button>
+        }
+      />
       <p className="muted">
         Tài liệu ở đây được tick cho từng agent (trong trang agent → tab Kiến thức) và chỉ
         đưa vào ngữ cảnh nội bộ — báo cáo gửi ra ngoài không bao giờ chứa nội dung này.

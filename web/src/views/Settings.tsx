@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../api/client'
 import { IntegrationHealthPanel } from '../components/IntegrationHealthPanel'
+import { PageHeader } from '../components/ui/page-header'
 import { useUiMode } from '../ui-mode-context'
 import type { CompanyPayload } from '../types'
 
@@ -48,7 +49,7 @@ export function Settings() {
 
   return (
     <section className="settings-page">
-      <h2>Cài đặt</h2>
+      <PageHeader title="Cài đặt" />
 
       <section className="mode-toggle-box">
         <h3>Giao việc cho đội</h3>

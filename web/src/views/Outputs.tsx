@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../api/client'
 import { EmptyState } from '../components/ui/empty-state'
+import { PageHeader } from '../components/ui/page-header'
 import { formatDateTime } from '../labels'
 import { ArtifactViewer } from './office-unified/artifact-viewer'
 import type { OutputItem } from '../types'
@@ -47,7 +48,7 @@ export function Outputs() {
 
   return (
     <section className="outputs-page">
-      <h2>Kết quả</h2>
+      <PageHeader title="Kết quả" />
       <p className="muted">
         Mọi kết quả bàn giao của cả đội — bấm một dòng để đọc, file thì tải về. Xem theo
         phòng việc tại <Link to="/office">Văn phòng</Link>.

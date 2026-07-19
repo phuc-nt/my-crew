@@ -8,6 +8,7 @@ import { Link, useSearchParams } from 'react-router'
 import { api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
+import { PageHeader } from '../components/ui/page-header'
 import { useSharedPendingApprovals } from '../pending-approvals-context'
 
 interface Turn {
@@ -89,7 +90,7 @@ export function Chat() {
   if (available === false) {
     return (
       <section>
-        <h2>Trợ lý điều hành</h2>
+        <PageHeader title="Trợ lý điều hành" />
         <p className="error">Chưa dùng được: {unavailableReason}</p>
         {/* v9 P2: never a dead-end — the CEO can always create an agent via the wizard. */}
         <p>
@@ -101,7 +102,7 @@ export function Chat() {
 
   return (
     <section className="ops-chat">
-      <h2>Trợ lý điều hành</h2>
+      <PageHeader title="Trợ lý điều hành" />
       <p className="ops-chat-hint">
         Nhắn tiếng Việt để quản lý đội: tạo agent, bật/tắt, xem trạng thái, xem chi phí. Mọi
         thay đổi đều được xem trước và cần bạn xác nhận.

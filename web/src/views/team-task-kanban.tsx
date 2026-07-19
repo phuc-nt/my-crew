@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../api/client'
 import { TeamTaskCost } from '../components/TeamTaskCost'
+import { Card } from '../components/ui/card'
 import type { TeamBoardLane } from '../types'
 
 const LANE_LABEL: Record<string, string> = {
@@ -45,7 +46,7 @@ export function TeamTaskKanban() {
                   {LANE_LABEL[lane.id] ?? lane.id} ({lane.cards.length})
                 </p>
                 {lane.cards.map((c) => (
-                  <div key={c.task_id} className="team-kanban-card">
+                  <Card key={c.task_id} className="team-kanban-card">
                     <Link
                       className="team-kanban-card-link"
                       to={`/office?room=${encodeURIComponent(c.room_id)}`}
@@ -69,7 +70,7 @@ export function TeamTaskKanban() {
                     </Link>
                     {/* v50: per-task cost breakdown, sibling to the Link so its toggle doesn't navigate. */}
                     <TeamTaskCost taskId={c.task_id} />
-                  </div>
+                  </Card>
                 ))}
               </div>
             ),

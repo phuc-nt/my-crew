@@ -10,6 +10,7 @@
 // reaches the server the same way GET /api/agents already does pre-setup.
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from '../api/client'
+import { Card } from '../components/ui/card'
 import type { AgentSummary } from '../types'
 import { SetupCompanyStep } from './setup-company-step'
 
@@ -178,17 +179,17 @@ export function Setup({ onDone }: { onDone: () => void }) {
   if (finished) {
     return (
       <div className="setup-screen">
-        <div className="setup-box">
+        <Card className="setup-box">
           <h1>Đang khởi động lại…</h1>
           <p>Đã lưu cấu hình. Dịch vụ đang khởi động lại — đợi vài giây rồi đăng nhập.</p>
-        </div>
+        </Card>
       </div>
     )
   }
 
   return (
     <div className="setup-screen">
-      <div className="setup-box">
+      <Card className="setup-box">
         <div className="setup-progress">
           Bước {step + 1}/{GROUPS.length + 2}
         </div>
@@ -279,7 +280,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
             </div>
           </>
         )}
-      </div>
+      </Card>
     </div>
   )
 }

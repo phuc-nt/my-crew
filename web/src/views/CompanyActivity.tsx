@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
+import { PageHeader } from '../components/ui/page-header'
 import type { CompanyActivityItem, CompanyActivityPayload } from '../types'
 
 const PAGE = 50
@@ -78,7 +79,7 @@ export function CompanyActivity() {
   const items = data?.items ?? []
   return (
     <section>
-      <h2>Hoạt động công ty</h2>
+      <PageHeader title="Hoạt động công ty" />
       <p>Mọi hành động các agent đã tự làm — quyết định rào chắn, lượt chạy, bước việc đội.</p>
       <div className="filter-row">
         <label>

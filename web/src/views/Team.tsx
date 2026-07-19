@@ -9,6 +9,7 @@ import { ApiError, api } from '../api/client'
 import { IntegrationHealthPanel } from '../components/IntegrationHealthPanel'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
+import { PageHeader } from '../components/ui/page-header'
 import { CoordinatorHealthBanner } from './office-unified/coordinator-health-banner'
 import { KIND_LABEL, RUN_STATUS_LABEL, formatCost, labelFor } from '../labels'
 import { useUiMode } from '../ui-mode-context'
@@ -241,29 +242,33 @@ export function Team() {
           "created a crew but nothing happens" gap is visible, not silent. */}
       <CoordinatorHealthBanner />
 
-      <h2>Đội</h2>
-      <div className="team-actions">
-        <Button variant="ghost" disabled={creating} onClick={goCreate}>
-          + Tạo nhân sự ảo
-        </Button>
-        {/* v32: templates are one-click-executable on the create page's first step —
-            this is the fast path ("Tạo ngay" per role, or the whole default crew). */}
-        <Link to="/create" className="btn-link">
-          ⚡ Tạo nhanh từ mẫu / cả đội
-        </Link>
-        {coordinatorId === null && (
-          <Button
-            variant="ghost"
-            disabled={creatingCoordinator}
-            onClick={createCoordinator}
-          >
-            {creatingCoordinator ? 'Đang tạo…' : '+ Tạo trưởng phòng'}
-          </Button>
-        )}
-        <Link to="/company-docs" className="btn-link">
-          📄 Kho tài liệu
-        </Link>
-      </div>
+      <PageHeader
+        title="Đội"
+        actions={
+          <div className="team-actions">
+            <Button variant="ghost" disabled={creating} onClick={goCreate}>
+              + Tạo nhân sự ảo
+            </Button>
+            {/* v32: templates are one-click-executable on the create page's first step —
+                this is the fast path ("Tạo ngay" per role, or the whole default crew). */}
+            <Link to="/create" className="btn-link">
+              ⚡ Tạo nhanh từ mẫu / cả đội
+            </Link>
+            {coordinatorId === null && (
+              <Button
+                variant="ghost"
+                disabled={creatingCoordinator}
+                onClick={createCoordinator}
+              >
+                {creatingCoordinator ? 'Đang tạo…' : '+ Tạo trưởng phòng'}
+              </Button>
+            )}
+            <Link to="/company-docs" className="btn-link">
+              📄 Kho tài liệu
+            </Link>
+          </div>
+        }
+      />
       {alerts.length > 0 && (
         <div className="team-alerts" role="alert">
           {alerts.map((al, i) => (

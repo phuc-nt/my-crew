@@ -48,7 +48,9 @@ export function IntegrationHealthPanel() {
   const failing = checks.filter((c) => !c.ok).length
 
   return (
-    <section className="health-panel">
+    // v53: card padding/border/radius/shadow via .card (Card renders a <div>; applied
+    // directly here to keep the semantic <section>).
+    <section className="card health-panel">
       <h3>
         Sức khỏe hệ thống{' '}
         <Button variant="ghost" disabled={loading} onClick={load}>

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAgent } from '../agent-context'
 import { api } from '../api/client'
 import { Button } from '../components/ui/button'
+import { PageHeader } from '../components/ui/page-header'
 import { useSse } from '../hooks/use-sse'
 import { AUDIENCE_LABEL, KIND_LABEL, labelFor } from '../labels'
 
@@ -52,7 +53,7 @@ export function Trigger() {
 
   return (
     <section>
-      <h2>Chạy báo cáo thủ công</h2>
+      <PageHeader title="Chạy báo cáo thủ công" />
       <div className="trigger-form">
         <label>
           Loại:{' '}
