@@ -157,3 +157,94 @@ def test_handler_error_is_audited_and_reraised(settings_factory, tmp_path):
 
     with pytest.raises(RuntimeError, match="failed"):
         gw.execute(POST, handler=boom)
+
+
+# --- v54: external_action office-event bridge ---
+
+
+def _office_events(tmp_path, room="office"):
+    from my_crew.runtime.office_room_append import office_room_db_path
+    from my_crew.runtime.office_room_store import OfficeRoomStore
+
+    path = office_room_db_path(tmp_path)
+    if not path.exists():
+        return []
+    store = OfficeRoomStore(path)
+    try:
+        return store.list(room)
+    finally:
+        store.close()
+
+
+def _bridge_gateway(settings_factory, tmp_path, monkeypatch, **kw):
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    settings = settings_factory(**kw)
+    return ActionGateway(
+        settings=settings, audit_log=AuditLog(tmp_path / "audit.jsonl"), actor="hr",
+    )
+
+
+def test_bridge_emits_one_event_on_allow(settings_factory, tmp_path, monkeypatch):
+    gw = _bridge_gateway(settings_factory, tmp_path, monkeypatch, dry_run=False)
+    result = gw.execute(POST, handler=lambda a: "POSTED")
+    assert result.status == "executed"
+    events = _office_events(tmp_path)
+    assert len(events) == 1
+    assert events[0].kind == "external_action"
+    assert events[0].body["outcome"] == "allow"
+    assert events[0].body["actor"] == "hr"
+    assert events[0].body["tool"] == "slack:post_message"
+    assert events[0].body["detail"] == "C1"  # no-content-echo: target id, never text body
+
+
+def test_bridge_emits_one_event_on_deny(settings_factory, tmp_path, monkeypatch):
+    gw = _bridge_gateway(settings_factory, tmp_path, monkeypatch, dry_run=False)
+    with pytest.raises(HardBlockedError):
+        gw.execute({"type": "gh_cli", "argv": ["repo", "delete", "x"]}, handler=lambda a: None)
+    events = _office_events(tmp_path)
+    assert len(events) == 1
+    assert events[0].body["outcome"] == "deny"
+
+
+def test_bridge_emits_one_event_on_skipped(settings_factory, tmp_path, monkeypatch):
+    gw = _bridge_gateway(settings_factory, tmp_path, monkeypatch, dry_run=False)
+    result = gw.execute(POST)  # no handler ⇒ skipped
+    assert result.status == "skipped"
+    events = _office_events(tmp_path)
+    assert len(events) == 1
+    assert events[0].body["outcome"] == "skipped"
+
+
+def test_bridge_append_failure_does_not_change_action_or_audit(
+    settings_factory, tmp_path, monkeypatch,
+):
+    """A broken office-room append must never affect the gateway result or the audit rows."""
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+
+    def _boom(*_a, **_kw):
+        raise RuntimeError("office store exploded")
+
+    monkeypatch.setattr(
+        "my_crew.runtime.office_room_append.append_office_event", _boom
+    )
+    settings = settings_factory(dry_run=False)
+    gw = ActionGateway(
+        settings=settings, audit_log=AuditLog(tmp_path / "audit.jsonl"), actor="hr",
+    )
+    result = gw.execute(POST, handler=lambda a: "POSTED")
+    assert result.status == "executed"  # action path unaffected
+    rows = _audit_rows(tmp_path)
+    assert len(rows) == 1 and rows[0]["verdict"] == "allow"  # audit byte-identical
+
+
+def test_bridge_never_echoes_message_content(settings_factory, tmp_path, monkeypatch):
+    gw = _bridge_gateway(settings_factory, tmp_path, monkeypatch, dry_run=False)
+    secret_text = "super secret payload body should never leak"
+    action = {
+        "type": "mcp_tool", "server": "slack", "tool": "post_message",
+        "args": {"channel": "C1", "text": secret_text},
+    }
+    gw.execute(action, handler=lambda a: "POSTED")
+    events = _office_events(tmp_path)
+    body_dump = str(events[0].body)
+    assert secret_text not in body_dump

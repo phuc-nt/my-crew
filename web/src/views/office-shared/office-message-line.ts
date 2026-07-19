@@ -28,6 +28,9 @@ const KIND_LABEL_KEY: Record<OfficeEventKind, UiKey> = {
   milestone: 'officeMessageLine.kindMilestone',
   consult: 'officeMessageLine.kindConsult',
   review: 'officeMessageLine.kindReview',
+  // v54: Action Gateway outcome bridge — label only; `messageLine`'s `default: return ''`
+  // still covers rendering (FE display of this kind is out of scope for this phase).
+  external_action: 'officeMessageLine.kindExternalAction',
 }
 
 export function kindLabel(kind: OfficeEventKind, t: Translate = defaultT): string {

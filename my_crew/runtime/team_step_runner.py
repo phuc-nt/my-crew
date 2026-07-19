@@ -514,6 +514,7 @@ def _run_graph(
                 _append_step_phase_event(
                     task_id, author=step.assigned_to, task_title=task_title,
                     step_title=step.title, phase=str(phase), attempt_id=attempt_id,
+                    deep_team=bool(_extra.get("deep_team")),
                 )
     if checkpointer is not None and state.get("status") != "waiting_clarify":
         # ONLY waiting_clarify keeps its thread (the mid-run interrupt IS the resume
@@ -653,6 +654,7 @@ def _delete_thread_best_effort(checkpointer, thread_id: str) -> None:
 
 def _append_step_phase_event(
     task_id: str, *, author: str, task_title: str, step_title: str, phase: str, attempt_id: str,
+    deep_team: bool = False,
 ) -> None:
     """try/degrade room-event append for a mid-run phase transition (work/self_check/
     rework) — never raises, matching `office_room_append.append_office_event`'s own
@@ -660,13 +662,19 @@ def _append_step_phase_event(
     perceive→work→...) are expected/acceptable: the room is an append-only timeline
     and the FE keys the CURRENT phase display off `attempt_id`, not off "last event
     wins" — a stale attempt's phase event is simply dropped client-side.
+
+    `deep_team` (v54): carried ONLY when True (the agent opted into in-sandbox subagent
+    delegation for this step) — omitted otherwise, so a pre-v54/non-deep_team event body
+    stays byte-identical (see `office_event_projection`'s `step_status` pass-through).
     """
     from my_crew.runtime.office_room_append import append_office_event, room_for_task
 
-    body: dict[str, str] = {
+    body: dict[str, Any] = {
         "task_title": task_title, "step_title": step_title, "status": "started",
         "assigned_to": author, "phase": phase, "attempt_id": attempt_id,
     }
+    if deep_team:
+        body["deep_team"] = True
     append_office_event(room_for_task(task_id), author=author, kind="step_status",
                         body=body, also_office=True)
 

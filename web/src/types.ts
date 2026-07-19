@@ -465,6 +465,10 @@ export interface TasksPayload {
 // src/agent/team_task_consult.py's module docstring.
 // M32 adds 'review': a peer-review verdict on a `work`/`rework` step — see
 // src/agent/review_graph.py's module docstring.
+// v54 adds 'external_action': the Action Gateway outcome bridge — one event per
+// gateway `_record` call (allow/deny/pending/dry_run/skipped/reject), no-content-echo
+// (tool label + short target only — see office_event_projection.py's `external_action`
+// allowlist branch).
 export type OfficeEventKind =
   | 'ceo'
   | 'assignment'
@@ -473,6 +477,7 @@ export type OfficeEventKind =
   | 'milestone'
   | 'consult'
   | 'review'
+  | 'external_action'
 
 export interface OfficeEventBody {
   text?: string
@@ -514,6 +519,19 @@ export interface OfficeEventBody {
   // the PIC's desk on assignment and clear it on that task's `milestone: done`.
   pic?: string
   task_id?: string
+  // `step_status` only (v54): present (always `true`) only when the runtime dispatched
+  // this step with the agent's `deep_team` (in-sandbox subagent delegation) opt-in on —
+  // omitted entirely otherwise, keeping every pre-v54 event byte-identical.
+  deep_team?: true
+  // `external_action` only (v54): the Action Gateway outcome bridge. `outcome` mirrors
+  // `GatewayResult.status`'s underlying verdict ("allow" | "deny" | "pending" | "dry_run"
+  // | "skipped" | "reject"); `detail` is a short non-content target (channel/issue-key/
+  // recipient id), never a message body.
+  actor?: string
+  tool?: string
+  action_type?: string
+  outcome?: string
+  detail?: string
 }
 
 export interface OfficeMessage {
@@ -748,4 +766,16 @@ export interface HistorySearchHit {
 
 export interface HistorySearchPayload {
   hits: HistorySearchHit[]
+}
+
+// v54: `/api/schedule/upcoming` — top-10 soonest cron fires fleet-wide.
+export interface ScheduleItem {
+  agent_id: string
+  kind: string
+  next_ts: string
+  label: string
+}
+
+export interface SchedulePayload {
+  items: ScheduleItem[]
 }

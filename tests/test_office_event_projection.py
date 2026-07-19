@@ -87,6 +87,40 @@ def test_milestone_kind_allowlist():
     assert "phone" not in out
 
 
+def test_step_status_deep_team_present_only_when_true():
+    # v54: `deep_team` is carried ONLY when the producer set it true — omitted (not a
+    # `False` key) when absent, keeping every pre-v54 event's key set unchanged.
+    out_true = summarize_office_event(
+        "step_status",
+        {"task_title": "Demo", "step_title": "draft", "status": "started",
+         "assigned_to": "agent-a", "deep_team": True},
+    )
+    assert out_true["deep_team"] is True
+
+    out_false = summarize_office_event(
+        "step_status",
+        {"task_title": "Demo", "step_title": "draft", "status": "started",
+         "assigned_to": "agent-a"},
+    )
+    assert "deep_team" not in out_false
+
+
+def test_external_action_kind_allowlist_no_content_echo():
+    out = summarize_office_event(
+        "external_action",
+        {
+            "actor": "hr", "tool": "slack:post_message", "action_type": "mcp_tool",
+            "outcome": "allow", "detail": "C1",
+            "message": "should never leak", "args": {"text": "secret payload"},
+        },
+    )
+    assert out == {
+        "actor": "hr", "tool": "slack:post_message", "action_type": "mcp_tool",
+        "outcome": "allow", "detail": "C1",
+    }
+    assert "message" not in out and "args" not in out
+
+
 def test_unknown_kind_drops_everything():
     assert summarize_office_event("weird-new-kind", {"text": "should not survive"}) == {}
 

@@ -1,4 +1,4 @@
-"""Read-only observability routes (dual-lens P3). STRICTLY read-only — three GETs,
+"""Read-only observability routes (dual-lens P3). STRICTLY read-only — GETs only,
 no Gateway involvement (nothing here mutates anything):
 
 - `GET /api/budget` — fleet budget: per-agent month spend vs cap + totals. Same
@@ -8,8 +8,12 @@ no Gateway involvement (nothing here mutates anything):
 - `GET /api/search` — the v33 FTS5 history index, UI search box only. The index module
   itself escapes the query into quoted terms (MATCH syntax is data, not operators);
   this route only bounds the inputs.
+- `GET /api/schedule/upcoming` (v54) — the fleet's next N cron fires across every
+  enabled agent's `schedule:` (report kind -> 5-field cron), same source
+  `agent_state_reader`/`scheduler` already read. Read-only croniter projection, no
+  new auth surface.
 
-All three sit behind the app's AuthMiddleware like every other /api route and degrade
+All routes sit behind the app's AuthMiddleware like every other /api route and degrade
 to empty payloads when a store file does not exist yet (fresh install ≠ 500).
 """
 
@@ -17,7 +21,9 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime
 
+from croniter import croniter
 from fastapi import APIRouter, HTTPException
 
 from my_crew.llm.budget_tracker import BudgetTracker
@@ -32,6 +38,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["observability"])
 
 _SEARCH_QUERY_MAX_CHARS = 200
+
+#: `/api/schedule/upcoming` returns at most this many of the soonest fires fleet-wide.
+_SCHEDULE_UPCOMING_LIMIT = 10
 
 # Sweep throttle (review M2): a sweep re-reads every agent's audit log before the
 # watermark filters rows, so per-keystroke sweeps grow O(total audit bytes). One sweep
@@ -108,6 +117,45 @@ def capture_detail(attempt_id: str) -> dict:
     if row is None:
         raise HTTPException(status_code=404, detail="capture not found")
     return row
+
+
+@router.get("/schedule/upcoming")
+def schedule_upcoming() -> dict:
+    """Top `_SCHEDULE_UPCOMING_LIMIT` soonest cron fires across every enabled agent.
+
+    Reads each enabled agent's `schedule:` dict (kind -> 5-field cron string, the same
+    field `agent_state_reader`/`scheduler` consume) and computes the next fire per entry
+    with `croniter`, interpreting the cron in LOCAL time (matches the real service
+    scheduler's own interpretation — see `agent_state_reader._prev_fire`). A malformed
+    cron string or an unreadable profile is skipped, never a 500 (fleet-gauge
+    resilience, same posture as `/api/budget`).
+    """
+    now = datetime.now().astimezone()
+    items: list[dict] = []
+    for entry in load_registry():
+        if not entry.enabled:
+            continue
+        try:
+            loaded = load_profile(entry.id)
+        except (FileNotFoundError, RuntimeError) as exc:
+            logger.warning("schedule/upcoming: skipping agent %r: %s", entry.id, exc)
+            continue
+        if not loaded.enabled:
+            continue
+        for kind, cron in dict(loaded.schedule).items():
+            if not croniter.is_valid(cron):
+                continue
+            next_fire = croniter(cron, now).get_next(datetime)
+            items.append(
+                {
+                    "agent_id": entry.id,
+                    "kind": kind,
+                    "next_ts": next_fire.isoformat(),
+                    "label": f"{entry.id}: {kind}",
+                }
+            )
+    items.sort(key=lambda i: i["next_ts"])
+    return {"items": items[:_SCHEDULE_UPCOMING_LIMIT]}
 
 
 @router.get("/search")

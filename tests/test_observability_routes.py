@@ -98,3 +98,88 @@ def test_search_blank_and_hostile_queries_are_safe(client):
     resp = client.get("/api/search", params={"q": hostile, "limit": 999})
     assert resp.status_code == 200
     assert isinstance(resp.json()["hits"], list)
+
+
+# --- v54: /api/schedule/upcoming ---
+
+
+class _RegistryEntry:
+    def __init__(self, agent_id, enabled=True):
+        self.id = agent_id
+        self.enabled = enabled
+
+
+class _LoadedSchedule:
+    def __init__(self, schedule, enabled=True):
+        self.schedule = schedule
+        self.enabled = enabled
+
+
+def test_schedule_upcoming_sorts_and_caps_at_ten(client, monkeypatch):
+    import datetime as dt_module
+
+    fixed_now = dt_module.datetime(2026, 7, 19, 0, 0, 0)
+
+    class _FixedDatetime(dt_module.datetime):
+        @classmethod
+        def now(cls, tz=None):  # noqa: ARG003 — signature match, tz unused (naive fixed clock)
+            return fixed_now
+
+    monkeypatch.setattr("my_crew.server.routes_observability.datetime", _FixedDatetime)
+    monkeypatch.setattr(
+        "my_crew.server.routes_observability.load_registry",
+        lambda: [_RegistryEntry("hr"), _RegistryEntry("pm")],
+    )
+
+    def _load(agent_id):
+        if agent_id == "hr":
+            # fires at 01:00 daily — the sooner of the two
+            return _LoadedSchedule({"daily_report": "0 1 * * *"})
+        # fires at 08:00 daily — later than hr's
+        return _LoadedSchedule({"weekly_report": "0 8 * * *"})
+
+    monkeypatch.setattr("my_crew.server.routes_observability.load_profile", _load)
+    payload = client.get("/api/schedule/upcoming").json()
+    assert [i["agent_id"] for i in payload["items"]] == ["hr", "pm"]
+    assert payload["items"][0]["kind"] == "daily_report"
+    assert payload["items"][0]["next_ts"].startswith("2026-07-19T01:00:00")
+    assert len(payload["items"]) <= 10
+
+
+def test_schedule_upcoming_skips_disabled_and_broken_profiles(client, monkeypatch):
+    monkeypatch.setattr(
+        "my_crew.server.routes_observability.load_registry",
+        lambda: [
+            _RegistryEntry("hr"),
+            _RegistryEntry("disabled_in_registry", enabled=False),
+            _RegistryEntry("ghost"),
+        ],
+    )
+
+    def _load(agent_id):
+        if agent_id == "ghost":
+            raise FileNotFoundError("no profile")
+        return _LoadedSchedule({"daily_report": "0 1 * * *"})
+
+    monkeypatch.setattr("my_crew.server.routes_observability.load_profile", _load)
+    payload = client.get("/api/schedule/upcoming").json()
+    assert [i["agent_id"] for i in payload["items"]] == ["hr"]
+
+
+def test_schedule_upcoming_skips_malformed_cron(client, monkeypatch):
+    monkeypatch.setattr(
+        "my_crew.server.routes_observability.load_registry", lambda: [_RegistryEntry("hr")]
+    )
+    monkeypatch.setattr(
+        "my_crew.server.routes_observability.load_profile",
+        lambda agent_id: _LoadedSchedule({"bad": "not-a-cron"}),
+    )
+    payload = client.get("/api/schedule/upcoming").json()
+    assert payload["items"] == []
+
+
+def test_schedule_upcoming_empty_registry(client, monkeypatch):
+    monkeypatch.setattr(
+        "my_crew.server.routes_observability.load_registry", lambda: []
+    )
+    assert client.get("/api/schedule/upcoming").json() == {"items": []}

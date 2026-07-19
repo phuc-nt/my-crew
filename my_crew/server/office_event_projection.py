@@ -78,7 +78,7 @@ def summarize_office_event(kind: str, body: dict) -> dict:
         }
     if kind == "step_status":
         phase = _short(body.get("phase"))
-        return {
+        projected = {
             "task_title": _short(body.get("task_title")),
             "step_title": _short(body.get("step_title")),
             "status": _short(body.get("status")),
@@ -93,6 +93,12 @@ def summarize_office_event(kind: str, body: dict) -> dict:
             "phase": phase if phase in _STEP_PHASES else "",
             "attempt_id": _short(body.get("attempt_id")),
         }
+        # v54: pass through the deep_team flag ONLY when true — omitted (not even a
+        # `False` key) when the runtime did not opt in, keeping pre-v54 events byte-
+        # identical and the room feed lean (see `team_step_runner._append_step_phase_event`).
+        if body.get("deep_team"):
+            projected["deep_team"] = True
+        return projected
     if kind == "handoff":
         return {
             "task_title": _short(body.get("task_title")),
@@ -127,6 +133,19 @@ def summarize_office_event(kind: str, body: dict) -> dict:
             # opaque internal UUID, same non-PII category as `step_status.attempt_id`.
             "attempt_id": _short(body.get("attempt_id")),
         }
+    if kind == "external_action":
+        # v54: Action Gateway outcome bridge — every mutation that passes through
+        # `ActionGateway._record` mirrors here. No-content-echo (same posture as every
+        # other kind): `tool`/`detail` are a short label + target id (channel/issue-key/
+        # recipient), never the action's args/message body. `outcome` is the gateway's own
+        # verdict string ("allow"/"deny"/"pending"/"dry_run"/"skipped"/"reject").
+        return {
+            "actor": _short(body.get("actor")),
+            "tool": _short(body.get("tool")),
+            "action_type": _short(body.get("action_type")),
+            "outcome": _short(body.get("outcome")),
+            "detail": _short(body.get("detail")),
+        }
     if kind == "review":
         # M32 peer review verdict (see `review_graph.run_review_step`): `verdict` is a
         # closed enum, never the model's raw JSON; `failure_count` is a count, never the
@@ -151,5 +170,8 @@ def summarize_office_event(kind: str, body: dict) -> dict:
 #: The only valid `kind` values a caller may append — `office_room_store.append` uses
 #: this to fail loud on a typo'd kind instead of silently persisting an ungoverned event.
 VALID_KINDS = frozenset(
-    {"ceo", "assignment", "step_status", "handoff", "milestone", "consult", "review"}
+    {
+        "ceo", "assignment", "step_status", "handoff", "milestone", "consult", "review",
+        "external_action",  # v54: Action Gateway outcome bridge
+    }
 )

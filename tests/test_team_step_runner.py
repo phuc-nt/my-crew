@@ -97,6 +97,108 @@ def test_run_graph_wires_self_id_to_the_assigned_agent(monkeypatch, tmp_path):
     assert captured.get("self_id") == "agent-a"
 
 
+class _FakeNonNativeRuntime:
+    """A stand-in for a non-native (e.g. deep_agent) runtime — `build_task` just
+    captures its kwargs so the test can assert what `_run_graph` threaded into it,
+    then returns a graph that emits ONE 'custom' phase chunk (the code path
+    `_append_step_phase_event` fires from)."""
+
+    def __init__(self, captured: dict) -> None:
+        self._captured = captured
+
+    def build_task(self, **kwargs):
+        self._captured.update(kwargs)
+        return _FakePhaseGraph()
+
+
+class _FakePhaseGraph:
+    def stream(self, _initial_state, _config=None, stream_mode=None):  # noqa: ARG002
+        yield ("custom", {"phase": "dang-lam"})
+
+
+def test_deep_team_flag_threads_into_started_step_event_when_true(
+    monkeypatch, tmp_path, settings_factory,
+):
+    """v54: a deep_team-opted-in agent's step 'started' (step_status/phase) event carries
+    `deep_team=True` — an agent that did NOT opt in gets no such key at all (lean events,
+    byte-identical to pre-v54 for every other agent)."""
+    from my_crew.runtime import team_step_runner
+
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    captured_build_kwargs: dict = {}
+    captured_phase_calls: list[dict] = []
+
+    monkeypatch.setattr(
+        "my_crew.runtime_backends.protocol.resolve_step_runtime",
+        lambda loaded, step: _FakeNonNativeRuntime(captured_build_kwargs),
+    )
+
+    def _fake_append_phase_event(*_a, **kw):
+        captured_phase_calls.append(kw)
+
+    monkeypatch.setattr(team_step_runner, "_append_step_phase_event", _fake_append_phase_event)
+
+    loaded = SimpleNamespace(
+        soul="", project="", memory="", config=SimpleNamespace(), agent_runtime=None,
+        academic_search=False, gws_context=False, deep_team=True, deep_team_max_calls=None,
+        company_docs=(), web_search=False, team_step_egress=None, skills=(),
+        profile_id="agent-a", domain="pm", template_role=None,
+    )
+    step = SimpleNamespace(
+        title="viết báo cáo", acceptance="", seq=1, deps=(), assigned_to="agent-a",
+        parent_step_id=None, system_inserted=False, step_type="work",
+    )
+    team_step_runner._run_graph(
+        loaded, settings_factory(), task_id="task-1", step=step, attempt_id="att-1",
+    )
+
+    assert captured_build_kwargs.get("deep_team") is True
+    assert len(captured_phase_calls) == 1
+    assert captured_phase_calls[0]["deep_team"] is True
+
+
+def test_deep_team_flag_omitted_from_started_event_when_false(
+    monkeypatch, tmp_path, settings_factory,
+):
+    """The counterpart: deep_team=False (default/opted-out) must NOT set the kwarg at all
+    on the phase-event call — omitted, not `False` (see office_event_projection pass-through:
+    a present-but-falsy key would still be dropped there, but the producer itself must not
+    even pass it, matching `_extra`'s own bool() cast)."""
+    from my_crew.runtime import team_step_runner
+
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    captured_build_kwargs: dict = {}
+    captured_phase_calls: list[dict] = []
+
+    monkeypatch.setattr(
+        "my_crew.runtime_backends.protocol.resolve_step_runtime",
+        lambda loaded, step: _FakeNonNativeRuntime(captured_build_kwargs),
+    )
+
+    def _fake_append_phase_event(*_a, **kw):
+        captured_phase_calls.append(kw)
+
+    monkeypatch.setattr(team_step_runner, "_append_step_phase_event", _fake_append_phase_event)
+
+    loaded = SimpleNamespace(
+        soul="", project="", memory="", config=SimpleNamespace(), agent_runtime=None,
+        academic_search=False, gws_context=False, deep_team=False, deep_team_max_calls=None,
+        company_docs=(), web_search=False, team_step_egress=None, skills=(),
+        profile_id="agent-a", domain="pm", template_role=None,
+    )
+    step = SimpleNamespace(
+        title="viết báo cáo", acceptance="", seq=1, deps=(), assigned_to="agent-a",
+        parent_step_id=None, system_inserted=False, step_type="work",
+    )
+    team_step_runner._run_graph(
+        loaded, settings_factory(), task_id="task-1", step=step, attempt_id="att-1",
+    )
+
+    assert captured_build_kwargs.get("deep_team") is False
+    assert len(captured_phase_calls) == 1
+    assert captured_phase_calls[0]["deep_team"] is False
+
+
 def test_resolve_search_hook_writes_audit_row_with_redacted_query(tmp_path, monkeypatch):
     from my_crew.runtime import team_task_paths
 

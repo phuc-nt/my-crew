@@ -538,3 +538,64 @@ class ActionGateway:
                 actor=self._actor,  # v46: attribute every outcome branch to the acting agent
             )
         )
+        # v54: mirror this outcome into the office event stream — additive-only bridge, never
+        # allowed to affect the action path or the audit rows above (already written). The whole
+        # bridge is wrapped so a store hiccup (locked file, disk full) degrades silently, matching
+        # every other office-room append in the codebase (see `office_room_append`'s own
+        # try/degrade contract).
+        self._bridge_external_action(action_type, tool, verdict, action)
+
+    def _bridge_external_action(
+        self, action_type: str, tool: str, verdict: str, action: dict[str, Any]
+    ) -> None:
+        try:
+            from my_crew.runtime.office_room_append import append_office_event
+            from my_crew.runtime.office_room_store import OFFICE_ROOM_ID
+
+            # No-content-echo (v34 P5 posture): only the tool label + a short target, never
+            # message bodies/payload content. `_short_target` reads only known non-content
+            # identifier fields (channel/issue-key/recipient/chat id).
+            body: dict[str, Any] = {
+                "actor": self._actor,
+                "tool": tool,
+                "action_type": action_type,
+                "outcome": verdict,
+            }
+            target = _short_target(action)
+            if target:
+                body["detail"] = target
+            # Room resolution: the gateway has no task_id in its own context (it is not
+            # threaded through callers — YAGNI per the phase spec, this is not a per-task
+            # step). Every outcome lands in the shared office overview room directly — the
+            # one room every CEO/staffer already watches for the fleet-wide feed.
+            append_office_event(
+                OFFICE_ROOM_ID, author=self._actor or "gateway", kind="external_action",
+                body=body, also_office=False,
+            )
+        except Exception:  # noqa: BLE001 — a bridge failure must NEVER affect the action path
+            logger.warning(
+                "external_action office-room bridge failed (tool=%s verdict=%s) — "
+                "continuing without it", tool, verdict, exc_info=True,
+            )
+
+
+def _short_target(action: dict[str, Any]) -> str:
+    """A short, non-content target string for the office bridge — channel/issue-key/recipient
+    ids only, NEVER message bodies or free-text payload content (no-content-echo, v34 P5)."""
+    atype = str(action.get("type", "")).lower()
+    if atype == "mcp_tool":
+        args = action.get("args") or {}
+        if isinstance(args, dict):
+            for key in ("channel", "issue_key", "issueKey", "page_id", "pageId", "id"):
+                value = args.get(key)
+                if value:
+                    return str(value)[:120]
+        return ""
+    if atype == "gh_cli":
+        argv = action.get("argv") or []
+        return " ".join(str(a) for a in argv[:3])[:120]
+    if atype == "email_send":
+        return str(action.get("to", ""))[:120]
+    if atype == "telegram_send":
+        return str(action.get("chat_id", ""))[:120]
+    return ""
