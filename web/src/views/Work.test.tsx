@@ -4,6 +4,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { DICT } from '../i18n/dictionary'
+import { LanguageProvider } from '../i18n/language-context'
 import { Work } from './Work'
 
 const APPROVAL = {
@@ -33,7 +35,9 @@ beforeEach(() => {
 function renderWork() {
   return render(
     <MemoryRouter>
-      <Work />
+      <LanguageProvider>
+        <Work />
+      </LanguageProvider>
     </MemoryRouter>,
   )
 }
@@ -47,7 +51,7 @@ test('lists pending approvals across agents with the agent id', async () => {
 test('approve calls the agent-scoped approve endpoint after confirm', async () => {
   const approve = vi.spyOn(api, 'approve').mockResolvedValue({ agent_id: 'hr', pending: [] })
   renderWork()
-  fireEvent.click(await screen.findByText('Xem & duyệt'))
+  fireEvent.click(await screen.findByText(DICT.vi['work.reviewAndApprove']))
   fireEvent.click(await screen.findByText('Duyệt & thực hiện'))
   await waitFor(() => expect(approve).toHaveBeenCalledWith('hr', 7))
 })
@@ -57,14 +61,14 @@ test('reject calls the agent-scoped reject endpoint after a light confirm', asyn
   vi.spyOn(window, 'confirm').mockReturnValue(true)
   const reject = vi.spyOn(api, 'reject').mockResolvedValue({ agent_id: 'hr', pending: [] })
   renderWork()
-  fireEvent.click(await screen.findByText('Từ chối'))
+  fireEvent.click(await screen.findByText(DICT.vi['work.reject']))
   await waitFor(() => expect(reject).toHaveBeenCalledWith('hr', 7))
 })
 
 test('shows empty state when nothing is pending', async () => {
   vi.spyOn(api, 'getApprovals').mockResolvedValue({ agent_id: 'x', pending: [] })
   renderWork()
-  expect(await screen.findByText(/Không có việc nào chờ duyệt/)).toBeInTheDocument()
+  expect(await screen.findByText(new RegExp(DICT.vi['work.emptyApprovals'].slice(0, 20)))).toBeInTheDocument()
 })
 
 test('shows the "Đã tự duyệt hôm nay" block when auto-approved runs exist (M23)', async () => {
@@ -80,11 +84,7 @@ test('shows the "Đã tự duyệt hôm nay" block when auto-approved runs exist
         }
       : { agent_id: id, runs: [] },
   )
-  render(
-    <MemoryRouter>
-      <Work />
-    </MemoryRouter>,
-  )
+  renderWork()
   expect(await screen.findByText(/Đã tự duyệt hôm nay/)).toBeInTheDocument()
   expect(screen.getByText(/báo cáo daily/)).toBeInTheDocument()
   expect(screen.queryByText(/báo cáo okr/)).not.toBeInTheDocument()

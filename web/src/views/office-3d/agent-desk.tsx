@@ -13,6 +13,8 @@ import { useFrame } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import type { UiKey } from '../../i18n/dictionary'
+import { DICT } from '../../i18n/dictionary'
 import { shouldShowBubble } from './agent-office-state'
 import type { AgentDeskState } from './agent-office-state'
 import { DESK_EDGE_COLOR, VERDICT_FLASH_COLOR, agentColor, agentHash, officeTheme } from './desk-colors'
@@ -38,6 +40,10 @@ interface AgentDeskProps {
   // Dual-lens P1 (high-mode only — parent gates it): this agent is PIC of a task with
   // sandbox (needs_shell) steps. Task-level truth from the board API, not the stream.
   needsShell?: boolean
+  // v53 i18n: this component renders inside <Canvas> (react-three-fiber), so it cannot
+  // call useLanguage() itself — the translate function is threaded down as a prop from
+  // office-unified.tsx via OfficeCanvas.
+  t: (key: UiKey, params?: Record<string, string | number>) => string
 }
 
 // Verdict flash lifetime — render-side fade keyed off the EVENT timestamp, so an SSE
@@ -80,13 +86,19 @@ function AgentAvatar({ id, skin }: { id: string; skin: string }) {
   )
 }
 
-// Vietnamese one-liner for the tooltip — mirrors the fallback table's state labels.
-export function deskTooltipText(desk: AgentDeskState): string {
+// One-liner for the tooltip — mirrors the fallback table's state labels. `t` is optional
+// so existing callers/tests that only need the vi-default text (module-level constant,
+// no language context available) can omit it — it falls back to DICT.vi directly.
+export function deskTooltipText(
+  desk: AgentDeskState,
+  t?: (key: UiKey, params?: Record<string, string | number>) => string,
+): string {
+  const tr = t ?? ((key: UiKey) => DICT.vi[key])
   const state =
-    desk.state === 'working' ? 'đang làm' :
-    desk.state === 'assigned' ? 'vừa nhận việc' :
-    desk.state === 'done' ? 'vừa xong một bước' :
-    desk.state === 'error' ? 'gặp lỗi' : 'đang rảnh'
+    desk.state === 'working' ? tr('agentDesk.stateWorking') :
+    desk.state === 'assigned' ? tr('agentDesk.stateAssigned') :
+    desk.state === 'done' ? tr('agentDesk.stateDone') :
+    desk.state === 'error' ? tr('agentDesk.stateError') : tr('agentDesk.stateIdle')
   const doing = desk.stepTitle || desk.taskTitle
   return doing ? `${state} — ${doing}` : state
 }
@@ -101,7 +113,7 @@ export function verdictFlashStrength(ts: string, now: number): number {
 }
 
 export function AgentDesk({
-  position, label, desk, consultPos, dimmed, dark, onSelect, needsShell,
+  position, label, desk, consultPos, dimmed, dark, onSelect, needsShell, t,
 }: AgentDeskProps) {
   const avatarRef = useRef<THREE.Group>(null)
   const bobRef = useRef<THREE.Group>(null) // inner group: bob rides here, NOT inside the lerp
@@ -232,8 +244,8 @@ export function AgentDesk({
         {hovered && (
           <Html position={[0, 2.2, 0]} center distanceFactor={9} occlude={false}>
             <div className="office-3d-tooltip">
-              <strong>{label}</strong> · {deskTooltipText(desk)}
-              {onSelect && <div className="muted">bấm để mở</div>}
+              <strong>{label}</strong> · {deskTooltipText(desk, t)}
+              {onSelect && <div className="muted">{t('agentDesk.clickToOpen')}</div>}
             </div>
           </Html>
         )}
@@ -266,6 +278,7 @@ export function AgentDesk({
           consultWith={desk.consultWith}
           isPic={desk.picTasks.size > 0}
           isError={desk.state === 'error'}
+          t={t}
         />
       )}
     </group>

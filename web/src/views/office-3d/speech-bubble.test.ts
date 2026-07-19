@@ -7,15 +7,21 @@
 // `<SpeechBubble>` at all — is the exact class of bug that left the 3D phase render dead
 // (the map existed and was correct, but nothing fed it a value).
 import { expect, test } from 'vitest'
+import { DICT } from '../../i18n/dictionary'
 import { PHASE_LABEL } from './speech-bubble'
 
 test('PHASE_LABEL covers exactly the backend phase vocabulary', () => {
   expect(PHASE_LABEL).toEqual({
-    'dang-lam': 'đang làm',
-    'tu-soat': 'tự soát',
-    'dang-sua': 'đang sửa',
-    'nho-tro-giup': 'nhờ trợ giúp',
+    'dang-lam': 'speechBubble.phaseWork',
+    'tu-soat': 'speechBubble.phaseSelfCheck',
+    'dang-sua': 'speechBubble.phaseRework',
+    'nho-tro-giup': 'speechBubble.phaseNeedHelp',
   })
+  // Each key must resolve to a real vi dictionary entry — the map's job is routing to
+  // the dictionary, not holding the text itself anymore.
+  for (const key of Object.values(PHASE_LABEL)) {
+    expect(DICT.vi[key]).toBeTruthy()
+  }
 })
 
 test('an unrecognized phase tag has no label (renders nothing, not the raw code)', () => {

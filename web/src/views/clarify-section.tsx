@@ -5,9 +5,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { Button } from '../components/ui/button'
+import { useLanguage } from '../i18n/language-context'
 import type { ClarifyQuestion } from '../types'
 
 function QuestionRow({ q, onDone }: { q: ClarifyQuestion; onDone: () => void }) {
+  const { t } = useLanguage()
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -21,7 +23,9 @@ function QuestionRow({ q, onDone }: { q: ClarifyQuestion; onDone: () => void }) 
       .then(onDone)
       .catch((e: unknown) => {
         // 409 = answered elsewhere (Telegram) — refresh, not an error worth showing.
-        const msg = e instanceof Error ? e.message : 'không gửi được câu trả lời'
+        // NOTE: this substring check matches the backend's own error text (data, not FE
+        // copy) — it must stay as the literal Vietnamese the API returns, regardless of UI language.
+        const msg = e instanceof Error ? e.message : t('clarify.sendFailed')
         if (msg.includes('đã được trả lời')) onDone()
         else setError(msg)
       })
@@ -31,8 +35,8 @@ function QuestionRow({ q, onDone }: { q: ClarifyQuestion; onDone: () => void }) 
   return (
     <li className="clarify-row">
       <div>
-        <strong>{q.agent_id}</strong> hỏi: {q.question}
-        {q.task_id && <span className="muted"> · việc {q.task_id.slice(0, 8)}</span>}
+        <strong>{q.agent_id}</strong>{t('clarify.asks')}{q.question}
+        {q.task_id && <span className="muted">{t('clarify.taskRef', { id: q.task_id.slice(0, 8) })}</span>}
       </div>
       <div className="clarify-actions">
         {q.options.map((opt, i) => (
@@ -46,7 +50,7 @@ function QuestionRow({ q, onDone }: { q: ClarifyQuestion; onDone: () => void }) 
           </Button>
         ))}
         <input
-          placeholder="hoặc trả lời chi tiết…"
+          placeholder={t('clarify.freeTextPlaceholder')}
           value={text}
           disabled={busy}
           onChange={(e) => setText(e.target.value)}
@@ -55,7 +59,7 @@ function QuestionRow({ q, onDone }: { q: ClarifyQuestion; onDone: () => void }) 
           }}
         />
         <Button variant="ghost" disabled={busy || !text.trim()} onClick={() => send(text)}>
-          Gửi
+          {t('clarify.send')}
         </Button>
       </div>
       {error && <p className="error">{error}</p>}
@@ -64,6 +68,7 @@ function QuestionRow({ q, onDone }: { q: ClarifyQuestion; onDone: () => void }) 
 }
 
 export function ClarifySection() {
+  const { t } = useLanguage()
   const [questions, setQuestions] = useState<ClarifyQuestion[]>([])
 
   const load = useCallback(() => {
@@ -81,11 +86,10 @@ export function ClarifySection() {
   return (
     <section className="clarify-section">
       <h3>
-        Đội đang hỏi bạn <span className="badge">{questions.length}</span>
+        {t('clarify.title')} <span className="badge">{questions.length}</span>
       </h3>
       <p className="muted">
-        Nhân sự cần bạn làm rõ để tiếp tục việc — bấm một lựa chọn hoặc trả lời chi tiết.
-        Câu trả lời được đưa vào bước tiếp theo của việc đó.
+        {t('clarify.hint')}
       </p>
       <ul className="clarify-list">
         {questions.map((q) => (

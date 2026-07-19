@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../../api/client'
 import { Button } from '../../components/ui/button'
+import { useLanguage } from '../../i18n/language-context'
 import { formatCost } from '../../labels'
 import type { AgentDeskState } from '../office-3d/agent-office-state'
 import { deskTooltipText } from '../office-3d/agent-desk'
@@ -20,6 +21,7 @@ interface DeskInspectorProps {
 }
 
 export function DeskInspector({ agentId, desk, onClose }: DeskInspectorProps) {
+  const { t } = useLanguage()
   const [status, setStatus] = useState<AgentStatus | null>(null)
   const [cost, setCost] = useState<TeamTaskCostPayload | null>(null)
   const picTask = desk && desk.picTasks.size > 0 ? [...desk.picTasks][0] : null
@@ -41,38 +43,44 @@ export function DeskInspector({ agentId, desk, onClose }: DeskInspectorProps) {
     // v53: card padding/border/radius/shadow via .card; position:fixed etc stay on
     // .desk-inspector (Card only renders a <div>, so the class is applied directly here
     // to keep the semantic <aside> element).
-    <aside className="card desk-inspector" aria-label={`Chi tiết ${agentId}`}>
+    <aside className="card desk-inspector" aria-label={t('deskInspector.ariaLabel', { agentId })}>
       <header className="desk-inspector-head">
         <strong>{agentId}</strong>
-        <Button variant="chip" onClick={onClose}>Đóng</Button>
+        <Button variant="chip" onClick={onClose}>{t('common.close')}</Button>
       </header>
-      {desk && <p>{deskTooltipText(desk)}{desk.phase ? ` · pha: ${desk.phase}` : ''}</p>}
+      {desk && (
+        <p>
+          {deskTooltipText(desk, t)}
+          {desk.phase ? t('deskInspector.phase', { phase: desk.phase }) : ''}
+        </p>
+      )}
       {status && (
         <p className="muted">
-          {status.trust_mode === 'guarded' ? 'guarded' : 'autonomous'} · ngân sách tháng:{' '}
+          {status.trust_mode === 'guarded' ? 'guarded' : 'autonomous'} · {t('deskInspector.monthlyBudget')}:{' '}
           {formatCost(status.budget.spent)} / {formatCost(status.budget.cap)}
         </p>
       )}
       {picTask && (
         <div className="desk-inspector-task">
           <p>
-            Việc đang PIC: <code>{picTask}</code>
+            {t('deskInspector.picTask')}: <code>{picTask}</code>
             {engines && <> · engine: {engines}</>}
           </p>
           {cost && (
             <p>
-              Chi phí việc này: {formatCost(cost.total_cost_usd)} ({cost.steps.length} bước)
+              {t('deskInspector.taskCost')}: {formatCost(cost.total_cost_usd)} (
+              {t('deskInspector.stepsCount', { n: cost.steps.length })})
             </p>
           )}
         </div>
       )}
       <p className="desk-inspector-links">
-        <Link to={`/agents/${agentId}`}>Trang nhân sự</Link>
+        <Link to={`/agents/${agentId}`}>{t('deskInspector.agentPage')}</Link>
         {picTask && (
           <>
             {' · '}
             <Link to={`/captures?task_id=${encodeURIComponent(picTask)}`}>
-              Captures việc này
+              {t('deskInspector.taskCaptures')}
             </Link>
           </>
         )}

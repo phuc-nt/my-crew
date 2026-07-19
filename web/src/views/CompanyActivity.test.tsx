@@ -2,8 +2,18 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { DICT } from '../i18n/dictionary'
+import { LanguageProvider } from '../i18n/language-context'
 import type { CompanyActivityPayload } from '../types'
 import { CompanyActivity } from './CompanyActivity'
+
+function renderActivity() {
+  return render(
+    <LanguageProvider>
+      <CompanyActivity />
+    </LanguageProvider>,
+  )
+}
 
 const EMPTY: CompanyActivityPayload = { items: [], agents: ['hr', 'pm'], skipped: [] }
 
@@ -32,15 +42,15 @@ beforeEach(() => {
 
 test('shows the empty state when no activity exists', async () => {
   vi.spyOn(api, 'getCompanyActivity').mockResolvedValue(EMPTY)
-  render(<CompanyActivity />)
+  renderActivity()
   await waitFor(() =>
-    expect(screen.getByText(/Chưa có hoạt động nào/)).toBeInTheDocument(),
+    expect(screen.getByText(DICT.vi['companyActivity.empty'])).toBeInTheDocument(),
   )
 })
 
 test('renders one row per item across all three sources + skipped notice', async () => {
   vi.spyOn(api, 'getCompanyActivity').mockResolvedValue(ROWS)
-  render(<CompanyActivity />)
+  renderActivity()
   await waitFor(() => expect(screen.getByText(/slack:post_message/)).toBeInTheDocument())
   expect(screen.getByText(/chạy 'daily'/)).toBeInTheDocument()
   expect(screen.getByText(/bước work trên native/)).toBeInTheDocument()
@@ -63,14 +73,14 @@ test('shows the actor tag when the acting agent differs from the log owner (v46)
       },
     ],
   })
-  render(<CompanyActivity />)
+  renderActivity()
   await waitFor(() => expect(screen.getByText(/\[bởi nghien-cuu\]/)).toBeInTheDocument())
   expect(screen.queryByText(/\[bởi pm\]/)).not.toBeInTheDocument()
 })
 
 test('changing the agent filter refetches with agent param', async () => {
   const spy = vi.spyOn(api, 'getCompanyActivity').mockResolvedValue(ROWS)
-  render(<CompanyActivity />)
+  renderActivity()
   await waitFor(() => expect(spy).toHaveBeenCalled())
   fireEvent.change(screen.getByLabelText(/Agent/), { target: { value: 'hr' } })
   await waitFor(() =>

@@ -6,12 +6,14 @@
 // strip is the maintainer's steady-state readout, not a replacement.
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
+import { useLanguage } from '../../i18n/language-context'
 import { formatCost } from '../../labels'
 import type { CoordinatorHealthPayload, FleetBudgetPayload, IntegrationCheck } from '../../types'
 
 const POLL_MS = 30_000
 
 export function OfficeHealthStrip() {
+  const { t } = useLanguage()
   const [beat, setBeat] = useState<CoordinatorHealthPayload | null>(null)
   const [checks, setChecks] = useState<IntegrationCheck[]>([])
   const [budget, setBudget] = useState<FleetBudgetPayload | null>(null)
@@ -30,11 +32,11 @@ export function OfficeHealthStrip() {
 
   const failing = checks.filter((c) => !c.ok)
   return (
-    <div className="office-health-strip" aria-label="Sức khỏe hệ thống">
+    <div className="office-health-strip" aria-label={t('officeHealthStrip.ariaLabel')}>
       <span className={beat?.alive ? 'health-chip health-ok' : 'health-chip health-bad'}>
         {beat?.alive
-          ? `♥ điều phối ${Math.round(beat.last_beat_ago_s ?? 0)}s`
-          : '♥ điều phối: mất nhịp'}
+          ? t('officeHealthStrip.coordinatorAlive', { seconds: Math.round(beat.last_beat_ago_s ?? 0) })
+          : t('officeHealthStrip.coordinatorDead')}
       </span>
       <span className="health-chip health-ok">✓ {checks.length - failing.length}</span>
       {budget && (

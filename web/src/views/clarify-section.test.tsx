@@ -3,7 +3,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { DICT } from '../i18n/dictionary'
+import { LanguageProvider } from '../i18n/language-context'
 import { ClarifySection } from './clarify-section'
+
+function renderClarify() {
+  return render(
+    <LanguageProvider>
+      <ClarifySection />
+    </LanguageProvider>,
+  )
+}
 
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -21,7 +31,7 @@ const pending = {
 
 test('renders the question with its option buttons', async () => {
   vi.spyOn(api, 'getClarifyPending').mockResolvedValue(pending)
-  render(<ClarifySection />)
+  renderClarify()
 
   expect(await screen.findByText(/Ưu tiên chi phí hay tốc độ\?/)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Chi phí' })).toBeInTheDocument()
@@ -34,7 +44,7 @@ test('option click answers and refreshes the list', async () => {
     .mockResolvedValueOnce(pending)
     .mockResolvedValueOnce({ questions: [] })
   const answer = vi.spyOn(api, 'answerClarify').mockResolvedValue({ ok: true, id: 7 })
-  render(<ClarifySection />)
+  renderClarify()
 
   fireEvent.click(await screen.findByRole('button', { name: 'Tốc độ' }))
   await waitFor(() => expect(answer).toHaveBeenCalledWith(7, 'Tốc độ'))
@@ -49,12 +59,12 @@ test('free-text answer sends on Gửi', async () => {
     .mockResolvedValueOnce(pending)
     .mockResolvedValueOnce({ questions: [] })
   const answer = vi.spyOn(api, 'answerClarify').mockResolvedValue({ ok: true, id: 7 })
-  render(<ClarifySection />)
+  renderClarify()
 
-  fireEvent.change(await screen.findByPlaceholderText('hoặc trả lời chi tiết…'), {
+  fireEvent.change(await screen.findByPlaceholderText(DICT.vi['clarify.freeTextPlaceholder']), {
     target: { value: 'Cân bằng cả hai, ưu tiên deadline' },
   })
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi' }))
+  fireEvent.click(screen.getByRole('button', { name: DICT.vi['clarify.send'] }))
   await waitFor(() =>
     expect(answer).toHaveBeenCalledWith(7, 'Cân bằng cả hai, ưu tiên deadline'),
   )
@@ -67,7 +77,7 @@ test('answered-elsewhere (409) refreshes without showing an error', async () => 
   vi.spyOn(api, 'answerClarify').mockRejectedValue(
     new Error('Câu hỏi này đã được trả lời hoặc đã hết hạn.'),
   )
-  render(<ClarifySection />)
+  renderClarify()
 
   fireEvent.click(await screen.findByRole('button', { name: 'Chi phí' }))
   await waitFor(() =>
@@ -78,7 +88,7 @@ test('answered-elsewhere (409) refreshes without showing an error', async () => 
 
 test('renders nothing when there are no questions', async () => {
   vi.spyOn(api, 'getClarifyPending').mockResolvedValue({ questions: [] })
-  const { container } = render(<ClarifySection />)
+  const { container } = renderClarify()
   await waitFor(() => expect(api.getClarifyPending).toHaveBeenCalled())
   expect(container.querySelector('.clarify-section')).toBeNull()
 })

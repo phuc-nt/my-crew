@@ -8,6 +8,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { PageHeader } from '../components/ui/page-header'
+import { useLanguage } from '../i18n/language-context'
 import { formatDateTime } from '../labels'
 import { useAutoApproved } from '../hooks/use-auto-approved'
 import { type AgentApproval, usePendingApprovals } from '../hooks/use-pending-approvals'
@@ -16,6 +17,7 @@ import { ClarifySection } from './clarify-section'
 import { TeamTaskKanban } from './team-task-kanban'
 
 export function Work() {
+  const { t } = useLanguage()
   const { items, loading, error, refresh } = usePendingApprovals()
   const { rows: autoApproved } = useAutoApproved()
   const [confirming, setConfirming] = useState<AgentApproval | null>(null)
@@ -26,7 +28,7 @@ export function Work() {
     async (item: AgentApproval, kind: 'approve' | 'reject') => {
       // Reject is safe + reversible (the agent can re-prepare), so it only needs a light
       // confirm to stop a mis-tap on mobile — not the full approve dialog (v9 P1 / red-team M2).
-      if (kind === 'reject' && !window.confirm('Bỏ việc này? Agent sẽ không thực hiện.')) return
+      if (kind === 'reject' && !window.confirm(t('work.rejectConfirm'))) return
       setBusy(true)
       setOpError(null)
       try {
@@ -35,28 +37,28 @@ export function Work() {
         setConfirming(null)
         await refresh()
       } catch (e: unknown) {
-        setOpError(e instanceof Error ? e.message : 'thao tác thất bại')
+        setOpError(e instanceof Error ? e.message : t('work.opFailed'))
       } finally {
         setBusy(false)
       }
     },
-    [refresh],
+    [refresh, t],
   )
 
   return (
     <section className="work-page">
-      <PageHeader title="Việc" />
+      <PageHeader title={t('work.title')} />
 
       {/* v33 P4: clarify questions — the CEO's other inbox besides approvals. */}
       <ClarifySection />
 
       <section className="work-approvals">
-        <h3>Cần bạn duyệt {items.length > 0 && <span className="badge">{items.length}</span>}</h3>
-        {error && <p className="error">Lỗi: {error}</p>}
+        <h3>{t('work.pendingApprovalTitle')} {items.length > 0 && <span className="badge">{items.length}</span>}</h3>
+        {error && <p className="error">{t('team.errorPrefix', { message: error })}</p>}
         {loading ? (
-          <p>Đang tải…</p>
+          <p>{t('work.loading')}</p>
         ) : items.length === 0 ? (
-          <EmptyState>Không có việc nào chờ duyệt. 🎉</EmptyState>
+          <EmptyState>{t('work.emptyApprovals')}</EmptyState>
         ) : (
           <ul className="approval-list">
             {items.map((it) => (
@@ -67,14 +69,14 @@ export function Work() {
                 </div>
                 <div className="agent-actions">
                   <Button variant="primary" onClick={() => setConfirming(it)}>
-                    Xem &amp; duyệt
+                    {t('work.reviewAndApprove')}
                   </Button>
                   <Button
                     variant="danger"
                     disabled={busy}
                     onClick={() => void act(it, 'reject')}
                   >
-                    Từ chối
+                    {t('work.reject')}
                   </Button>
                 </div>
               </li>
@@ -88,20 +90,20 @@ export function Work() {
       <TeamTaskKanban />
 
       <section className="work-tasks">
-        <h3>Việc đã giao cho từng nhân sự</h3>
+        <h3>{t('work.assignedTasksTitle')}</h3>
         <Tasks />
       </section>
 
       {autoApproved.length > 0 && (
         <section className="work-auto-approved">
-          <h3>Đã tự duyệt hôm nay ({autoApproved.length})</h3>
+          <h3>{t('work.autoApprovedTitle', { n: autoApproved.length })}</h3>
           <p className="muted">
-            Các hành động agent tin cậy đã tự chạy (trong hạn mức bạn đặt) — không cần bạn duyệt.
+            {t('work.autoApprovedHint')}
           </p>
           <ul className="auto-approved-list">
             {autoApproved.map((r, i) => (
               <li key={`${r.agentId}-${i}`}>
-                <strong>{r.agentId}</strong> · báo cáo {r.kind}
+                <strong>{r.agentId}</strong> · {t('work.autoApprovedReport', { kind: r.kind })}
                 <span className="muted"> · {r.timestamp.slice(11, 16)}</span>
               </li>
             ))}

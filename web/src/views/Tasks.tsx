@@ -6,24 +6,31 @@ import { api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { PageHeader } from '../components/ui/page-header'
+import { DICT, type UiKey } from '../i18n/dictionary'
+import { useLanguage } from '../i18n/language-context'
 import type { AgentTasks, AssignedTask } from '../types'
 
-const STATUS_LABEL: Record<AssignedTask['status'], string> = {
-  open: 'đang mở',
-  running: 'đang chạy',
-  done: 'hoàn tất',
-  cancelled: 'đã huỷ',
-  stalled: 'bị treo',
+const STATUS_LABEL_KEY: Record<AssignedTask['status'], UiKey> = {
+  open: 'tasks.stateOpen',
+  running: 'tasks.stateRunning',
+  done: 'tasks.stateDone',
+  cancelled: 'tasks.stateCancelled',
+  stalled: 'tasks.stateStalled',
 }
 
-function taskSummary(t: AssignedTask): string {
-  if (t.kind === 'watch') return `Theo dõi PR #${String(t.params.number ?? '?')}`
-  if (t.kind === 'report') return `Báo cáo định kỳ '${String(t.params.kind ?? '?')}'`
-  if (t.kind === 'qa') return `Trả lời định kỳ: ${String(t.params.question ?? '?')}`
-  return t.kind
+type Translate = (key: UiKey, params?: Record<string, string | number>) => string
+
+// Optional `t`: only called from within Tasks() today, but the fallback keeps this pure
+// function usable without a hook context (matches the pattern used across this sweep).
+function taskSummary(task: AssignedTask, t: Translate = (key) => DICT.vi[key]): string {
+  if (task.kind === 'watch') return t('tasks.watchSummary', { number: String(task.params.number ?? '?') })
+  if (task.kind === 'report') return t('tasks.reportSummary', { kind: String(task.params.kind ?? '?') })
+  if (task.kind === 'qa') return t('tasks.qaSummary', { question: String(task.params.question ?? '?') })
+  return task.kind
 }
 
 export function Tasks() {
+  const { t } = useLanguage()
   const [agents, setAgents] = useState<AgentTasks[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -32,8 +39,8 @@ export function Tasks() {
     api
       .getTasks()
       .then((p) => setAgents(p.agents))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'tải thất bại'))
-  }, [])
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('tasks.loadFailed')))
+  }, [t])
 
   useEffect(() => {
     load()
@@ -46,58 +53,58 @@ export function Tasks() {
         await api.cancelTask(agentId, taskId)
         load()
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : 'huỷ thất bại')
+        setError(e instanceof Error ? e.message : t('tasks.cancelFailed'))
       } finally {
         setBusyId(null)
       }
     },
-    [load],
+    [load, t],
   )
 
-  if (error) return <p className="error">Lỗi: {error}</p>
-  if (agents === null) return <p>Đang tải…</p>
+  if (error) return <p className="error">{t('team.errorPrefix', { message: error })}</p>
+  if (agents === null) return <p>{t('common.loading')}</p>
   if (agents.length === 0)
     return (
       <section>
-        <PageHeader title="Việc đã giao" />
-        <EmptyState>Chưa có việc nào được giao. Giao việc qua khung Trợ lý (chat).</EmptyState>
+        <PageHeader title={t('tasks.title')} />
+        <EmptyState>{t('tasks.empty')}</EmptyState>
       </section>
     )
 
   return (
     <section className="tasks-board">
-      <PageHeader title="Việc đã giao" />
+      <PageHeader title={t('tasks.title')} />
       {agents.map((a) => (
         <div key={a.agent_id} className="tasks-agent">
           <h3>{a.agent_id}</h3>
           <table className="tasks-table">
             <thead>
               <tr>
-                <th>#</th>
-                <th>Việc</th>
-                <th>Trạng thái</th>
-                <th>Lần chạy gần nhất</th>
+                <th>{t('tasks.colIndex')}</th>
+                <th>{t('tasks.colTask')}</th>
+                <th>{t('tasks.colState')}</th>
+                <th>{t('tasks.colLastRun')}</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {a.tasks.map((t) => {
-                const last = t.history.at(-1)
-                const open = t.status === 'open' || t.status === 'running'
+              {a.tasks.map((task) => {
+                const last = task.history.at(-1)
+                const open = task.status === 'open' || task.status === 'running'
                 return (
-                  <tr key={t.id}>
-                    <td data-label="#">{t.id}</td>
-                    <td data-label="Việc">{taskSummary(t)}</td>
-                    <td data-label="Trạng thái">{STATUS_LABEL[t.status]}</td>
-                    <td className="tasks-last" data-label="Lần chạy gần nhất">{last ? last.summary : '—'}</td>
+                  <tr key={task.id}>
+                    <td data-label={t('tasks.colIndex')}>{task.id}</td>
+                    <td data-label={t('tasks.colTask')}>{taskSummary(task, t)}</td>
+                    <td data-label={t('tasks.colState')}>{t(STATUS_LABEL_KEY[task.status])}</td>
+                    <td className="tasks-last" data-label={t('tasks.colLastRun')}>{last ? last.summary : '—'}</td>
                     <td>
                       {open && (
                         <Button
                           variant="ghost"
-                          onClick={() => void cancel(a.agent_id, t.id)}
-                          disabled={busyId === `${a.agent_id}:${t.id}`}
+                          onClick={() => void cancel(a.agent_id, task.id)}
+                          disabled={busyId === `${a.agent_id}:${task.id}`}
                         >
-                          Huỷ
+                          {t('tasks.cancel')}
                         </Button>
                       )}
                     </td>

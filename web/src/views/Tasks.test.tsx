@@ -3,7 +3,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { DICT } from '../i18n/dictionary'
+import { LanguageProvider } from '../i18n/language-context'
 import { Tasks } from './Tasks'
+
+function renderTasks() {
+  return render(
+    <LanguageProvider>
+      <Tasks />
+    </LanguageProvider>,
+  )
+}
 
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -30,23 +40,23 @@ const PAYLOAD = {
 
 test('renders tasks and their status', async () => {
   vi.spyOn(api, 'getTasks').mockResolvedValue(PAYLOAD)
-  render(<Tasks />)
+  renderTasks()
   await waitFor(() => expect(screen.getByText(/Theo dõi PR #45/)).toBeInTheDocument())
-  expect(screen.getByText('đang mở')).toBeInTheDocument()
+  expect(screen.getByText(DICT.vi['tasks.stateOpen'])).toBeInTheDocument()
   expect(screen.getByText('PR #45 vẫn mở')).toBeInTheDocument()
 })
 
 test('cancel calls the endpoint and reloads', async () => {
   vi.spyOn(api, 'getTasks').mockResolvedValue(PAYLOAD)
   const cancel = vi.spyOn(api, 'cancelTask').mockResolvedValue({ status: 'cancelled' })
-  render(<Tasks />)
+  renderTasks()
   await screen.findByText(/Theo dõi PR #45/)
-  fireEvent.click(screen.getByText('Huỷ'))
+  fireEvent.click(screen.getByText(DICT.vi['tasks.cancel']))
   await waitFor(() => expect(cancel).toHaveBeenCalledWith('default', 1))
 })
 
 test('empty board shows a hint', async () => {
   vi.spyOn(api, 'getTasks').mockResolvedValue({ agents: [] })
-  render(<Tasks />)
+  renderTasks()
   await waitFor(() => expect(screen.getByText(/Chưa có việc nào/)).toBeInTheDocument())
 })

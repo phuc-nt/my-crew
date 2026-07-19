@@ -6,6 +6,7 @@
 import { OrbitControls } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useEffect, useState } from 'react'
+import { useLanguage } from '../../i18n/language-context'
 import { AgentDesk } from './agent-desk'
 import type { AgentDeskState } from './agent-office-state'
 import { CoordinatorDesk } from './coordinator-desk'
@@ -56,6 +57,7 @@ function useThemeIsDark(): boolean {
 export function OfficeCanvas({
   agentIds, desks, rosterIds, dimmedIds, onDeskSelect, needsShellAgents,
 }: OfficeCanvasProps) {
+  const { t } = useLanguage()
   const visible = visibleDesks(agentIds, rosterIds)
   const dark = useThemeIsDark()
   const theme = officeTheme(dark)
@@ -95,6 +97,7 @@ export function OfficeCanvas({
               dark={dark}
               onSelect={onDeskSelect}
               needsShell={needsShellAgents?.has(id) ?? false}
+              t={t}
             />
           )
         })}

@@ -4,10 +4,12 @@
 import { useState } from 'react'
 import { api } from '../api/client'
 import { Button } from './ui/button'
+import { useLanguage } from '../i18n/language-context'
 import { formatCost } from '../labels'
 import type { TeamTaskCostPayload } from '../types'
 
 export function TeamTaskCost({ taskId }: { taskId: string }) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(false)
   const [data, setData] = useState<TeamTaskCostPayload | null>(null)
   const [loading, setLoading] = useState(false)
@@ -30,26 +32,26 @@ export function TeamTaskCost({ taskId }: { taskId: string }) {
   return (
     <div className="team-task-cost">
       <Button variant="ghost" onClick={toggle}>
-        {open ? '▾' : '▸'} Chi phí
+        {open ? '▾' : '▸'} {t('teamTaskCost.toggle')}
       </Button>
-      {open && loading && <span className="muted"> đang tải…</span>}
-      {open && error && <span className="error"> Lỗi: {error}</span>}
+      {open && loading && <span className="muted">{t('teamTaskCost.loading')}</span>}
+      {open && error && <span className="error">{t('teamTaskCost.errorPrefix', { message: error })}</span>}
       {open && data && (
         <div className="team-task-cost-body">
           <p className="muted">
-            Tổng: <strong>{formatCost(data.total_cost_usd)}</strong> ·{' '}
-            {data.total_input_tokens + data.total_output_tokens} token
+            {t('teamTaskCost.total')}: <strong>{formatCost(data.total_cost_usd)}</strong> ·{' '}
+            {data.total_input_tokens + data.total_output_tokens}{t('teamTaskCost.tokensSuffix')}
           </p>
           {data.steps.length === 0 ? (
-            <p className="muted">Chưa có dữ liệu chi phí cho việc này.</p>
+            <p className="muted">{t('teamTaskCost.empty')}</p>
           ) : (
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Bước</th>
-                  <th>Engine</th>
-                  <th>Chi phí</th>
-                  <th>Token (vào/ra)</th>
+                  <th>{t('teamTaskCost.colStep')}</th>
+                  <th>{t('teamTaskCost.colEngine')}</th>
+                  <th>{t('teamTaskCost.colCost')}</th>
+                  <th>{t('teamTaskCost.colTokens')}</th>
                 </tr>
               </thead>
               <tbody>

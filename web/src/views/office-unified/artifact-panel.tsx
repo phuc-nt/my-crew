@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import { EmptyState } from '../../components/ui/empty-state'
+import { useLanguage } from '../../i18n/language-context'
 import type { OfficeMessage, RoomArtifactsPayload } from '../../types'
 import { ArtifactViewer } from './artifact-viewer'
 
@@ -22,6 +23,7 @@ interface ArtifactPanelProps {
 }
 
 export function ArtifactPanel({ activeRoom, roomMessages }: ArtifactPanelProps) {
+  const { t } = useLanguage()
   const [data, setData] = useState<RoomArtifactsPayload | null>(null)
   const [open, setOpen] = useState<{ taskId: string; seq: number; stepId: string } | null>(null)
 
@@ -34,10 +36,10 @@ export function ArtifactPanel({ activeRoom, roomMessages }: ArtifactPanelProps) 
 
   if (!activeRoom) {
     return (
-      <aside className="office-artifacts" aria-label="Kết quả">
-        <p className="office-zone-title">Kết quả</p>
+      <aside className="office-artifacts" aria-label={t('artifactPanel.title')}>
+        <p className="office-zone-title">{t('artifactPanel.title')}</p>
         <div className="office-artifacts-body">
-          <EmptyState>Chọn một phòng việc để xem kết quả bàn giao.</EmptyState>
+          <EmptyState>{t('artifactPanel.selectRoomHint')}</EmptyState>
         </div>
       </aside>
     )
@@ -52,10 +54,10 @@ export function ArtifactPanel({ activeRoom, roomMessages }: ArtifactPanelProps) 
   const hasAny = tasks.some((t) => t.delivered.length > 0)
 
   return (
-    <aside className="office-artifacts" aria-label="Kết quả">
-      <p className="office-zone-title">Kết quả</p>
+    <aside className="office-artifacts" aria-label={t('artifactPanel.title')}>
+      <p className="office-zone-title">{t('artifactPanel.title')}</p>
       <div className="office-artifacts-body">
-      {!hasAny && <EmptyState>Chưa có bàn giao nào trong phòng này.</EmptyState>}
+      {!hasAny && <EmptyState>{t('artifactPanel.empty')}</EmptyState>}
       {tasks.map((t) => t.delivered.length > 0 && (
         <section key={t.task_id} className="artifact-task">
           <h4 title={t.title}>

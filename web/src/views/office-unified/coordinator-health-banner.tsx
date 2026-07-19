@@ -8,11 +8,13 @@
 // single 30s GET. Keep the two mount points; this component is the single source.
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
+import { useLanguage } from '../../i18n/language-context'
 import type { CoordinatorHealthPayload } from '../../types'
 
 const POLL_MS = 30_000
 
 export function CoordinatorHealthBanner() {
+  const { t } = useLanguage()
   const [health, setHealth] = useState<CoordinatorHealthPayload | null>(null)
 
   useEffect(() => {
@@ -29,16 +31,14 @@ export function CoordinatorHealthBanner() {
   if (health.reason === 'no_coordinator') {
     return (
       <div className="office-health-banner office-health-warn">
-        Chưa cấu hình trưởng phòng (điều phối viên) — vào Cài đặt / Setup để chọn, đội chưa
-        thể nhận việc.
+        {t('coordinatorHealth.noCoordinator')}
       </div>
     )
   }
   return (
     <div className="office-health-banner office-health-dead">
-      Bộ điều phối chưa chạy — việc đã giao sẽ KHÔNG tiến triển. Khởi động bằng:{' '}
-      <code>uv run python -m my_crew.runtime.service</code> (hoặc cài dịch vụ nền theo mục A.2
-      của hướng dẫn).
+      {t('coordinatorHealth.deadPrefix')}{' '}
+      <code>uv run python -m my_crew.runtime.service</code> {t('coordinatorHealth.deadSuffix')}
     </div>
   )
 }

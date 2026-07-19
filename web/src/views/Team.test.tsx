@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { DICT } from '../i18n/dictionary'
 import { AppProviders } from '../test-utils'
 import { Team } from './Team'
 
@@ -66,7 +67,7 @@ test('+ Tạo nhân sự ảo → chat when ops-chat is available', async () => 
   vi.spyOn(api, 'getAgents').mockResolvedValue([])
   vi.spyOn(api, 'opsChatAvailable').mockResolvedValue({ available: true, agent_id: 'admin' })
   wrapWithRoutes()
-  fireEvent.click(await screen.findByText('+ Tạo nhân sự ảo'))
+  fireEvent.click(await screen.findByText(DICT.vi['team.createAgent']))
   await waitFor(() => expect(screen.getByText('CHAT LANDING')).toBeInTheDocument())
 })
 
@@ -74,7 +75,7 @@ test('+ Tạo nhân sự ảo → wizard when ops-chat is unavailable (no dead-e
   vi.spyOn(api, 'getAgents').mockResolvedValue([])
   vi.spyOn(api, 'opsChatAvailable').mockResolvedValue({ available: false, reason: 'chưa cấu hình' })
   wrapWithRoutes()
-  fireEvent.click(await screen.findByText('+ Tạo nhân sự ảo'))
+  fireEvent.click(await screen.findByText(DICT.vi['team.createAgent']))
   await waitFor(() => expect(screen.getByText('WIZARD LANDING')).toBeInTheDocument())
 })
 
@@ -82,7 +83,7 @@ test('+ Tạo nhân sự ảo → wizard when the availability check throws', as
   vi.spyOn(api, 'getAgents').mockResolvedValue([])
   vi.spyOn(api, 'opsChatAvailable').mockRejectedValue(new Error('boom'))
   wrapWithRoutes()
-  fireEvent.click(await screen.findByText('+ Tạo nhân sự ảo'))
+  fireEvent.click(await screen.findByText(DICT.vi['team.createAgent']))
   await waitFor(() => expect(screen.getByText('WIZARD LANDING')).toBeInTheDocument())
 })
 
@@ -106,11 +107,11 @@ test('pause/resume calls PATCH /enabled then refreshes from GET /api/agents', as
   })
   wrap(<Team />)
   await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument())
-  fireEvent.click(screen.getByText('Tạm dừng'))
+  fireEvent.click(screen.getByText(DICT.vi['team.pause']))
   await waitFor(() => expect(setEnabled).toHaveBeenCalledWith('acme', false))
   // the table reflects the RE-FETCHED list, not the optimistic PATCH response
   await waitFor(() => expect(getAgents).toHaveBeenCalledTimes(2))
-  await waitFor(() => expect(screen.getByText('Bật lại')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText(DICT.vi['team.resume'])).toBeInTheDocument())
 })
 
 test('resume where the profile still vetoes the agent shows an inline notice', async () => {
@@ -124,9 +125,9 @@ test('resume where the profile still vetoes the agent shows an inline notice', a
   })
   wrap(<Team />)
   await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument())
-  fireEvent.click(screen.getByText('Bật lại'))
+  fireEvent.click(screen.getByText(DICT.vi['team.resume']))
   await waitFor(() =>
-    expect(screen.getByText(/Agent đang bị tắt trong hồ sơ/)).toBeInTheDocument(),
+    expect(screen.getByText(new RegExp(DICT.vi['team.profileDisabledNotice']))).toBeInTheDocument(),
   )
 })
 
@@ -138,8 +139,8 @@ test('+ Tạo trưởng phòng is hidden once a coordinator already exists', asy
     team_task_cap_usd: 2,
   })
   wrap(<Team />)
-  await waitFor(() => expect(screen.getByText('+ Tạo nhân sự ảo')).toBeInTheDocument())
-  expect(screen.queryByText('+ Tạo trưởng phòng')).not.toBeInTheDocument()
+  await waitFor(() => expect(screen.getByText(DICT.vi['team.createAgent'])).toBeInTheDocument())
+  expect(screen.queryByText(DICT.vi['team.createCoordinator'])).not.toBeInTheDocument()
 })
 
 test('+ Tạo trưởng phòng creates the coordinator from the truong-phong template then sets company.coordinator_id', async () => {
@@ -170,7 +171,7 @@ test('+ Tạo trưởng phòng creates the coordinator from the truong-phong tem
     team_task_cap_usd: 2,
   })
   wrap(<Team />)
-  fireEvent.click(await screen.findByText('+ Tạo trưởng phòng'))
+  fireEvent.click(await screen.findByText(DICT.vi['team.createCoordinator']))
   await waitFor(() => expect(getStaffTemplates).toHaveBeenCalled())
   await waitFor(() =>
     expect(createAgent).toHaveBeenCalledWith(
@@ -178,7 +179,7 @@ test('+ Tạo trưởng phòng creates the coordinator from the truong-phong tem
     ),
   )
   await waitFor(() => expect(saveCompany).toHaveBeenCalledWith('Acme Co', 'truong-phong', 2))
-  await waitFor(() => expect(screen.queryByText('+ Tạo trưởng phòng')).not.toBeInTheDocument())
+  await waitFor(() => expect(screen.queryByText(DICT.vi['team.createCoordinator'])).not.toBeInTheDocument())
 })
 
 test('+ Tạo trưởng phòng surfaces an inline error and stays clickable when template lookup fails', async () => {
@@ -186,10 +187,10 @@ test('+ Tạo trưởng phòng surfaces an inline error and stays clickable when
   vi.spyOn(api, 'getStaffTemplates').mockResolvedValue({ templates: [] })
   const createAgent = vi.spyOn(api, 'createAgent')
   wrap(<Team />)
-  fireEvent.click(await screen.findByText('+ Tạo trưởng phòng'))
+  fireEvent.click(await screen.findByText(DICT.vi['team.createCoordinator']))
   await waitFor(() => expect(screen.getByText(/Lỗi:/)).toBeInTheDocument())
   expect(createAgent).not.toHaveBeenCalled()
-  expect(screen.getByText('+ Tạo trưởng phòng')).not.toBeDisabled()
+  expect(screen.getByText(DICT.vi['team.createCoordinator'])).not.toBeDisabled()
 })
 
 test('delete requires confirm before calling DELETE, and default has no delete button', async () => {
@@ -206,14 +207,14 @@ test('delete requires confirm before calling DELETE, and default has no delete b
   await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument())
 
   // only one Delete button (for acme, not default)
-  const deleteButtons = screen.getAllByText('Xoá')
+  const deleteButtons = screen.getAllByText(DICT.vi['team.delete'])
   expect(deleteButtons).toHaveLength(1)
 
   expect(deleteAgent).not.toHaveBeenCalled()
   fireEvent.click(deleteButtons[0])
   const dialog = await screen.findByRole('dialog')
-  expect(dialog).toHaveTextContent('Xoá agent acme?')
-  fireEvent.click(within(dialog).getByText('Xoá'))
+  expect(dialog).toHaveTextContent(DICT.vi['team.confirmDeleteTitle'].replace('{id}', 'acme'))
+  fireEvent.click(within(dialog).getByText(DICT.vi['team.delete']))
   await waitFor(() => expect(deleteAgent).toHaveBeenCalledWith('acme'))
   await waitFor(() => expect(screen.getByText(/lưu trữ/)).toBeInTheDocument())
 })

@@ -10,6 +10,7 @@ import { IntegrationHealthPanel } from '../components/IntegrationHealthPanel'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { PageHeader } from '../components/ui/page-header'
+import { useLanguage } from '../i18n/language-context'
 import { CoordinatorHealthBanner } from './office-unified/coordinator-health-banner'
 import { KIND_LABEL, RUN_STATUS_LABEL, formatCost, labelFor } from '../labels'
 import { useUiMode } from '../ui-mode-context'
@@ -31,6 +32,7 @@ const COORDINATOR_TEMPLATE_ROLE_ID = 'truong-phong'
 const COORDINATOR_AGENT_ID = 'truong-phong'
 
 export function Team() {
+  const { t } = useLanguage()
   const [agents, setAgents] = useState<AgentSummary[]>([])
   // v18: profiles on disk that fell out of the registry (recovery list)
   const [orphans, setOrphans] = useState<UnregisteredProfile[]>([])
@@ -92,14 +94,14 @@ export function Team() {
             .catch(() => undefined) // a single agent's status failing shouldn't break the table
         }
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'không tải được danh sách agent'))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('team.loadAgentsFailed')))
       .finally(() => setLoading(false))
     // v36 P3: which agents have a newer template config (badge overlay; failure is silent).
     api
       .getTemplateStatus()
       .then((p) => setTemplateStatus(Object.fromEntries(p.agents.map((r) => [r.agent_id, r]))))
       .catch(() => undefined)
-  }, [])
+  }, [t])
 
   const loadCompany = useCallback(() => {
     api
@@ -118,8 +120,8 @@ export function Team() {
     setOpError(null)
     try {
       const templates = await api.getStaffTemplates()
-      const template = templates.templates.find((t) => t.role_id === COORDINATOR_TEMPLATE_ROLE_ID)
-      if (!template) throw new Error(`không tìm thấy mẫu "${COORDINATOR_TEMPLATE_ROLE_ID}"`)
+      const template = templates.templates.find((tmpl) => tmpl.role_id === COORDINATOR_TEMPLATE_ROLE_ID)
+      if (!template) throw new Error(t('team.templateNotFound', { roleId: COORDINATOR_TEMPLATE_ROLE_ID }))
       const created = await api.createAgent({
         id: COORDINATOR_AGENT_ID,
         name: template.role,
@@ -134,11 +136,11 @@ export function Team() {
       setCoordinatorId(created.created.id)
       loadAgents()
     } catch (e: unknown) {
-      setOpError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'tạo trưởng phòng thất bại')
+      setOpError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : t('team.createCoordinatorFailed'))
     } finally {
       setCreatingCoordinator(false)
     }
-  }, [loadAgents])
+  }, [loadAgents, t])
 
   async function toggleEnabled(agent: AgentSummary) {
     setBusyId(agent.id)
@@ -157,7 +159,7 @@ export function Team() {
       })
       await refreshAgentsOnly()
     } catch (e: unknown) {
-      setOpError(e instanceof Error ? e.message : 'thao tác thất bại')
+      setOpError(e instanceof Error ? e.message : t('team.toggleFailed'))
     } finally {
       setBusyId(null)
     }
@@ -175,7 +177,7 @@ export function Team() {
       const preview = await api.previewTemplateUpgrade(id)
       setUpgradePreview({ id, preview })
     } catch (e: unknown) {
-      setOpError(e instanceof Error ? e.message : 'không xem được nâng cấp')
+      setOpError(e instanceof Error ? e.message : t('team.upgradePreviewFailed'))
     }
   }
 
@@ -187,15 +189,15 @@ export function Team() {
       const n = Object.keys(res.apply).length
       setUpgradeNote(
         n > 0
-          ? `Đã nâng cấp ${id}: áp ${n} mục, sao lưu ${res.backup}. Giữ nguyên mục bạn đã tự chỉnh.`
-          : `Đã cập nhật phiên bản ${id} (không có mục nào cần áp).`,
+          ? t('team.upgradeAppliedNote', { id, n, backup: res.backup })
+          : t('team.upgradeNoneNote', { id }),
       )
       setUpgradePreview(null)
       // Refresh the badge state so the upgraded row loses its badge.
       const p = await api.getTemplateStatus()
       setTemplateStatus(Object.fromEntries(p.agents.map((r) => [r.agent_id, r])))
     } catch (e: unknown) {
-      setOpError(e instanceof Error ? e.message : 'nâng cấp thất bại')
+      setOpError(e instanceof Error ? e.message : t('team.upgradeFailed'))
     } finally {
       setBusyId(null)
     }
@@ -213,9 +215,9 @@ export function Team() {
         return next
       })
       setConfirmingDelete(null)
-      setDeletedNote(`Đã xoá ${id}. Hồ sơ agent được giữ lại để lưu trữ.`)
+      setDeletedNote(t('team.deletedNote', { id }))
     } catch (e: unknown) {
-      setOpError(e instanceof Error ? e.message : 'xoá thất bại')
+      setOpError(e instanceof Error ? e.message : t('team.deleteFailed'))
     } finally {
       setBusyId(null)
     }
@@ -230,7 +232,7 @@ export function Team() {
     api.registerExistingProfile(id)
       .then(() => api.getUnregisteredProfiles().then((p) => setOrphans(p.profiles)))
       .then(() => window.location.reload()) // đơn giản: bảng đội + roster nạp lại đủ
-      .catch((e: unknown) => setOpError(e instanceof Error ? e.message : 'thêm thất bại'))
+      .catch((e: unknown) => setOpError(e instanceof Error ? e.message : t('team.addOrphanFailed')))
       .finally(() => setRegistering(null))
   }
 
@@ -243,16 +245,16 @@ export function Team() {
       <CoordinatorHealthBanner />
 
       <PageHeader
-        title="Đội"
+        title={t('team.title')}
         actions={
           <div className="team-actions">
             <Button variant="ghost" disabled={creating} onClick={goCreate}>
-              + Tạo nhân sự ảo
+              {t('team.createAgent')}
             </Button>
             {/* v32: templates are one-click-executable on the create page's first step —
                 this is the fast path ("Tạo ngay" per role, or the whole default crew). */}
             <Link to="/create" className="btn-link">
-              ⚡ Tạo nhanh từ mẫu / cả đội
+              {t('team.quickCreateFromTemplate')}
             </Link>
             {coordinatorId === null && (
               <Button
@@ -260,11 +262,11 @@ export function Team() {
                 disabled={creatingCoordinator}
                 onClick={createCoordinator}
               >
-                {creatingCoordinator ? 'Đang tạo…' : '+ Tạo trưởng phòng'}
+                {creatingCoordinator ? t('team.creatingCoordinator') : t('team.createCoordinator')}
               </Button>
             )}
             <Link to="/company-docs" className="btn-link">
-              📄 Kho tài liệu
+              {t('team.docsRepo')}
             </Link>
           </div>
         }
@@ -278,18 +280,18 @@ export function Team() {
           ))}
         </div>
       )}
-      {opError && <p className="error">Lỗi: {opError}</p>}
+      {opError && <p className="error">{t('team.errorPrefix', { message: opError })}</p>}
       {deletedNote && <p className="ok">{deletedNote}</p>}
-      {loading && <p>Đang tải…</p>}
-      {error && <p className="error">Lỗi: {error}</p>}
+      {loading && <p>{t('common.loading')}</p>}
+      {error && <p className="error">{t('team.errorPrefix', { message: error })}</p>}
       {!loading && !error && agents.length === 0 && (
         <div className="team-empty-hero">
-          <EmptyState>Chưa có nhân sự nào.</EmptyState>
+          <EmptyState>{t('team.empty')}</EmptyState>
           <p>
             <Link to="/create" className="btn-link">
-              ⚡ Tạo cả đội mẫu trong một lần
+              {t('team.emptyCreateWholeCrew')}
             </Link>{' '}
-            hoặc chọn từng vai từ mẫu có sẵn.
+            {t('team.emptyOrPickRole')}
           </p>
         </div>
       )}
@@ -297,12 +299,12 @@ export function Team() {
         <table className="agents-table">
           <thead>
             <tr>
-              <th>Mã</th>
-              <th>Tên</th>
-              <th>Trạng thái</th>
-              <th>Lần chạy gần nhất</th>
-              <th>Ngân sách</th>
-              <th>Chờ duyệt</th>
+              <th>{t('team.colCode')}</th>
+              <th>{t('team.colName')}</th>
+              <th>{t('team.colState')}</th>
+              <th>{t('team.colLastRun')}</th>
+              <th>{t('team.colBudget')}</th>
+              <th>{t('team.colPendingApprovals')}</th>
               <th></th>
             </tr>
           </thead>
@@ -311,36 +313,36 @@ export function Team() {
               const status = statuses[a.id]
               return (
                 <tr key={a.id}>
-                  <td data-label="Mã">
+                  <td data-label={t('team.colCode')}>
                     <Link to={`/agents/${a.id}`}>{a.id}</Link>
                   </td>
-                  <td data-label="Tên">
+                  <td data-label={t('team.colName')}>
                     {a.name}
                     {templateStatus[a.id]?.upgradable && (
                       <Button
                         variant="ghost"
                         className="template-upgrade-badge"
-                        title="Template có bản cấu hình mới — bấm để xem và nâng cấp"
+                        title={t('team.templateUpgradeHint')}
                         onClick={() => openUpgrade(a.id)}
                       >
-                        ⬆ bản mới v{templateStatus[a.id].latest_version}
+                        {t('team.templateUpgradeBadge', { version: templateStatus[a.id].latest_version })}
                       </Button>
                     )}
                   </td>
-                  <td data-label="Trạng thái">
-                    {a.enabled ? '✓ bật' : '— tắt'}
+                  <td data-label={t('team.colState')}>
+                    {a.enabled ? t('team.enabled') : t('team.disabled')}
                     {profileDisabledNotice[a.id] && (
                       <div className="error health-detail">
-                        Agent đang bị tắt trong hồ sơ — bật lại ở Nâng cao › Cấu hình
+                        {t('team.profileDisabledNotice')}
                       </div>
                     )}
                   </td>
-                  <td data-label="Lần chạy gần nhất">
+                  <td data-label={t('team.colLastRun')}>
                     {a.last_run
                       ? `${labelFor(KIND_LABEL, a.last_run.kind)} · ${labelFor(RUN_STATUS_LABEL, a.last_run.status)}`
-                      : 'chưa chạy'}
+                      : t('team.neverRun')}
                   </td>
-                  <td data-label="Ngân sách">
+                  <td data-label={t('team.colBudget')}>
                     <div className="budget-cell">
                       <span>
                         {status
@@ -352,7 +354,7 @@ export function Team() {
                         // (amber→red) as spend nears the cap. Ratio comes from the status.
                         <div
                           className="budget-bar"
-                          title={`${Math.round(status.budget.ratio * 100)}% ngân sách`}
+                          title={t('team.budgetRatioTitle', { pct: Math.round(status.budget.ratio * 100) })}
                         >
                           <span
                             className={
@@ -368,10 +370,10 @@ export function Team() {
                       )}
                     </div>
                   </td>
-                  <td data-label="Chờ duyệt">{status ? status.pending_approvals : '…'}</td>
+                  <td data-label={t('team.colPendingApprovals')}>{status ? status.pending_approvals : '…'}</td>
                   <td>
                     <Button variant="ghost" disabled={busyId === a.id} onClick={() => toggleEnabled(a)}>
-                      {a.enabled ? 'Tạm dừng' : 'Bật lại'}
+                      {a.enabled ? t('team.pause') : t('team.resume')}
                     </Button>{' '}
                     {a.id !== 'default' && (
                       <Button
@@ -379,7 +381,7 @@ export function Team() {
                         disabled={busyId === a.id}
                         onClick={() => setConfirmingDelete(a.id)}
                       >
-                        Xoá
+                        {t('team.delete')}
                       </Button>
                     )}
                   </td>
@@ -392,10 +394,9 @@ export function Team() {
 
       {orphans.length > 0 && (
         <section className="team-orphans">
-          <h3>Hồ sơ chưa trong đội ({orphans.length})</h3>
+          <h3>{t('team.orphansTitle', { n: orphans.length })}</h3>
           <p className="muted">
-            Các hồ sơ này tồn tại trong thư mục profiles/ nhưng chưa được đăng ký vào đội —
-            thêm lại để giao việc được cho họ.
+            {t('team.orphansHint')}
           </p>
           <ul>
             {orphans.map((o) => (
@@ -408,10 +409,10 @@ export function Team() {
                     disabled={registering === o.id}
                     onClick={() => registerOrphan(o.id)}
                   >
-                    {registering === o.id ? 'Đang thêm…' : 'Thêm vào đội'}
+                    {registering === o.id ? t('team.orphanAdding') : t('team.orphanAdd')}
                   </Button>
                 ) : (
-                  <span className="error">hồ sơ lỗi: {o.error}</span>
+                  <span className="error">{t('team.orphanError', { error: o.error ?? '' })}</span>
                 )}
               </li>
             ))}
@@ -419,14 +420,14 @@ export function Team() {
         </section>
       )}
       {confirmingDelete && (
-        <div className="confirm-dialog" role="dialog" aria-modal="true" aria-label="Xác nhận xoá">
-          <h3>Xoá agent {confirmingDelete}?</h3>
-          <p>Agent bị gỡ khỏi danh sách. Hồ sơ của agent vẫn được giữ lại để lưu trữ.</p>
+        <div className="confirm-dialog" role="dialog" aria-modal="true" aria-label={t('team.confirmDeleteAria')}>
+          <h3>{t('team.confirmDeleteTitle', { id: confirmingDelete })}</h3>
+          <p>{t('team.confirmDeleteBody')}</p>
           <Button variant="danger" disabled={busyId === confirmingDelete} onClick={() => confirmDelete(confirmingDelete)}>
-            {busyId === confirmingDelete ? 'Đang xoá…' : 'Xoá'}
+            {busyId === confirmingDelete ? t('team.deleting') : t('team.delete')}
           </Button>{' '}
           <Button variant="ghost" disabled={busyId === confirmingDelete} onClick={() => setConfirmingDelete(null)}>
-            Huỷ
+            {t('common.cancel')}
           </Button>
         </div>
       )}
@@ -434,38 +435,42 @@ export function Team() {
         <div className="ok health-detail" role="status">
           {upgradeNote}{' '}
           <Button variant="ghost" onClick={() => setUpgradeNote(null)}>
-            đóng
+            {t('team.upgradeNoteClose')}
           </Button>
         </div>
       )}
       {upgradePreview && (
-        <div className="confirm-dialog" role="dialog" aria-modal="true" aria-label="Nâng cấp template">
+        <div className="confirm-dialog" role="dialog" aria-modal="true" aria-label={t('team.aria.confirmUpgrade')}>
           <h3>
-            Nâng cấp cấu hình {upgradePreview.id} (v{upgradePreview.preview.applied_version} → v
-            {upgradePreview.preview.latest_version})
+            {t('team.upgradeTitle', {
+              id: upgradePreview.id,
+              from: upgradePreview.preview.applied_version,
+              to: upgradePreview.preview.latest_version,
+            })}
           </h3>
           {Object.keys(upgradePreview.preview.apply).length > 0 ? (
             <p>
-              Sẽ áp: <strong>{Object.keys(upgradePreview.preview.apply).join(', ')}</strong>.
+              {t('team.upgradeWillApplyPrefix')}
+              <strong>{Object.keys(upgradePreview.preview.apply).join(', ')}</strong>.
             </p>
           ) : (
-            <EmptyState>Không có mục nào cần áp (bạn đã tự chỉnh hoặc đã mới nhất).</EmptyState>
+            <EmptyState>{t('team.upgradeNoneToApply')}</EmptyState>
           )}
           {upgradePreview.preview.keep.length > 0 && (
             <p className="muted">
-              Giữ nguyên (bạn đã tự chỉnh): {upgradePreview.preview.keep.join(', ')}
+              {t('team.upgradeKeep', { fields: upgradePreview.preview.keep.join(', ') })}
             </p>
           )}
-          <p className="muted">Hồ sơ hiện tại được sao lưu trước khi ghi.</p>
+          <p className="muted">{t('team.upgradeBackupNote')}</p>
           <Button
             variant="ghost"
             disabled={busyId === upgradePreview.id}
             onClick={() => applyUpgrade(upgradePreview.id)}
           >
-            {busyId === upgradePreview.id ? 'Đang nâng cấp…' : 'Nâng cấp'}
+            {busyId === upgradePreview.id ? t('team.upgrading') : t('team.upgrade')}
           </Button>{' '}
           <Button variant="ghost" onClick={() => setUpgradePreview(null)}>
-            Huỷ
+            {t('common.cancel')}
           </Button>
         </div>
       )}

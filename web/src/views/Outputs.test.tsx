@@ -5,6 +5,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { LanguageProvider } from '../i18n/language-context'
 import { Outputs } from './Outputs'
 import { TeamTaskKanban } from './team-task-kanban'
 import type { OutputsPayload, TeamBoardPayload } from '../types'
@@ -32,7 +33,9 @@ const outputs: OutputsPayload = {
 function renderOutputs() {
   return render(
     <MemoryRouter>
-      <Outputs />
+      <LanguageProvider>
+        <Outputs />
+      </LanguageProvider>
     </MemoryRouter>,
   )
 }
@@ -87,7 +90,9 @@ test('kanban renders non-empty lanes and links cards to their workroom', async (
   vi.spyOn(api, 'getTeamTaskBoard').mockResolvedValue(board)
   render(
     <MemoryRouter>
-      <TeamTaskKanban />
+      <LanguageProvider>
+        <TeamTaskKanban />
+      </LanguageProvider>
     </MemoryRouter>,
   )
 
@@ -102,7 +107,9 @@ test('kanban renders nothing when the board is empty', async () => {
   vi.spyOn(api, 'getTeamTaskBoard').mockResolvedValue({ lanes: [] })
   const { container } = render(
     <MemoryRouter>
-      <TeamTaskKanban />
+      <LanguageProvider>
+        <TeamTaskKanban />
+      </LanguageProvider>
     </MemoryRouter>,
   )
   await waitFor(() => expect(api.getTeamTaskBoard).toHaveBeenCalled())

@@ -8,6 +8,8 @@
 import { useRef, useState } from 'react'
 import { api } from '../../api/client'
 import { Button } from '../../components/ui/button'
+import { DICT } from '../../i18n/dictionary'
+import { useLanguage } from '../../i18n/language-context'
 import type { AssignPreviewPayload, RoomChatPayload } from '../../types'
 
 export interface StaffOption {
@@ -17,12 +19,13 @@ export interface StaffOption {
 
 // Returns dropdown options while the caret sits in a leading "@…" token: "" (just "@")
 // lists everyone (plus the pseudo-entry @all), a partial like "@no" narrows by prefix
-// then substring. A brief not starting with "@" never shows the dropdown.
+// then substring. A brief not starting with "@" never shows the dropdown. Uses DICT.vi
+// directly (pure helper, no component/hook context available to callers in tests).
 export function filterStaffForMention(brief: string, staff: StaffOption[]): StaffOption[] {
   const m = /^@([A-Za-z0-9_.-]*)$/.exec(brief.trimStart().split(/\s/, 1)[0] ?? '')
   if (!m || /\s/.test(brief.trimStart())) return [] // token complete once a space follows
   const q = m[1].toLowerCase()
-  const all: StaffOption = { id: 'all', domain: 'đội tự chọn PIC' }
+  const all: StaffOption = { id: 'all', domain: DICT.vi['assignComposer.allDomain'] }
   const pool = [all, ...staff]
   if (!q) return pool
   const starts = pool.filter((s) => s.id.toLowerCase().startsWith(q))
@@ -51,6 +54,7 @@ interface AssignComposerProps {
 }
 
 export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignComposerProps) {
+  const { t } = useLanguage()
   const [brief, setBrief] = useState('')
   const [staff, setStaff] = useState<StaffOption[]>([])
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
@@ -99,7 +103,7 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
           }
         })
         .catch((e: unknown) =>
-          setPhase({ kind: 'error', message: e instanceof Error ? e.message : 'gửi thất bại' }),
+          setPhase({ kind: 'error', message: e instanceof Error ? e.message : t('assignComposer.sendFailed') }),
         )
       return
     }
@@ -115,7 +119,7 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
         }
       })
       .catch((e: unknown) =>
-        setPhase({ kind: 'error', message: e instanceof Error ? e.message : 'giao việc thất bại' }),
+        setPhase({ kind: 'error', message: e instanceof Error ? e.message : t('assignComposer.assignFailed') }),
       )
   }
 
@@ -126,7 +130,7 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
       .roomConfirmAdjust(activeRoom, data.task_id ?? '', data.amendment_id ?? '')
       .then((r) => { setPhase({ kind: 'done', text: r.text, auto: false }); setBrief('') })
       .catch((e: unknown) =>
-        setPhase({ kind: 'error', message: e instanceof Error ? e.message : 'xác nhận sửa thất bại' }),
+        setPhase({ kind: 'error', message: e instanceof Error ? e.message : t('assignComposer.confirmAdjustFailed') }),
       )
   }
 
@@ -141,7 +145,7 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
         if (!activeRoom && data.task_id) onTaskCreated?.(data.task_id)
       })
       .catch((e: unknown) =>
-        setPhase({ kind: 'error', message: e instanceof Error ? e.message : 'xác nhận thất bại' }),
+        setPhase({ kind: 'error', message: e instanceof Error ? e.message : t('assignComposer.confirmFailed') }),
       )
   }
 
@@ -157,8 +161,8 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
           type="text"
           value={brief}
           placeholder={activeRoom
-            ? 'Chat trong phòng việc… (hỏi tiến độ / "chỉnh: …" / "giao …" việc mới)'
-            : 'Giao việc… (@tên-nhân-sự để chỉ định PIC, @all hoặc bỏ trống để đội tự chọn)'}
+            ? t('assignComposer.placeholderRoom')
+            : t('assignComposer.placeholderNew')}
           onFocus={ensureStaff}
           onChange={(e) => {
             setBrief(e.target.value)
@@ -169,7 +173,11 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
           }}
         />
         <Button variant="ghost" onClick={submit} disabled={phase.kind === 'previewing'}>
-          {phase.kind === 'previewing' ? 'Đang xử lý…' : activeRoom ? 'Gửi' : 'Giao việc'}
+          {phase.kind === 'previewing'
+            ? t('assignComposer.processing')
+            : activeRoom
+              ? t('assignComposer.send')
+              : t('assignComposer.assign')}
         </Button>
       </div>
       {mentions.length > 0 && (
@@ -189,10 +197,10 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
           <pre>{phase.data.preview_text}</pre>
           <div className="office-composer-actions">
             <Button variant="primary" onClick={() => confirm(phase.data)}>
-              Xác nhận giao việc
+              {t('assignComposer.confirmAssign')}
             </Button>
             <Button variant="ghost" onClick={() => cancel(phase.data)}>
-              Huỷ
+              {t('assignComposer.cancel')}
             </Button>
           </div>
         </div>
@@ -207,20 +215,24 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
           <pre>{phase.data.preview_text}</pre>
           <div className="office-composer-actions">
             <Button variant="primary" onClick={() => confirmAdjust(phase.data)}>
-              Xác nhận sửa kế hoạch
+              {t('assignComposer.confirmAdjust')}
             </Button>
-            <Button variant="ghost" onClick={() => setPhase({ kind: 'idle' })}>Bỏ qua</Button>
+            <Button variant="ghost" onClick={() => setPhase({ kind: 'idle' })}>
+              {t('assignComposer.dismiss')}
+            </Button>
           </div>
         </div>
       )}
-      {phase.kind === 'confirming' && <p className="office-room-status">Đang xác nhận…</p>}
+      {phase.kind === 'confirming' && <p className="office-room-status">{t('assignComposer.confirming')}</p>}
       {phase.kind === 'done' && (
         <div className="office-composer-preview office-composer-done">
           <pre>{phase.text}</pre>
-          {phase.auto && <p className="office-room-status">Đã tự xác nhận (chế độ tự xác nhận đang bật).</p>}
+          {phase.auto && <p className="office-room-status">{t('assignComposer.autoConfirmed')}</p>}
         </div>
       )}
-      {phase.kind === 'error' && <p className="error">Lỗi: {phase.message}</p>}
+      {phase.kind === 'error' && (
+        <p className="error">{t('assignComposer.errorPrefix', { message: phase.message })}</p>
+      )}
     </div>
   )
 }

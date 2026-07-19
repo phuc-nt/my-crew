@@ -7,17 +7,20 @@ import { Link } from 'react-router'
 import { api } from '../api/client'
 import { TeamTaskCost } from '../components/TeamTaskCost'
 import { Card } from '../components/ui/card'
+import { type UiKey } from '../i18n/dictionary'
+import { useLanguage } from '../i18n/language-context'
 import type { TeamBoardLane } from '../types'
 
-const LANE_LABEL: Record<string, string> = {
-  planning: 'Chờ xác nhận',
-  open: 'Sẵn sàng',
-  running: 'Đang chạy',
-  done: 'Xong',
-  khac: 'Kẹt',
+const LANE_LABEL_KEY: Record<string, UiKey> = {
+  planning: 'teamKanban.lanePlanning',
+  open: 'teamKanban.laneOpen',
+  running: 'teamKanban.laneRunning',
+  done: 'teamKanban.laneDone',
+  khac: 'teamKanban.laneStuck',
 }
 
 export function TeamTaskKanban() {
+  const { t } = useLanguage()
   const [lanes, setLanes] = useState<TeamBoardLane[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -26,9 +29,9 @@ export function TeamTaskKanban() {
       .getTeamTaskBoard()
       .then((res) => setLanes(res.lanes))
       .catch((e: unknown) =>
-        setError(e instanceof Error ? e.message : 'không tải được bảng việc đội'),
+        setError(e instanceof Error ? e.message : t('teamKanban.loadError')),
       )
-  }, [])
+  }, [t])
 
   const total = lanes.reduce((n, l) => n + l.cards.length, 0)
   if (error) return <p className="error">{error}</p>
@@ -36,14 +39,14 @@ export function TeamTaskKanban() {
 
   return (
     <section className="team-kanban">
-      <h3>Việc của đội</h3>
+      <h3>{t('teamKanban.title')}</h3>
       <div className="team-kanban-lanes">
         {lanes.map(
           (lane) =>
             lane.cards.length > 0 && (
               <div key={lane.id} className="team-kanban-lane">
                 <p className="office-zone-title">
-                  {LANE_LABEL[lane.id] ?? lane.id} ({lane.cards.length})
+                  {LANE_LABEL_KEY[lane.id] ? t(LANE_LABEL_KEY[lane.id]) : lane.id} ({lane.cards.length})
                 </p>
                 {lane.cards.map((c) => (
                   <Card key={c.task_id} className="team-kanban-card">
@@ -56,14 +59,14 @@ export function TeamTaskKanban() {
                         {c.pic_id && <span className="outputs-agent">@{c.pic_id}</span>}
                         {c.steps_total > 0 && (
                           <span className="muted">
-                            {c.steps_done}/{c.steps_total} bước
+                            {t('teamKanban.stepsDone', { done: c.steps_done, total: c.steps_total })}
                           </span>
                         )}
                         {/* v50: flag tasks with steps that escalate to the deep_agent (Docker
                             sandbox) tier — the rest run create_agent with no Docker. */}
                         {(c.steps_needs_shell ?? 0) > 0 && (
-                          <span className="team-kanban-sandbox" title="Bước cần chạy shell trong hộp cát Docker (deep_agent)">
-                            🔒 {c.steps_needs_shell} sandbox
+                          <span className="team-kanban-sandbox" title={t('teamKanban.sandboxTitle')}>
+                            {t('teamKanban.sandboxBadge', { n: c.steps_needs_shell ?? 0 })}
                           </span>
                         )}
                       </span>

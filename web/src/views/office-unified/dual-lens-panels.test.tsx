@@ -4,6 +4,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { api } from '../../api/client'
+import { DICT } from '../../i18n/dictionary'
+import { LanguageProvider } from '../../i18n/language-context'
 import { UiModeProvider, useUiMode } from '../../ui-mode-context'
 import { DeskInspector } from './desk-inspector'
 import { OfficeHealthStrip } from './office-health-strip'
@@ -41,8 +43,12 @@ test('health strip: alive beat + failing checks render as chips with hints', asy
       { id: 'b', label: 'Email (SMTP)', ok: false, detail: 'chưa cấu hình', hint: 'điền SMTP' },
     ],
   })
-  render(<OfficeHealthStrip />)
-  await waitFor(() => expect(screen.getByText('♥ điều phối 12s')).toBeTruthy())
+  render(<LanguageProvider><OfficeHealthStrip /></LanguageProvider>)
+  await waitFor(() =>
+    expect(
+      screen.getByText(DICT.vi['officeHealthStrip.coordinatorAlive'].replace('{seconds}', '12')),
+    ).toBeTruthy(),
+  )
   expect(screen.getByText('✓ 1')).toBeTruthy()
   const bad = screen.getByText('✗ Email (SMTP)')
   expect(bad.getAttribute('title')).toContain('điền SMTP')
@@ -65,10 +71,14 @@ test('desk inspector: fetches status always, task cost only when the desk is PIC
   }
   render(
     <MemoryRouter>
-      <DeskInspector agentId="hr" desk={desk} onClose={() => {}} />
+      <LanguageProvider>
+        <DeskInspector agentId="hr" desk={desk} onClose={() => {}} />
+      </LanguageProvider>
     </MemoryRouter>,
   )
-  await waitFor(() => expect(screen.getByText(/ngân sách tháng/)).toBeTruthy())
+  await waitFor(() =>
+    expect(screen.getByText(new RegExp(DICT.vi['deskInspector.monthlyBudget']))).toBeTruthy(),
+  )
   expect(statusSpy).toHaveBeenCalledWith('hr')
   expect(costSpy).toHaveBeenCalledWith('t9')
   await waitFor(() => expect(screen.getByText(/\$0\.4567/)).toBeTruthy())
@@ -88,9 +98,13 @@ test('desk inspector without a PIC task never calls the cost endpoint', async ()
   }
   render(
     <MemoryRouter>
-      <DeskInspector agentId="hr" desk={desk} onClose={() => {}} />
+      <LanguageProvider>
+        <DeskInspector agentId="hr" desk={desk} onClose={() => {}} />
+      </LanguageProvider>
     </MemoryRouter>,
   )
-  await waitFor(() => expect(screen.getByText(/ngân sách tháng/)).toBeTruthy())
+  await waitFor(() =>
+    expect(screen.getByText(new RegExp(DICT.vi['deskInspector.monthlyBudget']))).toBeTruthy(),
+  )
   expect(costSpy).not.toHaveBeenCalled()
 })

@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { api } from '../../api/client'
+import { useLanguage } from '../../i18n/language-context'
 import { useUiMode } from '../../ui-mode-context'
 import { useOfficeStream } from '../../hooks/use-office-stream'
 import { agentIdsInOrder, deriveAgentDesks } from '../office-3d/agent-office-state'
@@ -33,6 +34,7 @@ const OFFICE_ROOM_ID = 'office'
 const PANEL_COLLAPSE_KEY = 'office3dCollapsed'
 
 export function OfficeUnified() {
+  const { t } = useLanguage()
   const [searchParams, setSearchParams] = useSearchParams()
   const activeRoom = searchParams.get('room') // null = toàn cảnh
   const [rooms, setRooms] = useState<Workroom[]>([])
@@ -170,22 +172,21 @@ export function OfficeUnified() {
       {/* v33 P2: one compact header row — title left, panel toggle right; the long
           how-to text folds into <details> so the working area starts higher. */}
       <PageHeader
-        title="Văn phòng"
+        title={t('office.title')}
         actions={
           <Button variant="chip" className="office-3d-toggle" onClick={toggleCollapsed}>
-            {collapsed ? 'Hiện không gian 3D' : 'Thu gọn không gian 3D'}
+            {collapsed ? t('office.expand3d') : t('office.collapse3d')}
           </Button>
         }
       />
       <CoordinatorHealthBanner />
       {isHigh && <OfficeHealthStrip />}
       <details className="office-hint">
-        <summary>Hướng dẫn nhanh</summary>
+        <summary>{t('office.hintSummary')}</summary>
         <p className="ops-chat-hint">
-          Bấm một bàn làm việc để mở việc của nhân sự đó; chọn phòng việc bên trái để xem
-          hoạt động và chat; "Toàn cảnh" xem cả đội. Giao việc mới: gõ{' '}
-          <code>@tên-nhân-sự</code> để chỉ định PIC, <code>@all</code>/bỏ trống để đội tự
-          chọn.
+          {t('office.hintBody')} <code>@tên-nhân-sự</code> {t('office.hintBodyMention')}{' '}
+          <code>@all</code>
+          {t('office.hintBodyAllPrefix')} {t('office.hintBodyAll')}
         </p>
       </details>
       {!collapsed && (

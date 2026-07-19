@@ -7,6 +7,7 @@ import { Link } from 'react-router'
 import { api } from '../api/client'
 import { EmptyState } from '../components/ui/empty-state'
 import { PageHeader } from '../components/ui/page-header'
+import { useLanguage } from '../i18n/language-context'
 import { formatDateTime } from '../labels'
 import { ArtifactViewer } from './office-unified/artifact-viewer'
 import type { OutputItem } from '../types'
@@ -16,6 +17,7 @@ function fmtTs(ts: string): string {
 }
 
 export function Outputs() {
+  const { t } = useLanguage()
   const [items, setItems] = useState<OutputItem[]>([])
   const [truncated, setTruncated] = useState(false)
   const [agent, setAgent] = useState('')
@@ -34,10 +36,10 @@ export function Outputs() {
         setTruncated(res.truncated)
       })
       .catch((e: unknown) =>
-        setError(e instanceof Error ? e.message : 'không tải được danh sách kết quả'),
+        setError(e instanceof Error ? e.message : t('outputs.loadError')),
       )
       .finally(() => setLoading(false))
-  }, [agent, days])
+  }, [agent, days, t])
 
   // Agent filter options come from the loaded rows themselves — no extra fetch, and
   // the list only offers agents that actually produced something.
@@ -48,17 +50,18 @@ export function Outputs() {
 
   return (
     <section className="outputs-page">
-      <PageHeader title="Kết quả" />
+      <PageHeader title={t('outputs.title')} />
       <p className="muted">
-        Mọi kết quả bàn giao của cả đội — bấm một dòng để đọc, file thì tải về. Xem theo
-        phòng việc tại <Link to="/office">Văn phòng</Link>.
+        {t('outputs.introPrefix')}
+        <Link to="/office">{t('outputs.introLink')}</Link>
+        {t('outputs.introSuffix')}
       </p>
 
       <div className="outputs-filters">
         <label>
-          Nhân sự{' '}
+          {t('outputs.filterAgent')}{' '}
           <select value={agent} onChange={(e) => setAgent(e.target.value)}>
-            <option value="">tất cả</option>
+            <option value="">{t('outputs.filterAll')}</option>
             {agents.map((a) => (
               <option key={a} value={a}>
                 {a}
@@ -67,19 +70,19 @@ export function Outputs() {
           </select>
         </label>
         <label>
-          Thời gian{' '}
+          {t('outputs.filterTime')}{' '}
           <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
-            <option value={0}>mọi lúc</option>
-            <option value={7}>7 ngày</option>
-            <option value={30}>30 ngày</option>
+            <option value={0}>{t('outputs.timeAll')}</option>
+            <option value={7}>{t('outputs.time7d')}</option>
+            <option value={30}>{t('outputs.time30d')}</option>
           </select>
         </label>
       </div>
 
-      {loading && <p className="muted">Đang tải…</p>}
+      {loading && <p className="muted">{t('outputs.loading')}</p>}
       {error && <p className="error">{error}</p>}
       {!loading && !error && items.length === 0 && (
-        <EmptyState>Chưa có kết quả nào. Giao việc cho đội ở Văn phòng trước đã.</EmptyState>
+        <EmptyState>{t('outputs.empty')}</EmptyState>
       )}
 
       <ul className="outputs-list">
@@ -102,7 +105,7 @@ export function Outputs() {
                 href={`/api/outputs/file/${encodeURIComponent(item.agent_id)}/${encodeURIComponent(item.name ?? '')}`}
               >
                 <span className="outputs-title">📎 {item.name}</span>
-                <span className="muted"> — file xuất</span>
+                <span className="muted"> — {t('outputs.fileExport')}</span>
               </a>
               <span className="outputs-meta">
                 <span className="outputs-agent">{item.agent_id}</span>
@@ -112,7 +115,7 @@ export function Outputs() {
           ),
         )}
       </ul>
-      {truncated && <p className="muted">Danh sách đã cắt bớt — lọc theo nhân sự/thời gian để thu hẹp.</p>}
+      {truncated && <p className="muted">{t('outputs.truncated')}</p>}
 
       {openStep && (
         <ArtifactViewer
