@@ -136,9 +136,15 @@ class _RegistryEntry:
 
 
 class _LoadedSchedule:
-    def __init__(self, schedule, enabled=True):
+    # Mirrors the LoadedProfile fields `_effective_schedule` consumes: the endpoint
+    # projects the service's EFFECTIVE schedule (synthesized team-tick/watch included),
+    # so the double needs the same surface (reports/watchers/profile_id) as a real one.
+    def __init__(self, schedule, enabled=True, watchers=()):
         self.schedule = schedule
         self.enabled = enabled
+        self.reports = tuple(schedule)
+        self.watchers = list(watchers)
+        self.profile_id = "test-agent"
 
 
 def test_schedule_upcoming_sorts_and_caps_at_ten(client, monkeypatch):

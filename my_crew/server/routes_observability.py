@@ -161,7 +161,18 @@ def schedule_upcoming() -> dict:
             continue
         if not loaded.enabled:
             continue
-        for kind, cron in dict(loaded.schedule).items():
+        # The service loop synthesizes pseudo-kinds on top of the profile's raw
+        # `schedule:` (coordinator team-tick, watcher `watch` every 5') — reuse its
+        # helper so this projection shows what will ACTUALLY fire, not just the yaml.
+        from my_crew.runtime.service import _effective_schedule
+
+        schedule, _reports = _effective_schedule(loaded)
+        for kind, cron in dict(schedule).items():
+            # The coordinator's team-tick is an every-minute infra heartbeat (already
+            # surfaced as ♥ in the health strip) — listing it would permanently occupy
+            # the top slots and bury the watch/daily fires the CEO actually cares about.
+            if kind == "team-tick":
+                continue
             if not croniter.is_valid(cron):
                 continue
             next_fire = croniter(cron, now).get_next(datetime)
