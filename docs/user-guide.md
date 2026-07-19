@@ -313,6 +313,24 @@ Toggle off to return to the simplified 4-section view. This only changes detail 
 
 ---
 
+## Language Toggle: Vietnamese / English (v53)
+
+The header (next to the theme toggle) shows a **VN / EN** chip. Click to switch interface language:
+
+- **Vietnamese (default):** All navigation, button labels, and UI text appear in Vietnamese (Tiếng Việt).
+- **English:** Same buttons and labels translate to English, making it easier for non-Vietnamese speakers to navigate.
+
+**What DOES change:** Dashboard nav labels ("Văn phòng" → "Office", "Đội" → "Team", etc.), settings labels, and all FE-static UI text.
+
+**What STAYS Vietnamese in English mode:**
+- Health-check status and error messages (these come from the backend system, not the UI layer).
+- LLM-generated content (reports, clarifications, agent reasoning).
+- Technical terms (they stay English in both languages for clarity): Captures, Guardrail, PIC, deep_agent, sandbox, engine, tokens, MCP, autonomous, guarded.
+
+Your choice is saved in browser storage, so the dashboard remembers your preference next time you visit.
+
+---
+
 ## Demo Mode (Safe Preview for Visitors)
 
 To show the product to stakeholders without exposing real data:

@@ -9,12 +9,15 @@
 > **Triết lý runtime-tier + routing xem [system-architecture](system-architecture.md) §3.9** (nguồn chuẩn).
 > Đọc cùng [project-overview-pdr](project-overview-pdr.md), [project-roadmap](project-roadmap.md).
 >
-> **Mốc v40–v49 (tóm tắt — chi tiết ở `docs/journals/`):** v40–v42 deep_agent hardening · v43 deep_team
+> **Mốc v40–v53 (tóm tắt — chi tiết ở `docs/journals/`):** v40–v42 deep_agent hardening · v43 deep_team
 > in-sandbox subagent · v44 benchmark-hardening · **v45 tier-0 routing** (no-shell→create_agent 0-Docker) ·
 > **v46 central-audit actor** (`AuditEntry.actor`, 1 choke point `_record`, migrate-free) ·
 > **v47 Docker-UX** (health probe, `prepull_sandbox_image`, `SANDBOX_DEFAULT_IMAGE`) ·
 > **v48 team-step MCP pool** (reuse session→faster) ·
-> **v49 barrier-to-entry** (`mpm quickstart`, `mpm crew init`, CoordinatorHealthBanner ở Đội).
+> **v49 barrier-to-entry** (`mpm quickstart`, `mpm crew init`, CoordinatorHealthBanner ở Đội) ·
+> **v50 UI catch-up** (surface backend actor/tier/cost/deep_team FE) ·
+> **v51–v52 polish** (minor fixes) ·
+> **v53 UI discipline + language mode** (design tokens refactor, 6 UI primitives, VN/EN toggle).
 
 ## Trạng thái hiện tại (v2 COMPLETE: M1+M2+M3)
 
@@ -480,6 +483,12 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 - **Header lens toggle** 👁/🔬 (`components/Layout.tsx`, `ui-mode-context`); high-mode office panels: **health strip** (`office-unified/office-health-strip.tsx`: coordinator beat + integration checks + budget chip), **Desk Inspector** (`desk-inspector.tsx`: step/tier/cost-so-far on desk click).
 - **Read-only observability** (`my_crew/server/routes_observability.py`, 3 GET behind auth, no Gateway): `/api/budget` (fleet spend vs cap), `/api/captures` (+`/{id}`, v26 per-attempt telemetry), `/api/search` (v33 FTS5, sweep-throttled 30s). UI: **Captures explorer** (`views/Captures.tsx`, ADVANCED_NAV), header search box.
 - **launchd PATH fix** (`deploy/launchd/*.plist`, `install.sh`): `EnvironmentVariables/PATH` via `__BIN_PATH__` so services find node/docker/gh/gws (v51 rename left them off the minimal launchd PATH).
+
+### v53: UI discipline + language mode (2026-07-19)
+- **App.css refactor** (5 sections: 1.TOKENS → 2.BASE → 3.PRIMITIVES → 4.APP SHELL/NAV → 5.VIEWS); new header rule: "new styles MUST use tokens+primitives; no new button/card/badge/input/empty-state classes". Fixed phantom tokens (`--color-err`, `--fs-md`, `--color-warn-solid` removed); added `--radius-sm: 4px`. Real `--shadow-sm` value = `0 1px 3px rgba(0,0,0,0.08)`.
+- **6 UI primitives** (`web/src/components/ui/`): Button (variants primary/danger/ghost/chip), Card, Badge (always pill, tones ok/warn/danger/accent/neutral), Input, EmptyState, PageHeader. React wrappers stay thin; all styling in `.btn`, `.card`, `.badge-*`, `.ui-input`, `.ops-chat-empty`, `.page-header` classes.
+- **Format helpers** (`labels.ts`): `formatCost()` <$1 → 4 decimals, ≥$1 → 2; `formatDateTime()` consistent "HH:mm dd/MM" (vi-VN locale). App-wide single format so spent/cap pairs read consistently.
+- **i18n infrastructure** (`web/src/i18n/`): LanguageProvider (localStorage `ui-lang`, default vi), TypeScript dictionary (`satisfies` constraint on en=vi keys), boundary (FE-static only; backend/LLM content stays Vietnamese). Header VN/EN chip. Technical terms stay English both languages (Captures, Guardrail, PIC, deep_agent, sandbox, engine, tokens, MCP, autonomous/guarded). Sweep ~30 views for label consistency.
 
 ## Key v2 Changes vs v1
 

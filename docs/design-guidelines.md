@@ -47,16 +47,16 @@ Agent đóng vai management → phải hành xử như một PM/SM **giỏi và 
 |----------|------------|------|
 | **Semantic color** | `--color-text`, `--color-muted`, `--color-subtle`, `--color-border`, `--color-bg` | black → white-text; #6b6b6b → lighter gray; etc. |
 | **Status colors** (role-split) | `--color-{danger,ok,warn}` (text) + `-solid` (nền đặc + white text) + `-bg` (nền nhạt) + `--color-on-{status}` | Separate roles: text ≠ white-on-filled ≠ background tint → WCAG AA both themes |
-| **Spacing** | `--space-1`, `--space-2`, `--space-3`, `--space-4`, `--space-5` | 4px, 8px, 12px, 16px, 24px |
-| **Radius** | `--radius`, `--radius-lg`, `--radius-pill` | 4px, 8px, 999px |
-| **Shadow** | `--shadow-sm` | `0 1px 2px rgba(0,0,0,0.05)` |
-| **Type scale** | `--fs-h1` through `--fs-xs`, `--lh-tight`/`-normal`/`-relaxed` | 1.4rem, 1.1rem, ... 0.75rem |
+| **Spacing** | `--space-1`, `--space-2`, `--space-3`, `--space-4`, `--space-5` | 0.25rem, 0.5rem, 0.75rem, 1rem, 1.5rem |
+| **Radius** | `--radius-sm`, `--radius`, `--radius-lg`, `--radius-pill` | 4px, 6px, 10px, 999px |
+| **Shadow** | `--shadow-sm` | `0 1px 3px rgba(0, 0, 0, 0.08)` |
+| **Type scale** | `--fs-h1` through `--fs-xs` | 1.4rem, 1.2rem, 1.05rem, 0.95rem, 1rem, 0.9rem, 0.8rem, 0.75rem |
 
 **Implementation**: 112+ `var()` usages across components. **WCAG AA verified**: all roles (text-on-bg, white-on-filled, hint-on-bg) ≥4.5:1 both light + dark.
 
 **Token organization by light/dark** (actual values from `web/src/App.css`):
-- **Light (default `:root`)**: `--color-text` #1a1a1a, `--color-bg` #fafafa, `--color-surface` #fff; `--color-danger` (text) #b00020, `--color-danger-solid` (fill under white text) #b00020.
-- **Dark (`[data-theme=dark]`)**: `--color-text` #e8e8e8, `--color-bg` #121212, `--color-surface` #1e1e1e; `--color-danger` (text) #ff8a80, `--color-danger-solid` (fill under white text) #c5221f. Text and solid-fill roles diverge in dark precisely because one hue can't serve both at AA once inverted.
+- **Light (default `:root`)**: `--color-text` #1a1a1a, `--color-bg` #fafafa, `--color-surface` #fff; `--color-danger` (text) #b00020, `--color-danger-solid` (fill under white text) #b00020, `--color-warn` #9a5b00, `--color-ok` #1e7e34.
+- **Dark (`[data-theme=dark]`)**: `--color-text` #e8e8e8, `--color-bg` #121212, `--color-surface` #1e1e1e; `--color-danger` (text) #ff8a80, `--color-danger-solid` (fill under white text) #c5221f, `--color-warn` #e0a03e, `--color-ok` #6bd68a. Text and solid-fill roles diverge in dark precisely because one hue can't serve both at AA once inverted.
 
 ### 5.2 Theme system (light/dark/auto, localStorage-persisted)
 
@@ -72,7 +72,24 @@ Agent đóng vai management → phải hành xử như một PM/SM **giỏi và 
 3. User toggles → context updates state + `localStorage`, then CSS re-evaluates `:root` or `[data-theme]` rules.
 4. OS theme changes (auto mode) → prefers-color-scheme listener triggers re-resolve.
 
-### 5.3 Font: Be Vietnam Pro (OFL, self-hosted)
+### 5.3 Primitives — The 6 UI Components (v53)
+
+**Principle**: ONE canonical class per component type. All new styles MUST use tokens + primitives; no ad-hoc button/card/badge/input/empty-state classes.
+
+**Files** (`web/src/components/ui/`):
+
+| Component | React wrapper | CSS class(es) | Purpose |
+|-----------|---|---|---|
+| **Button** | `<Button variant="primary\|danger\|ghost\|chip">` | `.btn`, `.btn-primary`, `.btn-danger`, `.chip` | Actions. `type="button"` default (explicit `type="submit"` in forms). |
+| **Card** | `<Card>` | `.card` | Surface (--space-3 padding, --radius, shadow-sm). Extra chrome via className. |
+| **Badge** | `<Badge tone="ok\|warn\|danger\|accent\|neutral">` | `.badge`, `.badge-{tone}` | Status indicator; always pill-shaped (replaces drifted 10px variants). |
+| **Input** | `<Input>` | `.ui-input` | Form field; one border/radius/padding app-wide. |
+| **EmptyState** | `<EmptyState>` | `.ops-chat-empty` | Muted italic line (nothing-here moment). |
+| **PageHeader** | `<PageHeader title={…} actions={…}>` | `.page-header`, `.page-header-actions` | Page title left, actions right, aligned baseline. |
+
+**Header rule (v53)**: New view styles MUST extend these 6 primitives. Visuals stay in `App.css` section 3 (PRIMITIVES), behaviors in React. DISALLOWED: `.my-button`, `.card-accent`, `.input-lg` — reuse existing classes or propose token addition.
+
+### 5.4 Font: Be Vietnam Pro (OFL, self-hosted)
 
 **Why**: Serve Vietnamese + Latin glyphs via self-hosted woff2 (no CDN, offline-safe, CSP-friendly).
 
@@ -83,7 +100,30 @@ Agent đóng vai management → phải hành xử như một PM/SM **giỏi và 
 
 **Load strategy**: Browser only fetches files if that weight/style is used on the page (unicode-range filtering).
 
-### 5.4 Motion & a11y
+### 5.5 Language Mode — VN/EN Toggle (v53)
+
+**Architecture** (`web/src/i18n/`):
+
+- **`LanguageProvider`** — React context (default 'vi'), persisted to `localStorage['ui-lang']`. Hook: `useLanguage()` → `{ lang, setLang, t }`.
+- **Dictionary** (`dictionary.ts`) — ONE source of truth: `vi` keys are canonical; `en` maps must satisfy TypeScript compile check (missing/extra keys = error).
+- **Translate function** `t(key, params?)` — FE-static strings only. Backend-origin strings (health-check labels, API error details, clarify questions) and LLM content stay Vietnamese in EN mode (they are data, not layout).
+- **UI toggle** — VN/EN chip in header next to theme toggle, visible on all pages.
+
+**Boundary (v1 decision, enforced)**: 
+
+- **Translates in EN mode:** View labels, navigation, button text, UI chrome (all FE-static strings in `labels.ts` + `dictionary.ts`).
+- **Stays Vietnamese in EN mode:** Health-check status/labels/hints, API error details, LLM-generated content (reports/clarifications), backend-origin strings — these are data flowing *from* backend, not layout.
+- **Technical terms stay English in BOTH languages:** Captures, Guardrail, PIC, deep_agent, sandbox, engine, tokens, MCP, attempt, autonomous, guarded. CEO decision to keep these untranslated for clarity.
+
+**Files**:
+- `web/src/i18n/language-context.tsx` — context + localStorage binding.
+- `web/src/i18n/dictionary.ts` — `DICT = { vi: {...}, en: {...} }` with `satisfies` type guard.
+- `web/src/labels.ts` — `labelFor(map, key, t?)` helper; format functions (`formatDateTime`, `formatCost`, etc.) always Vietnamese.
+- Components in Canvas (r3f) receive `t` via props (can't use context inside Canvas).
+
+**Enforcement**: `formatDateTime()` always "HH:mm dd/MM" (vi-VN locale). `formatCost()` always "$X.XX" (USD). Both hardcoded, not translated.
+
+### 5.7 Motion & a11y
 
 - **Transitions**: button/nav/tab/chip hover = 120–180ms smooth (no jarring jumps).
 - **Confirm dialog**: fade-in 200ms.
@@ -91,7 +131,7 @@ Agent đóng vai management → phải hành xử như một PM/SM **giỏi và 
 - **Reduce mode**: transitions stripped entirely (no-op CSS).
 - **Focus management**: modal trap focus, Escape closes, scroll-into-view on keyboard nav (ConfirmDialog accessibility).
 
-### 5.5 UI Mode: Dual-layer view toggle (v10 M25)
+### 5.8 UI Mode: Dual-layer view toggle (v10 M25)
 
 **Concept**: Low-tech CEO mode vs. high-tech advanced mode, toggled globally via `ui-mode-context.tsx`.
 
@@ -106,7 +146,7 @@ Agent đóng vai management → phải hành xử như một PM/SM **giỏi và 
 - Settings → "Chế độ hiển thị" toggle → calls context setter.
 - Routes for advanced views check context; hidden in low mode but still navigable via direct URL (auth remains the true boundary).
 
-### 5.6 Chart theme-awareness (v10 M24–M25)
+### 5.9 Chart theme-awareness (v10 M24–M25)
 
 **Before**: hardcoded colors (hex literals), ignored theme.
 **After**: Charts read design tokens via `getComputedStyle()`, remount on theme change.
@@ -115,7 +155,7 @@ Agent đóng vai management → phải hành xử như một PM/SM **giỏi và 
 - `web/src/components/charts/chart-theme.ts` — `getChartColors()` reads computed `--color-{status}` values, returns chart.js dataset config.
 - Components use `key={resolvedTheme}` to remount when theme flips → refetch colors.
 
-### 5.7 Responsive design (v9 M4)
+### 5.10 Responsive design (v9 M4)
 
 **Mobile-first card-list**: `@media (max-width: 640px)` transforms CEO tables (Team/Tasks/Approvals) into card layouts:
 - `<tr>` → card div; `<td>` → flex row with `data-label` label prefix.

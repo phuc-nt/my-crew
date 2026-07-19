@@ -605,7 +605,9 @@ input, textarea, select { font-size: var(--fs-body); }
   .app-nav, .app-nav-primary { flex-wrap: wrap; }
   .quick-chips, .team-actions { flex-wrap: wrap; }
   .app-header { flex-wrap: wrap; }
-  .app-header-actions { gap: var(--space-2); }
+  /* v53: the actions row grew to 5 controls (lens + language + theme + logout [+ search]) —
+     it must wrap too, or the page scrolls horizontally on phones. */
+  .app-header-actions { gap: var(--space-2); flex-wrap: wrap; justify-content: flex-end; }
   /* The theme segmented control is a grouped picker, not a lone tap target — the 44px rule
      (applied to buttons below) would balloon it, so keep its segments compact on mobile. */
   .theme-toggle-btn { min-height: 0; padding: 0.35rem 0.6rem; }
