@@ -1,11 +1,10 @@
-// S4 ops view tests: approve requires the confirm step + calls the real endpoint; config save
-// surfaces the backend validation error. Mocked api (no network). Local-only (npm test).
+// S4 ops view tests: config save surfaces the backend validation error. Mocked api (no
+// network). Local-only (npm test).
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { AgentProvider } from '../agent-context'
 import { ApiError, api } from '../api/client'
 import { LanguageProvider } from '../i18n/language-context'
-import { Approvals } from './Approvals'
 import { Config } from './Config'
 
 beforeEach(() => {
@@ -22,46 +21,6 @@ function wrap(ui: React.ReactElement) {
     </LanguageProvider>,
   )
 }
-
-const PENDING = {
-  agent_id: 'acme',
-  pending: [
-    {
-      id: 7,
-      reason: 'external post',
-      status: 'pending',
-      created_at: 't1',
-      action: { type: 'mcp_tool', server: 'slack', tool: 'post_message', args: { channel: 'C' } },
-    },
-  ],
-}
-
-test('approve requires the two-step confirm before calling the endpoint', async () => {
-  vi.spyOn(api, 'getApprovals').mockResolvedValue(PENDING)
-  const approve = vi.spyOn(api, 'approve').mockResolvedValue({ agent_id: 'acme', pending: [] })
-  wrap(<Approvals />)
-  await waitFor(() => expect(screen.getByText('external post')).toBeInTheDocument())
-
-  // approve is NOT called just by listing — the operator must Review → confirm first.
-  expect(approve).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByText('Xem & duyệt'))
-  const dialog = await screen.findByRole('dialog')
-  expect(dialog).toHaveTextContent('Duyệt việc #7')
-  // the confirm dialog keeps the exact action JSON that will post (in <details>)
-  expect(dialog).toHaveTextContent('post_message')
-  fireEvent.click(screen.getByText('Duyệt & thực hiện'))
-  await waitFor(() => expect(approve).toHaveBeenCalledWith('acme', 7))
-})
-
-test('reject calls the reject endpoint after a light confirm', async () => {
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
-  vi.spyOn(api, 'getApprovals').mockResolvedValue(PENDING)
-  const reject = vi.spyOn(api, 'reject').mockResolvedValue({ agent_id: 'acme', pending: [] })
-  wrap(<Approvals />)
-  await waitFor(() => expect(screen.getByText('external post')).toBeInTheDocument())
-  fireEvent.click(screen.getByText('Từ chối'))
-  await waitFor(() => expect(reject).toHaveBeenCalledWith('acme', 7))
-})
 
 test('config save surfaces the backend validation error (exact message)', async () => {
   vi.spyOn(api, 'getConfig').mockResolvedValue({

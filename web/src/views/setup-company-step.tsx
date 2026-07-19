@@ -1,6 +1,7 @@
 // Setup wizard's company step: name + optional coordinator select, written via
 // POST /api/company. Split out of Setup.tsx to keep that file under the project's
 // modularization guideline — this is pure presentation, all state/fetch stays in Setup.tsx.
+import { Button } from '../components/ui/button'
 import { useLanguage } from '../i18n/language-context'
 import type { AgentSummary } from '../types'
 
@@ -51,13 +52,12 @@ export function SetupCompanyStep({
       </label>
       {error && <p className="error">{error}</p>}
       <div className="setup-actions">
-        {/* v53: styled by container element selector (.setup-actions button) — unify in a later pass */}
-        <button type="button" disabled={busy} onClick={onBack}>
+        <Button variant="ghost" disabled={busy} onClick={onBack}>
           {t('setupCompany.back')}
-        </button>
-        <button type="button" className="setup-primary" disabled={busy} onClick={onNext}>
+        </Button>
+        <Button variant="primary" className="setup-primary-align" disabled={busy} onClick={onNext}>
           {t('setupCompany.continue')}
-        </button>
+        </Button>
       </div>
     </>
   )

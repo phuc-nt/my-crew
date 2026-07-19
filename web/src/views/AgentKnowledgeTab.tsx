@@ -3,6 +3,7 @@
 // AgentPage.tsx to keep that view focused; the tab is self-contained (own state + api calls).
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from '../api/client'
+import { Button } from '../components/ui/button'
 import type { UiKey } from '../i18n/dictionary'
 import { useLanguage } from '../i18n/language-context'
 import type { KnowledgePayload, SkillsPayload } from '../types'
@@ -109,10 +110,9 @@ function CompanyDocsPicker({ id }: { id: string }) {
         </ul>
       )}
       <div className="agent-actions">
-        {/* v53: styled by container element selector (.agent-actions button) — unify in a later pass */}
-        <button type="button" disabled={busy} onClick={() => void save()}>
+        <Button variant="primary" disabled={busy} onClick={() => void save()}>
           {busy ? t('agentKnowledge.savingDocs') : t('agentKnowledge.saveDocs')}
-        </button>
+        </Button>
         {dirty && <span className="unsaved">{t('agentKnowledge.unsaved')}</span>}
         {saved && <span className="ok">{t('agentKnowledge.saved')}</span>}
       </div>
@@ -212,9 +212,9 @@ function KnowledgeDoc({ id, doc, title }: { id: string; doc: 'soul' | 'project';
         ))
       )}
       <div className="agent-actions">
-        <button type="button" disabled={busy} onClick={() => void save()}>
+        <Button variant="primary" disabled={busy} onClick={() => void save()}>
           {busy ? t('agentKnowledge.saving') : t('agentKnowledge.save')}
-        </button>
+        </Button>
         {dirty && <span className="unsaved">{t('agentKnowledge.unsaved')}</span>}
         {saved && <span className="ok">{t('agentKnowledge.saved')}</span>}
       </div>
@@ -293,9 +293,9 @@ function SkillsPicker({ id }: { id: string }) {
         </ul>
       )}
       <div className="agent-actions">
-        <button type="button" disabled={busy} onClick={() => void save()}>
+        <Button variant="primary" disabled={busy} onClick={() => void save()}>
           {busy ? t('agentKnowledge.skillsSaving') : t('agentKnowledge.skillsSave')}
-        </button>
+        </Button>
         {dirty && <span className="unsaved">{t('agentKnowledge.unsaved')}</span>}
         {saved && <span className="ok">{t('agentKnowledge.saved')}</span>}
       </div>

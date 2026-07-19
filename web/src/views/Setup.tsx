@@ -10,6 +10,7 @@
 // reaches the server the same way GET /api/agents already does pre-setup.
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from '../api/client'
+import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
 import type { UiKey } from '../i18n/dictionary'
 import { useLanguage } from '../i18n/language-context'
@@ -230,25 +231,24 @@ export function Setup({ onDone }: { onDone: () => void }) {
             )}
             {error && <p className="error">{error}</p>}
             <div className="setup-actions">
-              {/* v53: styled by container element selector (.setup-actions button) — unify in a later pass */}
               {GROUPS[step].testable && (
-                <button type="button" disabled={busy} onClick={() => void test(GROUPS[step])}>
+                <Button variant="ghost" disabled={busy} onClick={() => void test(GROUPS[step])}>
                   {t('setup.testConnection')}
-                </button>
+                </Button>
               )}
               {step > 0 && (
-                <button type="button" disabled={busy} onClick={() => setStep((s) => s - 1)}>
+                <Button variant="ghost" disabled={busy} onClick={() => setStep((s) => s - 1)}>
                   {t('setup.back')}
-                </button>
+                </Button>
               )}
-              <button
-                type="button"
-                className="setup-primary"
+              <Button
+                variant="primary"
+                className="setup-primary-align"
                 disabled={busy}
                 onClick={() => void next(GROUPS[step])}
               >
                 {t('setup.continue')}
-              </button>
+              </Button>
             </div>
           </>
         ) : (
@@ -269,17 +269,17 @@ export function Setup({ onDone }: { onDone: () => void }) {
             </label>
             {error && <p className="error">{error}</p>}
             <div className="setup-actions">
-              <button type="button" disabled={busy} onClick={() => setStep((s) => s - 1)}>
+              <Button variant="ghost" disabled={busy} onClick={() => setStep((s) => s - 1)}>
                 {t('setup.back')}
-              </button>
-              <button
-                type="button"
-                className="setup-primary"
+              </Button>
+              <Button
+                variant="primary"
+                className="setup-primary-align"
                 disabled={busy || password.length < 6}
                 onClick={() => void finish()}
               >
                 {t('setup.finish')}
-              </button>
+              </Button>
             </div>
           </>
         )}

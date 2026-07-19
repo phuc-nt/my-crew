@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ApiError, api } from '../api/client'
 import { Badge } from '../components/ui/badge'
+import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { useLanguage } from '../i18n/language-context'
 import { KIND_LABEL, RUN_STATUS_LABEL, formatCost, formatDateTime, labelFor } from '../labels'
@@ -201,12 +202,11 @@ function TelegramTab({ id }: { id: string }) {
       </label>
       {chats && chats.length > 0 && (
         <ul className="telegram-chats">
-          {/* v53: styled by container element selector (.telegram-chats button) — unify in a later pass */}
           {chats.map((c) => (
             <li key={c.id}>
-              <button type="button" onClick={() => setChatId(c.id)}>
+              <Button variant="chip" className="telegram-chip" onClick={() => setChatId(c.id)}>
                 {c.id} {c.name && `(${c.name})`}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -216,18 +216,17 @@ function TelegramTab({ id }: { id: string }) {
         <p className="ok">{t('agentPage.telegramBoundNote', { username: result.bot_username ?? '' })}</p>
       )}
       <div className="agent-actions">
-        {/* v53: styled by container element selector (.agent-actions button) — unify in a later pass */}
-        <button type="button" onClick={() => void loadChats()}>
+        <Button variant="ghost" onClick={() => void loadChats()}>
           {t('agentPage.telegramLoadChats')}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="primary"
           disabled={busy || !token.trim() || !chatId.trim()}
           onClick={() => void bind()}
           title={!chatId.trim() ? t('agentPage.telegramBindTitleHint') : undefined}
         >
           {busy ? t('agentPage.telegramBinding') : t('agentPage.telegramBind')}
-        </button>
+        </Button>
       </div>
     </div>
   )

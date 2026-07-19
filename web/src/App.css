@@ -557,8 +557,7 @@ input, textarea, select { font-size: var(--fs-body); }
 .login-box h1 { margin: 0 0 var(--space-1); font-size: var(--fs-h1); }
 .login-box label { display: flex; flex-direction: column; gap: 0.3rem; font-size: var(--fs-sm); color: var(--color-muted); }
 .login-box input { padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-surface); color: var(--color-text); }
-.login-box button { padding: 0.55rem; background: var(--color-primary); color: var(--color-primary-contrast); border: none; border-radius: var(--radius); cursor: pointer; }
-.login-box button:disabled { opacity: 0.5; cursor: default; }
+.login-submit { padding: 0.55rem; }
 .logout-btn { margin-left: auto; padding: var(--space-1) 0.7rem; background: none; border: 1px solid var(--color-border-strong); border-radius: var(--radius); cursor: pointer; font-size: var(--fs-sm); color: var(--color-text); }
 
 /* v7 M17: setup wizard */
@@ -571,9 +570,7 @@ input, textarea, select { font-size: var(--fs-body); }
 .setup-box input { padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-surface); color: var(--color-text); }
 .setup-ok { color: var(--color-ok); font-size: var(--fs-sm); }
 .setup-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); }
-.setup-actions button { padding: var(--space-2) 0.9rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-surface); color: var(--color-text); cursor: pointer; }
-.setup-primary { background: var(--color-primary) !important; color: var(--color-primary-contrast); border-color: var(--color-primary) !important; margin-left: auto; }
-.setup-actions button:disabled { opacity: 0.5; cursor: default; }
+.setup-primary-align { margin-left: auto; }
 
 /* v7 M18a: unified agent page */
 .agent-page-head { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
@@ -585,9 +582,8 @@ input, textarea, select { font-size: var(--fs-body); }
 .telegram-tab label { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: var(--space-3); font-size: var(--fs-sm); color: var(--color-muted); }
 .telegram-tab input { padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-surface); color: var(--color-text); }
 .telegram-chats { list-style: none; padding: 0; display: flex; gap: 0.4rem; flex-wrap: wrap; }
-.telegram-chats button { padding: 0.3rem 0.6rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-bg-faint); color: var(--color-text); cursor: pointer; font-size: var(--fs-sm); }
+.telegram-chip { background: var(--color-bg-faint); }
 .agent-actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); flex-wrap: wrap; align-items: center; }
-.agent-actions button { padding: var(--space-2) 0.9rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-surface); color: var(--color-text); cursor: pointer; }
 
 /* v7 M19: company docs library — selected item in the list (had .active class, no style). */
 .company-docs-list { list-style: none; padding: 0; }

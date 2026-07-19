@@ -136,17 +136,16 @@ function DocEditor({
       </label>
       {error && <p className="error">{error}</p>}
       <div className="agent-actions">
-        {/* v53: styled by container element selector (.agent-actions button) — unify in a later pass */}
-        <button type="button" disabled={busy || !title.trim()} onClick={() => void save()}>
+        <Button variant="primary" disabled={busy || !title.trim()} onClick={() => void save()}>
           {busy ? t('companyDocs.saving') : t('companyDocs.save')}
-        </button>
-        <button type="button" onClick={onCancel}>
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
           {t('companyDocs.cancel')}
-        </button>
+        </Button>
         {doc && (
-          <button type="button" className="danger" disabled={busy} onClick={() => void remove()}>
+          <Button variant="danger" disabled={busy} onClick={() => void remove()}>
             {t('companyDocs.delete')}
-          </button>
+          </Button>
         )}
       </div>
     </div>

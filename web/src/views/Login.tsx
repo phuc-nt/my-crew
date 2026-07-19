@@ -3,6 +3,7 @@
 // dashboard. Errors (wrong password 401, rate-limit 429) surface the backend's message.
 import { useCallback, useState } from 'react'
 import { ApiError, api } from '../api/client'
+import { Button } from '../components/ui/button'
 import { useLanguage } from '../i18n/language-context'
 
 export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
@@ -49,10 +50,9 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
           />
         </label>
         {error && <p className="error">{error}</p>}
-        {/* v53: styled by container element selector (.login-box button) — unify in a later pass */}
-        <button type="submit" disabled={busy || !password}>
+        <Button variant="primary" type="submit" className="login-submit" disabled={busy || !password}>
           {busy ? t('login.submitting') : t('login.submit')}
-        </button>
+        </Button>
       </form>
     </div>
   )
