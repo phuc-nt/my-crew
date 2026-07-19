@@ -22,6 +22,7 @@ import { use3dFallback } from '../office-3d/use-3d-fallback'
 import { Button } from '../../components/ui/button'
 import { PageHeader } from '../../components/ui/page-header'
 import type { TeamBoardLane, Workroom } from '../../types'
+import { ActionRail } from './action-rail'
 import { ActivityFeed } from './activity-feed'
 import { ArtifactPanel } from './artifact-panel'
 import { AssignComposer } from './assign-composer'
@@ -170,50 +171,64 @@ export function OfficeUnified() {
   return (
     <section className="office-unified">
       {/* v33 P2: one compact header row — title left, panel toggle right; the long
-          how-to text folds into <details> so the working area starts higher. */}
-      <PageHeader
-        title={t('office.title')}
-        actions={
-          <Button variant="chip" className="office-3d-toggle" onClick={toggleCollapsed}>
-            {collapsed ? t('office.expand3d') : t('office.collapse3d')}
-          </Button>
-        }
-      />
-      <CoordinatorHealthBanner />
-      {isHigh && <OfficeHealthStrip />}
-      <details className="office-hint">
-        <summary>{t('office.hintSummary')}</summary>
-        <p className="ops-chat-hint">
-          {t('office.hintBody')} <code>@tên-nhân-sự</code> {t('office.hintBodyMention')}{' '}
-          <code>@all</code>
-          {t('office.hintBodyAllPrefix')} {t('office.hintBodyAll')}
-        </p>
-      </details>
-      {!collapsed && (
-        <div className="office-unified-main">
-          {useFallback ? (
-            <AgentStatusTable
-              agentIds={agentIds} desks={desks} onDeskSelect={openDesk}
-              needsShellAgents={needsShellAgents}
-            />
-          ) : (
-            <OfficeCanvas
-              agentIds={agentIds} desks={desks} rosterIds={rosterIds} dimmedIds={dimmedIds}
-              onDeskSelect={openDesk} needsShellAgents={needsShellAgents}
-            />
-          )}
-        </div>
-      )}
-      <div className="office-unified-layout office-columns">
+          how-to text folds into <details> so the working area starts higher. This header
+          and the composer below span the full width of the layout-A grid. */}
+      <div className="office-unified-header">
+        <PageHeader
+          title={t('office.title')}
+          actions={
+            <Button variant="chip" className="office-3d-toggle" onClick={toggleCollapsed}>
+              {collapsed ? t('office.expand3d') : t('office.collapse3d')}
+            </Button>
+          }
+        />
+        <CoordinatorHealthBanner />
+        {isHigh && <OfficeHealthStrip />}
+        <details className="office-hint">
+          <summary>{t('office.hintSummary')}</summary>
+          <p className="ops-chat-hint">
+            {t('office.hintBody')} <code>@tên-nhân-sự</code> {t('office.hintBodyMention')}{' '}
+            <code>@all</code>
+            {t('office.hintBodyAllPrefix')} {t('office.hintBodyAll')}
+          </p>
+        </details>
+      </div>
+
+      {/* v54 layout A: rail trái (LÀM) — mobile DOM order puts this first so blocking
+          items stack above the canvas/feed on narrow screens. */}
+      <ActionRail />
+
+      {/* center column (XEM): 3D canvas + live feed of the selected room. */}
+      <div className="office-unified-center">
+        {!collapsed && (
+          <div className="office-unified-main">
+            {useFallback ? (
+              <AgentStatusTable
+                agentIds={agentIds} desks={desks} onDeskSelect={openDesk}
+                needsShellAgents={needsShellAgents}
+              />
+            ) : (
+              <OfficeCanvas
+                agentIds={agentIds} desks={desks} rosterIds={rosterIds} dimmedIds={dimmedIds}
+                onDeskSelect={openDesk} needsShellAgents={needsShellAgents}
+              />
+            )}
+          </div>
+        )}
+        <ActivityFeed
+          messages={room.messages} connected={room.connected} errored={room.errored}
+        />
+      </div>
+
+      {/* right column (TRA): phòng việc list + kết quả/artifacts, stacked. */}
+      <div className="office-unified-side">
         <WorkroomList
           rooms={rooms} activeRoom={activeRoom} onSelect={selectRoom}
           needsShellRooms={needsShellRooms}
         />
-        <ActivityFeed
-          messages={room.messages} connected={room.connected} errored={room.errored}
-        />
         <ArtifactPanel activeRoom={activeRoom} roomMessages={room.messages} />
       </div>
+
       <AssignComposer activeRoom={activeRoom} onTaskCreated={(taskId) => selectRoom(taskId)} />
       {isHigh && inspectorAgent && (
         <DeskInspector

@@ -284,11 +284,21 @@ input, textarea, select { font-size: var(--fs-body); }
 .office-3d-label { font-size: var(--fs-2xs); font-weight: 700; white-space: nowrap;
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9); }
 
+/* v54 layout A: rail trái (LÀM, 260px) | giữa (XEM, 1fr) | phải (TRA, ~300px), header +
+   composer span the full width. Grid areas keep the JSX's DOM order meaningful (rail first)
+   while letting CSS place the header/composer without an extra wrapper per row. */
+.office-unified { display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) minmax(260px, 300px);
+  grid-template-areas: "header header header" "rail center side" "composer composer composer";
+  gap: var(--space-3); align-items: start; }
+.office-unified-header { grid-area: header; }
+.office-unified-center { grid-area: center; display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.office-unified-side { grid-area: side; display: flex; flex-direction: column; gap: var(--space-3); }
+.office-rail { grid-area: rail; }
+.office-unified > .office-composer { grid-area: composer; }
+
 /* v15 unified office: canvas left, live feed right, composer below. */
-.office-unified-layout { display: flex; gap: var(--space-3); align-items: stretch; }
-.office-unified-main { flex: 1 1 62%; min-width: 0; }
-.office-unified-feed { flex: 1 1 38%; min-width: 260px; max-width: 460px;
-  display: flex; flex-direction: column; }
+.office-unified-main { min-width: 0; }
 .office-unified-log { flex: 1; overflow-y: auto; max-height: 70vh; min-height: 420px; }
 /* v33 P2: on shorter screens the feed yields height so the composer stays above the fold. */
 @media (max-height: 900px) {
@@ -296,11 +306,31 @@ input, textarea, select { font-size: var(--fs-body); }
   .office-3d-canvas-wrap { height: 30vh; min-height: 220px; }
   .workroom-list { max-height: 34vh; overflow-y: auto; }
 }
-@media (max-width: 900px) {
-  .office-unified-layout { flex-direction: column; }
-  .office-unified-feed { max-width: none; }
-  .office-unified-log { min-height: 200px; max-height: 40vh; }
+/* v54: below 1100px the 3 columns collapse to a single stack — rail (chờ) first, then
+   center (canvas/feed), then side (phòng việc/kết quả), matching the mobile blocking-first
+   requirement (v54 brainstorm risk note) — grid-template-areas order IS the DOM order here
+   since each area is exactly one element. */
+@media (max-width: 1100px) {
+  .office-unified { grid-template-columns: 1fr;
+    grid-template-areas: "header" "rail" "center" "side" "composer"; }
 }
+
+/* v54 P2: action rail (Chờ anh/chị + Sắp chạy). Layout-only classes — cards/buttons/badges
+   are the section-3 primitives (.card via Card, .btn/.chip via Button, .badge via <span>).
+   (.office-rail's grid-area: rail is set above alongside the other layout-A areas.) */
+.office-rail { display: flex; flex-direction: column; gap: var(--space-4); }
+.office-rail-section h3 { display: flex; align-items: center; gap: var(--space-2);
+  margin: 0 0 var(--space-2); font-size: var(--fs-h4); }
+.office-rail-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.office-rail-item { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; overflow-wrap: break-word; }
+.office-rail-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.office-rail-input { flex: 1 1 140px; padding: 0.4rem 0.6rem; border: 1px solid var(--color-border);
+  border-radius: var(--radius); background: var(--color-bg); color: var(--color-text); }
+.office-rail-empty { color: var(--color-muted); font-style: italic; font-size: var(--fs-sm); }
+.office-rail-schedule { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
+  gap: var(--space-2); font-size: var(--fs-sm); }
+.office-rail-schedule-time { font-weight: 700; color: var(--color-accent); }
+
 .office-composer { margin-top: var(--space-3); }
 .office-composer-row { display: flex; gap: var(--space-2); }
 .office-composer-row input { flex: 1; padding: 0.55rem 0.75rem;
@@ -343,14 +373,6 @@ input, textarea, select { font-size: var(--fs-body); }
 .office-feed-danger .office-room-text { color: var(--color-danger); }
 .office-feed-warn .office-room-text { color: var(--color-warn); }
 .office-feed-pending .office-room-text { color: var(--color-pending); }
-/* v17: 3-column command center — rooms | feed | results. */
-/* v37: 3 peer columns. The middle (live feed) takes the flexible remainder — within the
-   1100px app-shell that lands ~464px vs 240/340 sides, a sensible hierarchy (feed widest for
-   message text). Each column is a flex stack whose zone-title sits flush at the top — no
-   column wraps its title in a padded box, so all three titles share one baseline. */
-.office-columns { display: grid;
-  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(260px, 340px);
-  gap: var(--space-3); align-items: start; }
 /* v37: the artifacts column is now a bare stack like the other two; the border/scroll box
    moved onto the inner list (.office-artifacts-body) so the "Kết quả" title aligns with
    "Phòng việc"/"Hoạt động trực tiếp" instead of sitting ~9px lower inside a padded box. */
@@ -381,7 +403,6 @@ input, textarea, select { font-size: var(--fs-body); }
 .artifact-markdown pre { background: var(--color-surface-2); padding: var(--space-2);
   border-radius: var(--radius); overflow-x: auto; }
 @media (max-width: 1100px) {
-  .office-columns { grid-template-columns: 1fr; }
   .office-artifacts { max-height: 40vh; }
 }
 @media (max-width: 900px) {

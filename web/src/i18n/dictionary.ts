@@ -67,6 +67,14 @@ const vi = {
   'office.hintBodyAllPrefix': '/bỏ trống',
   'office.hintBodyAll': 'để đội tự chọn.',
 
+  // action-rail.tsx (v54 P2)
+  'actionRail.pendingTitle': 'Chờ anh/chị',
+  'actionRail.pendingEmpty': '✓ Không có gì chờ',
+  'actionRail.approve': 'Duyệt',
+  'actionRail.reject': 'Từ chối',
+  'actionRail.upcomingTitle': 'Sắp chạy',
+  'actionRail.upcomingEmpty': 'Chưa có lịch trực nào',
+
   // activity-feed.tsx
   'activityFeed.ariaLabel': 'Hoạt động trực tiếp',
   'activityFeed.disconnected': 'Mất kết nối luồng — thử tải lại trang.',
@@ -998,6 +1006,14 @@ const en = {
   'office.hintBodyMention': 'to set a PIC,',
   'office.hintBodyAllPrefix': '/blank',
   'office.hintBodyAll': 'to let the team pick.',
+
+  // action-rail.tsx (v54 P2)
+  'actionRail.pendingTitle': 'Waiting on you',
+  'actionRail.pendingEmpty': '✓ Nothing pending',
+  'actionRail.approve': 'Approve',
+  'actionRail.reject': 'Reject',
+  'actionRail.upcomingTitle': 'Coming up',
+  'actionRail.upcomingEmpty': 'No schedule yet',
 
   // activity-feed.tsx
   'activityFeed.ariaLabel': 'Live activity',

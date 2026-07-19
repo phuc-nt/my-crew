@@ -60,6 +60,7 @@ import type {
   OpsChatReply,
   PacksPayload,
   RunsPayload,
+  SchedulePayload,
   StaffTemplatesPayload,
   TasksPayload,
   TeamAlertsPayload,
@@ -220,6 +221,8 @@ export const api = {
   answerClarify: (id: number, answer: string) =>
     post<{ ok: boolean; id: number }>(`/api/clarify/${id}/answer`, { answer }),
   getTeamAlerts: () => request<TeamAlertsPayload>('/api/team/alerts'),
+  // v54: rail "Sắp chạy" — top-N soonest cron fires fleet-wide (read-only).
+  getScheduleUpcoming: () => request<SchedulePayload>('/api/schedule/upcoming'),
   // Company identity (config-only) + staff-template picker.
   getCompany: () => request<CompanyPayload>('/api/company'),
   saveCompany: (
