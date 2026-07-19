@@ -320,8 +320,11 @@ input, textarea, select { font-size: var(--fs-body); }
    requirement (v54 brainstorm risk note) — grid-template-areas order IS the DOM order here
    since each area is exactly one element. */
 @media (max-width: 1100px) {
-  .office-unified { grid-template-columns: 1fr;
+  /* minmax(0,1fr) + min-width:0 on every zone: a single unbreakable string (a long
+     clarify question, a feed line) must never widen the only column past the viewport. */
+  .office-unified { grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "header" "rail" "center" "side" "composer"; }
+  .office-rail, .office-unified-side, .office-unified-header { min-width: 0; }
 }
 
 /* v54 P2: action rail (Chờ anh/chị + Sắp chạy). Layout-only classes — cards/buttons/badges

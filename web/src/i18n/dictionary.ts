@@ -109,7 +109,7 @@ const vi = {
   'officeMessageLine.verdictFailed': 'cần sửa ({n} lỗi)',
   'officeMessageLine.criteriaSuffix': ' — {passed}/{total} tiêu chí đạt',
   'officeMessageLine.reviewLine': '{taskTitle} / {stepTitle}: {verdict}{checklist}',
-  'officeMessageLine.externalActionLine': '{actor} → {tool}{detail} · {outcome}',
+  'officeMessageLine.externalActionLine': '→ {tool}{detail} · {outcome}',
   'officeMessageLine.outcomeAllow': '✓ cho phép',
   'officeMessageLine.outcomeDeny': '✗ từ chối',
 
@@ -1066,7 +1066,7 @@ const en = {
   'officeMessageLine.verdictFailed': 'needs fixes ({n} issues)',
   'officeMessageLine.criteriaSuffix': ' — {passed}/{total} criteria passed',
   'officeMessageLine.reviewLine': '{taskTitle} / {stepTitle}: {verdict}{checklist}',
-  'officeMessageLine.externalActionLine': '{actor} → {tool}{detail} · {outcome}',
+  'officeMessageLine.externalActionLine': '→ {tool}{detail} · {outcome}',
   'officeMessageLine.outcomeAllow': '✓ allowed',
   'officeMessageLine.outcomeDeny': '✗ denied',
 

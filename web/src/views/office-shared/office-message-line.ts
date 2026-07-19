@@ -102,9 +102,13 @@ export function messageLine(m: OfficeMessage, t: Translate = defaultT): string {
         : b.outcome === 'deny'
           ? t('officeMessageLine.outcomeDeny')
           : (b.outcome ?? '')
+      // Live-UAT dedup: the feed row already shows the actor as its author chip, so the
+      // line starts at the tool; and some gateway tool ids embed their target (e.g.
+      // "telegram:<chat>"), in which case repeating `detail` would print it twice.
+      const tool = b.tool ?? ''
+      const detail = b.detail && !tool.includes(b.detail) ? ` ${b.detail}` : ''
       return t('officeMessageLine.externalActionLine', {
-        actor: b.actor ?? '', tool: b.tool ?? '',
-        detail: b.detail ? ` ${b.detail}` : '', outcome: outcomeLabel,
+        actor: b.actor ?? '', tool, detail, outcome: outcomeLabel,
       })
     }
     default:

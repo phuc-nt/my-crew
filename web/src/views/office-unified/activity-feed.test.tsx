@@ -1,6 +1,6 @@
 // v54 P3: feed filter chips [Tất cả | Bước | Ra ngoài] — verifies the filter narrows the
 // SAME props-supplied stream (no re-fetch, no re-sort) and that external_action renders
-// as "actor → tool detail · outcome".
+// as "→ tool detail · outcome" (actor = author chip).
 import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, test } from 'vitest'
 import { LanguageProvider } from '../../i18n/language-context'
@@ -33,16 +33,16 @@ function renderFeed(messages: OfficeMessage[] = MESSAGES) {
 test('default filter (Tất cả) shows every kind', () => {
   renderFeed()
   expect(screen.getByText(/T1 \/ draft: started/)).toBeTruthy()
-  expect(screen.getByText(/hr → slack_send #general · ✓ cho phép/)).toBeTruthy()
-  expect(screen.getByText(/ops → gh_pr_merge PR#3 · ✗ từ chối/)).toBeTruthy()
+  expect(screen.getByText(/→ slack_send #general · ✓ cho phép/)).toBeTruthy()
+  expect(screen.getByText(/→ gh_pr_merge PR#3 · ✗ từ chối/)).toBeTruthy()
   expect(screen.getByText(/T1: done/)).toBeTruthy()
 })
 
 test('"Ra ngoài" filter shows only external_action lines', () => {
   renderFeed()
   fireEvent.click(screen.getByText('Ra ngoài'))
-  expect(screen.getByText(/hr → slack_send #general · ✓ cho phép/)).toBeTruthy()
-  expect(screen.getByText(/ops → gh_pr_merge PR#3 · ✗ từ chối/)).toBeTruthy()
+  expect(screen.getByText(/→ slack_send #general · ✓ cho phép/)).toBeTruthy()
+  expect(screen.getByText(/→ gh_pr_merge PR#3 · ✗ từ chối/)).toBeTruthy()
   expect(screen.queryByText(/T1 \/ draft: started/)).toBeNull()
   expect(screen.queryByText(/T1: done/)).toBeNull()
 })

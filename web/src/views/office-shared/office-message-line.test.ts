@@ -37,25 +37,25 @@ test('recover phase renders its label via the shared PHASE_LABEL', () => {
   expect(line).toContain('(nhờ trợ giúp)')
 })
 
-test('external_action renders "actor → tool detail · outcome" with a translated verdict', () => {
+test('external_action renders "→ tool detail · outcome" (actor lives on the author chip) with a translated verdict', () => {
   const line = messageLine(msg('external_action', {
     actor: 'hr', tool: 'slack_send', action_type: 'send', outcome: 'allow', detail: '#general',
   }))
-  expect(line).toBe('hr → slack_send #general · ✓ cho phép')
+  expect(line).toBe('→ slack_send #general · ✓ cho phép')
 })
 
 test('external_action with a deny outcome and no detail omits the extra space', () => {
   const line = messageLine(msg('external_action', {
     actor: 'ops', tool: 'gh_pr_merge', action_type: 'write', outcome: 'deny',
   }))
-  expect(line).toBe('ops → gh_pr_merge · ✗ từ chối')
+  expect(line).toBe('→ gh_pr_merge · ✗ từ chối')
 })
 
 test('external_action with a non-allow/deny outcome passes the raw string through', () => {
   const line = messageLine(msg('external_action', {
     actor: 'ops', tool: 'jira_create', action_type: 'write', outcome: 'pending',
   }))
-  expect(line).toBe('ops → jira_create · pending')
+  expect(line).toBe('→ jira_create · pending')
 })
 
 test('externalActionTone maps allow/deny/other to ok/danger/neutral', () => {
