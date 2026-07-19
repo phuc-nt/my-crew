@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
+import { LanguageProvider } from '../i18n/language-context'
 import { SearchBox } from '../components/search-box'
 import type { CaptureRow } from '../types'
 import { Captures } from './Captures'
@@ -45,7 +46,7 @@ test('search box debounces, shows hits, and a step hit navigates to its office r
       { excerpt: 'báo cáo »sprint« tuần', source: 'step', ref: 'task-9:step-2', agent_id: 'pm', ts: 't' },
     ],
   })
-  render(<MemoryRouter><SearchBox /></MemoryRouter>)
+  render(<MemoryRouter><LanguageProvider><SearchBox /></LanguageProvider></MemoryRouter>)
   fireEvent.change(screen.getByPlaceholderText('tìm lịch sử…'), { target: { value: 'sprint' } })
   expect(spy).not.toHaveBeenCalled() // debounce window still open
   await vi.advanceTimersByTimeAsync(350)

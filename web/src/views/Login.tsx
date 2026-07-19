@@ -3,8 +3,10 @@
 // dashboard. Errors (wrong password 401, rate-limit 429) surface the backend's message.
 import { useCallback, useState } from 'react'
 import { ApiError, api } from '../api/client'
+import { useLanguage } from '../i18n/language-context'
 
 export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
+  const { t } = useLanguage()
   const [username, setUsername] = useState('admin')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -33,13 +35,13 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
       {/* v53: card padding/border/radius/shadow via .card (Card only renders a <div>;
           applied directly here to keep the <form> semantics). */}
       <form className="card login-box" onSubmit={submit}>
-        <h1>Đăng nhập</h1>
+        <h1>{t('login.submit')}</h1>
         <label>
           Tên đăng nhập
           <input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
         </label>
         <label>
-          Mật khẩu
+          {t('login.password')}
           <input
             type="password"
             value={password}
@@ -49,7 +51,7 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
         {error && <p className="error">{error}</p>}
         {/* v53: styled by container element selector (.login-box button) — unify in a later pass */}
         <button type="submit" disabled={busy || !password}>
-          {busy ? 'Đang đăng nhập…' : 'Đăng nhập'}
+          {busy ? t('login.submitting') : t('login.submit')}
         </button>
       </form>
     </div>

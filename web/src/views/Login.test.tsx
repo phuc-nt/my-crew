@@ -3,6 +3,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { ApiError, api } from '../api/client'
+import { LanguageProvider } from '../i18n/language-context'
 import { Login } from './Login'
 
 beforeEach(() => {
@@ -12,7 +13,7 @@ beforeEach(() => {
 test('successful login calls onLoggedIn', async () => {
   vi.spyOn(api, 'login').mockResolvedValue({ ok: true })
   const onLoggedIn = vi.fn()
-  render(<Login onLoggedIn={onLoggedIn} />)
+  render(<LanguageProvider><Login onLoggedIn={onLoggedIn} /></LanguageProvider>)
   fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: 'pw' } })
   fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }))
   await waitFor(() => expect(onLoggedIn).toHaveBeenCalled())
@@ -21,7 +22,7 @@ test('successful login calls onLoggedIn', async () => {
 
 test('wrong password shows the backend error', async () => {
   vi.spyOn(api, 'login').mockRejectedValue(new ApiError(401, 'Sai tên đăng nhập hoặc mật khẩu.'))
-  render(<Login onLoggedIn={vi.fn()} />)
+  render(<LanguageProvider><Login onLoggedIn={vi.fn()} /></LanguageProvider>)
   fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: 'bad' } })
   fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }))
   await waitFor(() =>
@@ -30,6 +31,6 @@ test('wrong password shows the backend error', async () => {
 })
 
 test('submit disabled with empty password', () => {
-  render(<Login onLoggedIn={vi.fn()} />)
+  render(<LanguageProvider><Login onLoggedIn={vi.fn()} /></LanguageProvider>)
   expect(screen.getByRole('button', { name: 'Đăng nhập' })).toBeDisabled()
 })

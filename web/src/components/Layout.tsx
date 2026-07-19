@@ -9,6 +9,8 @@
 import { NavLink, Outlet } from 'react-router'
 import { api } from '../api/client'
 import { useTeamHealth } from '../hooks/use-team-health'
+import { useLanguage } from '../i18n/language-context'
+import type { UiKey } from '../i18n/dictionary'
 import { useSharedPendingApprovals } from '../pending-approvals-context'
 import { useUiMode } from '../ui-mode-context'
 import { SearchBox } from './search-box'
@@ -26,40 +28,43 @@ async function logout() {
 // v17 IA: Văn phòng leads (the home screen); "Việc" became "Duyệt" — that tab is the
 // approval queue (+ the per-agent assigned board below it); team-task history lives in
 // the office's workrooms.
-const NAV = [
-  { to: 'office', label: 'Văn phòng' },
-  { to: 'team', label: 'Đội', badge: 'health' as const },
-  { to: 'work', label: 'Duyệt', badge: 'approvals' as const },
+// v53: labels live in the i18n dictionary (labelKey), rendered via t() so the VN/EN
+// toggle re-labels the whole nav.
+const NAV: { to: string; labelKey: UiKey; badge?: 'health' | 'approvals' }[] = [
+  { to: 'office', labelKey: 'nav.office' },
+  { to: 'team', labelKey: 'nav.team', badge: 'health' },
+  { to: 'work', labelKey: 'nav.work', badge: 'approvals' },
   // v33 P3: the cross-room outputs hub — "mọi kết quả một chỗ" sits one click away.
-  { to: 'outputs', label: 'Kết quả' },
+  { to: 'outputs', labelKey: 'nav.outputs' },
   // v31 P1: fleet-wide "what did the company do" — the post-hoc audit surface of
   // autonomy-first, so it sits in the CEO-primary row (NOT behind high ui-mode).
-  { to: 'company-activity', label: 'Hoạt động' },
-  { to: 'chat', label: 'Trợ lý' },
-  { to: 'settings', label: 'Cài đặt' },
+  { to: 'company-activity', labelKey: 'nav.activity' },
+  { to: 'chat', labelKey: 'nav.chat' },
+  { to: 'settings', labelKey: 'nav.settings' },
 ]
 
 // High-mode ("Chế độ nâng cao") extra destinations — the technical views that low mode keeps
 // tucked under Cài đặt → Nâng cao. Same routes, just surfaced in the nav for power users.
-const ADVANCED_NAV = [
-  { to: 'overview', label: 'Tổng quan' },
-  { to: 'timeline', label: 'Dòng thời gian' },
-  { to: 'cost', label: 'Chi phí' },
-  { to: 'memory', label: 'Bộ nhớ' },
-  { to: 'guardrail', label: 'Guardrail' },
-  { to: 'config', label: 'Cấu hình' },
-  { to: 'trigger', label: 'Chạy tay' },
+const ADVANCED_NAV: { to: string; labelKey: UiKey }[] = [
+  { to: 'overview', labelKey: 'nav.advanced.overview' },
+  { to: 'timeline', labelKey: 'nav.advanced.timeline' },
+  { to: 'cost', labelKey: 'nav.advanced.cost' },
+  { to: 'memory', labelKey: 'nav.advanced.memory' },
+  { to: 'guardrail', labelKey: 'nav.advanced.guardrail' },
+  { to: 'config', labelKey: 'nav.advanced.config' },
+  { to: 'trigger', labelKey: 'nav.advanced.trigger' },
   // Dual-lens P3: per-attempt telemetry explorer over the v26 captures store.
-  { to: 'captures', label: 'Captures' },
+  { to: 'captures', labelKey: 'nav.advanced.captures' },
   // v15: the 3D view merged into the primary "Văn phòng" screen; this advanced entry is
   // the full room-by-room timeline (complete history + room picker).
-  { to: 'office/timeline', label: 'Nhật ký văn phòng' },
+  { to: 'office/timeline', labelKey: 'nav.advanced.officeLog' },
 ]
 
 export function Layout() {
   const { count } = useSharedPendingApprovals()
   const { highCount } = useTeamHealth()
   const { isHigh, setMode } = useUiMode()
+  const { lang, setLang, t } = useLanguage()
   const badgeFor = (b?: 'health' | 'approvals') =>
     b === 'approvals' ? count : b === 'health' ? highCount : 0
   return (
@@ -76,15 +81,20 @@ export function Layout() {
             variant="chip"
             className="mode-toggle"
             onClick={() => setMode(isHigh ? 'low' : 'high')}
-            title={isHigh ? 'Đang: chế độ kỹ thuật — bấm về chế độ thường' : 'Đang: chế độ thường — bấm sang chế độ kỹ thuật'}
+            title={isHigh ? t('chrome.modeHighTitle') : t('chrome.modeLowTitle')}
           >
-            {isHigh ? '🔬 Kỹ thuật' : '👁 Thường'}
+            {isHigh ? t('chrome.modeHigh') : t('chrome.modeLow')}
+          </Button>
+          {/* v53 language mode — VN/EN for FE-static strings (view-layer; backend/LLM
+              content stays as-is by design). */}
+          <Button variant="chip" onClick={() => setLang(lang === 'vi' ? 'en' : 'vi')}>
+            {lang === 'vi' ? 'VN' : 'EN'}
           </Button>
           <ThemeToggle />
           {/* v53: .logout-btn styled standalone (not .btn family) — Button's ghost variant
               would add .btn on top and change the visual; keep raw this pass. */}
           <button type="button" className="logout-btn" onClick={() => void logout()}>
-            Đăng xuất
+            {t('chrome.logout')}
           </button>
         </div>
       </header>
@@ -92,18 +102,18 @@ export function Layout() {
         {NAV.map((n) => {
           const badgeCount = badgeFor(n.badge)
           return (
-            <NavLink key={n.label} to={n.to}>
-              {n.label}
+            <NavLink key={n.to} to={n.to}>
+              {t(n.labelKey)}
               {badgeCount > 0 && <span className="nav-badge">{badgeCount}</span>}
             </NavLink>
           )
         })}
       </nav>
       {isHigh && (
-        <nav className="app-nav app-nav-advanced" aria-label="Nâng cao">
+        <nav className="app-nav app-nav-advanced" aria-label={t('nav.advancedLabel')}>
           {ADVANCED_NAV.map((n) => (
             <NavLink key={n.to} to={n.to}>
-              {n.label}
+              {t(n.labelKey)}
             </NavLink>
           ))}
         </nav>

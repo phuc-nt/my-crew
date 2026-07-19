@@ -1,29 +1,32 @@
-// Theme switcher (v10 M24): a 3-way segmented control — Sáng / Tối / Tự động. Kept as buttons
-// (not a <select>) so the current choice is always visible and one tap changes it. Labels are
-// Vietnamese-first to match the CEO-facing surfaces.
+// Theme switcher (v10 M24): a 3-way segmented control — light/dark/auto. Kept as buttons
+// (not a <select>) so the current choice is always visible and one tap changes it.
+// v53: labels go through the i18n dictionary (VN default, EN in language mode).
+import { useLanguage } from '../i18n/language-context'
+import type { UiKey } from '../i18n/dictionary'
 import { useTheme } from '../theme-context'
 import type { ThemePref } from '../theme-context'
 
-const OPTIONS: { pref: ThemePref; label: string; title: string }[] = [
-  { pref: 'light', label: 'Sáng', title: 'Giao diện sáng' },
-  { pref: 'dark', label: 'Tối', title: 'Giao diện tối' },
-  { pref: 'auto', label: 'Tự động', title: 'Theo hệ điều hành' },
+const OPTIONS: { pref: ThemePref; labelKey: UiKey }[] = [
+  { pref: 'light', labelKey: 'chrome.theme.light' },
+  { pref: 'dark', labelKey: 'chrome.theme.dark' },
+  { pref: 'auto', labelKey: 'chrome.theme.auto' },
 ]
 
 export function ThemeToggle() {
   const { pref, setPref } = useTheme()
+  const { t } = useLanguage()
   return (
-    <div className="theme-toggle" role="group" aria-label="Giao diện">
+    <div className="theme-toggle" role="group" aria-label="Theme">
       {OPTIONS.map((o) => (
         <button
           key={o.pref}
           type="button"
           className={o.pref === pref ? 'theme-toggle-btn active' : 'theme-toggle-btn'}
           aria-pressed={o.pref === pref}
-          title={o.title}
+          title={t(o.labelKey)}
           onClick={() => setPref(o.pref)}
         >
-          {o.label}
+          {t(o.labelKey)}
         </button>
       ))}
     </div>

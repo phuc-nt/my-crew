@@ -3,13 +3,16 @@
 // stack. Router is NOT included — tests that need routing add their own MemoryRouter.
 import { render } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
+import { LanguageProvider } from './i18n/language-context'
 import { ThemeProvider } from './theme-context'
 import { UiModeProvider } from './ui-mode-context'
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider>
-      <UiModeProvider>{children}</UiModeProvider>
+      <LanguageProvider>
+        <UiModeProvider>{children}</UiModeProvider>
+      </LanguageProvider>
     </ThemeProvider>
   )
 }

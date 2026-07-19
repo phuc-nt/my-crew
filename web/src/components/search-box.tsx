@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { api } from '../api/client'
+import { useLanguage } from '../i18n/language-context'
 import type { HistorySearchHit } from '../types'
 
 const DEBOUNCE_MS = 300
@@ -15,6 +16,7 @@ export function SearchBox() {
   const [open, setOpen] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const navigate = useNavigate()
+  const { t } = useLanguage()
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current)
@@ -51,13 +53,13 @@ export function SearchBox() {
         onChange={(e) => setQ(e.target.value)}
         onFocus={() => hits.length > 0 && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="tìm lịch sử…"
-        aria-label="Tìm lịch sử làm việc"
+        placeholder={t('chrome.searchPlaceholder')}
+        aria-label={t('chrome.searchAria')}
       />
       {open && (
         <ul className="header-search-results">
           {/* v53: styled by container element selector (.header-search-results button) — unify in a later pass */}
-          {hits.length === 0 && <li className="muted">Không có kết quả</li>}
+          {hits.length === 0 && <li className="muted">{t('chrome.searchEmpty')}</li>}
           {hits.map((h, i) => (
             <li key={`${h.ref}-${i}`}>
               <button type="button" onMouseDown={() => go(h)}>
