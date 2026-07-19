@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { api, ApiError } from '../api/client'
+import { Button } from '../components/ui/button'
 import type { CreateAgentResult, CreateAgentSpec } from '../types'
 import { buildEnvTemplate } from './env-template'
 
@@ -49,16 +50,16 @@ export function ReviewStep({ spec, pack }: { spec: CreateAgentSpec; pack: { serv
           thuật sẽ điền giá trị thật vào file .env trên máy chủ.
         </p>
         <pre className="env-template">{envTemplate}</pre>
-        <button type="button" onClick={copyEnv}>
+        <Button variant="ghost" onClick={copyEnv}>
           {copied ? 'Đã chép!' : 'Chép mẫu .env'}
-        </button>
+        </Button>
       </div>
 
       {error && <p className="error">Lỗi: {error}</p>}
       {!result && (
-        <button type="button" disabled={busy} onClick={create}>
+        <Button variant="ghost" disabled={busy} onClick={create}>
           {busy ? 'Đang tạo…' : 'Tạo agent'}
-        </button>
+        </Button>
       )}
       {result && (
         <p className="ok">

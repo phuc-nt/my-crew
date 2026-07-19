@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api } from '../../api/client'
+import { Button } from '../../components/ui/button'
 import type { StepArtifactPayload } from '../../types'
 
 interface ArtifactViewerProps {
@@ -65,11 +66,11 @@ export function ArtifactViewer({ taskId, seq, stepId, onClose }: ArtifactViewerP
         <div className="artifact-drawer-head">
           <h3>{artifact?.step_title ?? 'Kết quả bước'}</h3>
           <div className="office-composer-actions">
-            <button type="button" onClick={copy} disabled={!artifact}>
+            <Button variant="ghost" onClick={copy} disabled={!artifact}>
               {copied ? 'Đã copy ✓' : 'Copy'}
-            </button>
-            <button type="button" onClick={download} disabled={!artifact}>Tải .md</button>
-            <button type="button" onClick={onClose}>Đóng</button>
+            </Button>
+            <Button variant="ghost" onClick={download} disabled={!artifact}>Tải .md</Button>
+            <Button variant="ghost" onClick={onClose}>Đóng</Button>
           </div>
         </div>
         {artifact?.self_check_failed && (

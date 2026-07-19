@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { api } from '../api/client'
+import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { formatCost } from '../labels'
 import type { CaptureRow } from '../types'
@@ -47,9 +48,9 @@ export function Captures() {
       </p>
       <div className="captures-filters">
         {taskFilter && (
-          <button type="button" className="chip" onClick={() => setSearchParams({})}>
+          <Button variant="chip" onClick={() => setSearchParams({})}>
             Việc: {taskFilter.slice(0, 12)}… ✕
-          </button>
+          </Button>
         )}
         <input
           placeholder="lọc theo nhân sự (agent id)"

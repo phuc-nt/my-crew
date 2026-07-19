@@ -226,6 +226,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
             )}
             {error && <p className="error">{error}</p>}
             <div className="setup-actions">
+              {/* v53: styled by container element selector (.setup-actions button) — unify in a later pass */}
               {GROUPS[step].testable && (
                 <button type="button" disabled={busy} onClick={() => void test(GROUPS[step])}>
                   Kiểm tra kết nối

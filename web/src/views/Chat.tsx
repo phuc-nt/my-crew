@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { api } from '../api/client'
+import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { useSharedPendingApprovals } from '../pending-approvals-context'
 
@@ -138,9 +139,9 @@ export function Chat() {
           </Link>
         )}
         {QUICK_CHIPS.map((c) => (
-          <button key={c} type="button" className="chip" disabled={busy} onClick={() => void sendText(c)}>
+          <Button key={c} variant="chip" disabled={busy} onClick={() => void sendText(c)}>
             {c}
-          </button>
+          </Button>
         ))}
       </div>
       <div className="ops-chat-input">
@@ -152,9 +153,9 @@ export function Chat() {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
         />
-        <button type="button" className="btn btn-primary" onClick={() => void send()} disabled={busy || !draft.trim()}>
+        <Button variant="primary" onClick={() => void send()} disabled={busy || !draft.trim()}>
           {busy ? 'Đang gửi…' : 'Gửi'}
-        </button>
+        </Button>
       </div>
     </section>
   )

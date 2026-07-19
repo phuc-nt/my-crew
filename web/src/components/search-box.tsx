@@ -56,6 +56,7 @@ export function SearchBox() {
       />
       {open && (
         <ul className="header-search-results">
+          {/* v53: styled by container element selector (.header-search-results button) — unify in a later pass */}
           {hits.length === 0 && <li className="muted">Không có kết quả</li>}
           {hits.map((h, i) => (
             <li key={`${h.ref}-${i}`}>

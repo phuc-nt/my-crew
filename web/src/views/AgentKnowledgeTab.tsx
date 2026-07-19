@@ -107,6 +107,7 @@ function CompanyDocsPicker({ id }: { id: string }) {
         </ul>
       )}
       <div className="agent-actions">
+        {/* v53: styled by container element selector (.agent-actions button) — unify in a later pass */}
         <button type="button" disabled={busy} onClick={() => void save()}>
           {busy ? 'Đang lưu…' : 'Lưu tài liệu'}
         </button>

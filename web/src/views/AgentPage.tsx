@@ -197,6 +197,7 @@ function TelegramTab({ id }: { id: string }) {
       </label>
       {chats && chats.length > 0 && (
         <ul className="telegram-chats">
+          {/* v53: styled by container element selector (.telegram-chats button) — unify in a later pass */}
           {chats.map((c) => (
             <li key={c.id}>
               <button type="button" onClick={() => setChatId(c.id)}>
@@ -214,6 +215,7 @@ function TelegramTab({ id }: { id: string }) {
         </p>
       )}
       <div className="agent-actions">
+        {/* v53: styled by container element selector (.agent-actions button) — unify in a later pass */}
         <button type="button" onClick={() => void loadChats()}>
           Lấy chat gần đây
         </button>

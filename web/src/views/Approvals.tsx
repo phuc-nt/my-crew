@@ -6,6 +6,7 @@ import { useCallback, useState } from 'react'
 import { useAgent } from '../agent-context'
 import { summarizeAction } from '../action-summary'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { api } from '../api/client'
 import { formatDateTime } from '../labels'
@@ -65,12 +66,11 @@ export function Approvals() {
                 <td data-label="Lý do">{p.reason}</td>
                 <td data-label="Lúc">{formatDateTime(p.created_at)}</td>
                 <td>
-                  <button type="button" className="btn" disabled={busy} onClick={() => setConfirming(p)}>
+                  <Button variant="ghost" disabled={busy} onClick={() => setConfirming(p)}>
                     Xem &amp; duyệt
-                  </button>{' '}
-                  <button
-                    type="button"
-                    className="btn btn-danger"
+                  </Button>{' '}
+                  <Button
+                    variant="danger"
                     disabled={busy}
                     onClick={() => {
                       if (selected && window.confirm('Từ chối việc này?'))
@@ -78,7 +78,7 @@ export function Approvals() {
                     }}
                   >
                     Từ chối
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}

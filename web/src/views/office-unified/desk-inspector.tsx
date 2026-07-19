@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../../api/client'
+import { Button } from '../../components/ui/button'
 import { formatCost } from '../../labels'
 import type { AgentDeskState } from '../office-3d/agent-office-state'
 import { deskTooltipText } from '../office-3d/agent-desk'
@@ -40,7 +41,7 @@ export function DeskInspector({ agentId, desk, onClose }: DeskInspectorProps) {
     <aside className="desk-inspector" aria-label={`Chi tiết ${agentId}`}>
       <header className="desk-inspector-head">
         <strong>{agentId}</strong>
-        <button type="button" className="chip" onClick={onClose}>Đóng</button>
+        <Button variant="chip" onClick={onClose}>Đóng</Button>
       </header>
       {desk && <p>{deskTooltipText(desk)}{desk.phase ? ` · pha: ${desk.phase}` : ''}</p>}
       {status && (

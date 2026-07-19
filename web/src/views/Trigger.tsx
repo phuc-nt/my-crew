@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAgent } from '../agent-context'
 import { api } from '../api/client'
+import { Button } from '../components/ui/button'
 import { useSse } from '../hooks/use-sse'
 import { AUDIENCE_LABEL, KIND_LABEL, labelFor } from '../labels'
 
@@ -77,9 +78,9 @@ export function Trigger() {
           <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />{' '}
           chạy thử (dry-run)
         </label>{' '}
-        <button type="button" disabled={busy || !selected} onClick={start}>
+        <Button variant="ghost" disabled={busy || !selected} onClick={start}>
           {busy ? 'Đang chạy…' : 'Chạy'}
-        </button>
+        </Button>
       </div>
       {error && <p className="error">Lỗi: {error}</p>}
       {runId && (

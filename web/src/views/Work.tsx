@@ -5,6 +5,7 @@
 import { useCallback, useState } from 'react'
 import { api } from '../api/client'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { formatDateTime } from '../labels'
 import { useAutoApproved } from '../hooks/use-auto-approved'
@@ -64,17 +65,16 @@ export function Work() {
                   <span className="muted"> · {formatDateTime(it.created_at)}</span>
                 </div>
                 <div className="agent-actions">
-                  <button type="button" className="btn btn-primary" onClick={() => setConfirming(it)}>
+                  <Button variant="primary" onClick={() => setConfirming(it)}>
                     Xem &amp; duyệt
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-danger"
+                  </Button>
+                  <Button
+                    variant="danger"
                     disabled={busy}
                     onClick={() => void act(it, 'reject')}
                   >
                     Từ chối
-                  </button>
+                  </Button>
                 </div>
               </li>
             ))}

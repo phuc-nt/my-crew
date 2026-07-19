@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { ApiError, api } from '../api/client'
 import { IntegrationHealthPanel } from '../components/IntegrationHealthPanel'
+import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { CoordinatorHealthBanner } from './office-unified/coordinator-health-banner'
 import { KIND_LABEL, RUN_STATUS_LABEL, formatCost, labelFor } from '../labels'
@@ -242,23 +243,22 @@ export function Team() {
 
       <h2>Đội</h2>
       <div className="team-actions">
-        <button type="button" className="btn-link" disabled={creating} onClick={goCreate}>
+        <Button variant="ghost" disabled={creating} onClick={goCreate}>
           + Tạo nhân sự ảo
-        </button>
+        </Button>
         {/* v32: templates are one-click-executable on the create page's first step —
             this is the fast path ("Tạo ngay" per role, or the whole default crew). */}
         <Link to="/create" className="btn-link">
           ⚡ Tạo nhanh từ mẫu / cả đội
         </Link>
         {coordinatorId === null && (
-          <button
-            type="button"
-            className="btn-link"
+          <Button
+            variant="ghost"
             disabled={creatingCoordinator}
             onClick={createCoordinator}
           >
             {creatingCoordinator ? 'Đang tạo…' : '+ Tạo trưởng phòng'}
-          </button>
+          </Button>
         )}
         <Link to="/company-docs" className="btn-link">
           📄 Kho tài liệu
@@ -312,14 +312,14 @@ export function Team() {
                   <td data-label="Tên">
                     {a.name}
                     {templateStatus[a.id]?.upgradable && (
-                      <button
-                        type="button"
-                        className="btn-link template-upgrade-badge"
+                      <Button
+                        variant="ghost"
+                        className="template-upgrade-badge"
                         title="Template có bản cấu hình mới — bấm để xem và nâng cấp"
                         onClick={() => openUpgrade(a.id)}
                       >
                         ⬆ bản mới v{templateStatus[a.id].latest_version}
-                      </button>
+                      </Button>
                     )}
                   </td>
                   <td data-label="Trạng thái">
@@ -365,18 +365,17 @@ export function Team() {
                   </td>
                   <td data-label="Chờ duyệt">{status ? status.pending_approvals : '…'}</td>
                   <td>
-                    <button type="button" className="btn" disabled={busyId === a.id} onClick={() => toggleEnabled(a)}>
+                    <Button variant="ghost" disabled={busyId === a.id} onClick={() => toggleEnabled(a)}>
                       {a.enabled ? 'Tạm dừng' : 'Bật lại'}
-                    </button>{' '}
+                    </Button>{' '}
                     {a.id !== 'default' && (
-                      <button
-                        type="button"
-                        className="btn btn-danger"
+                      <Button
+                        variant="danger"
                         disabled={busyId === a.id}
                         onClick={() => setConfirmingDelete(a.id)}
                       >
                         Xoá
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
@@ -399,13 +398,13 @@ export function Team() {
                 <strong>{o.id}</strong> {o.name !== o.id && `(${o.name})`}{' '}
                 {o.domain && <span className="muted">— {o.domain}</span>}{' '}
                 {o.valid ? (
-                  <button
-                    type="button" className="btn-link"
+                  <Button
+                    variant="ghost"
                     disabled={registering === o.id}
                     onClick={() => registerOrphan(o.id)}
                   >
                     {registering === o.id ? 'Đang thêm…' : 'Thêm vào đội'}
-                  </button>
+                  </Button>
                 ) : (
                   <span className="error">hồ sơ lỗi: {o.error}</span>
                 )}
@@ -418,20 +417,20 @@ export function Team() {
         <div className="confirm-dialog" role="dialog" aria-modal="true" aria-label="Xác nhận xoá">
           <h3>Xoá agent {confirmingDelete}?</h3>
           <p>Agent bị gỡ khỏi danh sách. Hồ sơ của agent vẫn được giữ lại để lưu trữ.</p>
-          <button type="button" className="btn btn-danger" disabled={busyId === confirmingDelete} onClick={() => confirmDelete(confirmingDelete)}>
+          <Button variant="danger" disabled={busyId === confirmingDelete} onClick={() => confirmDelete(confirmingDelete)}>
             {busyId === confirmingDelete ? 'Đang xoá…' : 'Xoá'}
-          </button>{' '}
-          <button type="button" className="btn" disabled={busyId === confirmingDelete} onClick={() => setConfirmingDelete(null)}>
+          </Button>{' '}
+          <Button variant="ghost" disabled={busyId === confirmingDelete} onClick={() => setConfirmingDelete(null)}>
             Huỷ
-          </button>
+          </Button>
         </div>
       )}
       {upgradeNote && (
         <div className="ok health-detail" role="status">
           {upgradeNote}{' '}
-          <button type="button" className="btn-link" onClick={() => setUpgradeNote(null)}>
+          <Button variant="ghost" onClick={() => setUpgradeNote(null)}>
             đóng
-          </button>
+          </Button>
         </div>
       )}
       {upgradePreview && (
@@ -453,17 +452,16 @@ export function Team() {
             </p>
           )}
           <p className="muted">Hồ sơ hiện tại được sao lưu trước khi ghi.</p>
-          <button
-            type="button"
-            className="btn"
+          <Button
+            variant="ghost"
             disabled={busyId === upgradePreview.id}
             onClick={() => applyUpgrade(upgradePreview.id)}
           >
             {busyId === upgradePreview.id ? 'Đang nâng cấp…' : 'Nâng cấp'}
-          </button>{' '}
-          <button type="button" className="btn" onClick={() => setUpgradePreview(null)}>
+          </Button>{' '}
+          <Button variant="ghost" onClick={() => setUpgradePreview(null)}>
             Huỷ
-          </button>
+          </Button>
         </div>
       )}
     </section>

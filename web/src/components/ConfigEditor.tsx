@@ -1,6 +1,7 @@
 // Editor for one profile file. MEMORY.md is rendered read-only (the agent self-writes it;
 // no save route exists). Save surfaces the backend's EXACT validation message on a 400.
 import { useState } from 'react'
+import { Button } from './ui/button'
 
 export function ConfigEditor({
   label,
@@ -47,9 +48,9 @@ export function ConfigEditor({
       />
       {!readOnly && (
         <div>
-          <button type="button" disabled={busy} onClick={save}>
+          <Button variant="ghost" disabled={busy} onClick={save}>
             {busy ? 'Đang lưu…' : 'Lưu'}
-          </button>
+          </Button>
           {status && <span className="ok"> {status}</span>}
           {error && <span className="error"> {error}</span>}
         </div>

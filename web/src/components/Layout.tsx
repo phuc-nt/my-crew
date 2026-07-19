@@ -13,6 +13,7 @@ import { useSharedPendingApprovals } from '../pending-approvals-context'
 import { useUiMode } from '../ui-mode-context'
 import { SearchBox } from './search-box'
 import { ThemeToggle } from './ThemeToggle'
+import { Button } from './ui/button'
 
 async function logout() {
   try {
@@ -71,15 +72,17 @@ export function Layout() {
           {/* Dual-lens P2: the low/high lens toggle moves up here from Settings (which
               keeps its control as a mirror — same context). View-layer only, never a
               permission (ui-mode-context.tsx). */}
-          <button
-            type="button"
-            className="chip mode-toggle"
+          <Button
+            variant="chip"
+            className="mode-toggle"
             onClick={() => setMode(isHigh ? 'low' : 'high')}
             title={isHigh ? 'Đang: chế độ kỹ thuật — bấm về chế độ thường' : 'Đang: chế độ thường — bấm sang chế độ kỹ thuật'}
           >
             {isHigh ? '🔬 Kỹ thuật' : '👁 Thường'}
-          </button>
+          </Button>
           <ThemeToggle />
+          {/* v53: .logout-btn styled standalone (not .btn family) — Button's ghost variant
+              would add .btn on top and change the visual; keep raw this pass. */}
           <button type="button" className="logout-btn" onClick={() => void logout()}>
             Đăng xuất
           </button>

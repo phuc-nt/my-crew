@@ -5,6 +5,7 @@
 // /api/company/activity which projects to a server-side allowlist.
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import type { CompanyActivityItem, CompanyActivityPayload } from '../types'
 
@@ -150,9 +151,9 @@ export function CompanyActivity() {
         </table>
       )}
       {items.length >= limit && (
-        <button type="button" onClick={() => setLimit((n) => n + PAGE)}>
+        <Button variant="ghost" onClick={() => setLimit((n) => n + PAGE)}>
           Xem thêm
-        </button>
+        </Button>
       )}
     </section>
   )

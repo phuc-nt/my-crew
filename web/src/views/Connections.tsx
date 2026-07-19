@@ -5,6 +5,7 @@
 // so a successful save shows the restart banner instead of pretending it's live.
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { Button } from '../components/ui/button'
 import type { ConnectionCard } from '../types'
 
 function CardForm({ card, onSaved }: { card: ConnectionCard; onSaved: () => void }) {
@@ -53,9 +54,9 @@ function CardForm({ card, onSaved }: { card: ConnectionCard; onSaved: () => void
         </label>
       ))}
       <div className="connection-form-actions">
-        <button type="button" disabled={!dirty || busy} onClick={save}>
+        <Button variant="ghost" disabled={!dirty || busy} onClick={save}>
           {busy ? 'Đang lưu…' : 'Lưu'}
-        </button>
+        </Button>
         {savedAt > 0 && !dirty && <span className="muted">Đã lưu.</span>}
         {error && <span className="error">{error}</span>}
       </div>
@@ -114,9 +115,9 @@ export function Connections() {
       {needsRestart && (
         <div className="connection-restart-banner" role="status">
           <span>Đã lưu khoá mới — cần khởi động lại máy chủ để áp dụng.</span>
-          <button type="button" disabled={restarting} onClick={restart}>
+          <Button variant="ghost" disabled={restarting} onClick={restart}>
             {restarting ? 'Đang gửi…' : 'Khởi động lại'}
-          </button>
+          </Button>
         </div>
       )}
       {restartMsg && <p className="muted">{restartMsg}</p>}

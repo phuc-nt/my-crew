@@ -18,6 +18,7 @@ import { agentIdsInOrder, deriveAgentDesks } from '../office-3d/agent-office-sta
 import { AgentStatusTable } from '../office-3d/agent-status-table'
 import { OfficeCanvas } from '../office-3d/office-canvas'
 import { use3dFallback } from '../office-3d/use-3d-fallback'
+import { Button } from '../../components/ui/button'
 import type { TeamBoardLane, Workroom } from '../../types'
 import { ActivityFeed } from './activity-feed'
 import { ArtifactPanel } from './artifact-panel'
@@ -169,9 +170,9 @@ export function OfficeUnified() {
           how-to text folds into <details> so the working area starts higher. */}
       <header className="office-header">
         <h2>Văn phòng</h2>
-        <button type="button" className="chip office-3d-toggle" onClick={toggleCollapsed}>
+        <Button variant="chip" className="office-3d-toggle" onClick={toggleCollapsed}>
           {collapsed ? 'Hiện không gian 3D' : 'Thu gọn không gian 3D'}
-        </button>
+        </Button>
       </header>
       <CoordinatorHealthBanner />
       {isHigh && <OfficeHealthStrip />}

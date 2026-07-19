@@ -5,6 +5,7 @@
 // Step 0 (template picker) never changes the create path: applyTemplate() only prefills
 // wizard state, buildSpec()/api.createAgent are unchanged.
 import { DomainPicker } from '../components/DomainPicker'
+import { Button } from '../components/ui/button'
 import { BindingsStep } from '../wizard/BindingsStep'
 import { IdentityStep } from '../wizard/IdentityStep'
 import { ReportsStep } from '../wizard/ReportsStep'
@@ -75,14 +76,14 @@ export function CreateAgent() {
 
       <div className="wizard-nav">
         {state.step > 0 && (
-          <button type="button" onClick={() => goTo(state.step - 1)}>
+          <Button variant="ghost" onClick={() => goTo(state.step - 1)}>
             Quay lại
-          </button>
+          </Button>
         )}{' '}
         {state.step > 0 && state.step < 5 && (
-          <button type="button" disabled={!canAdvanceFrom[state.step]} onClick={() => goTo(state.step + 1)}>
+          <Button variant="ghost" disabled={!canAdvanceFrom[state.step]} onClick={() => goTo(state.step + 1)}>
             Tiếp
-          </button>
+          </Button>
         )}
       </div>
     </section>

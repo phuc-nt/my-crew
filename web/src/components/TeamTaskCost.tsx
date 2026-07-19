@@ -3,6 +3,7 @@
 // be null (dry-run) → rendered as "—".
 import { useState } from 'react'
 import { api } from '../api/client'
+import { Button } from './ui/button'
 import { formatCost } from '../labels'
 import type { TeamTaskCostPayload } from '../types'
 
@@ -28,9 +29,9 @@ export function TeamTaskCost({ taskId }: { taskId: string }) {
 
   return (
     <div className="team-task-cost">
-      <button type="button" className="btn-link" onClick={toggle}>
+      <Button variant="ghost" onClick={toggle}>
         {open ? '▾' : '▸'} Chi phí
-      </button>
+      </Button>
       {open && loading && <span className="muted"> đang tải…</span>}
       {open && error && <span className="error"> Lỗi: {error}</span>}
       {open && data && (

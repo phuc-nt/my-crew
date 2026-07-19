@@ -45,6 +45,7 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
           />
         </label>
         {error && <p className="error">{error}</p>}
+        {/* v53: styled by container element selector (.login-box button) — unify in a later pass */}
         <button type="submit" disabled={busy || !password}>
           {busy ? 'Đang đăng nhập…' : 'Đăng nhập'}
         </button>

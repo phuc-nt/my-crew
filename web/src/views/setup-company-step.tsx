@@ -45,6 +45,7 @@ export function SetupCompanyStep({
       </label>
       {error && <p className="error">{error}</p>}
       <div className="setup-actions">
+        {/* v53: styled by container element selector (.setup-actions button) — unify in a later pass */}
         <button type="button" disabled={busy} onClick={onBack}>
           Quay lại
         </button>

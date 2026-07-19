@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { api } from '../api/client'
+import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { useOfficeStream } from '../hooks/use-office-stream'
 // v15: line rendering shared with the unified office screen's activity feed — one
@@ -44,24 +45,24 @@ export function OfficeRoom() {
       {error && <p className="error">Lỗi: {error}</p>}
       <div className="office-room-layout">
         <nav className="office-room-picker" aria-label="Danh sách phòng">
-          <button
-            type="button"
-            className={activeRoom === OFFICE_ROOM_ID ? 'chip chip-active' : 'chip'}
+          <Button
+            variant="chip"
+            className={activeRoom === OFFICE_ROOM_ID ? 'chip-active' : undefined}
             onClick={() => selectRoom(OFFICE_ROOM_ID)}
           >
             Tổng quan
-          </button>
+          </Button>
           {rooms
             ?.filter((r) => r !== OFFICE_ROOM_ID)
             .map((r) => (
-              <button
+              <Button
                 key={r}
-                type="button"
-                className={activeRoom === r ? 'chip chip-active' : 'chip'}
+                variant="chip"
+                className={activeRoom === r ? 'chip-active' : undefined}
                 onClick={() => selectRoom(r)}
               >
                 Việc #{r}
-              </button>
+              </Button>
             ))}
         </nav>
         <div className="office-room-timeline">

@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { ApiError, api } from '../api/client'
+import { Button } from '../components/ui/button'
 import type { CrewCreateResult, CrewPreview, Pack, StaffTemplate } from '../types'
 
 const RUNTIME_LABEL: Record<string, string> = {
@@ -69,9 +70,9 @@ export function StaffTemplatePicker({
       <section>
         <p className="error">Lỗi: {error}</p>
         <div className="wizard-nav">
-          <button type="button" onClick={onSkip}>
+          <Button variant="ghost" onClick={onSkip}>
             Bỏ qua, tự chọn
-          </button>
+          </Button>
         </div>
       </section>
     )
@@ -130,9 +131,9 @@ export function StaffTemplatePicker({
         <div className="crew-banner">
           <strong>{crew.crew}</strong> — tạo cả đội {missingCount} nhân sự trong một lần
           {!crewOpen ? (
-            <button type="button" onClick={() => setCrewOpen(true)}>
+            <Button variant="ghost" onClick={() => setCrewOpen(true)}>
               Tạo cả đội ({missingCount})
-            </button>
+            </Button>
           ) : (
             <div className="crew-preview">
               <ul>
@@ -143,12 +144,12 @@ export function StaffTemplatePicker({
                   </li>
                 ))}
               </ul>
-              <button type="button" disabled={crewBusy} onClick={() => void crewCreate()}>
+              <Button variant="ghost" disabled={crewBusy} onClick={() => void crewCreate()}>
                 {crewBusy ? 'Đang tạo…' : `Xác nhận tạo ${missingCount} nhân sự`}
-              </button>{' '}
-              <button type="button" onClick={() => setCrewOpen(false)}>
+              </Button>{' '}
+              <Button variant="ghost" onClick={() => setCrewOpen(false)}>
                 Thôi
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -189,33 +190,33 @@ export function StaffTemplatePicker({
               ) : confirming === t.role_id ? (
                 <div>
                   <p className="muted">Tạo nhân sự "{t.role_id}" với cấu hình chuẩn của mẫu?</p>
-                  <button type="button" disabled={busy === t.role_id} onClick={() => void quickCreate(t)}>
+                  <Button variant="ghost" disabled={busy === t.role_id} onClick={() => void quickCreate(t)}>
                     {busy === t.role_id ? 'Đang tạo…' : 'Xác nhận'}
-                  </button>{' '}
-                  <button type="button" onClick={() => setConfirming(null)}>
+                  </Button>{' '}
+                  <Button variant="ghost" onClick={() => setConfirming(null)}>
                     Thôi
-                  </button>
+                  </Button>
                   {conflictOf === t.role_id && (
                     <p className="muted">
                       Đã có "{t.role_id}" rồi.{' '}
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
                         disabled={busy === t.role_id}
                         onClick={() => void quickCreate(t, `${t.role_id}-2`)}
                       >
                         Tạo thêm "{t.role_id}-2"
-                      </button>
+                      </Button>
                     </p>
                   )}
                 </div>
               ) : (
                 <div>
-                  <button type="button" onClick={() => setConfirming(t.role_id)}>
+                  <Button variant="ghost" onClick={() => setConfirming(t.role_id)}>
                     Tạo ngay
-                  </button>{' '}
-                  <button type="button" className="chip" onClick={() => customize(t)}>
+                  </Button>{' '}
+                  <Button variant="chip" onClick={() => customize(t)}>
                     Tuỳ chỉnh…
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -223,9 +224,9 @@ export function StaffTemplatePicker({
         </div>
       )}
       <div className="wizard-nav">
-        <button type="button" onClick={onSkip}>
+        <Button variant="ghost" onClick={onSkip}>
           Bỏ qua, tự chọn
-        </button>
+        </Button>
       </div>
     </section>
   )

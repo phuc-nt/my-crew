@@ -4,6 +4,7 @@
 // question was already handled elsewhere, so the list refreshes instead of erroring.
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { Button } from '../components/ui/button'
 import type { ClarifyQuestion } from '../types'
 
 function QuestionRow({ q, onDone }: { q: ClarifyQuestion; onDone: () => void }) {
@@ -35,15 +36,14 @@ function QuestionRow({ q, onDone }: { q: ClarifyQuestion; onDone: () => void }) 
       </div>
       <div className="clarify-actions">
         {q.options.map((opt, i) => (
-          <button
+          <Button
             key={`${q.id}-${i}`}
-            type="button"
-            className="btn btn-primary"
+            variant="primary"
             disabled={busy}
             onClick={() => send(opt)}
           >
             {opt}
-          </button>
+          </Button>
         ))}
         <input
           placeholder="hoặc trả lời chi tiết…"
@@ -54,9 +54,9 @@ function QuestionRow({ q, onDone }: { q: ClarifyQuestion; onDone: () => void }) 
             if (e.key === 'Enter') send(text)
           }}
         />
-        <button type="button" disabled={busy || !text.trim()} onClick={() => send(text)}>
+        <Button variant="ghost" disabled={busy || !text.trim()} onClick={() => send(text)}>
           Gửi
-        </button>
+        </Button>
       </div>
       {error && <p className="error">{error}</p>}
     </li>

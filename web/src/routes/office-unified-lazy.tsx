@@ -10,6 +10,7 @@
 // escape hatch (reload + the table-based timeline link).
 import { Component, Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
+import { Button } from '../components/ui/button'
 
 const OfficeUnified = lazy(() => import('../views/office-unified/office-unified'))
 
@@ -18,9 +19,9 @@ function OfficeLoadEscape() {
     <div style={{ padding: '2rem' }}>
       <p className="error">Không tải được màn hình văn phòng.</p>
       <p>
-        <button type="button" onClick={() => window.location.reload()}>
+        <Button variant="ghost" onClick={() => window.location.reload()}>
           Tải lại
-        </button>{' '}
+        </Button>{' '}
         hoặc xem <Link to="/office/timeline">nhật ký văn phòng dạng bảng</Link>.
       </p>
     </div>

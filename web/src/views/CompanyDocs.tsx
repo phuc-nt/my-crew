@@ -4,6 +4,7 @@
 // prompt only (external reports never see it, enforced server-side).
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from '../api/client'
+import { Button } from '../components/ui/button'
 import type { CompanyDoc } from '../types'
 
 export function CompanyDocs() {
@@ -26,9 +27,9 @@ export function CompanyDocs() {
     <section className="company-docs">
       <header className="page-head">
         <h2>Tài liệu công ty</h2>
-        <button type="button" onClick={() => setSelected('new')}>
+        <Button variant="ghost" onClick={() => setSelected('new')}>
           + Tài liệu mới
-        </button>
+        </Button>
       </header>
       <p className="muted">
         Tài liệu ở đây được tick cho từng agent (trong trang agent → tab Kiến thức) và chỉ
@@ -36,6 +37,7 @@ export function CompanyDocs() {
       </p>
       <div className="company-docs-body">
         <ul className="company-docs-list">
+          {/* v53: styled by container element selector (.company-docs-list button) — unify in a later pass */}
           {docs.length === 0 && <li className="muted">Chưa có tài liệu nào.</li>}
           {docs.map((d) => (
             <li key={d.slug}>
@@ -127,6 +129,7 @@ function DocEditor({
       </label>
       {error && <p className="error">{error}</p>}
       <div className="agent-actions">
+        {/* v53: styled by container element selector (.agent-actions button) — unify in a later pass */}
         <button type="button" disabled={busy || !title.trim()} onClick={() => void save()}>
           {busy ? 'Đang lưu…' : 'Lưu'}
         </button>

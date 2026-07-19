@@ -7,6 +7,7 @@
 // composer against a live stream, but the mention matching is the logic that matters).
 import { useRef, useState } from 'react'
 import { api } from '../../api/client'
+import { Button } from '../../components/ui/button'
 import type { AssignPreviewPayload, RoomChatPayload } from '../../types'
 
 export interface StaffOption {
@@ -167,12 +168,13 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
             if (e.key === 'Enter') submit()
           }}
         />
-        <button type="button" onClick={submit} disabled={phase.kind === 'previewing'}>
+        <Button variant="ghost" onClick={submit} disabled={phase.kind === 'previewing'}>
           {phase.kind === 'previewing' ? 'Đang xử lý…' : activeRoom ? 'Gửi' : 'Giao việc'}
-        </button>
+        </Button>
       </div>
       {mentions.length > 0 && (
         <ul className="office-composer-mentions" role="listbox">
+          {/* v53: styled by container element selector (.office-composer-mentions button) — unify in a later pass */}
           {mentions.map((s) => (
             <li key={s.id}>
               <button type="button" onClick={() => applyMention(s.id)}>
@@ -186,12 +188,12 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
         <div className="office-composer-preview">
           <pre>{phase.data.preview_text}</pre>
           <div className="office-composer-actions">
-            <button type="button" className="primary" onClick={() => confirm(phase.data)}>
+            <Button variant="primary" onClick={() => confirm(phase.data)}>
               Xác nhận giao việc
-            </button>
-            <button type="button" onClick={() => cancel(phase.data)}>
+            </Button>
+            <Button variant="ghost" onClick={() => cancel(phase.data)}>
               Huỷ
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -204,10 +206,10 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
         <div className="office-composer-preview">
           <pre>{phase.data.preview_text}</pre>
           <div className="office-composer-actions">
-            <button type="button" className="primary" onClick={() => confirmAdjust(phase.data)}>
+            <Button variant="primary" onClick={() => confirmAdjust(phase.data)}>
               Xác nhận sửa kế hoạch
-            </button>
-            <button type="button" onClick={() => setPhase({ kind: 'idle' })}>Bỏ qua</button>
+            </Button>
+            <Button variant="ghost" onClick={() => setPhase({ kind: 'idle' })}>Bỏ qua</Button>
           </div>
         </div>
       )}

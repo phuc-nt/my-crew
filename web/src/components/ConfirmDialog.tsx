@@ -5,6 +5,7 @@
 // a blank. Detail comes from the API, never constructed client-side. Modal: focus + Esc + scroll.
 import { useEffect, useRef } from 'react'
 import { summarizeAction } from '../action-summary'
+import { Button } from './ui/button'
 import type { ApprovalItem } from '../types'
 
 export function ConfirmDialog({
@@ -56,12 +57,12 @@ export function ConfirmDialog({
         <pre className="action-detail">{JSON.stringify(item.action, null, 2)}</pre>
       </details>
       <div className="confirm-actions">
-        <button type="button" className="btn btn-primary" disabled={busy} onClick={onApprove}>
+        <Button variant="primary" disabled={busy} onClick={onApprove}>
           {busy ? 'Đang thực hiện…' : 'Duyệt & thực hiện'}
-        </button>{' '}
-        <button type="button" className="btn" disabled={busy} onClick={onCancel}>
+        </Button>{' '}
+        <Button variant="ghost" disabled={busy} onClick={onCancel}>
           Huỷ
-        </button>
+        </Button>
       </div>
     </div>
   )

@@ -5,6 +5,7 @@
 // the backend caches for 30s so polling is not needed.
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { Button } from './ui/button'
 import type { IntegrationCheck } from '../types'
 
 // Split a hint into text + inline-code spans on `backtick` boundaries so the shell commands in a
@@ -50,9 +51,9 @@ export function IntegrationHealthPanel() {
     <section className="health-panel">
       <h3>
         Sức khỏe hệ thống{' '}
-        <button type="button" disabled={loading} onClick={load}>
+        <Button variant="ghost" disabled={loading} onClick={load}>
           {loading ? 'Đang kiểm tra…' : 'Làm mới'}
-        </button>
+        </Button>
       </h3>
       {error && <p className="error">Lỗi: {error}</p>}
       {!error && !loading && (

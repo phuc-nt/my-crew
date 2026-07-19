@@ -3,6 +3,7 @@
 // through chat (needs the confirm dialogue). Consumes /api/tasks.
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import type { AgentTasks, AssignedTask } from '../types'
 
@@ -90,14 +91,13 @@ export function Tasks() {
                     <td className="tasks-last" data-label="Lần chạy gần nhất">{last ? last.summary : '—'}</td>
                     <td>
                       {open && (
-                        <button
-                          type="button"
-                          className="btn"
+                        <Button
+                          variant="ghost"
                           onClick={() => void cancel(a.agent_id, t.id)}
                           disabled={busyId === `${a.agent_id}:${t.id}`}
                         >
                           Huỷ
-                        </button>
+                        </Button>
                       )}
                     </td>
                   </tr>
