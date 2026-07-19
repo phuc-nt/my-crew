@@ -86,3 +86,11 @@ export function formatCron(cron: string | undefined | null): string {
     .join(', ')
   return days ? `${time} ${days}` : `${time} (${cron})`
 }
+
+// v53: ONE cost format app-wide (was ~7 inline toFixed variants). LLM step costs are
+// sub-cent — below $1 keep 4 decimals ($0.0034); from $1 up 2 decimals ($2.70). Caps
+// and totals share the same rule so "spent/cap" pairs read consistently.
+export function formatCost(usd: number | undefined | null): string {
+  if (usd == null || !Number.isFinite(usd)) return '—'
+  return usd < 1 ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`
+}

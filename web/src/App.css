@@ -1,4 +1,12 @@
 /* Dashboard styles. No UI kit — plain CSS with design tokens.
+
+   ═══ v53 STRUCTURE + RULES ═══
+   Sections, in order: 1.TOKENS → 2.BASE (elements) → 3.PRIMITIVES (.btn/.card/.badge/.chip
+   + .ui-*) → 4.APP SHELL/NAV → 5.VIEWS (chronological by feature era — legacy spacing kept
+   pixel-stable on purpose; use the --space-N and --fs-N tokens for ALL new rules).
+   RULE: new styles MUST use tokens + primitives. Do NOT invent another button/card/badge/
+   input/empty-state class — extend the primitives in section 3.
+
    Tokens live in :root (light) and [data-theme="dark"] (dark). Component styles reference
    var(--…) ONLY — no hardcoded literals below the token blocks — so a single edit re-themes
    everything and dark mode is a pure token swap. Theme is resolved in JS (theme-context.tsx) and
@@ -67,6 +75,7 @@
   --space-5: 1.5rem;
 
   /* Radius + shadow */
+  --radius-sm: 4px;
   --radius: 6px;
   --radius-lg: 10px;
   --radius-pill: 999px;
@@ -134,11 +143,62 @@
   --color-neutral-bg: #2c2c2c;
 }
 
+/* ═══════════════ 2. BASE — element defaults (no classes) ═══════════════ */
+
 /* Type scale — consistent heading hierarchy across every view. */
 h1 { font-size: var(--fs-h1); }
 h2 { font-size: var(--fs-h2); margin: 0 0 var(--space-4); }
 h3 { font-size: var(--fs-h3); }
 h4 { font-size: var(--fs-h4); }
+
+table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); }
+/* ONE table rhythm app-wide — per-table padding overrides are forbidden (v53). */
+th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--color-border-soft); }
+
+/* v37: unclassed <button> inherited the ~13.3px browser default; base tokens keep raw
+   buttons aligned with classed ones. (v53: prefer the <Button> primitive over raw.) */
+button { cursor: pointer; padding: var(--space-1) 0.6rem; font-size: var(--fs-sm); }
+button:disabled { cursor: default; opacity: 0.6; }
+/* =16px on desktop AND the iOS anti-auto-zoom guard (v37). */
+input, textarea, select { font-size: var(--fs-body); }
+
+.error { color: var(--color-danger); }
+.muted { color: var(--color-muted); font-size: var(--fs-sm); }
+
+/* ═══════════ 3. PRIMITIVES — the only button/card/badge/input styles ═══════════ */
+/* Shared component classes (v9 P3; v53 promotes these to THE primitives — React wrappers in
+   components/ui/*). Keep any existing class on an element when adding these. */
+.btn { display: inline-block; padding: 0.45rem 0.9rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius);
+  background: var(--color-surface); color: var(--color-text); cursor: pointer; font-size: var(--fs-sm); text-decoration: none; transition: background var(--motion-fast); }
+.btn:hover { background: var(--color-bg-soft); }
+.btn:disabled { opacity: 0.6; cursor: default; }
+.btn-primary { background: var(--color-primary); color: var(--color-primary-contrast); border-color: var(--color-primary); }
+.btn-primary:hover { background: var(--color-primary-hover); }
+.btn-danger { color: var(--color-danger); border-color: var(--color-danger); }
+.btn-danger:hover { background: var(--color-danger-bg); }
+.btn-link { text-decoration: none; border: 1px solid var(--color-border-strong); border-radius: var(--radius);
+  padding: 0.35rem 0.8rem; color: var(--color-text); background: var(--color-surface); cursor: pointer; font-size: var(--fs-sm); transition: background var(--motion-fast); }
+.btn-link:hover { background: var(--color-neutral-bg); }
+.card { border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-3);
+  box-shadow: var(--shadow-sm); }
+.badge { display: inline-block; border-radius: var(--radius-pill); padding: 0.15rem 0.5rem; font-size: var(--fs-xs); }
+/* v53 badge tones — role-split tokens; ALWAYS pill (replaces the 10px-radius drift of
+   badge-on/off/trust-* and health-chip). */
+.badge-ok { background: var(--color-ok-bg); color: var(--color-ok); }
+.badge-warn { background: var(--color-warn-bg); color: var(--color-warn); }
+.badge-danger { background: var(--color-danger-bg); color: var(--color-danger); }
+.badge-accent { background: var(--color-accent-bg); color: var(--color-accent); }
+.badge-neutral { background: var(--color-neutral-bg); color: var(--color-subtle); }
+/* v53 input primitive — one field style (screens each had 5px/8px ad-hoc before). */
+.ui-input { padding: var(--space-2); border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius); background: var(--color-surface); color: var(--color-text); }
+/* v53 page header — h2 + actions on one baseline (generalizes .office-header). */
+.page-header { display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-3); margin-bottom: var(--space-3); }
+.page-header h2 { margin: 0; }
+.page-header-actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+
+/* ═══════════════ 4. APP SHELL + NAV ═══════════════ */
 
 .app-shell { max-width: 1100px; margin: 0 auto; padding: var(--space-4); }
 .app-header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
@@ -167,6 +227,8 @@ h4 { font-size: var(--fs-h4); }
 .chip:hover { background: var(--color-neutral-bg); }
 .chip-alert { border-color: var(--color-danger); color: var(--color-danger); background: var(--color-danger-bg); font-weight: 600; }
 .chip-active { background: var(--color-primary); color: var(--color-primary-contrast); border-color: var(--color-primary); }
+
+/* ═══════════════ 5. VIEWS (chronological by feature era) ═══════════════ */
 
 /* Office group-chat room (v12 M29) — a room picker + live timeline, reusing .chip for the
    picker and .ops-chat-* spacing conventions for the log itself. */
@@ -198,7 +260,7 @@ h4 { font-size: var(--fs-h4); }
 /* Fixed moderate width: long step titles wrap instead of stretching the tooltip across
    the whole scene (titles are already length-capped server-side, so ≤ a few lines). */
 .office-3d-tooltip { background: var(--color-bg); color: var(--color-text);
-  border: 1px solid var(--color-border); border-radius: 6px; padding: 0.3rem 0.55rem;
+  border: 1px solid var(--color-border); border-radius: var(--radius); padding: 0.3rem 0.55rem;
   font-size: var(--fs-xs); max-width: 260px; width: max-content; white-space: normal;
   overflow-wrap: break-word; box-shadow: 0 2px 8px rgb(0 0 0 / 0.18); }
 /* Fixed-width bubble frame: long titles ellipsize per line instead of stretching across the
@@ -242,18 +304,18 @@ h4 { font-size: var(--fs-h4); }
 .office-composer { margin-top: var(--space-3); }
 .office-composer-row { display: flex; gap: var(--space-2); }
 .office-composer-row input { flex: 1; padding: 0.55rem 0.75rem;
-  border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg);
+  border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-bg);
   color: var(--color-text); }
 .office-composer-mentions { list-style: none; margin: 4px 0 0; padding: 4px;
-  border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg);
+  border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-bg);
   max-height: 220px; overflow-y: auto; }
 .office-composer-mentions button { width: 100%; text-align: left; background: none;
   border: none; padding: 0.35rem 0.5rem; cursor: pointer; color: var(--color-text);
-  border-radius: 6px; }
+  border-radius: var(--radius); }
 .office-composer-mentions button:hover { background: var(--color-border); }
 .office-composer-domain { color: var(--color-muted); font-size: var(--fs-xs); }
 .office-composer-preview { margin-top: var(--space-2); border: 1px solid var(--color-border);
-  border-radius: 8px; padding: var(--space-2); }
+  border-radius: var(--radius-lg); padding: var(--space-2); }
 .office-composer-preview pre { white-space: pre-wrap; margin: 0; font-size: var(--fs-sm); }
 .office-composer-actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
 .office-composer-done { border-color: var(--color-ok); }
@@ -293,7 +355,7 @@ h4 { font-size: var(--fs-h4); }
    moved onto the inner list (.office-artifacts-body) so the "Kết quả" title aligns with
    "Phòng việc"/"Hoạt động trực tiếp" instead of sitting ~9px lower inside a padded box. */
 .office-artifacts { display: flex; flex-direction: column; }
-.office-artifacts-body { border: 1px solid var(--color-border); border-radius: 8px;
+.office-artifacts-body { border: 1px solid var(--color-border); border-radius: var(--radius-lg);
   padding: var(--space-2); max-height: 70vh; overflow-y: auto; }
 /* v37: give the "Kết quả" column a real size hierarchy — task name (h4) sits above the
    item text, not merely bolder at the same size. */
@@ -301,7 +363,7 @@ h4 { font-size: var(--fs-h4); }
 .office-artifacts ul { list-style: none; margin: 0; padding: 0; }
 .artifact-pic { margin-left: 0.4rem; }
 .artifact-item { width: 100%; text-align: left; background: none; border: none;
-  padding: 0.3rem 0.4rem; border-radius: 6px; cursor: pointer; color: var(--color-text);
+  padding: 0.3rem 0.4rem; border-radius: var(--radius); cursor: pointer; color: var(--color-text);
   font-size: var(--fs-sm); }
 .artifact-item:hover { background: var(--color-surface-2); }
 .artifact-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35);
@@ -311,13 +373,13 @@ h4 { font-size: var(--fs-h4); }
 .artifact-drawer-head { display: flex; justify-content: space-between; align-items: center;
   gap: var(--space-3); margin-bottom: var(--space-3); }
 .artifact-drawer-head h3 { margin: 0; }
-.artifact-flag { padding: var(--space-2); border-radius: 6px; }
+.artifact-flag { padding: var(--space-2); border-radius: var(--radius); }
 .artifact-markdown { line-height: 1.55; font-size: var(--fs-body); }
 .artifact-markdown table { border-collapse: collapse; }
 .artifact-markdown th, .artifact-markdown td { border: 1px solid var(--color-border);
   padding: 0.3rem 0.55rem; }
 .artifact-markdown pre { background: var(--color-surface-2); padding: var(--space-2);
-  border-radius: 6px; overflow-x: auto; }
+  border-radius: var(--radius); overflow-x: auto; }
 @media (max-width: 1100px) {
   .office-columns { grid-template-columns: 1fr; }
   .office-artifacts { max-height: 40vh; }
@@ -335,59 +397,64 @@ h4 { font-size: var(--fs-h4); }
 .office-3d-state-assigned { color: var(--color-accent); }
 .office-3d-state-working { color: var(--color-warn); }
 .office-3d-state-done { color: var(--color-ok); }
-.office-3d-state-error { color: var(--color-err, #ef4444); font-weight: 700; }
+/* 2D fallback table is theme-aware → real danger token (was phantom --color-err → literal
+   that never inverted in dark mode). */
+.office-3d-state-error { color: var(--color-danger); font-weight: 700; }
+/* Inside the theme-independent 3D bubble (fixed light colors, see block note above):
+   #b00020 = light-theme danger-solid, white text ≥4.5:1 (the old #ef4444 was below AA). */
 .office-3d-bubble-error {
-  display: inline-block; background: #ef4444; color: #fff; border-radius: 4px;
+  display: inline-block; background: #b00020; color: #ffffff; border-radius: var(--radius-sm);
   padding: 0 4px; margin-right: 4px; font-weight: 700;
 }
-.office-3d-bubble-has-error { border-color: #ef4444; }
+.office-3d-bubble-has-error { border-color: #b00020; }
 
-/* Dual-lens P2: high-mode health strip + desk inspector drawer */
+/* Dual-lens P2: high-mode health strip + desk inspector drawer (v53: tokenized —
+   this block was the worst literal-px/hex offender in the file). */
 .office-health-strip {
-  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
-  padding: 4px 0; font-size: 0.85rem;
+  display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center;
+  padding: var(--space-1) 0; font-size: var(--fs-sm);
 }
 .health-chip {
-  display: inline-block; border-radius: 10px; padding: 1px 8px;
-  border: 1px solid var(--color-border, #d0d7de);
+  display: inline-block; border-radius: var(--radius-pill); padding: 0.15rem var(--space-2);
+  border: 1px solid var(--color-border);
 }
 .health-ok { color: var(--color-ok); }
-.health-bad { color: #fff; background: #ef4444; border-color: #ef4444; }
+.health-bad { color: var(--color-on-danger); background: var(--color-danger-solid);
+  border-color: var(--color-danger-solid); }
 .desk-inspector {
-  position: fixed; right: 12px; bottom: 12px; width: min(340px, 92vw);
-  background: var(--color-bg, #fff); border: 1px solid var(--color-border, #d0d7de);
-  border-radius: 10px; padding: 12px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); z-index: 40;
+  position: fixed; right: var(--space-3); bottom: var(--space-3); width: min(340px, 92vw);
+  background: var(--color-bg); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); padding: var(--space-3);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); z-index: 40;
 }
 .desk-inspector-head { display: flex; justify-content: space-between; align-items: center; }
-.desk-inspector-task code { font-size: 0.8em; }
+.desk-inspector-task code { font-size: var(--fs-xs); }
 .mode-toggle { font-weight: 600; }
 
-/* Dual-lens P3: header search + captures explorer */
+/* Dual-lens P3: header search + captures explorer (v53: tokenized). */
 .header-search { position: relative; }
 .header-search input {
-  width: 180px; border-radius: 8px; border: 1px solid var(--color-border, #d0d7de);
-  padding: 4px 8px; font-size: 0.85rem;
+  width: 180px; border-radius: var(--radius); border: 1px solid var(--color-border);
+  padding: var(--space-1) var(--space-2); font-size: var(--fs-sm);
 }
 .header-search-results {
   position: absolute; top: 110%; right: 0; width: min(420px, 90vw); max-height: 50vh;
-  overflow-y: auto; background: var(--color-bg, #fff);
-  border: 1px solid var(--color-border, #d0d7de); border-radius: 8px; z-index: 50;
-  list-style: none; margin: 0; padding: 4px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+  overflow-y: auto; background: var(--color-bg);
+  border: 1px solid var(--color-border); border-radius: var(--radius-lg); z-index: 50;
+  list-style: none; margin: 0; padding: var(--space-1); box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
 }
 .header-search-results button {
   display: block; width: 100%; text-align: left; background: none; border: 0;
-  padding: 6px 8px; cursor: pointer; font-size: 0.85rem;
+  padding: var(--space-1) var(--space-2); cursor: pointer; font-size: var(--fs-sm);
 }
-.header-search-results button:hover { background: var(--color-border, #eef1f4); }
-.captures-filters { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
-.captures-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-.captures-table th, .captures-table td {
-  text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--color-border, #e5e9ee);
-}
+.header-search-results button:hover { background: var(--color-surface-2); }
+.captures-filters { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); align-items: center; }
+.captures-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+/* v53: inherits the global th,td padding (one table rhythm app-wide — no per-table override). */
 .captures-table tbody tr { cursor: pointer; }
-.captures-row-open { background: var(--color-border, #f2f5f8); }
-.captures-detail { font-size: 0.8em; margin-top: 4px; }
-.captures-error { color: #ef4444; }
+.captures-row-open { background: var(--color-surface-2); }
+.captures-detail { font-size: var(--fs-xs); margin-top: var(--space-1); }
+.captures-error { color: var(--color-danger); }
 /* High-mode ("Chế độ nâng cao") secondary nav row — v10 M25. Lighter than the primary row so
    the 4 CEO items stay dominant; sits directly under them. */
 .app-nav-advanced { gap: var(--space-3); font-size: var(--fs-sm); margin-top: calc(-1 * var(--space-2)); }
@@ -415,31 +482,10 @@ h4 { font-size: var(--fs-h4); }
   margin-bottom: var(--space-2); display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
 .advanced-links { columns: 2; list-style: none; padding: 0; }
 .danger { color: var(--color-danger); }
-table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); }
-th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--color-border-soft); }
-.error { color: var(--color-danger); }
 
-/* Shared component classes (v9 P3). Applied to CEO views; the global `button` rule below still
-   styles Advanced-view buttons so nothing there breaks. Keep any existing class on an element
-   when adding these — tests query by text/role, not by these visual classes. */
-.btn { display: inline-block; padding: 0.45rem 0.9rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius);
-  background: var(--color-surface); color: var(--color-text); cursor: pointer; font-size: var(--fs-sm); text-decoration: none; transition: background var(--motion-fast); }
-.btn:hover { background: var(--color-bg-soft); }
-.btn:disabled { opacity: 0.6; cursor: default; }
-.btn-primary { background: var(--color-primary); color: var(--color-primary-contrast); border-color: var(--color-primary); }
-.btn-primary:hover { background: var(--color-primary-hover); }
-.btn-danger { color: var(--color-danger); border-color: var(--color-danger); }
-.btn-danger:hover { background: var(--color-danger-bg); }
-.btn-link { text-decoration: none; border: 1px solid var(--color-border-strong); border-radius: var(--radius);
-  padding: 0.35rem 0.8rem; color: var(--color-text); background: var(--color-surface); cursor: pointer; font-size: var(--fs-sm); transition: background var(--motion-fast); }
-.btn-link:hover { background: var(--color-neutral-bg); }
-.card { border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-3);
-  box-shadow: var(--shadow-sm); }
-.badge { display: inline-block; border-radius: var(--radius-pill); padding: 0.15rem 0.5rem; font-size: var(--fs-xs); }
 
 /* Status / verdict coloring + chart sizing (M4 S3 views). */
 .chart-box { max-width: 420px; margin: var(--space-4) 0; }
-.muted { color: var(--color-muted); font-size: var(--fs-sm); }
 .status-delivered, .verdict-allow { color: var(--color-ok); font-weight: 600; }
 .status-interrupted, .verdict-pending { color: var(--color-pending); font-weight: 600; }
 .status-error, .verdict-deny, .verdict-reject { color: var(--color-danger); font-weight: 600; }
@@ -449,10 +495,10 @@ th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(
 
 /* Ops surfaces (M4 S4). */
 .confirm-dialog { border: 1px solid var(--color-danger-strong); border-radius: var(--radius); padding: var(--space-4); margin-top: var(--space-4); background: var(--color-danger-bg); box-shadow: var(--shadow-sm); }
-.action-detail { background: var(--color-bg-soft); padding: var(--space-2); border-radius: 4px; overflow-x: auto; font-size: var(--fs-xs); }
+.action-detail { background: var(--color-bg-soft); padding: var(--space-2); border-radius: var(--radius-sm); overflow-x: auto; font-size: var(--fs-xs); }
 /* Approve-dialog summary (v9 P1). The external variant MUST stand out — it's the CEO's last
    signal that an action leaves the org. Plain vs red/bold is the whole point of external:boolean. */
-.confirm-summary { font-size: var(--fs-h3); margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border-radius: 4px; background: var(--color-bg-soft); }
+.confirm-summary { font-size: var(--fs-h3); margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--color-bg-soft); }
 .confirm-external { background: var(--color-danger-bg-2); color: var(--color-external); font-weight: 700; border: 1px solid var(--color-danger-strong); }
 .confirm-external-note { color: var(--color-external); font-weight: 600; margin: var(--space-1) 0 var(--space-2); }
 .config-editor { margin: var(--space-4) 0; }
@@ -461,33 +507,21 @@ th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(
 .unsaved { color: var(--color-warn); font-weight: 600; margin-left: var(--space-2); }
 .trigger-form { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
 .run-stream ul { font-family: ui-monospace, monospace; font-size: var(--fs-xs); }
-/* v37: unclassed <button> previously inherited the browser default (~13.3px), a hair
-   smaller than every .chip/.btn (--fs-sm). Give the element a base token so raw buttons
-   match classed ones; specific classes (.btn, .chip, .theme-toggle-btn) still override. */
-button { cursor: pointer; padding: var(--space-1) 0.6rem; font-size: var(--fs-sm); }
-button:disabled { cursor: default; opacity: 0.6; }
-
-/* v37: form fields previously had NO font-size token on desktop — the only rule lived in
-   the max-width:640px block, so desktop inputs rendered at the UA default (~13.3px), smaller
-   than the labels around them. This base rule (=16px) covers desktop AND doubles as the iOS
-   anti-auto-zoom guard, so the mobile block no longer needs to repeat it. */
-input, textarea, select { font-size: var(--fs-body); }
-
 /* Create-agent wizard + Team view (v3 M7). */
 .wizard-steps { display: flex; gap: var(--space-4); list-style: none; padding: 0; font-size: var(--fs-sm); color: var(--color-muted); }
 .wizard-steps .wizard-step-active { color: var(--color-text); font-weight: 600; }
 .wizard-nav { margin-top: var(--space-4); display: flex; gap: var(--space-2); }
 .domain-picker { border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-3); }
 .domain-picker-option { display: block; margin: var(--space-2) 0; }
-.schedule-builder { margin: 0.4rem 0 0.8rem 1.5rem; padding: var(--space-2); background: var(--color-bg-soft); border-radius: 4px; }
+.schedule-builder { margin: 0.4rem 0 0.8rem 1.5rem; padding: var(--space-2); background: var(--color-bg-soft); border-radius: var(--radius-sm); }
 .schedule-builder-days { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: 0.4rem; }
 .schedule-builder-when { font-weight: 600; margin: 0.2rem 0; }
 .schedule-builder-cron { font-family: ui-monospace, monospace; }
 .reports-step-kind { margin-bottom: var(--space-2); }
 .persona-textarea { width: 100%; font-family: ui-monospace, monospace; font-size: var(--fs-sm); }
-.review-spec { background: var(--color-bg-soft); padding: var(--space-2); border-radius: 4px; overflow-x: auto; font-size: var(--fs-xs); }
+.review-spec { background: var(--color-bg-soft); padding: var(--space-2); border-radius: var(--radius-sm); overflow-x: auto; font-size: var(--fs-xs); }
 .token-setup-box { border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-3); margin: var(--space-4) 0; }
-.env-template { background: var(--color-bg-soft); padding: var(--space-2); border-radius: 4px; overflow-x: auto; font-size: var(--fs-xs); }
+.env-template { background: var(--color-bg-soft); padding: var(--space-2); border-radius: var(--radius-sm); overflow-x: auto; font-size: var(--fs-xs); }
 .health-panel { border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-3); margin-bottom: 1.25rem; box-shadow: var(--shadow-sm); }
 .health-checks { list-style: none; padding: 0; }
 .health-checks li { margin: 0.3rem 0; }
@@ -498,7 +532,7 @@ input, textarea, select { font-size: var(--fs-body); }
 /* v36 P3: "template có bản mới" badge on a Team-page agent row. */
 .template-upgrade-badge { margin-left: var(--space-3); font-size: var(--fs-xs); padding: 2px 8px; }
 /* Copy-paste shell command inside a remediation hint (v10 M26). */
-.health-fix-cmd { font-family: ui-monospace, monospace; font-size: var(--fs-xs); background: var(--color-bg-soft); border: 1px solid var(--color-border-soft); border-radius: 4px; padding: 0.05rem 0.35rem; user-select: all; }
+.health-fix-cmd { font-family: ui-monospace, monospace; font-size: var(--fs-xs); background: var(--color-bg-soft); border: 1px solid var(--color-border-soft); border-radius: var(--radius-sm); padding: 0.05rem 0.35rem; user-select: all; }
 
 /* v6 M14b: CEO chat-ops box */
 .ops-chat-hint { color: var(--color-muted); font-size: var(--fs-sm); margin: var(--space-1) 0 var(--space-3); }
@@ -522,13 +556,13 @@ input, textarea, select { font-size: var(--fs-body); }
 
 /* v6 M16: login screen + logout */
 .login-screen { display: flex; align-items: center; justify-content: center; min-height: 80vh; }
-.login-box { display: flex; flex-direction: column; gap: 0.85rem; width: 300px; padding: var(--space-5); border: 1px solid var(--color-border); border-radius: 8px; box-shadow: var(--shadow-sm); background: var(--color-surface); }
+.login-box { display: flex; flex-direction: column; gap: 0.85rem; width: 300px; padding: var(--space-5); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); background: var(--color-surface); }
 .login-box h1 { margin: 0 0 var(--space-1); font-size: var(--fs-h1); }
 .login-box label { display: flex; flex-direction: column; gap: 0.3rem; font-size: var(--fs-sm); color: var(--color-muted); }
-.login-box input { padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: 5px; background: var(--color-surface); color: var(--color-text); }
-.login-box button { padding: 0.55rem; background: var(--color-primary); color: var(--color-primary-contrast); border: none; border-radius: 5px; cursor: pointer; }
+.login-box input { padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-surface); color: var(--color-text); }
+.login-box button { padding: 0.55rem; background: var(--color-primary); color: var(--color-primary-contrast); border: none; border-radius: var(--radius); cursor: pointer; }
 .login-box button:disabled { opacity: 0.5; cursor: default; }
-.logout-btn { margin-left: auto; padding: var(--space-1) 0.7rem; background: none; border: 1px solid var(--color-border-strong); border-radius: 5px; cursor: pointer; font-size: var(--fs-sm); color: var(--color-text); }
+.logout-btn { margin-left: auto; padding: var(--space-1) 0.7rem; background: none; border: 1px solid var(--color-border-strong); border-radius: var(--radius); cursor: pointer; font-size: var(--fs-sm); color: var(--color-text); }
 
 /* v7 M17: setup wizard */
 .setup-screen { display: flex; align-items: center; justify-content: center; min-height: 90vh; }
@@ -537,31 +571,31 @@ input, textarea, select { font-size: var(--fs-body); }
 .setup-progress { color: var(--color-muted); font-size: var(--fs-xs); }
 .setup-hint { color: var(--color-muted); font-size: var(--fs-sm); margin: 0; }
 .setup-box label { display: flex; flex-direction: column; gap: 0.3rem; font-size: var(--fs-sm); color: var(--color-muted); }
-.setup-box input { padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: 5px; background: var(--color-surface); color: var(--color-text); }
+.setup-box input { padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-surface); color: var(--color-text); }
 .setup-ok { color: var(--color-ok); font-size: var(--fs-sm); }
 .setup-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); }
-.setup-actions button { padding: var(--space-2) 0.9rem; border: 1px solid var(--color-border-strong); border-radius: 5px; background: var(--color-surface); color: var(--color-text); cursor: pointer; }
+.setup-actions button { padding: var(--space-2) 0.9rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-surface); color: var(--color-text); cursor: pointer; }
 .setup-primary { background: var(--color-primary) !important; color: var(--color-primary-contrast); border-color: var(--color-primary) !important; margin-left: auto; }
 .setup-actions button:disabled { opacity: 0.5; cursor: default; }
 
 /* v7 M18a: unified agent page */
 .agent-page-head { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
-.badge-on { background: var(--color-ok-bg); color: var(--color-ok); padding: 0.15rem 0.5rem; border-radius: 10px; font-size: var(--fs-xs); }
-.badge-off { background: var(--color-neutral-bg); color: var(--color-subtle); padding: 0.15rem 0.5rem; border-radius: 10px; font-size: var(--fs-xs); }
+.badge-on { background: var(--color-ok-bg); color: var(--color-ok); padding: 0.15rem 0.5rem; border-radius: var(--radius-pill); font-size: var(--fs-xs); }
+.badge-off { background: var(--color-neutral-bg); color: var(--color-subtle); padding: 0.15rem 0.5rem; border-radius: var(--radius-pill); font-size: var(--fs-xs); }
 /* v30: trust-mode badge — accent = autonomous (free to act), warn = guarded (waits for review) */
-.badge-trust-auto { background: var(--color-accent-bg); color: var(--color-accent); padding: 0.15rem 0.5rem; border-radius: 10px; font-size: var(--fs-xs); }
-.badge-trust-guarded { background: var(--color-warn-bg); color: var(--color-warn); padding: 0.15rem 0.5rem; border-radius: 10px; font-size: var(--fs-xs); }
+.badge-trust-auto { background: var(--color-accent-bg); color: var(--color-accent); padding: 0.15rem 0.5rem; border-radius: var(--radius-pill); font-size: var(--fs-xs); }
+.badge-trust-guarded { background: var(--color-warn-bg); color: var(--color-warn); padding: 0.15rem 0.5rem; border-radius: var(--radius-pill); font-size: var(--fs-xs); }
 .agent-pending { color: var(--color-warn); font-size: var(--fs-sm); }
 .agent-tabs { display: flex; gap: var(--space-2); margin: var(--space-4) 0; border-bottom: 1px solid var(--color-border-soft); }
 .agent-tabs button { background: none; border: none; padding: var(--space-2) var(--space-3); cursor: pointer; color: var(--color-muted); border-bottom: 2px solid transparent; transition: color var(--motion-fast), border-color var(--motion-fast); }
 .agent-tabs button.tab-active { color: var(--color-text); border-bottom-color: var(--color-primary); font-weight: 600; }
 .agent-runs { font-size: var(--fs-sm); color: var(--color-muted); }
 .telegram-tab label { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: var(--space-3); font-size: var(--fs-sm); color: var(--color-muted); }
-.telegram-tab input { padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: 5px; background: var(--color-surface); color: var(--color-text); }
+.telegram-tab input { padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-surface); color: var(--color-text); }
 .telegram-chats { list-style: none; padding: 0; display: flex; gap: 0.4rem; flex-wrap: wrap; }
-.telegram-chats button { padding: 0.3rem 0.6rem; border: 1px solid var(--color-border-strong); border-radius: 5px; background: var(--color-bg-faint); color: var(--color-text); cursor: pointer; font-size: var(--fs-sm); }
+.telegram-chats button { padding: 0.3rem 0.6rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-bg-faint); color: var(--color-text); cursor: pointer; font-size: var(--fs-sm); }
 .agent-actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); flex-wrap: wrap; align-items: center; }
-.agent-actions button { padding: var(--space-2) 0.9rem; border: 1px solid var(--color-border-strong); border-radius: 5px; background: var(--color-surface); color: var(--color-text); cursor: pointer; }
+.agent-actions button { padding: var(--space-2) 0.9rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-surface); color: var(--color-text); cursor: pointer; }
 
 /* v7 M19: company docs library — selected item in the list (had .active class, no style). */
 .company-docs-list { list-style: none; padding: 0; }
@@ -650,7 +684,7 @@ input, textarea, select { font-size: var(--fs-body); }
 }
 .staff-template-card {
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 0.75rem;
   display: flex;
   flex-direction: column;
@@ -664,7 +698,7 @@ input, textarea, select { font-size: var(--fs-body); }
 .crew-banner {
   border: 1px solid var(--color-border);
   border-left: 4px solid var(--color-accent);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 0.75rem 1rem;
   margin: 0.75rem 0;
 }
@@ -688,7 +722,7 @@ input, textarea, select { font-size: var(--fs-body); }
 }
 .connection-card {
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 0.85rem 1rem;
   background: var(--color-bg);
 }
@@ -710,8 +744,8 @@ input, textarea, select { font-size: var(--fs-body); }
   align-items: center;
   justify-content: space-between;
   gap: 0.8rem;
-  border: 1px solid var(--color-warn-solid, #f59e0b);
-  border-radius: 8px;
+  border: 1px solid var(--color-warn); /* v53: was phantom --color-warn-solid → literal */
+  border-radius: var(--radius-lg);
   padding: 0.6rem 0.9rem;
   margin: 0.6rem 0;
 }
