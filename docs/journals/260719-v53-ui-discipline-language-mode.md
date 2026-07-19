@@ -22,8 +22,12 @@ Audit lộ App.css 767 dòng xếp theo niên đại → drift: 8 kiểu button 
 - Test-fix hàng loạt do thiếu provider (47 fail một lúc) — `test-utils.AppProviders` là chỗ thêm provider mới, các test wrap tay phải theo.
 - Subagent bắt được premise sai của controller (`.advanced-bar` không phải h2+actions) và xử lý theo intent — prompt nên nói mục tiêu, không chỉ cơ chế.
 
+## Nợ đã giải quyết (cùng ngày)
+
+- UAT đầy đủ trên **server live** (fleet thật, kết nối thật): 8/8 PASS — VN/EN × low/high × dark, formatCost 0-vi-phạm trên 81 giá trị thật, danger token đảo dark đúng, ranh giới data-vs-layout kiểm nghiệm (clarify options / workroom title / agent display-name vẫn VN là ĐÚNG). Report `uat-260719-1049-*`.
+- **Nợ nút hành động**: 9 call-site (setup/agent-actions/telegram/login) → `<Button>`, xóa 4 nhóm element-selector rule; chỉ còn 8 raw button = picker/segmented cố tình giữ (agent-tabs, list pickers, theme toggle).
+- **Nợ dead code**: xóa `Approvals.tsx` (không route — Work.tsx là màn duyệt thật); ops.test.tsx giữ (test cả Config sống), chỉ cắt 2 test Approvals.
+
 ## Còn treo
 
-- 12 nút raw styled qua container-selector (setup/agent-actions/login…) — unify pass sau (đã comment trong code).
-- `Approvals.tsx` dead code (không còn route) — dọn đợt sau.
-- CEO restart web live để nạp bundle mới + mắt thường soát EN mode 1 vòng.
+- CEO restart web live để nạp bundle mới; 9→11 commit chưa push (v53 xứng 0.3.0).
