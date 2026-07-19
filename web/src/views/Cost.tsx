@@ -4,6 +4,8 @@ import { CostChart } from '../components/charts/CostChart'
 import { api } from '../api/client'
 import { useAgentData } from '../hooks/use-agent-data'
 import { useTheme } from '../theme-context'
+import { EmptyState } from '../components/ui/empty-state'
+import { formatCost } from '../labels'
 import type { CostPayload } from '../types'
 
 export function Cost() {
@@ -19,12 +21,12 @@ export function Cost() {
     <section>
       <h2>Chi phí so với ngân sách</h2>
       <p>
-        Tháng này: <strong>${data.spent_this_month.toFixed(4)}</strong> trên hạn mức $
-        {data.cap.toFixed(2)} ({(ratio * 100).toFixed(0)}%
+        Tháng này: <strong>{formatCost(data.spent_this_month)}</strong> trên hạn mức{' '}
+        {formatCost(data.cap)} ({(ratio * 100).toFixed(0)}%
         {ratio >= data.warn_ratio ? ' ⚠️' : ''})
       </p>
       {data.series.length === 0 ? (
-        <p>Chưa có lịch sử chi phí.</p>
+        <EmptyState>Chưa có lịch sử chi phí.</EmptyState>
       ) : (
         <CostChart key={resolved} series={data.series} cap={data.cap} />
       )}

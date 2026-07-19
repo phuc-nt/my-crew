@@ -5,11 +5,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { api } from '../api/client'
+import { EmptyState } from '../components/ui/empty-state'
+import { formatCost } from '../labels'
 import type { CaptureRow } from '../types'
 
 function fmtCost(row: CaptureRow): string {
   if (row.cost_usd == null) return '—'
-  return `$${row.cost_usd.toFixed(4)} (${row.cost_source || '?'})`
+  return `${formatCost(row.cost_usd)} (${row.cost_source || '?'})`
 }
 
 function fmtTokens(row: CaptureRow): string {
@@ -56,7 +58,7 @@ export function Captures() {
         />
       </div>
       {rows.length === 0 ? (
-        <p className="ops-chat-empty">Chưa có capture nào khớp bộ lọc.</p>
+        <EmptyState>Chưa có capture nào khớp bộ lọc.</EmptyState>
       ) : (
         <table className="captures-table">
           <thead>

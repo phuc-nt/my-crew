@@ -4,6 +4,7 @@
 // red-team M1). Click opens the full-markdown ArtifactViewer.
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
+import { EmptyState } from '../../components/ui/empty-state'
 import type { OfficeMessage, RoomArtifactsPayload } from '../../types'
 import { ArtifactViewer } from './artifact-viewer'
 
@@ -36,7 +37,7 @@ export function ArtifactPanel({ activeRoom, roomMessages }: ArtifactPanelProps) 
       <aside className="office-artifacts" aria-label="Kết quả">
         <p className="office-zone-title">Kết quả</p>
         <div className="office-artifacts-body">
-          <p className="ops-chat-empty">Chọn một phòng việc để xem kết quả bàn giao.</p>
+          <EmptyState>Chọn một phòng việc để xem kết quả bàn giao.</EmptyState>
         </div>
       </aside>
     )
@@ -54,7 +55,7 @@ export function ArtifactPanel({ activeRoom, roomMessages }: ArtifactPanelProps) 
     <aside className="office-artifacts" aria-label="Kết quả">
       <p className="office-zone-title">Kết quả</p>
       <div className="office-artifacts-body">
-      {!hasAny && <p className="ops-chat-empty">Chưa có bàn giao nào trong phòng này.</p>}
+      {!hasAny && <EmptyState>Chưa có bàn giao nào trong phòng này.</EmptyState>}
       {tasks.map((t) => t.delivered.length > 0 && (
         <section key={t.task_id} className="artifact-task">
           <h4 title={t.title}>

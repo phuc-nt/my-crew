@@ -3,11 +3,8 @@
 // be null (dry-run) → rendered as "—".
 import { useState } from 'react'
 import { api } from '../api/client'
+import { formatCost } from '../labels'
 import type { TeamTaskCostPayload } from '../types'
-
-function fmtCost(c?: number | null): string {
-  return c == null ? '—' : `$${c.toFixed(4)}`
-}
 
 export function TeamTaskCost({ taskId }: { taskId: string }) {
   const [open, setOpen] = useState(false)
@@ -39,7 +36,7 @@ export function TeamTaskCost({ taskId }: { taskId: string }) {
       {open && data && (
         <div className="team-task-cost-body">
           <p className="muted">
-            Tổng: <strong>{fmtCost(data.total_cost_usd)}</strong> ·{' '}
+            Tổng: <strong>{formatCost(data.total_cost_usd)}</strong> ·{' '}
             {data.total_input_tokens + data.total_output_tokens} token
           </p>
           {data.steps.length === 0 ? (
@@ -59,7 +56,7 @@ export function TeamTaskCost({ taskId }: { taskId: string }) {
                   <tr key={`${s.step_id}-${i}`}>
                     <td>{s.step_id}</td>
                     <td>{s.engine}</td>
-                    <td>{fmtCost(s.cost_usd)}</td>
+                    <td>{formatCost(s.cost_usd)}</td>
                     <td>
                       {s.input_tokens ?? 0}/{s.output_tokens ?? 0}
                     </td>

@@ -3,6 +3,7 @@
 // through chat (needs the confirm dialogue). Consumes /api/tasks.
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { EmptyState } from '../components/ui/empty-state'
 import type { AgentTasks, AssignedTask } from '../types'
 
 const STATUS_LABEL: Record<AssignedTask['status'], string> = {
@@ -57,7 +58,7 @@ export function Tasks() {
     return (
       <section>
         <h2>Việc đã giao</h2>
-        <p>Chưa có việc nào được giao. Giao việc qua khung Trợ lý (chat).</p>
+        <EmptyState>Chưa có việc nào được giao. Giao việc qua khung Trợ lý (chat).</EmptyState>
       </section>
     )
 

@@ -5,6 +5,7 @@
 import { useCallback, useState } from 'react'
 import { api } from '../api/client'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { EmptyState } from '../components/ui/empty-state'
 import { formatDateTime } from '../labels'
 import { useAutoApproved } from '../hooks/use-auto-approved'
 import { type AgentApproval, usePendingApprovals } from '../hooks/use-pending-approvals'
@@ -53,7 +54,7 @@ export function Work() {
         {loading ? (
           <p>Đang tải…</p>
         ) : items.length === 0 ? (
-          <p className="muted">Không có việc nào chờ duyệt. 🎉</p>
+          <EmptyState>Không có việc nào chờ duyệt. 🎉</EmptyState>
         ) : (
           <ul className="approval-list">
             {items.map((it) => (

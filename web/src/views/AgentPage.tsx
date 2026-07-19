@@ -5,7 +5,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { ApiError, api } from '../api/client'
-import { KIND_LABEL, RUN_STATUS_LABEL, formatDateTime, labelFor } from '../labels'
+import { EmptyState } from '../components/ui/empty-state'
+import { KIND_LABEL, RUN_STATUS_LABEL, formatCost, formatDateTime, labelFor } from '../labels'
 import type { AgentStatus, CostPayload, RunsPayload } from '../types'
 import { KnowledgeTab } from './AgentKnowledgeTab'
 
@@ -109,10 +110,10 @@ function ActivityTab({ id, status }: { id: string; status: AgentStatus }) {
     <div>
       <p>
         Chi phí tháng này:{' '}
-        <strong>${cost ? cost.spent_this_month.toFixed(4) : '…'}</strong>
+        <strong>{cost ? formatCost(cost.spent_this_month) : '…'}</strong>
         {cost && cost.cap > 0 && (
           <>
-            {' '}/ ${cost.cap.toFixed(2)} ({(ratio * 100).toFixed(0)}%
+            {' '}/ {formatCost(cost.cap)} ({(ratio * 100).toFixed(0)}%
             {ratio >= (cost.warn_ratio ?? 0.8) ? ' ⚠️' : ''})
           </>
         )}
@@ -125,7 +126,7 @@ function ActivityTab({ id, status }: { id: string; status: AgentStatus }) {
       </p>
       <h4>Lịch sử chạy</h4>
       {!runs || runs.runs.length === 0 ? (
-        <p className="muted">Chưa có lần chạy nào.</p>
+        <EmptyState>Chưa có lần chạy nào.</EmptyState>
       ) : (
         <ul className="agent-runs">
           {runs.runs.slice(0, 10).map((r, i) => (

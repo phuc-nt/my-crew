@@ -1,13 +1,14 @@
 // Overview: the agent list (replaces the htmx index). Renders id/name/enabled + last-run
 // status from /api/agents. The first end-to-end proof: FastAPI static → React → /api/agents.
 import { useAgent } from '../agent-context'
+import { EmptyState } from '../components/ui/empty-state'
 import { KIND_LABEL, RUN_STATUS_LABEL, labelFor } from '../labels'
 
 export function Overview() {
   const { agents, loading, error } = useAgent()
   if (loading) return <p>Đang tải…</p>
   if (error) return <p className="error">Lỗi: {error}</p>
-  if (agents.length === 0) return <p>Chưa có nhân sự ảo nào.</p>
+  if (agents.length === 0) return <EmptyState>Chưa có nhân sự ảo nào.</EmptyState>
 
   return (
     <section>

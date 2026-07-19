@@ -85,7 +85,7 @@ function CompanyDocsPicker({ id }: { id: string }) {
 
   return (
     <section className="company-docs-picker">
-      <h4>Tài liệu công ty</h4>
+      <h3>Tài liệu công ty</h3>
       {docs.length === 0 ? (
         <p className="muted">
           Chưa có tài liệu nào trong kho. Thêm ở mục Tài liệu công ty (trong Đội) rồi tick cho agent tại đây.
@@ -169,7 +169,7 @@ function KnowledgeDoc({ id, doc, title }: { id: string; doc: 'soul' | 'project';
 
   return (
     <section className="knowledge-doc">
-      <h4>{title}</h4>
+      <h3>{title}</h3>
       {data.raw_mode ? (
         <>
           <p className="muted">
@@ -270,7 +270,7 @@ function SkillsPicker({ id }: { id: string }) {
 
   return (
     <section className="skills-picker">
-      <h4>Kỹ năng</h4>
+      <h3>Kỹ năng</h3>
       {data.skills.length === 0 ? (
         <p className="muted">Domain này chưa có kỹ năng nào.</p>
       ) : (

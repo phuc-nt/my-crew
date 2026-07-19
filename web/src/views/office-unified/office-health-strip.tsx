@@ -6,6 +6,7 @@
 // strip is the maintainer's steady-state readout, not a replacement.
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
+import { formatCost } from '../../labels'
 import type { CoordinatorHealthPayload, FleetBudgetPayload, IntegrationCheck } from '../../types'
 
 const POLL_MS = 30_000
@@ -40,10 +41,10 @@ export function OfficeHealthStrip() {
         <span
           className={budget.ratio >= 0.8 ? 'health-chip health-bad' : 'health-chip health-ok'}
           title={budget.agents
-            .map((a) => `${a.agent_id}: $${a.spent_usd.toFixed(2)}/$${a.cap_usd.toFixed(0)}`)
+            .map((a) => `${a.agent_id}: ${formatCost(a.spent_usd)}/${formatCost(a.cap_usd)}`)
             .join(' · ')}
         >
-          💰 ${budget.total_spent_usd.toFixed(2)}/${budget.total_cap_usd.toFixed(0)}
+          💰 {formatCost(budget.total_spent_usd)}/{formatCost(budget.total_cap_usd)}
         </span>
       )}
       {failing.map((c) => (

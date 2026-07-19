@@ -7,8 +7,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { ApiError, api } from '../api/client'
 import { IntegrationHealthPanel } from '../components/IntegrationHealthPanel'
+import { EmptyState } from '../components/ui/empty-state'
 import { CoordinatorHealthBanner } from './office-unified/coordinator-health-banner'
-import { KIND_LABEL, RUN_STATUS_LABEL, labelFor } from '../labels'
+import { KIND_LABEL, RUN_STATUS_LABEL, formatCost, labelFor } from '../labels'
 import { useUiMode } from '../ui-mode-context'
 import type {
   AgentStatus,
@@ -278,7 +279,7 @@ export function Team() {
       {error && <p className="error">Lỗi: {error}</p>}
       {!loading && !error && agents.length === 0 && (
         <div className="team-empty-hero">
-          <p className="muted">Chưa có nhân sự nào.</p>
+          <EmptyState>Chưa có nhân sự nào.</EmptyState>
           <p>
             <Link to="/create" className="btn-link">
               ⚡ Tạo cả đội mẫu trong một lần
@@ -338,7 +339,7 @@ export function Team() {
                     <div className="budget-cell">
                       <span>
                         {status
-                          ? `$${status.budget.spent.toFixed(2)} / $${status.budget.cap.toFixed(2)}`
+                          ? `${formatCost(status.budget.spent)} / ${formatCost(status.budget.cap)}`
                           : '…'}
                       </span>
                       {isHigh && status && (
@@ -444,7 +445,7 @@ export function Team() {
               Sẽ áp: <strong>{Object.keys(upgradePreview.preview.apply).join(', ')}</strong>.
             </p>
           ) : (
-            <p>Không có mục nào cần áp (bạn đã tự chỉnh hoặc đã mới nhất).</p>
+            <EmptyState>Không có mục nào cần áp (bạn đã tự chỉnh hoặc đã mới nhất).</EmptyState>
           )}
           {upgradePreview.preview.keep.length > 0 && (
             <p className="muted">

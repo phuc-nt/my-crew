@@ -45,7 +45,7 @@ test('renders agent identity and activity', async () => {
   await waitFor(() => expect(screen.getByText(/ACME PM/)).toBeInTheDocument())
   expect(screen.getByText('đang bật')).toBeInTheDocument()
   expect(screen.getByText('tự chủ')).toBeInTheDocument()
-  await waitFor(() => expect(screen.getByText(/\$1.5000/)).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText(/\$1\.50/)).toBeInTheDocument())
 })
 
 test('shows the guarded badge when the agent is pinned guarded', async () => {

@@ -1,6 +1,7 @@
 // 2D fallback for the 3D office scene: a plain table (agent / trạng thái / công việc), rendered
 // instead of the Canvas when prefers-reduced-motion is set or the UA looks mobile (see
 // use-3d-fallback.ts). No animation — just the same derived desk-state map as a static list.
+import { EmptyState } from '../../components/ui/empty-state'
 import type { AgentDeskState, AgentState } from './agent-office-state'
 
 const STATE_LABEL: Record<AgentState, string> = {
@@ -41,7 +42,7 @@ export function AgentStatusTable({
         vì sơ đồ 3D.
       </p>
       {agentIds.length === 0 ? (
-        <p className="ops-chat-empty">Chưa có nhân sự nào xuất hiện trong dòng sự kiện.</p>
+        <EmptyState>Chưa có nhân sự nào xuất hiện trong dòng sự kiện.</EmptyState>
       ) : (
         <table className="office-3d-fallback-table">
           <thead>

@@ -3,6 +3,7 @@
 // strip. Colors ride the role-split tokens via CSS classes (no new hex here).
 // Receives messages as props — the unified screen owns the stream(s).
 import { useEffect, useRef } from 'react'
+import { EmptyState } from '../../components/ui/empty-state'
 import type { OfficeMessage } from '../../types'
 import { agentColor } from '../office-3d/desk-colors'
 import { KIND_LABEL, messageLine } from '../office-shared/office-message-line'
@@ -50,9 +51,7 @@ export function ActivityFeed({ messages, connected, errored }: ActivityFeedProps
       <p className="office-zone-title">
         {errored ? 'Mất kết nối luồng — thử tải lại trang.' : connected ? 'Hoạt động trực tiếp' : 'Đang kết nối…'}
       </p>
-      {tail.length === 0 && !errored && (
-        <p className="ops-chat-empty">Chưa có hoạt động nào.</p>
-      )}
+      {tail.length === 0 && !errored && <EmptyState>Chưa có hoạt động nào.</EmptyState>}
       <ul className="office-room-log office-unified-log" ref={listRef}>
         {tail.map((m) => {
           const who = m.body.assigned_to ?? m.author

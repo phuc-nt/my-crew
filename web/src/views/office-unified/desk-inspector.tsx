@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../../api/client'
+import { formatCost } from '../../labels'
 import type { AgentDeskState } from '../office-3d/agent-office-state'
 import { deskTooltipText } from '../office-3d/agent-desk'
 import type { AgentStatus, TeamTaskCostPayload } from '../../types'
@@ -44,8 +45,8 @@ export function DeskInspector({ agentId, desk, onClose }: DeskInspectorProps) {
       {desk && <p>{deskTooltipText(desk)}{desk.phase ? ` · pha: ${desk.phase}` : ''}</p>}
       {status && (
         <p className="muted">
-          {status.trust_mode === 'guarded' ? 'guarded' : 'autonomous'} · ngân sách tháng: $
-          {status.budget.spent.toFixed(2)} / ${status.budget.cap.toFixed(0)}
+          {status.trust_mode === 'guarded' ? 'guarded' : 'autonomous'} · ngân sách tháng:{' '}
+          {formatCost(status.budget.spent)} / {formatCost(status.budget.cap)}
         </p>
       )}
       {picTask && (
@@ -56,7 +57,7 @@ export function DeskInspector({ agentId, desk, onClose }: DeskInspectorProps) {
           </p>
           {cost && (
             <p>
-              Chi phí việc này: ${cost.total_cost_usd.toFixed(4)} ({cost.steps.length} bước)
+              Chi phí việc này: {formatCost(cost.total_cost_usd)} ({cost.steps.length} bước)
             </p>
           )}
         </div>

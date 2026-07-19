@@ -5,6 +5,7 @@
 // /api/company/activity which projects to a server-side allowlist.
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { EmptyState } from '../components/ui/empty-state'
 import type { CompanyActivityItem, CompanyActivityPayload } from '../types'
 
 const PAGE = 50
@@ -119,7 +120,7 @@ export function CompanyActivity() {
       {loading && <p>Đang tải…</p>}
       {error && <p className="error">Lỗi: {error}</p>}
       {!loading && !error && items.length === 0 && (
-        <p>Chưa có hoạt động nào trong khoảng thời gian này.</p>
+        <EmptyState>Chưa có hoạt động nào trong khoảng thời gian này.</EmptyState>
       )}
       {(data?.skipped.length ?? 0) > 0 && (
         <p className="error">Không đọc được dữ liệu của: {data?.skipped.join(', ')}</p>

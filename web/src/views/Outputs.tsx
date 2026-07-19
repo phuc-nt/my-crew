@@ -5,12 +5,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../api/client'
+import { EmptyState } from '../components/ui/empty-state'
+import { formatDateTime } from '../labels'
 import { ArtifactViewer } from './office-unified/artifact-viewer'
 import type { OutputItem } from '../types'
 
 function fmtTs(ts: string): string {
-  const d = new Date(ts)
-  return Number.isNaN(d.getTime()) ? ts : d.toLocaleString('vi-VN')
+  return formatDateTime(ts) || ts
 }
 
 export function Outputs() {
@@ -77,7 +78,7 @@ export function Outputs() {
       {loading && <p className="muted">Đang tải…</p>}
       {error && <p className="error">{error}</p>}
       {!loading && !error && items.length === 0 && (
-        <p className="muted">Chưa có kết quả nào. Giao việc cho đội ở Văn phòng trước đã.</p>
+        <EmptyState>Chưa có kết quả nào. Giao việc cho đội ở Văn phòng trước đã.</EmptyState>
       )}
 
       <ul className="outputs-list">

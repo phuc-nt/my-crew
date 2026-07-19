@@ -6,6 +6,7 @@ import { useCallback, useState } from 'react'
 import { useAgent } from '../agent-context'
 import { summarizeAction } from '../action-summary'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { EmptyState } from '../components/ui/empty-state'
 import { api } from '../api/client'
 import { formatDateTime } from '../labels'
 import { useAgentData } from '../hooks/use-agent-data'
@@ -44,7 +45,7 @@ export function Approvals() {
       <h2>Việc chờ duyệt</h2>
       {opError && <p className="error">Lỗi: {opError}</p>}
       {rows.length === 0 ? (
-        <p className="muted">Không có việc nào chờ duyệt.</p>
+        <EmptyState>Không có việc nào chờ duyệt.</EmptyState>
       ) : (
         <table className="proposals-table">
           <thead>

@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { api } from '../api/client'
+import { EmptyState } from '../components/ui/empty-state'
 import { useSharedPendingApprovals } from '../pending-approvals-context'
 
 interface Turn {
@@ -116,10 +117,10 @@ export function Chat() {
       )}
       <div className="ops-chat-log">
         {turns.length === 0 && (
-          <p className="ops-chat-empty">
+          <EmptyState>
             Ví dụ: “đội mình đang có mấy agent, tốn bao nhiêu?” hoặc “tạo agent mã sales-pm,
             vai trò quản lý dự án”.
-          </p>
+          </EmptyState>
         )}
         {turns.map((t, i) => (
           <div key={i} className={`ops-chat-turn ops-chat-${t.who}`}>

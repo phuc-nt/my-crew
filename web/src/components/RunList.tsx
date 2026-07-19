@@ -1,5 +1,5 @@
 // Run history list (newest-first, allowlisted run-events from /api/runs). Status-styled.
-import { AUDIENCE_LABEL, KIND_LABEL, RUN_STATUS_LABEL, formatDateTime, labelFor } from '../labels'
+import { AUDIENCE_LABEL, KIND_LABEL, RUN_STATUS_LABEL, formatCost, formatDateTime, labelFor } from '../labels'
 import type { RunEvent } from '../types'
 
 export function RunList({ runs }: { runs: RunEvent[] }) {
@@ -24,7 +24,7 @@ export function RunList({ runs }: { runs: RunEvent[] }) {
             <td>{labelFor(KIND_LABEL, r.kind)}</td>
             <td>{labelFor(AUDIENCE_LABEL, r.audience)}</td>
             <td className={`status status-${r.status}`}>{labelFor(RUN_STATUS_LABEL, r.status)}</td>
-            <td>{r.cost_usd != null ? `$${r.cost_usd.toFixed(4)}` : '—'}</td>
+            <td>{formatCost(r.cost_usd)}</td>
             <td>{r.delivered ? '✓' : '—'}</td>
           </tr>
         ))}

@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { api } from '../api/client'
+import { EmptyState } from '../components/ui/empty-state'
 import { useOfficeStream } from '../hooks/use-office-stream'
 // v15: line rendering shared with the unified office screen's activity feed — one
 // vocabulary, one place to extend (see office-shared/office-message-line.ts).
@@ -68,7 +69,7 @@ export function OfficeRoom() {
             {errored ? 'Mất kết nối luồng — thử tải lại trang.' : connected ? 'Đang theo dõi trực tiếp' : 'Đang kết nối…'}
           </p>
           {messages.length === 0 && !errored && (
-            <p className="ops-chat-empty">Chưa có hoạt động nào trong phòng này.</p>
+            <EmptyState>Chưa có hoạt động nào trong phòng này.</EmptyState>
           )}
           <ul className="office-room-log">
             {messages.map((m) => (
