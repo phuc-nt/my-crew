@@ -17,6 +17,7 @@ import { useUiMode } from '../../ui-mode-context'
 import { useOfficeStream } from '../../hooks/use-office-stream'
 import { useSharedPendingApprovals } from '../../pending-approvals-context'
 import { agentIdsInOrder, deriveAgentDesks, derivePendingCounts } from '../office-3d/agent-office-state'
+import { maxSeqOf } from './artifact-panel'
 import { AgentStatusTable } from '../office-3d/agent-status-table'
 import { OfficeCanvas } from '../office-3d/office-canvas'
 import { use3dFallback } from '../office-3d/use-3d-fallback'
@@ -167,6 +168,30 @@ export function OfficeUnified() {
   // different room's stream never lingers behind a new selection.
   const [reviewSelected, setReviewSelected] = useState<OfficeMessage | null>(null)
   useEffect(() => { setReviewSelected(null) }, [activeRoom])
+
+  // v55: the right column is tabbed [Phòng việc | Kết quả] so results are one click away
+  // instead of buried under the rooms list. A ● dot marks a handoff that landed LIVE while
+  // the results tab wasn't open.
+  //
+  // Baseline = the handoff seq this room already had when it was opened, captured DURING
+  // RENDER and keyed by room id. Two earlier attempts failed live UAT: a `prev.seq > 0`
+  // guard swallowed the first handoff of a brand-new room (its baseline is legitimately
+  // 0), and moving the bookkeeping into the effect never armed at all — the effect only
+  // re-runs when the handoff seq changes, so a room opened at 0 kept re-recording 0 as an
+  // un-settled baseline. Capturing at render time makes the baseline exist before any
+  // handoff can arrive, so `signal > baseline` is exactly "delivered while I was watching".
+  const [sideTab, setSideTab] = useState<'rooms' | 'results'>('rooms')
+  const [resultsDot, setResultsDot] = useState(false)
+  const artifactSignal = maxSeqOf(room.messages, ['handoff'])
+  const baseline = useRef<{ room: string | null; seq: number }>({ room: null, seq: -1 })
+  if (baseline.current.room !== activeRoom) {
+    baseline.current = { room: activeRoom, seq: artifactSignal }
+  }
+  useEffect(() => {
+    if (artifactSignal > baseline.current.seq && sideTab !== 'results') setResultsDot(true)
+  }, [artifactSignal, sideTab])
+  useEffect(() => { setResultsDot(false) }, [activeRoom]) // new room = new baseline
+  useEffect(() => { if (sideTab === 'results') setResultsDot(false) }, [sideTab])
   // v32 desk click: a PIC desk opens its task's workroom (room id = task id for a
   // standalone task; a child task's events mirror into its parent room via room_for_task
   // server-side, so the task id is still the room the FEED knows). A desk with no PIC
@@ -223,8 +248,12 @@ export function OfficeUnified() {
         </details>
       </div>
 
-      {/* v54 layout A: rail trái (LÀM) — mobile DOM order puts this first so blocking
-          items stack above the canvas/feed on narrow screens. */}
+      {/* v55 layout B: the composer sits directly under the header — giao việc is the
+          first thing the CEO can do, on desktop AND in the mobile stack (DOM order). */}
+      <AssignComposer activeRoom={activeRoom} onTaskCreated={(taskId) => selectRoom(taskId)} />
+
+      {/* v54 layout A: rail trái (LÀM) — mobile DOM order puts this above the canvas/feed
+          so blocking items stay first on narrow screens. */}
       <ActionRail clarifyQuestions={clarifyQuestions} onClarifyAnswered={loadClarify} />
 
       {/* center column (XEM): 3D canvas + live feed of the selected room. */}
@@ -251,19 +280,45 @@ export function OfficeUnified() {
         />
       </div>
 
-      {/* right column (TRA): phòng việc list + kết quả/artifacts, stacked. */}
+      {/* right column (TRA), v55: tabbed [Phòng việc | Kết quả] — each tab gets the
+          whole column height (cockpit shell scrolls .office-side-body internally). An
+          open review tray takes over the column; closing it returns to the tabs. */}
       <div className="office-unified-side">
-        <WorkroomList
-          rooms={rooms} activeRoom={activeRoom} onSelect={selectRoom}
-          needsShellRooms={needsShellRooms}
-        />
-        <ArtifactPanel activeRoom={activeRoom} roomMessages={room.messages} />
-        {reviewSelected && (
+        {reviewSelected ? (
           <ReviewDetailTray message={reviewSelected} taskId={activeRoom} onClose={() => setReviewSelected(null)} />
+        ) : (
+          <>
+            <div className="office-side-tabs" role="tablist">
+              <Button
+                variant="chip"
+                className={sideTab === 'rooms' ? 'chip-active' : undefined}
+                onClick={() => setSideTab('rooms')}
+              >
+                {t('officeSide.tabRooms')}
+              </Button>
+              <Button
+                variant="chip"
+                className={sideTab === 'results' ? 'chip-active' : undefined}
+                onClick={() => setSideTab('results')}
+              >
+                {t('officeSide.tabResults')}
+                {resultsDot ? <span className="office-side-badge">●</span> : null}
+              </Button>
+            </div>
+            <div className="office-side-body">
+              {sideTab === 'rooms' ? (
+                <WorkroomList
+                  rooms={rooms} activeRoom={activeRoom} onSelect={selectRoom}
+                  needsShellRooms={needsShellRooms}
+                />
+              ) : (
+                <ArtifactPanel activeRoom={activeRoom} roomMessages={room.messages} />
+              )}
+            </div>
+          </>
         )}
       </div>
 
-      <AssignComposer activeRoom={activeRoom} onTaskCreated={(taskId) => selectRoom(taskId)} />
       {isHigh && inspectorAgent && (
         <DeskInspector
           agentId={inspectorAgent}

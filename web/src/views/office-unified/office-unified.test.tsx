@@ -125,6 +125,80 @@ test('v54 layout A: renders the left action rail alongside the canvas/feed cente
   expect(screen.getAllByText(DICT.vi['agentStatusTable.empty']).length).toBeGreaterThan(0)
 })
 
+test('v55: right column tabs — Kết quả tab swaps the rooms list for the artifact panel', () => {
+  stubReducedMotion(true)
+  mockStream([])
+  renderOffice()
+  // Rooms tab is the default: its search box is present, the artifact hint is not.
+  expect(screen.getByPlaceholderText(DICT.vi['workroomList.searchPlaceholder'])).toBeInTheDocument()
+  expect(screen.queryByText(DICT.vi['artifactPanel.selectRoomHint'])).toBeNull()
+  fireEvent.click(screen.getByText(DICT.vi['officeSide.tabResults']))
+  // No room selected → the panel's pick-a-room hint; the rooms search box is gone.
+  expect(screen.getByText(DICT.vi['artifactPanel.selectRoomHint'])).toBeInTheDocument()
+  expect(screen.queryByPlaceholderText(DICT.vi['workroomList.searchPlaceholder'])).toBeNull()
+})
+
+test('v55: a live handoff dots the Kết quả tab, but loading a room\'s history does not', () => {
+  stubReducedMotion(true)
+  const handoff = (seq: number): OfficeMessage => ({
+    seq, ts: 't', author: 'noi-dung', kind: 'handoff',
+    body: { task_title: 'Demo', step_title: 'soạn', message: 'xong', assigned_to: 'noi-dung' },
+  })
+  // First render = the room's existing history (2 handoffs already delivered): no dot.
+  mockStream([handoff(1), handoff(2)])
+  const { rerender } = renderOffice()
+  const dot = () => document.querySelector('.office-side-badge')
+  expect(dot()).toBeNull()
+  // A NEW handoff arrives on the same room's stream → the tab flags it.
+  mockStream([handoff(1), handoff(2), handoff(3)])
+  rerender(
+    <MemoryRouter>
+      <LanguageProvider>
+        <UiModeProvider>
+          <PendingApprovalsProvider>
+            <OfficeUnified />
+          </PendingApprovalsProvider>
+        </UiModeProvider>
+      </LanguageProvider>
+    </MemoryRouter>,
+  )
+  expect(dot()).not.toBeNull()
+  // Opening the tab clears it.
+  fireEvent.click(screen.getByText(DICT.vi['officeSide.tabResults']))
+  expect(dot()).toBeNull()
+})
+
+test('v55: the FIRST handoff of a brand-new room dots the tab (baseline 0 is legitimate)', () => {
+  stubReducedMotion(true)
+  const step: OfficeMessage = {
+    seq: 1, ts: 't', author: 'coordinator', kind: 'step_status',
+    body: { task_title: 'Demo', step_title: 'soạn', status: 'started', assigned_to: 'noi-dung' },
+  }
+  const handoff: OfficeMessage = {
+    seq: 2, ts: 't', author: 'noi-dung', kind: 'handoff',
+    body: { task_title: 'Demo', step_title: 'soạn', message: 'xong', assigned_to: 'noi-dung' },
+  }
+  // A room the CEO just created: no handoff yet, only progress events.
+  mockStream([step])
+  const { rerender } = renderOffice()
+  const dot = () => document.querySelector('.office-side-badge')
+  expect(dot()).toBeNull()
+  // Its very first delivery arrives live — this is exactly what live UAT found swallowed.
+  mockStream([step, handoff])
+  rerender(
+    <MemoryRouter>
+      <LanguageProvider>
+        <UiModeProvider>
+          <PendingApprovalsProvider>
+            <OfficeUnified />
+          </PendingApprovalsProvider>
+        </UiModeProvider>
+      </LanguageProvider>
+    </MemoryRouter>,
+  )
+  expect(dot()).not.toBeNull()
+})
+
 test('v54 P3: clicking a review feed line opens the detail tray in the right column', async () => {
   stubReducedMotion(true)
   mockStream([
