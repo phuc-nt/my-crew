@@ -1,9 +1,12 @@
 // v54 P3: cost chip lazy per the v50 desk-inspector pattern — fetched ONLY for the
 // selected room (never fanned out over the whole list on mount), cached so re-selection
 // doesn't re-fetch.
+// v55: default status filter shows ● + ⚠ only (✓ off), title search ignores the filter,
+// recurring identical-title runs collapse into a ×N group row.
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { api } from '../../api/client'
+import { DICT } from '../../i18n/dictionary'
 import { LanguageProvider } from '../../i18n/language-context'
 import type { Workroom } from '../../types'
 import { WorkroomList } from './workroom-list'
@@ -92,7 +95,56 @@ test('a cost fetch failure never blocks room selection (no chip, no throw)', asy
       <WorkroomList rooms={ROOMS} activeRoom="r1" onSelect={onSelect} />
     </LanguageProvider>,
   )
+  // 'Việc 2' is xong — hidden by the default filter; enable ✓ first (chip titled Xong).
+  fireEvent.click(screen.getByTitle(DICT.vi['workroomList.filter.xong']))
   fireEvent.click(screen.getByText('Việc 2', { exact: false }))
   expect(onSelect).toHaveBeenCalledWith('r2')
   expect(screen.queryByText(/^\$/)).toBeNull()
+})
+
+test('v55 default filter: xong rooms hidden until the ✓ chip is toggled on', () => {
+  render(
+    <LanguageProvider>
+      <WorkroomList rooms={ROOMS} activeRoom={null} onSelect={() => {}} />
+    </LanguageProvider>,
+  )
+  expect(screen.getByText('Việc 1', { exact: false })).toBeTruthy()
+  expect(screen.queryByText('Việc 2', { exact: false })).toBeNull()
+  expect(screen.getByText(DICT.vi['workroomList.hiddenHint'].replace('{n}', '1'))).toBeTruthy()
+  fireEvent.click(screen.getByTitle(DICT.vi['workroomList.filter.xong']))
+  expect(screen.getByText('Việc 2', { exact: false })).toBeTruthy()
+})
+
+test('v55 search ignores the status filter and matches by substring', () => {
+  render(
+    <LanguageProvider>
+      <WorkroomList rooms={ROOMS} activeRoom={null} onSelect={() => {}} />
+    </LanguageProvider>,
+  )
+  fireEvent.change(screen.getByPlaceholderText(DICT.vi['workroomList.searchPlaceholder']), {
+    target: { value: 'việc 2' },
+  })
+  expect(screen.getByText('Việc 2', { exact: false })).toBeTruthy()
+  expect(screen.queryByText('Việc 1', { exact: false })).toBeNull()
+})
+
+test('v55 recurring runs collapse into a ×N group row and expand on click', () => {
+  const watchRooms: Workroom[] = [
+    { room_id: 'w2', title: '[watch] đổi Jira', task_count: 1, status: 'dang-chay', updated_at: 't2' },
+    { room_id: 'w1', title: '[watch] đổi Jira', task_count: 1, status: 'dang-chay', updated_at: 't1' },
+  ]
+  const onSelect = vi.fn()
+  render(
+    <LanguageProvider>
+      <WorkroomList rooms={watchRooms} activeRoom={null} onSelect={onSelect} />
+    </LanguageProvider>,
+  )
+  // Collapsed: only the group row itself carries the shared title.
+  expect(screen.getAllByTitle('[watch] đổi Jira').length).toBe(1)
+  fireEvent.click(screen.getByText(/×2/))
+  // Expanded: group row + two run chips (newest first), each selectable.
+  const runs = screen.getAllByTitle('[watch] đổi Jira').filter((el) => el.getAttribute('aria-expanded') === null)
+  expect(runs.length).toBe(2)
+  fireEvent.click(runs[0])
+  expect(onSelect).toHaveBeenCalledWith('w2')
 })

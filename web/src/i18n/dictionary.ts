@@ -163,6 +163,17 @@ const vi = {
   'workroomList.title': 'Phòng việc',
   'workroomList.overview': 'Toàn cảnh',
   'workroomList.taskCount': '{n} việc',
+  // v55 cockpit: status filter + search + recurring-run grouping + side tabs.
+  'workroomList.filter.dang-chay': 'Đang chạy',
+  'workroomList.filter.ket': 'Kẹt',
+  'workroomList.filter.xong': 'Xong',
+  'workroomList.searchPlaceholder': 'Tìm phòng việc…',
+  'workroomList.emptyFiltered': 'Không có phòng nào khớp — đổi bộ lọc hoặc tìm kiếm.',
+  'workroomList.hiddenHint': '{n} nhóm phòng đang ẩn bởi bộ lọc',
+  'officeSide.tabRooms': 'Phòng việc',
+  'officeSide.tabResults': 'Kết quả',
+  'assignComposer.labelNew': 'GIAO VIỆC MỚI',
+  'assignComposer.labelRoom': 'TRAO ĐỔI TRONG PHÒNG VIỆC',
 
   // coordinator-health-banner.tsx
   'coordinatorHealth.noCoordinator':
@@ -1121,6 +1132,16 @@ const en = {
   'workroomList.title': 'Workrooms',
   'workroomList.overview': 'Overview',
   'workroomList.taskCount': '{n} tasks',
+  'workroomList.filter.dang-chay': 'Running',
+  'workroomList.filter.ket': 'Stalled',
+  'workroomList.filter.xong': 'Done',
+  'workroomList.searchPlaceholder': 'Search workrooms…',
+  'workroomList.emptyFiltered': 'No rooms match — adjust the filters or search.',
+  'workroomList.hiddenHint': '{n} room groups hidden by filters',
+  'officeSide.tabRooms': 'Workrooms',
+  'officeSide.tabResults': 'Results',
+  'assignComposer.labelNew': 'NEW ASSIGNMENT',
+  'assignComposer.labelRoom': 'CHAT IN WORKROOM',
 
   // coordinator-health-banner.tsx
   'coordinatorHealth.noCoordinator':

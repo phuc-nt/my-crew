@@ -293,12 +293,14 @@ input, textarea, select { font-size: var(--fs-body); }
 .office-3d-badge-pending { background: #d97706; }
 .office-3d-badge-fanout { background: #2563eb; }
 
-/* v54 layout A: rail trái (LÀM, 260px) | giữa (XEM, 1fr) | phải (TRA, ~300px), header +
-   composer span the full width. Grid areas keep the JSX's DOM order meaningful (rail first)
-   while letting CSS place the header/composer without an extra wrapper per row. */
+/* v54 layout A: rail trái (LÀM, 260px) | giữa (XEM, 1fr) | phải (TRA, ~300px).
+   v55 layout B: the composer moved from the BOTTOM row to just under the header — giao
+   việc is the first action on the screen, not something you scroll to find. Grid areas
+   keep the JSX's DOM order meaningful (rail first) while letting CSS place the
+   header/composer without an extra wrapper per row. */
 .office-unified { display: grid;
   grid-template-columns: 260px minmax(0, 1fr) minmax(260px, 300px);
-  grid-template-areas: "header header header" "rail center side" "composer composer composer";
+  grid-template-areas: "header header header" "composer composer composer" "rail center side";
   gap: var(--space-3); align-items: start; }
 .office-unified-header { grid-area: header; }
 .office-unified-center { grid-area: center; display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
@@ -315,6 +317,73 @@ input, textarea, select { font-size: var(--fs-body); }
   .office-3d-canvas-wrap { height: 30vh; min-height: 220px; }
   .workroom-list { max-height: 34vh; overflow-y: auto; }
 }
+/* v55 cockpit shell (desktop): when Văn phòng is the active view the app chrome becomes a
+   fixed 100dvh column and the office grid fills what remains — every zone scrolls
+   INTERNALLY, the page itself never scrolls, so the composer is ALWAYS on screen (the
+   v54 layout let the side column stretch the page to thousands of px and buried it).
+   Scoped via :has() so no other view changes; a browser without :has() simply keeps the
+   scrolling document flow (graceful fallback). Width widens to 1600px for the 3-column
+   cockpit — the 1100px shell cap cramped the center feed on wide monitors. */
+@media (min-width: 1101px) {
+  .app-shell:has(.office-unified) { height: 100dvh; max-width: 1600px;
+    display: flex; flex-direction: column; overflow: hidden;
+    /* Reclaim vertical budget: on a 900px laptop the shell chrome (padding + header +
+       nav) was eating ~220px before the cockpit's own header. */
+    padding: var(--space-2) var(--space-3) var(--space-3); }
+  .app-shell:has(.office-unified) .app-nav-primary { margin: var(--space-2) 0;
+    padding-bottom: var(--space-1); }
+  .app-shell:has(.office-unified) .app-main { flex: 1; min-height: 0; }
+  .app-shell:has(.office-unified) .office-unified { height: 100%;
+    /* rows: header · composer · content — content takes ALL remaining height. */
+    grid-template-rows: auto auto minmax(0, 1fr); align-items: stretch; }
+  /* Columns own their scroll. The side column defers scrolling to its tab body
+     (.office-side-body) so the [Phòng việc | Kết quả] tab bar stays pinned. */
+  .app-shell:has(.office-unified) .office-rail { overflow-y: auto; min-height: 0; }
+  .app-shell:has(.office-unified) .office-unified-center { min-height: 0; }
+  .app-shell:has(.office-unified) .office-unified-side { min-height: 0; overflow: hidden; }
+  /* The feed fills whatever the canvas leaves. `min-height: 0` is the load-bearing part:
+     without it a flex item's auto min-size is its CONTENT, so a 2600px feed grows the
+     column instead of scrolling inside it (measured in UAT). The viewport-fraction caps
+     (70vh / the 420px floor) belong to the document-flow layout only. */
+  /* .office-unified-feed is the <aside> wrapping the feed's title + filter chips + log.
+     It must become a flex column with min-height:0, otherwise the log's own `flex: 1`
+     resolves against an auto-height block and the list grows to its content (2600px,
+     measured in UAT) instead of scrolling inside the column. */
+  .app-shell:has(.office-unified) .office-unified-feed { display: flex;
+    flex-direction: column; flex: 1 1 0; min-height: 0; }
+  .app-shell:has(.office-unified) .office-unified-log { max-height: none;
+    min-height: 0; flex: 1 1 0; }
+  .app-shell:has(.office-unified) .workroom-list { max-height: none; }
+  .app-shell:has(.office-unified) .office-side-body { flex: 1 1 0; min-height: 0;
+    overflow-y: auto; }
+  /* Kết quả tab: the artifacts list stretches to the tab body instead of a 70vh cap. */
+  .app-shell:has(.office-unified) .office-artifacts { flex: 1 1 0; min-height: 0; }
+  .app-shell:has(.office-unified) .office-artifacts-body { max-height: none;
+    flex: 1 1 0; min-height: 0; }
+  /* Header chrome is compact in cockpit mode — every px it gives back goes to the feed. */
+  .app-shell:has(.office-unified) .office-unified-header .page-header { margin-bottom: var(--space-2); }
+  .app-shell:has(.office-unified) .office-health-banner { margin-bottom: var(--space-2);
+    padding: var(--space-1) var(--space-2); font-size: var(--fs-xs); }
+  /* The 3D panel SHARES the center column rather than claiming a fixed slice: it may
+     shrink to 140px so the feed always keeps a usable window on a short laptop screen
+     (at 577px viewport the old fixed 200px left the feed 2px tall — measured in UAT). */
+  /* The canvas panel and its wrapper BOTH take the 34vh basis: the wrapper's height comes
+     from its content otherwise (the r3f canvas reports its own small intrinsic size), which
+     collapsed the 3D office to ~150px regardless of the panel's max-height. `flex: 0 1`
+     lets it give the space back on a short screen; the feed (`flex: 2 1 0`) keeps the rest
+     and stays the larger panel. */
+  .app-shell:has(.office-unified) .office-unified-main { display: flex; min-height: 0;
+    flex: 0 1 34vh; }
+  .app-shell:has(.office-unified) .office-3d-canvas-wrap { height: auto; min-height: 140px;
+    max-height: none; flex: 1 1 auto; }
+  .app-shell:has(.office-unified) .office-unified-feed { flex: 2 1 0; }
+  /* Below this the cockpit has no room for both panels — the feed wins (the 3D office is
+     ambience; the feed is the working surface). The CEO can also collapse 3D manually. */
+  @media (max-height: 700px) {
+    .app-shell:has(.office-unified) .office-3d-canvas-wrap { max-height: 26vh; min-height: 120px; }
+  }
+}
+
 /* v54: below 1100px the 3 columns collapse to a single stack — rail (chờ) first, then
    center (canvas/feed), then side (phòng việc/kết quả), matching the mobile blocking-first
    requirement (v54 brainstorm risk note) — grid-template-areas order IS the DOM order here
@@ -322,9 +391,14 @@ input, textarea, select { font-size: var(--fs-body); }
 @media (max-width: 1100px) {
   /* minmax(0,1fr) + min-width:0 on every zone: a single unbreakable string (a long
      clarify question, a feed line) must never widen the only column past the viewport. */
+  /* v55 layout B on mobile: composer stays directly under the header (matching desktop
+     and the DOM order), then the blocking rail, then canvas/feed, then rooms/results. */
   .office-unified { grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "header" "rail" "center" "side" "composer"; }
+    grid-template-areas: "header" "composer" "rail" "center" "side"; }
   .office-rail, .office-unified-side, .office-unified-header { min-width: 0; }
+  /* Overlays stay absolute here too — a long plan preview must not push the page. */
+  .office-composer-bar .office-composer-mentions,
+  .office-composer-bar .office-composer-preview { max-height: 40vh; }
 }
 
 /* v54 P2: action rail (Chờ anh/chị + Sắp chạy). Layout-only classes — cards/buttons/badges
@@ -351,6 +425,35 @@ input, textarea, select { font-size: var(--fs-body); }
 .office-composer-mentions { list-style: none; margin: 4px 0 0; padding: 4px;
   border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-bg);
   max-height: 220px; overflow-y: auto; }
+
+/* v55 layout B — the composer is the screen's PRIMARY action, sitting under the header:
+   a raised command bar (accent ring + larger field) instead of a muted input lost at the
+   bottom of the page. Its dropdown/preview overlay the content below (absolute, above the
+   3D canvas) so opening them never shoves the cockpit's three columns down. */
+.office-composer-bar { position: relative; z-index: 20; background: var(--color-surface);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-3); box-shadow: 0 1px 3px rgb(0 0 0 / 0.06);
+  margin-top: 0; }
+.office-composer-bar .office-composer-row { align-items: center; gap: var(--space-3); }
+.office-composer-bar .office-composer-row input { padding: 0.6rem 0.85rem; font-size: var(--fs-body); }
+.office-composer-bar .office-composer-row input:focus-visible { outline: 2px solid var(--color-accent);
+  outline-offset: 1px; }
+/* The submit button keeps the .btn-primary fill from the primitive (assign-composer
+   passes variant="primary") — only its flex behaviour is layout's business. */
+.office-composer-bar .office-composer-row .btn { flex: 0 0 auto; font-weight: 600; }
+.office-composer-bar .office-composer-row .btn:disabled { opacity: 0.6; }
+.office-composer-label { display: block; font-size: var(--fs-xs); font-weight: 700;
+  color: var(--color-muted); margin-bottom: var(--space-1); letter-spacing: 0.02em; }
+/* Overlay layers: anchored to the bar, never part of the grid's height. */
+.office-composer-bar .office-composer-mentions,
+.office-composer-bar .office-composer-preview {
+  position: absolute; left: var(--space-3); top: calc(100% - var(--space-2));
+  z-index: 25; background: var(--color-surface); box-shadow: 0 6px 20px rgb(0 0 0 / 0.16);
+  max-height: 50vh; overflow-y: auto; }
+/* The @-list holds short ids — a full-width dropdown over the 3D office reads as a
+   modal takeover. The plan preview is prose, so it keeps the bar's full width. */
+.office-composer-bar .office-composer-mentions { right: auto; min-width: 280px; }
+.office-composer-bar .office-composer-preview { right: var(--space-3); }
 .office-composer-mentions button { width: 100%; text-align: left; background: none;
   border: none; padding: 0.35rem 0.5rem; cursor: pointer; color: var(--color-text);
   border-radius: var(--radius); }
@@ -382,6 +485,23 @@ input, textarea, select { font-size: var(--fs-body); }
 /* v54 P3: lazy per-task $ chip — fetched only for the selected room (see workroom-list.tsx). */
 .workroom-cost { display: inline-block; margin-left: var(--space-2); color: var(--color-muted);
   font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+/* v55 cockpit: right-column tabs [Phòng việc | Kết quả] + workroom status filter, search
+   and recurring-run grouping. Buttons/chips are the section-3 primitives — layout only. */
+.office-side-tabs { display: flex; gap: var(--space-2); }
+.office-side-body { display: flex; flex-direction: column; gap: var(--space-3); min-height: 0; }
+.office-side-body .workroom-list { max-width: none; }
+.office-side-badge { margin-left: 0.35rem; font-size: var(--fs-2xs); font-weight: 700;
+  color: var(--color-ok); }
+/* The tab label already says Kết quả — the panel's own zone title would repeat it. */
+.office-side-body .office-zone-title { display: none; }
+.workroom-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.workroom-search { padding: 0.4rem 0.6rem; border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius); background: var(--color-surface); color: var(--color-text);
+  font-size: var(--fs-sm); width: 100%; }
+/* Expanded runs of a recurring group indent under their group row. */
+.workroom-group-runs { display: flex; flex-direction: column; gap: var(--space-2);
+  margin-left: var(--space-3); }
+.workroom-hidden-hint { color: var(--color-muted); font-size: var(--fs-xs); margin: 0; }
 /* v54 P3: feed filter chips [Tất cả | Bước | Ra ngoài] — reuses .chip/.chip-active, no
    new button treatment. */
 .office-feed-filters { display: flex; gap: var(--space-2); margin-bottom: var(--space-2); }

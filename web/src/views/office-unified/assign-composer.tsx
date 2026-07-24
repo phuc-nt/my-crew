@@ -155,7 +155,13 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
   }
 
   return (
-    <div className="office-composer">
+    // v55 layout B: `office-composer-bar` styles this as the screen's primary command bar
+    // (it sits under the header now, not at the page bottom). The label names the action so
+    // the bar reads as "giao việc", not a generic search field.
+    <div className="office-composer office-composer-bar">
+      <span className="office-composer-label">
+        {activeRoom ? t('assignComposer.labelRoom') : t('assignComposer.labelNew')}
+      </span>
       <div className="office-composer-row">
         <input
           type="text"
@@ -172,7 +178,8 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
             if (e.key === 'Enter') submit()
           }}
         />
-        <Button variant="ghost" onClick={submit} disabled={phase.kind === 'previewing'}>
+        {/* v55: primary variant — giao việc is THE action of the office screen. */}
+        <Button variant="primary" onClick={submit} disabled={phase.kind === 'previewing'}>
           {phase.kind === 'previewing'
             ? t('assignComposer.processing')
             : activeRoom
