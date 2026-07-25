@@ -126,6 +126,46 @@
 			"from": "Domain Packs",
 			"to": "Action Gateway",
 			"relation": "depends-on"
+		},
+		{
+			"from": "Web Server (FastAPI)",
+			"to": "Coordinator & Worker Runtime",
+			"relation": "depends-on"
+		},
+		{
+			"from": "Web Server (FastAPI)",
+			"to": "Agent Graphs",
+			"relation": "calls"
+		},
+		{
+			"from": "Web Server (FastAPI)",
+			"to": "Action Gateway",
+			"relation": "calls"
+		},
+		{
+			"from": "Coordinator & Worker Runtime",
+			"to": "Action Gateway",
+			"relation": "calls"
+		},
+		{
+			"from": "Coordinator & Worker Runtime",
+			"to": "AgentRuntime Backends",
+			"relation": "calls"
+		},
+		{
+			"from": "Coordinator & Worker Runtime",
+			"to": "Tools & Adapters",
+			"relation": "calls"
+		},
+		{
+			"from": "Tools & Adapters",
+			"to": "Action Gateway",
+			"relation": "depends-on"
+		},
+		{
+			"from": "Agent Graphs",
+			"to": "Coordinator & Worker Runtime",
+			"relation": "depends-on"
 		}
 	],
 	"title": "my-crew — architecture (2026-07-24)",
