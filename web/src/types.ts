@@ -237,7 +237,11 @@ export interface CompanyPayload {
 
 // v15 office composer (/api/office/assign/*)
 export interface AssignStaffPayload {
-  staff: { id: string; domain: string }[]
+  // v56: `web_search` = the agent's profile opt-in; `web_search_ready` = a search
+  // provider key exists on the machine (presence-only, never a key name/value). Both
+  // optional so older cached payloads still typecheck.
+  staff: { id: string; domain: string; web_search?: boolean }[]
+  web_search_ready?: boolean
 }
 
 // v16 workrooms

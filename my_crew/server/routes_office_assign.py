@@ -29,10 +29,30 @@ router = APIRouter(prefix="/api/office/assign", tags=["office-assign"])
 @router.get("/staff")
 def get_assignable_staff() -> dict:
     """Roster for the composer's @-autocomplete — assignable ids only (coordinator +
-    admin excluded by `assignable_staff`, same rule the decompose validator enforces)."""
-    from my_crew.agent.team_task_roster import assignable_staff
+    admin excluded by `assignable_staff`, same rule the decompose validator enforces).
 
-    return {"staff": [{"id": a, "domain": d} for a, d in assignable_staff()]}
+    v56: also carries `web_search_ready` (a provider key exists on this machine —
+    presence-only, never a key name/value) and a per-staff `web_search` opt-in flag, so
+    the composer can warn at assign time that a PIC will silently degrade to
+    internal-only work. Same presence rule as integration_health's websearch_key check.
+    """
+    import os
+
+    from my_crew.agent.team_task_roster import assignable_staff
+    from my_crew.profile.loader import load_profile
+
+    def _wants_web(agent_id: str) -> bool:
+        try:
+            return bool(getattr(load_profile(agent_id), "web_search", False))
+        except Exception:  # noqa: BLE001 — one broken profile never blocks the roster
+            return False
+
+    return {
+        "web_search_ready": bool(os.getenv("TAVILY_API_KEY") or os.getenv("BRAVE_API_KEY")),
+        "staff": [
+            {"id": a, "domain": d, "web_search": _wants_web(a)} for a, d in assignable_staff()
+        ],
+    }
 
 
 @router.post("/preview")

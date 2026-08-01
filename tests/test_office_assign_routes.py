@@ -23,10 +23,46 @@ def test_staff_endpoint_lists_assignable(monkeypatch, client):
         "my_crew.agent.team_task_roster.assignable_staff",
         lambda: [("noi-dung", "office"), ("nghien-cuu", "office")],
     )
+
+    class _Profile:
+        def __init__(self, web_search):
+            self.web_search = web_search
+
+    profiles = {"noi-dung": _Profile(False), "nghien-cuu": _Profile(True)}
+    monkeypatch.setattr(
+        "my_crew.profile.loader.load_profile", lambda agent_id: profiles[agent_id]
+    )
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.delenv("BRAVE_API_KEY", raising=False)
     r = client.get("/api/office/assign/staff")
     assert r.status_code == 200
-    assert r.json() == {"staff": [{"id": "noi-dung", "domain": "office"},
-                                  {"id": "nghien-cuu", "domain": "office"}]}
+    assert r.json() == {
+        "web_search_ready": False,
+        "staff": [
+            {"id": "noi-dung", "domain": "office", "web_search": False},
+            {"id": "nghien-cuu", "domain": "office", "web_search": True},
+        ],
+    }
+
+
+def test_staff_endpoint_web_search_ready_presence_only(monkeypatch, client):
+    """A provider key flips the ready flag; the key value/name never enters the payload,
+    and a broken profile degrades to web_search=False instead of failing the roster."""
+    monkeypatch.setattr(
+        "my_crew.agent.team_task_roster.assignable_staff", lambda: [("hong", "office")]
+    )
+
+    def _boom(agent_id):
+        raise RuntimeError("broken profile")
+
+    monkeypatch.setattr("my_crew.profile.loader.load_profile", _boom)
+    monkeypatch.setenv("TAVILY_API_KEY", "tvly-secret")
+    r = client.get("/api/office/assign/staff")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["web_search_ready"] is True
+    assert body["staff"] == [{"id": "hong", "domain": "office", "web_search": False}]
+    assert "tvly-secret" not in r.text
 
 
 def test_preview_maps_slots_and_auto_confirmed_flag(monkeypatch, client):

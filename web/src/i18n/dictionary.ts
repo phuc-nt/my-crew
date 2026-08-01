@@ -147,6 +147,8 @@ const vi = {
   'assignComposer.processing': 'Đang xử lý…',
   'assignComposer.allDomain': 'đội tự chọn PIC',
   'assignComposer.confirmAssign': 'Xác nhận giao việc',
+  'assignComposer.webSearchNoKey':
+    'PIC bật web_search nhưng máy chưa có key tìm kiếm — agent sẽ chỉ dùng dữ liệu nội bộ (thêm key ở màn Kết nối).',
   'assignComposer.cancel': 'Huỷ',
   'assignComposer.confirmAdjust': 'Xác nhận sửa kế hoạch',
   'assignComposer.dismiss': 'Bỏ qua',
@@ -1116,6 +1118,8 @@ const en = {
   'assignComposer.processing': 'Processing…',
   'assignComposer.allDomain': 'team picks the PIC',
   'assignComposer.confirmAssign': 'Confirm assignment',
+  'assignComposer.webSearchNoKey':
+    'The PIC has web_search on but no search API key is configured — the agent will use internal data only (add a key in Connections).',
   'assignComposer.cancel': 'Cancel',
   'assignComposer.confirmAdjust': 'Confirm plan change',
   'assignComposer.dismiss': 'Dismiss',

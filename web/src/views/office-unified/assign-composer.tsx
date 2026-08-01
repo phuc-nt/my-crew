@@ -15,6 +15,21 @@ import type { AssignPreviewPayload, RoomChatPayload } from '../../types'
 export interface StaffOption {
   id: string
   domain: string
+  web_search?: boolean
+}
+
+// v56: the assign-time web-search warning — true when the previewed PIC opted into
+// web_search but the machine has no provider key (`web_search_ready === false`), so the
+// agent would silently degrade to internal-only work. '@all' warns when ANY staff opted
+// in. Pure helper (same test seam as filterStaffForMention).
+export function webSearchHintNeeded(
+  picId: string,
+  staff: StaffOption[],
+  ready: boolean | undefined,
+): boolean {
+  if (ready !== false || !picId) return false
+  if (picId === 'all') return staff.some((s) => s.web_search)
+  return staff.some((s) => s.id === picId && s.web_search)
 }
 
 // Returns dropdown options while the caret sits in a leading "@…" token: "" (just "@")
@@ -57,6 +72,8 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
   const { t } = useLanguage()
   const [brief, setBrief] = useState('')
   const [staff, setStaff] = useState<StaffOption[]>([])
+  // undefined until the roster payload lands — the hint only fires on an explicit false.
+  const [webSearchReady, setWebSearchReady] = useState<boolean | undefined>(undefined)
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const fetchedStaff = useRef(false)
 
@@ -65,7 +82,9 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
   const ensureStaff = () => {
     if (fetchedStaff.current) return
     fetchedStaff.current = true
-    api.getAssignableStaff().then((p) => setStaff(p.staff)).catch(() => setStaff([]))
+    api.getAssignableStaff()
+      .then((p) => { setStaff(p.staff); setWebSearchReady(p.web_search_ready) })
+      .catch(() => setStaff([]))
   }
 
   const mentions = filterStaffForMention(brief, staff)
@@ -202,6 +221,9 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
       {phase.kind === 'preview' && (
         <div className="office-composer-preview">
           <pre>{phase.data.preview_text}</pre>
+          {webSearchHintNeeded(phase.data.pic_id, staff, webSearchReady) && (
+            <p className="office-composer-hint">{t('assignComposer.webSearchNoKey')}</p>
+          )}
           <div className="office-composer-actions">
             <Button variant="primary" onClick={() => confirm(phase.data)}>
               {t('assignComposer.confirmAssign')}
