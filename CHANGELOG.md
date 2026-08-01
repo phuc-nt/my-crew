@@ -3,6 +3,37 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.5.0] — 2026-08-01
+
+Office cockpit shell: the office screen becomes a single fixed viewport — the CEO never
+scrolls the page again.
+
+### Added
+- **Assign command bar on top**: the composer moved from the page bottom to directly
+  under the header, styled as the screen's primary action (label, filled button). Its
+  @-mention dropdown and plan preview render as overlays, so opening them never pushes
+  the three columns down.
+- **Workroom list controls**: status-filter chips [● running | ⚠ stalled | ✓ done]
+  (done off by default — finished rooms are history), a title search that intentionally
+  ignores the status filter, and recurring same-title runs (watch tasks) collapsed into
+  one expandable "×N" row. Deep-linking `?room=<id>` to a filtered-out or collapsed room
+  force-shows it and auto-expands its group.
+- **Right-column tabs [Workrooms | Results]**: each tab gets the whole column height;
+  a ● dot on the Results tab marks a handoff delivered live while the tab wasn't open.
+
+### Changed
+- The whole office screen is one 100dvh cockpit: every zone (action rail, activity feed,
+  rooms/results) scrolls internally and the page itself never scrolls. Scoped via CSS
+  `:has()` — other views are untouched; browsers without it keep the old document flow.
+  The app shell widens to 1600px on this screen (was capped at 1100px).
+- The 3D office panel shares the center column height (flex, 140px floor) instead of
+  claiming a fixed slice, so the feed keeps a usable window on short screens.
+- Architecture model (C4-style) and its drift-check board are committed under `docs/`.
+
+### Fixed
+- The Results-tab dot now arms on the first live handoff of a brand-new room (two
+  earlier guards swallowed it; caught by live UAT with a real fleet, not by the suite).
+
 ## [0.4.0] — 2026-07-19
 
 Office cockpit: the 3D office becomes the place the CEO acts from, not just watches.
