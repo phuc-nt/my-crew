@@ -29,6 +29,10 @@ RETENTION_DAYS = {
     "office_room": 90,
     "clarify": 90,
     "dedup": 7,
+    # Artifact dirs whose task row is gone (demo cleanup, manual DB edits). A fresh
+    # orphan is a bug signal the integrity audit should surface, not junk — only dirs
+    # past this age are deleted.
+    "artifact_orphans": 7,
 }
 
 #: The integrity audit is read-only but not free — run it at most once per local day,
@@ -72,6 +76,7 @@ def run_retention_sweep(*, now: datetime | None = None) -> dict[str, int]:
     )
     _sweep("clarify", lambda: ClarifyStore(clarify_db_path()), RETENTION_DAYS["clarify"])
     _sweep_dedup(deleted, now)
+    _sweep_artifact_orphans(deleted, now)
     return deleted
 
 
@@ -101,6 +106,52 @@ def _sweep_dedup(deleted: dict[str, int], now: datetime) -> None:
     deleted["dedup"] = total
 
 
+def _sweep_artifact_orphans(deleted: dict[str, int], now: datetime) -> None:
+    """Delete artifact dirs (team_tasks_root()/"team-tasks"/<task>/) whose task row is
+    gone — but only once they are old enough to be junk rather than a bug signal.
+
+    Double guard: (no team_tasks row) AND (dir mtime past the retention window). A fresh
+    orphan stays on disk where the read-only integrity audit keeps reporting it. Confined
+    to direct children of the team-tasks artifact root; nothing else under .data/ (and
+    never audit logs) is touched. Symlinked children are skipped — rmtree refuses them
+    and a link's target may live outside the artifact root.
+    """
+    import shutil
+    import sqlite3
+
+    from my_crew.agent.team_task_artifact import team_task_artifacts_root
+    from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
+
+    removed = 0
+    try:
+        db = team_tasks_db_path()
+        art_root = team_task_artifacts_root(team_tasks_root())
+        if not db.exists() or not art_root.is_dir():
+            deleted["artifact_orphans"] = 0
+            return
+        conn = sqlite3.connect(str(db))
+        try:
+            task_ids = {r[0] for r in conn.execute("SELECT id FROM team_tasks")}
+        finally:
+            conn.close()
+        cutoff_ts = (now - timedelta(days=RETENTION_DAYS["artifact_orphans"])).timestamp()
+        for d in art_root.iterdir():
+            if not d.is_dir() or d.is_symlink() or d.name in task_ids:
+                continue
+            try:
+                if d.stat().st_mtime >= cutoff_ts:
+                    continue  # fresh orphan — leave it for the audit to flag
+                shutil.rmtree(d)
+                removed += 1
+            except OSError:
+                logger.warning(
+                    "artifact orphan sweep failed for %s (ignored)", d.name, exc_info=True
+                )
+    except Exception:  # noqa: BLE001 — retention is best-effort per store
+        logger.warning("artifact orphan sweep failed (ignored)", exc_info=True)
+    deleted["artifact_orphans"] = removed
+
+
 def run_integrity_audit(*, now: datetime | None = None) -> list[str]:
     """Read-only orphan scan; logs a WARNING with counts + examples, mutates nothing.
 
@@ -127,6 +178,7 @@ def _scan_orphans() -> list[str]:
     task row. Returns human-readable warning lines (count + up to 5 example ids)."""
     import sqlite3
 
+    from my_crew.agent.team_task_artifact import team_task_artifacts_root
     from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
 
     lines: list[str] = []
@@ -148,8 +200,10 @@ def _scan_orphans() -> list[str]:
                 f"{len(orphan_steps)} step rows reference {len(uniq)} missing task(s): "
                 f"{uniq[:5]}"
             )
-        # Artifact dirs (.data/team-tasks/<task>/) with no task row.
-        art_root = team_tasks_root() / "team-tasks"
+        # Artifact dirs (.data/artifacts/team-tasks/<task>/) with no task row. v56: this
+        # branch used to hardcode `.data/team-tasks/` — a path nothing ever writes — so
+        # it had reported "clean" since v36. The shared helper is the writers' path.
+        art_root = team_task_artifacts_root(team_tasks_root())
         if art_root.is_dir():
             orphan_dirs = [
                 d.name for d in art_root.iterdir() if d.is_dir() and d.name not in task_ids

@@ -37,14 +37,24 @@ def _validate_task_id(task_id: str) -> str:
     return task_id
 
 
+def team_task_artifacts_root(data_dir: Path) -> Path:
+    """`data_dir/artifacts/team-tasks/` — the root holding every task's artifact dir.
+
+    The single source of this path: storage_hygiene's orphan sweep/audit walk it, and
+    the per-task helpers below build under it. (v56: the hygiene code used to hardcode
+    a WRONG sibling path and silently scanned nothing — a helper can't drift.)
+    """
+    return data_dir / "artifacts" / "team-tasks"
+
+
 def task_artifact_dir(data_dir: Path, task_id: str) -> Path:
     """`data_dir/artifacts/team-tasks/<task-id>/` — the confinement root for one task."""
-    return data_dir / "artifacts" / "team-tasks" / _validate_task_id(task_id)
+    return team_task_artifacts_root(data_dir) / _validate_task_id(task_id)
 
 
 def step_artifact_path(data_dir: Path, task_id: str, step_seq: int) -> Path:
     """The on-disk path for one step's handoff artifact: `step-<n>.json`."""
-    unresolved_base = data_dir / "artifacts" / "team-tasks"
+    unresolved_base = team_task_artifacts_root(data_dir)
     root = task_artifact_dir(data_dir, task_id)
     path = root / f"step-{int(step_seq)}.json"
     _confine(path, root, unresolved_base)
@@ -59,7 +69,7 @@ def review_verdict_artifact_path(
     (not overwritten in place) so a round-2 re-review's verdict never clobbers
     round-1's — `tick_actions`'s round-cap logic reads BOTH files across the task's
     lifetime, not just the latest. Same path-confinement guard as `step_artifact_path`."""
-    unresolved_base = data_dir / "artifacts" / "team-tasks"
+    unresolved_base = team_task_artifacts_root(data_dir)
     root = task_artifact_dir(data_dir, task_id)
     path = root / f"step-{int(parent_seq)}-review-{int(review_round)}.json"
     _confine(path, root, unresolved_base)

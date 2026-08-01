@@ -144,8 +144,76 @@ def test_retention_sweep_survives_a_broken_store(monkeypatch, tmp_path):
     monkeypatch.setattr("my_crew.runtime.clarify_store.ClarifyStore", lambda p: _boom())
     monkeypatch.setattr("my_crew.runtime.registry.load_registry", lambda: ())
     out = storage_hygiene.run_retention_sweep(now=_NOW)
-    # Broken stores are simply absent from the result; dedup ran (empty registry → 0).
-    assert out == {"dedup": 0}
+    # Broken stores are simply absent from the result; dedup ran (empty registry → 0)
+    # and the artifact-orphan sweep ran against a home with no team-tasks DB (→ 0).
+    assert out == {"dedup": 0, "artifact_orphans": 0}
+
+
+def test_artifact_orphan_sweep_double_guard(monkeypatch, tmp_path):
+    """Deletes ONLY (no task row) AND (older than the retention window); a live task's
+    dir and a fresh orphan both survive."""
+    import os
+
+    from my_crew.runtime import storage_hygiene
+
+    db = tmp_path / "team_tasks.sqlite3"
+    conn = sqlite3.connect(str(db))
+    conn.execute("CREATE TABLE team_tasks (id TEXT PRIMARY KEY)")
+    conn.execute("INSERT INTO team_tasks (id) VALUES ('t1')")
+    conn.commit()
+    conn.close()
+
+    # The writers' real layout (team_task_artifact.task_artifact_dir): the sweep must
+    # walk .data/artifacts/team-tasks/ — the path bug this replaced scanned a sibling
+    # dir nothing writes to.
+    art = tmp_path / "artifacts" / "team-tasks"
+    (art / "t1").mkdir(parents=True)  # has a task row → kept even when old
+    (art / "ghost-old").mkdir()  # orphan past the window → deleted
+    (art / "ghost-new").mkdir()  # orphan inside the window → kept (audit's job)
+    aged = (_NOW - timedelta(days=8)).timestamp()
+    os.utime(art / "t1", (aged, aged))
+    os.utime(art / "ghost-old", (aged, aged))
+
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.team_tasks_db_path", lambda: db)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
+    monkeypatch.setattr("my_crew.runtime.registry.load_registry", lambda: ())
+
+    out = storage_hygiene.run_retention_sweep(now=_NOW)
+    assert out["artifact_orphans"] == 1
+    assert not (art / "ghost-old").exists()
+    assert (art / "ghost-new").exists()
+    assert (art / "t1").exists()
+
+
+def test_artifact_orphan_sweep_confined_to_artifact_root(monkeypatch, tmp_path):
+    """Nothing outside team_tasks_root()/team-tasks is touched — an aged stray dir and a
+    log file next to the artifact root survive the sweep."""
+    import os
+
+    from my_crew.runtime import storage_hygiene
+
+    db = tmp_path / "team_tasks.sqlite3"
+    conn = sqlite3.connect(str(db))
+    conn.execute("CREATE TABLE team_tasks (id TEXT PRIMARY KEY)")
+    conn.commit()
+    conn.close()
+
+    (tmp_path / "artifacts" / "team-tasks").mkdir(parents=True)
+    stray = tmp_path / "not-artifacts"
+    stray.mkdir()
+    audit_log = tmp_path / "audit.jsonl"
+    audit_log.write_text("{}\n", encoding="utf-8")
+    aged = (_NOW - timedelta(days=30)).timestamp()
+    os.utime(stray, (aged, aged))
+
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.team_tasks_db_path", lambda: db)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
+    monkeypatch.setattr("my_crew.runtime.registry.load_registry", lambda: ())
+
+    out = storage_hygiene.run_retention_sweep(now=_NOW)
+    assert out["artifact_orphans"] == 0
+    assert stray.exists()
+    assert audit_log.exists()
 
 
 def test_integrity_audit_flags_orphans_daily_gated(monkeypatch, tmp_path):
@@ -161,11 +229,16 @@ def test_integrity_audit_flags_orphans_daily_gated(monkeypatch, tmp_path):
     conn.commit()
     conn.close()
 
+    # v56: an artifact dir with no task row, at the writers' REAL path — the audit's
+    # artifact branch was a no-op before (it scanned a sibling dir nothing writes to).
+    (tmp_path / "artifacts" / "team-tasks" / "ghost-art").mkdir(parents=True)
+
     monkeypatch.setattr("my_crew.runtime.team_task_paths.team_tasks_db_path", lambda: db)
     monkeypatch.setattr("my_crew.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
 
     lines = storage_hygiene.run_integrity_audit(now=_NOW)
     assert any("missing task" in ln for ln in lines)
+    assert any("ghost-art" in ln for ln in lines)
     # Daily gate: an immediate second call is suppressed.
     assert storage_hygiene.run_integrity_audit(now=_NOW + timedelta(minutes=1)) == []
     # Next day: runs again.
