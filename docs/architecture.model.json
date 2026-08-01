@@ -1,0 +1,185 @@
+{
+	"components": [
+		{
+			"name": "Action Gateway",
+			"kind": "lib",
+			"repoUrl": "my_crew/actions"
+		},
+		{
+			"name": "Agent Graphs",
+			"kind": "lib",
+			"repoUrl": "my_crew/agent"
+		},
+		{
+			"name": "Coordinator & Worker Runtime",
+			"kind": "app",
+			"repoUrl": "my_crew/runtime"
+		},
+		{
+			"name": "CLI (mpm)",
+			"kind": "tool",
+			"repoUrl": "my_crew/entrypoints"
+		},
+		{
+			"name": "Web Server (FastAPI)",
+			"kind": "api",
+			"repoUrl": "my_crew/server"
+		},
+		{
+			"name": "Office SPA",
+			"kind": "web",
+			"repoUrl": "web/src"
+		},
+		{
+			"name": "Tools & Adapters",
+			"kind": "lib",
+			"repoUrl": "my_crew/tools"
+		},
+		{
+			"name": "Domain Packs",
+			"kind": "lib",
+			"repoUrl": "domain-packs"
+		},
+		{
+			"name": "AgentRuntime Backends",
+			"kind": "lib",
+			"repoUrl": "my_crew/runtime_backends"
+		},
+		{
+			"name": "SQLite State Stores",
+			"kind": "db",
+			"repoUrl": ".data"
+		}
+	],
+	"edges": [
+		{
+			"from": "Office SPA",
+			"to": "Web Server (FastAPI)",
+			"relation": "calls"
+		},
+		{
+			"from": "CLI (mpm)",
+			"to": "Web Server (FastAPI)",
+			"relation": "calls"
+		},
+		{
+			"from": "CLI (mpm)",
+			"to": "Coordinator & Worker Runtime",
+			"relation": "calls"
+		},
+		{
+			"from": "Web Server (FastAPI)",
+			"to": "SQLite State Stores",
+			"relation": "reads"
+		},
+		{
+			"from": "Web Server (FastAPI)",
+			"to": "Office SPA",
+			"relation": "embeds"
+		},
+		{
+			"from": "Coordinator & Worker Runtime",
+			"to": "SQLite State Stores",
+			"relation": "writes"
+		},
+		{
+			"from": "Coordinator & Worker Runtime",
+			"to": "Agent Graphs",
+			"relation": "calls"
+		},
+		{
+			"from": "AgentRuntime Backends",
+			"to": "Agent Graphs",
+			"relation": "calls"
+		},
+		{
+			"from": "Agent Graphs",
+			"to": "Action Gateway",
+			"relation": "calls"
+		},
+		{
+			"from": "AgentRuntime Backends",
+			"to": "Action Gateway",
+			"relation": "calls"
+		},
+		{
+			"from": "Agent Graphs",
+			"to": "Tools & Adapters",
+			"relation": "calls"
+		},
+		{
+			"from": "AgentRuntime Backends",
+			"to": "Tools & Adapters",
+			"relation": "calls"
+		},
+		{
+			"from": "Agent Graphs",
+			"to": "Domain Packs",
+			"relation": "depends-on"
+		},
+		{
+			"from": "Action Gateway",
+			"to": "SQLite State Stores",
+			"relation": "writes"
+		},
+		{
+			"from": "Domain Packs",
+			"to": "Action Gateway",
+			"relation": "depends-on"
+		},
+		{
+			"from": "Web Server (FastAPI)",
+			"to": "Coordinator & Worker Runtime",
+			"relation": "depends-on"
+		},
+		{
+			"from": "Web Server (FastAPI)",
+			"to": "Agent Graphs",
+			"relation": "calls"
+		},
+		{
+			"from": "Web Server (FastAPI)",
+			"to": "Action Gateway",
+			"relation": "calls"
+		},
+		{
+			"from": "Coordinator & Worker Runtime",
+			"to": "Action Gateway",
+			"relation": "calls"
+		},
+		{
+			"from": "Coordinator & Worker Runtime",
+			"to": "AgentRuntime Backends",
+			"relation": "calls"
+		},
+		{
+			"from": "Coordinator & Worker Runtime",
+			"to": "Tools & Adapters",
+			"relation": "calls"
+		},
+		{
+			"from": "Tools & Adapters",
+			"to": "Action Gateway",
+			"relation": "depends-on"
+		},
+		{
+			"from": "Agent Graphs",
+			"to": "Coordinator & Worker Runtime",
+			"relation": "depends-on"
+		}
+	],
+	"title": "my-crew — architecture (2026-07-24)",
+	"groups": [
+		{
+			"name": "Agent Execution Core",
+			"members": [
+				"Action Gateway",
+				"Agent Graphs",
+				"Coordinator & Worker Runtime",
+				"Tools & Adapters",
+				"AgentRuntime Backends"
+			]
+		}
+	],
+	"documentId": "my-crew-architecture"
+}
