@@ -63,6 +63,14 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
 ## Việc nên làm tiếp (từ UAT + nợ kỹ thuật)
 
 Ưu tiên giảm dần. Nguồn: `plans/260711-0711-.../reports/uat-*findings*.md` + HANDOVER §8.
+Định giá lại 2026-08-01 sau 0.5.0: `plans/reports/260801-1940-roadmap-reassessment-post-0.5.0.md`
+— hướng chốt cho 1–2 vòng tới: **Nền vững** (Playwright smoke → vòng dọn dẹp quick wins → attempt_id).
+
+### Go-live có kiểm soát (chưa xếp lịch — CEO quyết thời điểm)
+- [ ] **Tắt DRY_RUN, chạy thật**: `trust_mode: guarded` (mọi Lớp B chờ duyệt tại action
+  rail v54) → nâng dần autonomous cho hành động ổn định. Đây là giá trị cốt lõi chưa
+  thu hoạch — trust-ladder (v30) + rail (v54) build sẵn để phục vụ chính bước này.
+  Trước khi bật: brainstorm checklist riêng (soi audit hằng ngày, budget cap, kill-switch drill).
 
 ### Agent-harness (chương trình 3 vòng — brainstorm 260711)
 - [x] **v19**: memory seam + static + workspace protocol (vault/skills per-agent) + capability block.
@@ -74,12 +82,16 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
   sandbox, fail-closed allowlist, PII gate) + wizard chọn runtime theo role. Red-team 3 reviewer
   (6 Critical, đọc deepagents wheel) → provider đổi sang Docker (không dịch vụ ngoài). **DeepAgent
   tự chủ trong Docker verify THẬT** (LLM tự gọi docker exec, container token-free, teardown sạch).
-- [ ] **v19.5 (kioku adapter)**: cắm my-kioku sau khi giải 7 điều kiện red-team — dist
+- [ ] **v19.5 (kioku adapter)** *(chưa xếp lịch — chờ tín hiệu pain memory từ usage thật)*:
+  cắm my-kioku sau khi giải 7 điều kiện red-team — dist
   (`bun link`+`MY_KIOKU_BIN`, BỎ `bun x`); recall `<query>` (không `--digest`); wrap digest
   `format_internal_content`; env allowlist subprocess; flock per-vault + stagger reflect;
   health probe thật; pin "zero network I/O". Xem `plans/260711-1543-v19-.../plan.md` §"Giữ cho v19.5".
 - [ ] **v20**: channel binding account→agent (mỗi agent 1 bot Telegram, OpenClaw-style).
-- [ ] **v21**: 2-mode UI (CEO đơn giản / Maintainer config+monitoring).
+  3 bot token đã sẵn trong `.env` — hạ tầng Telegram có, giá trị cao khi mở lại hướng sản phẩm.
+- [x] ~~**v21**: 2-mode UI (CEO đơn giản / Maintainer config+monitoring)~~ — **đóng
+  2026-08-01**: v52 dual-lens (👁/🔬 + captures explorer + health strip) đã đáp ứng đủ
+  ý tưởng gốc; phần còn lại không đáng một hạng mục riêng.
 
 ### Tài liệu
 - [x] Dựng bộ doc chuẩn v18 (overview-pdr, system-architecture, deployment-guide, roadmap).
@@ -90,19 +102,31 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
 - [ ] **Web-search key cảnh báo → hành động**: agent bật web_search thiếu key mới chỉ
   cảnh báo; cân nhắc auto-tắt flag hoặc nhắc rõ ở luồng giao việc.
 - [ ] **Queue transparency**: coordinator 1 hành-động/tick (60s) theo thứ tự cũ→mới →
-  task mới chờ vài phút khi hàng đợi đông; UI nên hiện "đang xếp sau N việc".
+  task mới chờ vài phút khi hàng đợi đông; UI nên hiện "đang xếp sau N việc". *(Định giá
+  2026-08-01: ROI tốt nhất nhóm sản phẩm — ứng viên đầu khi mở lại hướng sản phẩm.)*
 - [ ] **QA reply persist (tùy chọn)**: câu trả lời "hỏi tiến độ" hiện không lưu — thêm
   kind lưu nếu CEO muốn lịch sử hỏi-đáp.
 - [ ] **Chi phí classify/QA vào cost-cap**: hiện chỉ log, chưa tính vào trần chi phí việc.
 
-### Kỹ thuật
-- [ ] Focus-trap + hiển thị detail lỗi cho artifact viewer (drawer).
-- [ ] Dọn artifact hex mồ côi sau demo (task giao thật trong demo).
-- [ ] Cân nhắc gộp/chuẩn hóa các module >200 LOC còn lại (theo rule modularization).
-- [ ] **Opaque `attempt_id` cho review tray** (treo từ v54): join review line ↔ capture
-  hiện theo (task, step, round) — attempt_id xuyên suốt sẽ chính xác tuyệt đối.
-- [ ] Test tự động cho layout cockpit (v55): jsdom không tính layout — cần Playwright
-  hoặc tương đương nếu muốn tự động hoá; hiện verify bằng browser đo DOM thật.
+### Kỹ thuật (hướng "Nền vững" — thứ tự chốt 2026-08-01)
+- [x] **1. Playwright smoke cockpit (v56, 2026-08-01)**: 8 test đo DOM thật (page-no-scroll,
+  scroll trong khung, composer luôn thấy, overlay không đẩy grid, gộp ×17, filter/search,
+  chấm ● live qua SSE reconnect thật, mobile stack) — toàn bộ /api mock trong browser,
+  CI job `frontend-e2e` secret-free. `plans/260801-1948-v56-playwright-smoke-and-cleanup/`.
+- [x] **2. Vòng dọn dẹp gộp (v56)**: web-search thiếu key → dòng nhắc ngay trong preview
+  giao việc (không auto-tắt flag — flag là ý định người dùng; trang Đội đã có health
+  check v18) · focus-trap + `HTTP <status> — <detail>` cho artifact viewer (GET giờ parse
+  detail như write) · GC artifact dir mồ côi (guard kép: không task row + >7 ngày).
+  Bonus từ review: audit orphan v36 quét SAI đường dẫn từ đầu (chưa bao giờ thấy gì) —
+  sửa bằng helper path chung `team_task_artifacts_root()`.
+- [ ] **3. Opaque `attempt_id` cho review tray** (treo từ v54): join review line ↔ capture
+  hiện theo (task, step, round) — chỉ sai khi retry cùng round (hiếm); làm khi đụng
+  review tray lần tới.
+- [ ] `/api/office/assign/staff` gọi `load_profile` đầy đủ per-staff per-request (v56
+  review M1) — đúng nhưng nặng hơn cần thiết; đọc yaml-only hoặc cache khi chạm lại.
+- Modularization >200 LOC: KHÔNG đứng riêng — `team_task_graph.py` (920 LOC) là lõi đã
+  red-team nhiều vòng, refactor vì đếm dòng = rủi ro > lợi. Áp rule khi chạm file có lý
+  do hành vi.
 
 ## Ngoài phạm vi hiện tại (cần thiết kế lại nếu mở)
 
