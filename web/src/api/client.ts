@@ -76,6 +76,20 @@ class ApiError extends Error {
   }
 }
 
+// Prefer the backend's exact detail (e.g. a config-validation message the CEO should
+// see), else a friendly line for the status. Shared by every read/write path so GET
+// errors carry the same detail writes always did.
+async function apiErrorFrom(res: Response): Promise<ApiError> {
+  let detail = ''
+  try {
+    const j = (await res.json()) as { detail?: string }
+    if (j.detail) detail = j.detail
+  } catch {
+    /* non-JSON error body */
+  }
+  return new ApiError(res.status, detail || friendlyError(res.status))
+}
+
 // v6 M16: when any call returns 401 the session expired/absent — notify the app shell so it
 // can show the login screen instead of a broken view. A view can register one handler.
 let onUnauthorized: (() => void) | null = null
@@ -94,18 +108,17 @@ function currentLang(): Language {
 }
 
 // v9 P1: map an HTTP status to a friendly line for a low-tech CEO, instead of the raw
-// "500 Internal Server Error for /api/…". A backend-provided `detail` is appended small.
-function friendlyError(status: number, detail?: string): string {
+// "500 Internal Server Error for /api/…". Backend `detail` handling lives in
+// `apiErrorFrom` — this is only the no-detail fallback.
+function friendlyError(status: number): string {
   const dict = DICT[currentLang()]
-  const base =
-    status >= 500
-      ? dict['api.friendlyServerError']
-      : status === 404
-        ? dict['api.friendlyNotFound']
-        : status === 403
-          ? dict['api.friendlyForbidden']
-          : dict['api.friendlyGeneric'].replaceAll('{status}', String(status))
-  return detail && detail !== `${status}` ? `${base} (${detail})` : base
+  return status >= 500
+    ? dict['api.friendlyServerError']
+    : status === 404
+      ? dict['api.friendlyNotFound']
+      : status === 403
+        ? dict['api.friendlyForbidden']
+        : dict['api.friendlyGeneric'].replaceAll('{status}', String(status))
 }
 
 async function request<T>(path: string): Promise<T> {
@@ -115,7 +128,7 @@ async function request<T>(path: string): Promise<T> {
     throw new ApiError(401, DICT[currentLang()]['api.notLoggedIn'])
   }
   if (!res.ok) {
-    throw new ApiError(res.status, friendlyError(res.status))
+    throw await apiErrorFrom(res)
   }
   return (await res.json()) as T
 }
@@ -143,16 +156,7 @@ async function mutate<T>(
     throw new ApiError(401, DICT[currentLang()]['api.notLoggedIn'])
   }
   if (!res.ok) {
-    // Prefer the backend's exact detail (e.g. a config-validation message the CEO should see),
-    // else a friendly Vietnamese line for the status.
-    let detail = ''
-    try {
-      const j = (await res.json()) as { detail?: string }
-      if (j.detail) detail = j.detail
-    } catch {
-      /* non-JSON error body */
-    }
-    throw new ApiError(res.status, detail || friendlyError(res.status))
+    throw await apiErrorFrom(res)
   }
   return (await res.json()) as T
 }

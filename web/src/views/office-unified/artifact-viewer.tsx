@@ -3,11 +3,12 @@
 // defaults already refuse raw HTML and neutralize `javascript:` URLs; on top of that
 // we refuse to render REMOTE <img> at all (red-team M4 — an image URL in a step result
 // would ping an external host from the CEO's browser) — images render as plain links.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { api } from '../../api/client'
+import { api, ApiError } from '../../api/client'
 import { Button } from '../../components/ui/button'
+import { useFocusTrap } from '../../hooks/use-focus-trap'
 import { DICT } from '../../i18n/dictionary'
 import { useLanguage } from '../../i18n/language-context'
 import type { StepArtifactPayload } from '../../types'
@@ -36,10 +37,17 @@ export function ArtifactViewer({ taskId, seq, stepId, onClose }: ArtifactViewerP
   const [artifact, setArtifact] = useState<StepArtifactPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const drawerRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(drawerRef)
 
   useEffect(() => {
     api.getStepArtifact(taskId, seq).then(setArtifact)
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : t('artifactViewer.loadError')))
+      .catch((e: unknown) => {
+        // ApiError already carries the backend's `detail` in message; prefix the status
+        // so a 404 (artifact pruned) reads differently from a 500 (server down).
+        if (e instanceof ApiError) setError(`HTTP ${e.status} — ${e.message}`)
+        else setError(e instanceof Error ? e.message : t('artifactViewer.loadError'))
+      })
   }, [taskId, seq, t])
 
   useEffect(() => {
@@ -68,7 +76,7 @@ export function ArtifactViewer({ taskId, seq, stepId, onClose }: ArtifactViewerP
 
   return (
     <div className="artifact-overlay" role="dialog" aria-modal="true">
-      <div className="artifact-drawer">
+      <div className="artifact-drawer" ref={drawerRef}>
         <div className="artifact-drawer-head">
           <h3>{artifact?.step_title ?? t('artifactViewer.fallbackTitle')}</h3>
           <div className="office-composer-actions">
