@@ -1,5 +1,5 @@
 # v56 — Playwright smoke cockpit + vòng dọn dẹp
-2026-08-01 · ✅ DONE · **Plan:** `plans/260801-1948-v56-playwright-smoke-and-cleanup/` · **Suite:** 2392 BE + 279 FE + 8 e2e
+2026-08-01 · ✅ DONE · **Plan:** `plans/260801-1948-v56-playwright-smoke-and-cleanup/` · **Suite:** 2392 BE + 280 FE + 8 e2e · **Release: 0.6.0 lên PyPI** (tag v0.6.0, OIDC pipeline + CI xanh)
 
 ## Làm gì
 
