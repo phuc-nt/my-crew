@@ -24,9 +24,11 @@ việc mất-dữ-liệu/lộ-bí-mật bị chặn cứng, LLM không vượt �
   Build dist commit vào `my_crew/server/static/app/` (server serve tĩnh).
 - **Tích hợp ngoài**: MCP servers (Jira/Confluence/Slack) + `gh` CLI (GitHub) + `gws` CLI
   (Google Sheets, hr-pack). LLM qua OpenRouter.
-- **Test**: `uv run python -m pytest` (~2389 BE — dùng `python -m`, shim `uv run pytest`
-  có thể bắt nhầm Python Homebrew ngoài venv) · `cd web && npx vitest run` (~273 FE) ·
-  `npx tsc -b`.
+- **Test**: `uv run python -m pytest` (~2392 BE — dùng `python -m`, shim `uv run pytest`
+  có thể bắt nhầm Python Homebrew ngoài venv; nhớ `uv sync --extra deep` kẻo 68 test deep
+  biến mất) · `cd web && npx vitest run` (~280 FE) · `npx tsc -b` ·
+  `cd web && npm run test:e2e` (~8 Playwright smoke đo DOM layout cockpit — toàn bộ /api
+  mock trong browser, không cần backend; v56).
 
 ## 3. Đọc theo thứ tự này
 
