@@ -41,7 +41,9 @@ test('7. chấm ● tab Kết quả: chỉ khi handoff tới LIVE, tắt khi m�
   const mock = await openOffice(page, `/office?room=${ROOM}`)
   const resultsTab = page.getByRole('button', { name: DICT.vi['officeSide.tabResults'] })
   await expect(resultsTab).toBeVisible()
-  // Baseline: the room's replayed history has no handoff yet — no dot.
+  // The replayed history CONTAINS an old handoff (seq 20) — replay must not arm the dot
+  // (v56 real-data regression: async SSE replay used to out-seq a render-time baseline).
+  await expect(page.getByText('Bàn giao lần trước').first()).toBeVisible()
   await expect(page.locator('.office-side-badge')).toHaveCount(0)
   // A handoff lands live (delivered on the next EventSource reconnect, ~100ms).
   mock.pushRoomEvents(ROOM, [makeHandoff(45)])

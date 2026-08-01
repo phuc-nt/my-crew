@@ -143,6 +143,23 @@ export function makeRoomEvents(count: number): OfficeMessage[] {
     },
   ]
   for (let seq = 3; seq <= count; seq += 1) {
+    // One OLD handoff sits mid-history (regression for the v56 real-data bug: the SSE
+    // replay of a room's past handoffs must never arm the results dot — "live" is the
+    // event's ts vs room-open time, and this one is firmly in the past).
+    if (seq === 20) {
+      events.push({
+        seq,
+        ts: '2026-07-01T08:00:00Z',
+        author: 'coordinator',
+        kind: 'handoff',
+        body: {
+          step_title: 'Bàn giao lần trước',
+          summary: 'Kết quả cũ đã bàn giao từ tuần trước.',
+          assigned_to: 'tro-ly-pm',
+        },
+      })
+      continue
+    }
     events.push({
       seq,
       ts: `2026-07-31T09:${String(Math.min(59, seq)).padStart(2, '0')}:00Z`,
@@ -158,11 +175,11 @@ export function makeRoomEvents(count: number): OfficeMessage[] {
   return events
 }
 
-/** A handoff event for the results-dot test — seq must top the room's current max. */
+/** A LIVE handoff for the results-dot test — stamped now, seq above the room's max. */
 export function makeHandoff(seq: number): OfficeMessage {
   return {
     seq,
-    ts: '2026-07-31T10:00:00Z',
+    ts: new Date().toISOString(),
     author: 'coordinator',
     kind: 'handoff',
     body: {

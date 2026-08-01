@@ -27,6 +27,22 @@
 | Bỏ badge web-search trang Đội | `IntegrationHealthPanel` (v18) đã liệt kê agent bật flag ngay trang đó — badge là trùng lặp | Cảnh báo không nằm trên từng card |
 | GC orphan cần tuổi >7 ngày | Orphan mới = tín hiệu bug cho audit read-only, không phải rác | Rác nằm thêm 1 tuần |
 
+## UAT đường thật (browser + data + connection thật, sau commit đợt 1)
+
+- CEO yêu cầu UAT đầy đủ → restart 2 service launchd chạy code mới, agent-browser đo DOM
+  trên data thật (39 room): page-no-scroll ✓, feed 2635px/237px khung ✓, composer y=180 ✓,
+  gộp ×N ✓, artifact viewer trap wrap 2 chiều + Esc phím thật + focus trả về ✓, giao việc
+  LLM thật `@nghien-cuu` → preview overlay đứng yên + **hint web_search hiện đúng** (máy
+  thiếu key thật, nghien-cuu bật flag thật) → Huỷ, dọn row · sweep thật `{artifact_orphans: 0}` ✓.
+- **Bắt bug thứ 4 của chấm ●** (suite + e2e đều xanh mà lọt): reload toàn cảnh → dot sáng
+  từ history. Hai lỗi chồng: sentinel `{room: null}` trùng `activeRoom=null` nên toàn cảnh
+  không bao giờ chụp baseline; và SÂU HƠN — SSE **replay history bất đồng bộ sau render**,
+  baseline "chụp lúc render" luôn chụp lúc messages rỗng → handoff cũ nào cũng vượt baseline.
+  jsdom set messages đồng bộ nên 3 lần sửa trước đều xanh giả. **Fix lần 4 (nghiệm thật):**
+  "live" = **ts của sự kiện** > lúc mở phòng (cùng máy, skew ~0); toàn cảnh tắt hẳn dot
+  (ArtifactPanel ở đó chỉ là hint chọn phòng). Unit test chuyển sang mô phỏng replay
+  bất-đồng-bộ + e2e nhét handoff cũ vào history replay làm regression.
+
 ## Vấp & học được
 
 - **Review bắt H1:** sweep orphan quét `.data/team-tasks/` — đường dẫn KHÔNG writer nào

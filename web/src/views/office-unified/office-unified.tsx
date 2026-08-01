@@ -17,7 +17,6 @@ import { useUiMode } from '../../ui-mode-context'
 import { useOfficeStream } from '../../hooks/use-office-stream'
 import { useSharedPendingApprovals } from '../../pending-approvals-context'
 import { agentIdsInOrder, deriveAgentDesks, derivePendingCounts } from '../office-3d/agent-office-state'
-import { maxSeqOf } from './artifact-panel'
 import { AgentStatusTable } from '../office-3d/agent-status-table'
 import { OfficeCanvas } from '../office-3d/office-canvas'
 import { use3dFallback } from '../office-3d/use-3d-fallback'
@@ -173,24 +172,29 @@ export function OfficeUnified() {
   // instead of buried under the rooms list. A ● dot marks a handoff that landed LIVE while
   // the results tab wasn't open.
   //
-  // Baseline = the handoff seq this room already had when it was opened, captured DURING
-  // RENDER and keyed by room id. Two earlier attempts failed live UAT: a `prev.seq > 0`
-  // guard swallowed the first handoff of a brand-new room (its baseline is legitimately
-  // 0), and moving the bookkeeping into the effect never armed at all — the effect only
-  // re-runs when the handoff seq changes, so a room opened at 0 kept re-recording 0 as an
-  // un-settled baseline. Capturing at render time makes the baseline exist before any
-  // handoff can arrive, so `signal > baseline` is exactly "delivered while I was watching".
+  // v56 (4th attempt, caught by real-data UAT): "live" is decided by the EVENT'S OWN ts
+  // versus when this room was opened — never by seq against a render-time baseline. The
+  // SSE stream replays a room's history ASYNCHRONOUSLY after mount, so any baseline
+  // captured during render is taken while messages are still empty, and the replay's old
+  // handoffs out-seq it → dot from history (jsdom sets messages synchronously, which is
+  // why the suite stayed green through all three earlier fixes). Same-machine clocks, so
+  // event-ts vs Date.now() skew is negligible; an unparsable ts (NaN) counts as history.
+  // Toàn-cảnh has no room (ArtifactPanel shows a pick-a-room hint) → dot suppressed —
+  // the old {room: null} baseline sentinel collided with exactly that state and never
+  // armed a baseline there at all.
   const [sideTab, setSideTab] = useState<'rooms' | 'results'>('rooms')
   const [resultsDot, setResultsDot] = useState(false)
-  const artifactSignal = maxSeqOf(room.messages, ['handoff'])
-  const baseline = useRef<{ room: string | null; seq: number }>({ room: null, seq: -1 })
-  if (baseline.current.room !== activeRoom) {
-    baseline.current = { room: activeRoom, seq: artifactSignal }
+  const openedAt = useRef<{ room: string | null | undefined; at: number }>({ room: undefined, at: 0 })
+  if (openedAt.current.room !== activeRoom) {
+    openedAt.current = { room: activeRoom, at: Date.now() }
   }
+  const liveHandoff = activeRoom !== null && room.messages.some(
+    (m) => m.kind === 'handoff' && Date.parse(m.ts) > openedAt.current.at,
+  )
   useEffect(() => {
-    if (artifactSignal > baseline.current.seq && sideTab !== 'results') setResultsDot(true)
-  }, [artifactSignal, sideTab])
-  useEffect(() => { setResultsDot(false) }, [activeRoom]) // new room = new baseline
+    if (liveHandoff && sideTab !== 'results') setResultsDot(true)
+  }, [liveHandoff, sideTab])
+  useEffect(() => { setResultsDot(false) }, [activeRoom]) // new room = fresh dot state
   useEffect(() => { if (sideTab === 'results') setResultsDot(false) }, [sideTab])
   // v32 desk click: a PIC desk opens its task's workroom (room id = task id for a
   // standalone task; a child task's events mirror into its parent room via room_for_task

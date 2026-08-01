@@ -22,9 +22,9 @@ import { PendingApprovalsProvider } from '../../pending-approvals-context'
 import type { OfficeMessage } from '../../types'
 import { OfficeUnified } from './office-unified'
 
-function renderOffice() {
+function renderOffice(route = '/office') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[route]}>
       <LanguageProvider>
         <UiModeProvider>
           <PendingApprovalsProvider>
@@ -138,21 +138,21 @@ test('v55: right column tabs — Kết quả tab swaps the rooms list for the ar
   expect(screen.queryByPlaceholderText(DICT.vi['workroomList.searchPlaceholder'])).toBeNull()
 })
 
-test('v55: a live handoff dots the Kết quả tab, but loading a room\'s history does not', () => {
-  stubReducedMotion(true)
-  const handoff = (seq: number): OfficeMessage => ({
-    seq, ts: 't', author: 'noi-dung', kind: 'handoff',
+// v56: "live" is the event's own ts vs room-open time (see office-unified.tsx) — these
+// tests build history with PAST ts and live deliveries with a FUTURE ts.
+const OLD_TS = '2026-07-01T00:00:00Z'
+const liveTs = () => new Date(Date.now() + 5_000).toISOString()
+
+function handoffAt(seq: number, ts: string): OfficeMessage {
+  return {
+    seq, ts, author: 'noi-dung', kind: 'handoff',
     body: { task_title: 'Demo', step_title: 'soạn', message: 'xong', assigned_to: 'noi-dung' },
-  })
-  // First render = the room's existing history (2 handoffs already delivered): no dot.
-  mockStream([handoff(1), handoff(2)])
-  const { rerender } = renderOffice()
-  const dot = () => document.querySelector('.office-side-badge')
-  expect(dot()).toBeNull()
-  // A NEW handoff arrives on the same room's stream → the tab flags it.
-  mockStream([handoff(1), handoff(2), handoff(3)])
+  }
+}
+
+function rerenderOffice(rerender: ReturnType<typeof renderOffice>['rerender'], route: string) {
   rerender(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[route]}>
       <LanguageProvider>
         <UiModeProvider>
           <PendingApprovalsProvider>
@@ -162,40 +162,53 @@ test('v55: a live handoff dots the Kết quả tab, but loading a room\'s histor
       </LanguageProvider>
     </MemoryRouter>,
   )
+}
+
+test('v55: a live handoff dots the Kết quả tab, but a room\'s replayed history does not', () => {
+  stubReducedMotion(true)
+  // The real stream replays history ASYNCHRONOUSLY: the room mounts empty, then the old
+  // handoffs land. This exact sequence armed a false dot in v56 real-data UAT.
+  mockStream([])
+  const { rerender } = renderOffice('/office?room=r1')
+  const dot = () => document.querySelector('.office-side-badge')
+  expect(dot()).toBeNull()
+  mockStream([handoffAt(1, OLD_TS), handoffAt(2, OLD_TS)])
+  rerenderOffice(rerender, '/office?room=r1')
+  expect(dot()).toBeNull() // history replay must NOT arm the dot
+  // A NEW handoff arrives on the same room's stream → the tab flags it.
+  mockStream([handoffAt(1, OLD_TS), handoffAt(2, OLD_TS), handoffAt(3, liveTs())])
+  rerenderOffice(rerender, '/office?room=r1')
   expect(dot()).not.toBeNull()
   // Opening the tab clears it.
   fireEvent.click(screen.getByText(DICT.vi['officeSide.tabResults']))
   expect(dot()).toBeNull()
 })
 
-test('v55: the FIRST handoff of a brand-new room dots the tab (baseline 0 is legitimate)', () => {
+test('v56: toàn cảnh never dots — the results tab there is only a pick-a-room hint', () => {
+  stubReducedMotion(true)
+  mockStream([])
+  const { rerender } = renderOffice('/office')
+  const dot = () => document.querySelector('.office-side-badge')
+  // Even a genuinely live handoff on the office stream must not arm it.
+  mockStream([handoffAt(1, liveTs())])
+  rerenderOffice(rerender, '/office')
+  expect(dot()).toBeNull()
+})
+
+test('v55: the FIRST handoff of a brand-new room dots the tab', () => {
   stubReducedMotion(true)
   const step: OfficeMessage = {
-    seq: 1, ts: 't', author: 'coordinator', kind: 'step_status',
+    seq: 1, ts: OLD_TS, author: 'coordinator', kind: 'step_status',
     body: { task_title: 'Demo', step_title: 'soạn', status: 'started', assigned_to: 'noi-dung' },
-  }
-  const handoff: OfficeMessage = {
-    seq: 2, ts: 't', author: 'noi-dung', kind: 'handoff',
-    body: { task_title: 'Demo', step_title: 'soạn', message: 'xong', assigned_to: 'noi-dung' },
   }
   // A room the CEO just created: no handoff yet, only progress events.
   mockStream([step])
-  const { rerender } = renderOffice()
+  const { rerender } = renderOffice('/office?room=r1')
   const dot = () => document.querySelector('.office-side-badge')
   expect(dot()).toBeNull()
-  // Its very first delivery arrives live — this is exactly what live UAT found swallowed.
-  mockStream([step, handoff])
-  rerender(
-    <MemoryRouter>
-      <LanguageProvider>
-        <UiModeProvider>
-          <PendingApprovalsProvider>
-            <OfficeUnified />
-          </PendingApprovalsProvider>
-        </UiModeProvider>
-      </LanguageProvider>
-    </MemoryRouter>,
-  )
+  // Its very first delivery arrives live — v55 live UAT found this swallowed twice.
+  mockStream([step, handoffAt(2, liveTs())])
+  rerenderOffice(rerender, '/office?room=r1')
   expect(dot()).not.toBeNull()
 })
 
