@@ -57,5 +57,9 @@ watch-run trùng, 28 xong + 11 kẹt.
 ## Còn treo
 
 - Chưa test tự động cho layout B (jsdom không tính layout) — chỉ browser đo được, đã đo.
-- Server đang chạy từ checkout cũ `my-project-manager/` (venv sai) — đã restart từ repo này
-  cho UAT; nợ dọn thư mục cũ + wire launchd đúng vẫn treo (ghi ở HANDOVER câu hỏi mở).
+- ~~Server chạy từ checkout cũ `my-project-manager/`~~ **Giải 2026-08-01 (finalize 0.5.0):**
+  gốc rễ là 2 plist launchd `com.mpm.*` + 3 dòng `*_MCP_DIST` trong `.env` đều trỏ đường
+  dẫn tuyệt đối vào checkout cũ. Chạy lại `deploy/install.sh` (re-render plist từ template
+  `__REPO_DIR__`), sửa `.env`, xoá thư mục cũ (chỉ log + DB rỗng). Doctor 13/15 ✓ (2 fail
+  còn lại = key web-search + SMTP, tuỳ chọn người dùng). Release **0.5.0 lên PyPI** qua
+  OIDC pipeline (CI + release đều xanh).
