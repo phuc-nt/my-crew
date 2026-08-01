@@ -43,6 +43,25 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # v56: layout smoke for the v55 cockpit — jsdom cannot measure layout, so these run
+  # in real chromium via Playwright with the whole /api surface mocked in-browser
+  # (see web/e2e/support/mock-api.ts). Secret-free like everything else here.
+  frontend-e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
   wheel:
     runs-on: ubuntu-latest
     steps:
