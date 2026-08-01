@@ -1,7 +1,7 @@
 # Project Overview & PDR — my-crew
 
 > Product definition + requirements. Đọc file này TRƯỚC khi plan hay code.
-> Cập nhật: 2026-07-16 (v50). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified**.
+> Cập nhật: 2026-08-01 (v55). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified — PyPI 0.4.0, chuẩn bị 0.5.0**.
 > Liên quan: [system-architecture](system-architecture.md) · [action-gateway-explainer](action-gateway-explainer.md) · [uat-theo-user-story](uat-theo-user-story.md).
 
 ## 1. Vấn đề
@@ -69,10 +69,12 @@ Xem [action-gateway-explainer.md](action-gateway-explainer.md) cho mô hình đ�
 
 ## 8. Trạng thái & lộ trình
 
-Đã ship tới **v49** (…v40–v42 deep_agent hardening · v43 deep_team in-sandbox · v44 benchmark ·
-v45 tier-0 routing · **v46 audit actor** (governance: every action stamped agent) ·
-**v47 Docker UX** (health check, prepull) · **v48 MCP pool** (team-step reuse) ·
-**v49 quickstart** (OpenRouter-only dry-run)), **~2312 BE tests**, live E2E verified.
+Đã ship tới **v55** (…v46 audit actor · v47 Docker UX · v48 MCP pool · v49 quickstart ·
+v50 UI catch-up · **v51 productize** (PyPI `my-crew` 0.1.0: console script, serve, Docker,
+CI + OIDC release) · **v52 office dual-lens** (👁/🔬, captures, search) · **v53 UI kỷ luật
++ VN/EN** · **v54 office cockpit** (rail duyệt/clarify tại chỗ, feed ra-ngoài, review tray)
+· **v55 cockpit viewport shell** (1 màn không scroll, composer command bar, gộp/lọc phòng
+việc)), **~2389 BE + ~273 FE tests**, live E2E verified, PyPI 0.4.0.
 Kiến trúc runtime-tier + moat: xem [system-architecture](system-architecture.md) §3.9.
 Lộ trình + việc tiếp: [project-roadmap.md](project-roadmap.md).
 

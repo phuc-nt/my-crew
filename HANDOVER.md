@@ -21,10 +21,12 @@ việc mất-dữ-liệu/lộ-bí-mật bị chặn cứng, LLM không vượt �
 - **Backend**: Python ≥3.12, quản lý bằng **uv**. LangGraph (agent graph). FastAPI + SSE.
   SQLite (WAL) cho state. Không dùng ORM.
 - **Frontend**: React 19 + TypeScript + Vite; react-three-fiber/three cho màn 3D "Văn phòng".
-  Build dist commit vào `src/server/static/app/` (server serve tĩnh).
+  Build dist commit vào `my_crew/server/static/app/` (server serve tĩnh).
 - **Tích hợp ngoài**: MCP servers (Jira/Confluence/Slack) + `gh` CLI (GitHub) + `gws` CLI
   (Google Sheets, hr-pack). LLM qua OpenRouter.
-- **Test**: `uv run pytest` (~1706 BE) · `cd web && npx vitest run` (~177 FE) · `npx tsc --noEmit`.
+- **Test**: `uv run python -m pytest` (~2389 BE — dùng `python -m`, shim `uv run pytest`
+  có thể bắt nhầm Python Homebrew ngoài venv) · `cd web && npx vitest run` (~273 FE) ·
+  `npx tsc -b`.
 
 ## 3. Đọc theo thứ tự này
 
@@ -50,7 +52,7 @@ việc mất-dữ-liệu/lộ-bí-mật bị chặn cứng, LLM không vượt �
 ## 4. Bản đồ code (nơi bắt đầu khi sửa)
 
 ```
-src/
+my_crew/
   agent/        LangGraph graphs + nodes. LÕI: coordinator_graph.py (ticker điều phối),
                 team_task_graph.py (chạy 1 bước việc), task_decomposition.py (chia việc),
                 review_graph.py (soát chéo), ops_*.py (lệnh CEO: giao/chỉnh việc)
@@ -66,8 +68,9 @@ web/src/
   views/                 Team, Work (Duyệt), Settings, Chat…
 ```
 
-Entry points: web `python -m src.server.app` (hoặc `main()` trong app.py) · daemon điều
-phối `python -m src.runtime.service` · CLI `python -m src.entrypoints.mpm`.
+Entry points: web `python -m my_crew.server.app` (hoặc `main()` trong app.py) · daemon
+điều phối `python -m my_crew.runtime.service` · CLI console script `my-crew` (hoặc
+`python -m my_crew.entrypoints.mpm`).
 
 ## 5. BẤT BIẾN — đừng phá khi refactor (đọc kỹ)
 
@@ -105,8 +108,8 @@ review → E2E thật (browser + LLM thật) → docs/journal → commit**. Bằ
 ```bash
 uv sync
 cd web && npm install && npm run build && cd ..     # build FE (dist đã commit sẵn)
-PORT=8765 uv run python -c "from src.server.app import main; main()" &   # web
-uv run python -m src.runtime.service &                                   # điều phối
+PORT=8765 uv run python -m my_crew.server.app &      # web
+uv run python -m my_crew.runtime.service &           # điều phối
 # mở http://127.0.0.1:8765  (auth OFF khi localhost + chưa đặt password)
 ```
 
@@ -121,8 +124,11 @@ service chạy, nếu không màn Văn phòng hiện banner đỏ "bộ điều 
 - **Cải thiện đã ghi nhận từ UAT v17/v18** (chưa làm): xem
   `plans/260711-0711-.../reports/uat-260711-0908-*findings*.md` + `docs/project-roadmap.md`
   §"Việc nên làm tiếp" — vd hr/sales-pm là hồ sơ agent mồ côi chưa đăng ký; web_search cần key.
-- Nhật ký/plan rất nhiều (67 journal, 22 plan) — là lịch sử, KHÔNG cần đọc để làm tiếp;
-  tra khi cần "vì sao quyết định X".
+- Nhật ký/plan rất nhiều (100+ journal, 50+ plan) — là lịch sử, KHÔNG cần đọc để làm
+  tiếp; tra khi cần "vì sao quyết định X".
+- **Hạ tầng máy dev**: repo từng có checkout cũ tên `my-project-manager` (đã xoá
+  2026-08-01); nếu máy chạy service qua launchd, kiểm tra plist trỏ đúng
+  `~/workspace/my-crew` (bài học: web server từng chạy từ venv checkout cũ).
 
 ## 9. Không được làm
 

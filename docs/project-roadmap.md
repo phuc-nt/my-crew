@@ -1,12 +1,21 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v50). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-07-16.
+> Lộ trình + trạng thái (as-built v55). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Cập nhật: 2026-08-01.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v50.** ~2345 backend test, ruff/tsc
-sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out parallelism).
+**Production-usable, single-user autonomy-first. Đã ship tới v55, PyPI `my-crew` 0.4.0.**
+~2389 BE + ~273 FE test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
+(live daemon, kill-9 resume, fan-out parallelism).
+
+**v51–v55 (productize + office cockpit):** **v51 productize** (PyPI package: console script
+`my-crew`, serve supervisor, Docker, CI secret-free + OIDC release, MY_CREW_HOME) ·
+**v52 office dual-lens** (👁/🔬 lens, captures explorer, FTS5 search, failure/review visuals 3D) ·
+**v53 UI kỷ luật + VN/EN** (6 primitive, 1 cost/date format, dictionary typed-keys) ·
+**v54 office cockpit** (rail duyệt/clarify tại chỗ, feed ra-ngoài từ gateway, review tray
+per-criterion, ✋/×N/ghost 3D) · **v55 cockpit viewport shell** (1 màn không scroll, composer
+command bar trên đỉnh, gộp watch-run ×N + lọc [●⚠✓] + search + tab Kết quả).
 
 **v40–v50 (deep_agent + runtime-tier + governance + onboarding + UI catch-up):** v40–v42 deep_agent hardening ·
 v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-shell→create_agent) ·
@@ -45,6 +54,11 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
 | **Harness wave 1: send_message + skill-curator (v38)** | `send_message` facade (slack/telegram/email) qua Action Gateway — agent chủ động gửi, thừa hưởng Lớp A/B + trust_mode + audit; surface chat-ops (không tool LLM ghi trong loop) · skill-curator: đếm skill được chọn + archive skill agent-own quá hạn (không xoá, không đụng template-role). 2177 BE + 200 FE tests. |
 | **Google Workspace context + SMTP + Calendar-create (v39)** | Agent bật `gws_context` đọc Gmail/Calendar/Drive (gws CLI, argv CODE-cố-định, internal-only, flag mặc định TẮT) · SMTP vào Connections UI · Calendar-create WRITE qua Gateway (`("calendar","events","insert")` allowlist, delete/acl = Lớp A). 2207 BE + 200 FE tests, live E2E OAuth thật. |
 | **UI catch-up: surface v43–v46 backend (v50)** | Audit actor column trên AuditTable (v46 data lộ UI) · tier badge "🔒 N sandbox" kanban card (v45 count steps_needs_shell) · GET `/api/team-tasks/{id}/cost` + TeamTaskCost component lazy-expand "Chi phí" (v26 telemetry bộ lộ) · create-wizard deep_team toggle (v43 feature YAML-only → UI, guarded passthrough). 2344 BE + 201 FE tests, E2E UAT browser 5/5. |
+| **Productize → PyPI (v51)** | Package `my-crew` 0.1.0: console script (`quickstart`/`crew init`/`serve`/`doctor`/`upgrade`) · wheel bundle dist FE + shipped resources · MY_CREW_HOME · Docker compose · CI ubuntu+macos + OIDC release pipeline. PyPI 0.3.0 (v53) → 0.4.0 (v54). |
+| **Office dual-lens (v52)** | 1 màn Văn phòng phục vụ CEO (thường) + maintainer (🔬): failure/review visuals 3D (desk đỏ + ⚠, floor ring verdict) · health strip · Desk Inspector · Captures explorer · FTS5 history search · read-only observability API. |
+| **UI kỷ luật + song ngữ (v53)** | 6 primitive (Button/Card/Badge/Input/EmptyState/PageHeader) · 1 cost/date format · App.css 5 section chống drift · language mode VN/EN dictionary typed-keys (thiếu key EN = lỗi compile). |
+| **Office cockpit (v54)** | Rail "Chờ anh/chị" (duyệt + clarify xử lý TẠI office) + "Sắp chạy" (effective schedule) · feed [All\|Steps\|External] bridge từ gateway audit choke-point · review tray per-criterion (criteria_json) · 3D ✋/×N/ghost deep_team. UAT live 6/6, vòng cockpit tự khép. |
+| **Cockpit viewport shell (v55)** | Màn Văn phòng = 1 viewport 100dvh (scoped `:has()`, cột scroll riêng, page không bao giờ scroll) · composer command bar trên đỉnh (overlay @mention/preview) · gộp watch-run trùng tiêu đề ×N + lọc [●⚠✓] + search + tab [Phòng việc\|Kết quả] (chấm ● live) · nới shell 1600px. UAT 2 vòng đường thật 26 mục; chấm ● sửa 3 lần mới đúng (suite xanh ≠ chạy được). |
 
 ## Việc nên làm tiếp (từ UAT + nợ kỹ thuật)
 
@@ -85,6 +99,10 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
 - [ ] Focus-trap + hiển thị detail lỗi cho artifact viewer (drawer).
 - [ ] Dọn artifact hex mồ côi sau demo (task giao thật trong demo).
 - [ ] Cân nhắc gộp/chuẩn hóa các module >200 LOC còn lại (theo rule modularization).
+- [ ] **Opaque `attempt_id` cho review tray** (treo từ v54): join review line ↔ capture
+  hiện theo (task, step, round) — attempt_id xuyên suốt sẽ chính xác tuyệt đối.
+- [ ] Test tự động cho layout cockpit (v55): jsdom không tính layout — cần Playwright
+  hoặc tương đương nếu muốn tự động hoá; hiện verify bằng browser đo DOM thật.
 
 ## Ngoài phạm vi hiện tại (cần thiết kế lại nếu mở)
 
