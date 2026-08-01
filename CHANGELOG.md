@@ -3,6 +3,41 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.6.0] — 2026-08-01
+
+Hardening round: browser-measured layout tests plus three small usability/hygiene
+fixes surfaced by the post-0.5.0 roadmap review.
+
+### Added
+- **Playwright smoke suite** (`web/e2e/`, `npm run test:e2e`, CI job `frontend-e2e`):
+  8 DOM-measurement tests pin the office cockpit layout (page never scrolls, every
+  zone scrolls internally, composer always visible, overlays never push the grid,
+  ×N watch-run grouping, filter/search, live results-dot, mobile stack). The whole
+  /api surface is mocked inside the browser — secret-free, no backend needed.
+- **Assign-time web-search warning**: when the previewed PIC has `web_search: true`
+  but the machine has no search-provider key, the plan preview shows a notice that
+  the agent will work internal-only (the profile flag is never auto-disabled).
+  `/api/office/assign/staff` now carries `web_search_ready` (presence-only) and a
+  per-staff `web_search` opt-in flag.
+- **Artifact drawer a11y**: a shared focus trap (Tab wraps inside the drawer, focus
+  returns to the opener on close) and error lines that show `HTTP <status>` plus the
+  backend's `detail` — GET requests now surface backend detail the way writes always did.
+
+### Changed
+- The retention sweep now deletes orphan artifact directories (no task row AND older
+  than 7 days, confined to the team-tasks artifact root); fresh orphans stay visible
+  to the read-only integrity audit as a bug signal.
+
+### Fixed
+- The results-tab ● dot no longer lights up from a room's replayed history (it armed
+  on old handoffs because the SSE replay lands after the render-time baseline was
+  captured, and the overview collided with the baseline's null sentinel — caught by
+  real-data UAT, the 4th fix of this dot). "Live" is now the event's own timestamp
+  versus room-open time, and the overview never dots.
+- The v36 integrity audit's artifact-orphan check scanned a directory nothing writes
+  to and has been silently reporting "clean" since v36 — both it and the new sweep
+  now share the writers' real path helper.
+
 ## [0.5.0] — 2026-08-01
 
 Office cockpit shell: the office screen becomes a single fixed viewport — the CEO never
