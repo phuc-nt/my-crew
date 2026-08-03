@@ -37,7 +37,7 @@ def test_personal_pack_discovered_and_assembled():
     assert "briefing-system" in pack.prompts
     assert "weekly-review-system" in pack.prompts
     assert pack.tools is not None
-    assert pack.commands == {}  # chưa có catalog lệnh chat — chỉ Q&A
+    assert set(pack.commands) == {"tao_lich"}  # 3b: lệnh ghi đầu tiên (calendar insert)
 
 
 def test_tool_provider_reads_day_context_plus_gws(monkeypatch):
@@ -156,6 +156,48 @@ def test_briefing_live_send_dedups_per_day_but_not_across_kinds(tmp_path, monkey
     ).invoke({})
     assert weekly["delivered"] is True  # kind khác ⇒ hint khác ⇒ không dedup chéo
     assert len(calls) == 2
+
+
+# --- chat-command tao_lich (3b) ---
+
+
+def test_tao_lich_builds_allowlisted_gws_argv():
+    """build_args → argv CODE-fixed trong _GWS_ALLOWLIST_PREFIXES; slots chỉ vào --json;
+    action qua Lớp A sạch (không phải NHỜ allowlist rộng — mà vì đúng prefix cho phép)."""
+    import json as _json
+
+    from my_crew.actions.hard_block import _hard_deny_gws
+
+    pack = PackRegistry().load("personal")
+    spec = pack.commands["tao_lich"]
+    payload = spec["build_args"](
+        {"title": "Họp thử", "start": "2026-08-05T09:00:00+07:00"}, None
+    )
+    assert payload["argv"][:3] == ["calendar", "events", "insert"]
+    params = _json.loads(payload["argv"][payload["argv"].index("--params") + 1])
+    assert params == {"calendarId": "primary"}  # path-param bắt buộc — thiếu là API 400
+    body = _json.loads(payload["argv"][payload["argv"].index("--json") + 1])
+    assert body["summary"] == "Họp thử"
+    assert body["start"] == {"dateTime": "2026-08-05T09:00:00+07:00"}
+    assert payload["dedup_hint"].startswith("personal-calendar:Họp thử:")
+    action = {**payload, "type": "gws_write"}
+    assert _hard_deny_gws(action) is None  # qua Lớp A vì đúng prefix — không phải may
+
+
+def test_tao_lich_destructive_slot_cannot_escape_argv():
+    """Slot chứa verb phá hoại chỉ nằm TRONG --json body (tiêu đề sự kiện), không bao giờ
+    thành subcommand — và một argv chế tay có 'delete' vẫn bị Lớp A marker chặn."""
+    from my_crew.actions.hard_block import _hard_deny_gws
+
+    pack = PackRegistry().load("personal")
+    payload = pack.commands["tao_lich"]["build_args"](
+        {"title": "delete share acl", "start": "2026-08-05T09:00:00+07:00"}, None
+    )
+    assert payload["argv"][:3] == ["calendar", "events", "insert"]  # verb không đổi argv
+    forged = {"type": "gws_write", "argv": ["calendar", "events", "delete", "--json", "{}"],
+              "dedup_hint": "x"}
+    verdict = _hard_deny_gws(forged)
+    assert verdict is not None and verdict.blocked  # Lớp A giữ nguyên
 
 
 def test_briefing_gateway_denies_mcp_with_empty_pack_allowlist(tmp_path):

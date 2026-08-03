@@ -47,7 +47,12 @@ def classify_intent(llm: LlmClient, message: str, commands: dict[str, dict]) -> 
         )
         for cid, spec in commands.items()
     )
-    user = f"DANH SÁCH LỆNH:\n{catalog}\n\nTIN NHẮN:\n{message}"
+    # Mốc thời gian hiện tại (giờ máy, kèm múi giờ) — thiếu nó, một lệnh có slot thời
+    # gian ("9h sáng mai") sẽ bị bịa ngày vì model không biết hôm nay là ngày nào.
+    from datetime import datetime
+
+    now = datetime.now().astimezone().isoformat(timespec="minutes")
+    user = f"BÂY GIỜ: {now}\n\nDANH SÁCH LỆNH:\n{catalog}\n\nTIN NHẮN:\n{message}"
     try:
         result = llm.complete(
             [{"role": "system", "content": _CLASSIFIER_SYSTEM},

@@ -127,5 +127,9 @@ def test_ops_builds_fixed_argv_not_llm_supplied(monkeypatch):
     ops_calendar_event.run_create_calendar_event(
         {"title": "họp", "start": "2026-07-20T09:00:00+07:00"})
     argv = captured["action"]["argv"]
-    assert argv[:4] == ["calendar", "events", "insert", "--json"]  # fixed prefix
+    assert argv[:3] == ["calendar", "events", "insert"]  # fixed prefix
+    # calendarId=primary là path-param BẮT BUỘC (thiếu → Google 400; bug v57 3b tìm ra
+    # khi UAT thật — bản argv cũ không có --params chưa từng chạy nổi với API thật).
+    assert argv[3:5] == ["--params", '{"calendarId": "primary"}']
+    assert argv[5] == "--json"
     assert captured["action"]["type"] == "gws_write"

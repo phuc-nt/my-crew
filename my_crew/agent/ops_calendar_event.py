@@ -53,14 +53,24 @@ def _build_event_body(slots: dict) -> dict:
     return body
 
 
+def calendar_insert_argv(body: dict) -> list[str]:
+    """CODE-fixed argv cho `calendar events insert` — slots chỉ vào --json, không bao giờ
+    thành subcommand. `calendarId: primary` là path-param BẮT BUỘC của API (thiếu nó
+    Google trả 400 validationError — bug v57 3b tìm ra khi UAT thật)."""
+    return [
+        "calendar", "events", "insert",
+        "--params", json.dumps({"calendarId": "primary"}),
+        "--json", json.dumps(body, ensure_ascii=False),
+    ]
+
+
 def run_create_calendar_event(slots: dict) -> str:
     """Confirm-time: create the event through the gateway. Returns a human summary."""
     from my_crew.actions.action_gateway import ActionGateway
 
     loaded = _sender_profile()
     body = _build_event_body(slots)
-    # CODE-fixed argv — the slots only fill the --json body, never the subcommand.
-    argv = ["calendar", "events", "insert", "--json", json.dumps(body, ensure_ascii=False)]
+    argv = calendar_insert_argv(body)
     action = {
         "type": "gws_write",
         "argv": argv,

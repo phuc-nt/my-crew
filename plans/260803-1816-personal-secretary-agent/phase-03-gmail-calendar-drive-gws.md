@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: Gmail Calendar Drive (gws)
-status: in-progress
+status: completed
 priority: P2
 effort: 0.5d
 dependencies:
@@ -51,11 +51,25 @@ per-source "(chưa đọc được: …)" khi CLI lỗi (không cần cờ: pack
 thư ký chủ máy; `gws_context: true` vẫn bật trong profile cho tier team-step). Smoke thật:
 snapshot trả calendar + inbox thật. +2 test, suite 2407.
 
-**3b còn lại (GHI) — phát hiện kiến trúc:** chat chỉ thực thi được hành động qua catalog
-`commands.py` của pack (v5 M12), và catalog CẤM type `email_send` by design (v31 P2 —
-`_VETTED_COMMAND_TYPES` chỉ cho mcp_tool/schedule_update/team_task/gws_write). Đường khả thi:
-lệnh `gws_write` (calendar insert / gmail send qua gws nếu verb qua được Lớp A) + auto_approve
-trusted-sender. Cần chốt: những verb ghi nào đáng làm đợt đầu → hỏi CEO trước khi code.
+**3b (GHI) xong — CEO chốt "thư ký được quyền ghi":** catalog `commands.py` của pack với
+lệnh `tao_lich` (native `gws_write`, argv CODE-fixed `calendar events insert`, slots chỉ vào
+`--json`) — trust_mode autonomous nên chạy ngay + audit, không cần cấu hình auto_approve
+riêng. **Email KHÔNG làm**: catalog cấm type `email_send` by design (v31 P2) — muốn có phải
+nới vetted-types, để lại như một quyết định riêng nếu CEO thật sự cần.
+
+**2 bug thật UAT 3b bắt được:**
+- Argv calendar insert (cả chat-ops v39 lẫn lệnh mới) thiếu path-param `calendarId` — Google
+  400, tức lệnh v39 CHƯA TỪNG chạy nổi với API thật mà test vẫn xanh (pin đúng argv hỏng —
+  phantom coverage lần 2 của repo). Fix: builder chung `calendar_insert_argv()` (+ `--params
+  '{"calendarId":"primary"}'`), test cập nhật theo argv đã nghiệm thật.
+- `gws_write` handler chỉ lấy stderr khi lỗi → noise keyring che mất JSON lỗi API ở stdout.
+  Fix: ghép cả hai vào detail.
+- Classifier lệnh chat không biết "bây giờ" → slot thời gian tương đối ("tối nay") bịa ngày.
+  Fix core: chèn `BÂY GIỜ: <ISO local>` vào prompt phân loại.
+
+**UAT thật:** tin nhắn "đặt giúp anh lịch … 23 giờ 15 tối nay" → classifier điền RFC3339 đúng
+ngày → gateway tự duyệt (autonomous) → sự kiện có thật trên Calendar (đã xoá 2 event test).
+Suite 2409 + 12 test pack, ruff sạch.
 
 ## Implementation Steps
 
@@ -70,9 +84,10 @@ trusted-sender. Cần chốt: những verb ghi nào đáng làm đợt đầu �
 
 ## Success Criteria
 
-- [ ] 3 câu đọc gws trả lời đúng dữ liệu thật.
-- [ ] Mail test gửi ngay qua auto-approve, có audit; quá cap/ngày → rơi về queue duyệt tay.
-- [ ] Lệnh destructive bị Lớp A chặn (bằng chứng audit), thư ký giải thích thay vì im lặng.
+- [x] Đọc lịch + email chưa đọc từ dữ liệu thật (smoke provider + chat DM).
+- [x] Lệnh ghi (tạo lịch) qua chat chạy ngay (autonomous) + audit; sự kiện lên Calendar thật.
+- [x] Verb destructive không thể lọt: slot chỉ vào --json (test), argv chế tay có `delete`
+      bị Lớp A chặn (test); email bị loại khỏi catalog by design — ghi nhận, không làm.
 
 ## Risk Assessment
 

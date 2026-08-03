@@ -58,7 +58,11 @@ def make_gws_handler(gws_bin: str = "gws") -> Handler:
                 f"gws CLI not found ({gws_bin!r}) — cài gws và đăng nhập OAuth trước"
             ) from None
         if proc.returncode != 0:
-            detail = (proc.stderr or proc.stdout or "").strip()[:_SUMMARY_MAX]
+            # Ghép CẢ stderr lẫn stdout: gws in noise keyring ra stderr còn lỗi API thật
+            # (JSON) ra stdout — chỉ lấy stderr là che mất nguyên nhân (v57 3b).
+            detail = " | ".join(
+                s for s in ((proc.stderr or "").strip(), (proc.stdout or "").strip()) if s
+            )[:_SUMMARY_MAX]
             raise RuntimeError(f"gws exited {proc.returncode}: {detail}")
         return _summarize(argv, proc.stdout)
 
