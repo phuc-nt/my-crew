@@ -2,10 +2,11 @@
 
 Load-bearing properties:
 
-- Pack assembly: discovery thấy `personal`; đúng 1 kind `briefing`; allowlist RỖNG
-  (thư ký không ghi MCP nào — default-DENY nguyên vẹn); prompts qa-system +
-  briefing-system có mặt (qa-system là persona chat DM, seam qa_answer.py).
-- ToolProvider thuần code, chạy offline, trả bối cảnh ngày tiếng Việt.
+- Pack assembly: discovery thấy `personal`; 2 kind briefing + weekly-review; allowlist
+  RỖNG (thư ký không ghi MCP nào — default-DENY nguyên vẹn); prompts qa/briefing/weekly
+  có mặt (qa-system là persona chat DM, seam qa_answer.py).
+- ToolProvider: bối cảnh ngày (thuần code) + gws lịch/email (mock trong test; degrade
+  per-source thành chuỗi nói-thật khi CLI lỗi — không bao giờ crash vòng trả lời).
 - Graph briefing chạy offline end-to-end: không API key ⇒ fallback thuần code vẫn
   ship bản tin; dry-run delivery tính là giao; thiếu telegram ⇒ skip có tiếng,
   không crash; audience external ⇒ fail loud (bản tin mang trí nhớ cá nhân).
@@ -39,15 +40,42 @@ def test_personal_pack_discovered_and_assembled():
     assert pack.commands == {}  # chưa có catalog lệnh chat — chỉ Q&A
 
 
-def test_tool_provider_reads_offline_day_context():
+def test_tool_provider_reads_day_context_plus_gws(monkeypatch):
+    monkeypatch.setattr("my_crew.tools.gws_read.calendar_agenda", lambda: '{"events": []}')
+    monkeypatch.setattr("my_crew.tools.gws_read.gmail_triage", lambda: '{"unread": 2}')
     pack = PackRegistry().load("personal")
     snapshot = pack.tools.read("briefing", None, None)
     assert snapshot["bay_gio"]  # ISO local time
     assert snapshot["thu"].startswith(("Thứ", "Chủ"))
-    assert snapshot["nguon_da_noi"] == []
+    assert snapshot["lich_24h_toi"] == '{"events": []}'
+    assert snapshot["email_chua_doc"] == '{"unread": 2}'
+
+
+def test_tool_provider_degrades_per_source_on_gws_failure(monkeypatch):
+    """CLI thiếu/OAuth hết hạn → snapshot vẫn ra, nguồn lỗi thành chuỗi nói-thật —
+    thư ký trả lời 'chưa xem được' thay vì crash vòng chat/briefing."""
+    from my_crew.tools.gws_read import GwsReadError
+
+    def boom():
+        raise GwsReadError("gws CLI chưa cài")
+
+    monkeypatch.setattr("my_crew.tools.gws_read.calendar_agenda", boom)
+    monkeypatch.setattr("my_crew.tools.gws_read.gmail_triage", lambda: '{"unread": 0}')
+    pack = PackRegistry().load("personal")
+    snapshot = pack.tools.read("briefing", None, None)
+    assert snapshot["lich_24h_toi"].startswith("(chưa đọc được:")
+    assert snapshot["email_chua_doc"] == '{"unread": 0}'  # nguồn lành không bị vạ lây
 
 
 # --- offline end-to-end graph run ---
+
+
+class _FakeDayTools:
+    """Provider giả cho graph tests — không chạm CLI gws thật (chậm + đọc data thật)."""
+
+    def read(self, kind, config, settings):
+        return {"bay_gio": "2026-08-03T07:00+07:00", "thu": "Thứ Hai",
+                "lich_24h_toi": "(chưa đọc được: test)", "email_chua_doc": "(chưa đọc được: test)"}
 
 
 def _config(with_telegram: bool):
@@ -66,7 +94,9 @@ def _config(with_telegram: bool):
 def test_briefing_graph_offline_dry_run_delivers_to_telegram(tmp_path):
     pack = PackRegistry().load("personal")
     settings = build_settings_from_dict({"data_dir": tmp_path, "dry_run": True})  # no API key
-    graph = pack.report_kinds["briefing"](None, config=_config(True), settings=settings)
+    graph = pack.report_kinds["briefing"](
+        None, config=_config(True), settings=settings, tools=_FakeDayTools()
+    )
     result = graph.invoke({})
     assert result["delivered"] is True  # dry-run delivery tính là giao
     assert result["delivery_summary"] == "telegram=dry_run"
@@ -77,7 +107,9 @@ def test_briefing_graph_offline_dry_run_delivers_to_telegram(tmp_path):
 def test_briefing_graph_without_telegram_skips_loudly(tmp_path):
     pack = PackRegistry().load("personal")
     settings = build_settings_from_dict({"data_dir": tmp_path, "dry_run": True})
-    graph = pack.report_kinds["briefing"](None, config=_config(False), settings=settings)
+    graph = pack.report_kinds["briefing"](
+        None, config=_config(False), settings=settings, tools=_FakeDayTools()
+    )
     result = graph.invoke({})
     assert result["delivered"] is False
     assert result["delivery_summary"] == "telegram=not_configured"
@@ -88,7 +120,8 @@ def test_briefing_graph_rejects_external_audience(tmp_path):
     settings = build_settings_from_dict({"data_dir": tmp_path, "dry_run": True})
     with pytest.raises(ValueError, match="internal"):
         pack.report_kinds["briefing"](
-            None, config=_config(True), settings=settings, audience="external"
+            None, config=_config(True), settings=settings, audience="external",
+            tools=_FakeDayTools(),
         )
 
 
@@ -106,15 +139,21 @@ def test_briefing_live_send_dedups_per_day_but_not_across_kinds(tmp_path, monkey
     pack = PackRegistry().load("personal")
     settings = build_settings_from_dict({"data_dir": tmp_path, "dry_run": False})
     config = _config(True)
-    first = pack.report_kinds["briefing"](None, config=config, settings=settings).invoke({})
-    second = pack.report_kinds["briefing"](None, config=config, settings=settings).invoke({})
+    first = pack.report_kinds["briefing"](
+        None, config=config, settings=settings, tools=_FakeDayTools()
+    ).invoke({})
+    second = pack.report_kinds["briefing"](
+        None, config=config, settings=settings, tools=_FakeDayTools()
+    ).invoke({})
     assert first["delivered"] is True
     assert first["delivery_summary"] == "telegram=executed"
     assert len(calls) == 1  # đúng 1 lần chạm Bot API
     assert second["delivered"] is False  # cùng ngày ⇒ dedup, không gửi lại
     assert second["delivery_summary"] == "telegram=deduplicated"
     assert len(calls) == 1
-    weekly = pack.report_kinds["weekly-review"](None, config=config, settings=settings).invoke({})
+    weekly = pack.report_kinds["weekly-review"](
+        None, config=config, settings=settings, tools=_FakeDayTools()
+    ).invoke({})
     assert weekly["delivered"] is True  # kind khác ⇒ hint khác ⇒ không dedup chéo
     assert len(calls) == 2
 
