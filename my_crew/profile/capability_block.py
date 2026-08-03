@@ -20,6 +20,9 @@ if TYPE_CHECKING:
     from my_crew.profile.loader import LoadedProfile
 
 _MAX_CHARS = 600
+#: Trần khi kèm roster (thư ký): mỗi đồng nghiệp ~50 ký tự — crew chục người vẫn lọt,
+#: và vẫn bounded để một registry phình không nuốt context.
+_MAX_CHARS_WITH_ROSTER = 1400
 
 
 def build_capability_block(loaded: LoadedProfile, pack: Pack | None) -> str:
@@ -47,7 +50,25 @@ def build_capability_block(loaded: LoadedProfile, pack: Pack | None) -> str:
     provider = getattr(getattr(loaded, "memory_config", None), "provider", "static")
     lines.append(f"- Bộ nhớ: {provider}")
 
+    # v58 P1: thư ký (domain personal) biết roster đồng nghiệp để gợi ý giao việc ĐÚNG TÊN
+    # thay vì bịa nhân vật. Best-effort: registry/profile lỗi ⇒ bỏ qua, không phá đường chat
+    # (stand-in tests và máy chưa có registry vẫn chạy). Internal-only như toàn block.
+    cap = _MAX_CHARS
+    if getattr(loaded, "domain", "") == "personal":
+        try:
+            from my_crew.profile.crew_roster import crew_roster, render_roster_lines
+
+            roster = render_roster_lines(
+                crew_roster(exclude_id=getattr(loaded, "profile_id", "") or "")
+            )
+        except Exception:  # noqa: BLE001 — roster là tiện nghi, không được làm vỡ chat
+            roster = []
+        if roster:
+            lines.append("- Đồng nghiệp trong crew (gợi ý giao việc đúng người):")
+            lines.extend(roster)
+            cap = _MAX_CHARS_WITH_ROSTER
+
     block = "--- Năng lực nhân sự ---\n" + "\n".join(lines)
-    if len(block) > _MAX_CHARS:
-        block = block[: _MAX_CHARS - 1].rstrip() + "…"
+    if len(block) > cap:
+        block = block[: cap - 1].rstrip() + "…"
     return block
