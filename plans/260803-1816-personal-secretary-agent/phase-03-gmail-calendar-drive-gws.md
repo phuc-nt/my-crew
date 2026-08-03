@@ -1,10 +1,11 @@
 ---
 phase: 3
-title: "Gmail Calendar Drive (gws)"
-status: pending
+title: Gmail Calendar Drive (gws)
+status: in-progress
 priority: P2
-effort: "0.5d"
-dependencies: [1]
+effort: 0.5d
+dependencies:
+  - 1
 ---
 
 # Phase 3: Gmail Calendar Drive (gws)
@@ -40,6 +41,21 @@ chạy qua auto-approve trust ladder thay vì chờ duyệt tay.
   (`_GWS_ALLOWLIST_PREFIXES`, `_hard_deny_email`), `my_crew/actions/auto_approve_policy.py`.
 - Modify: `profiles/thu-ky/profile.yaml` (gws_context, auto_approve grants — user-data);
   chỉ đụng product code nếu bước "mở rộng argv" được kích hoạt có bằng chứng.
+
+## Tiến độ 2026-08-03 — 3a (ĐỌC) xong, 3b (GHI) cần 1 quyết định thiết kế
+
+**3a xong:** `gws` CLI đã cài + OAuth sẵn trên máy (Pong dùng chung CLI này) → KHÔNG cần
+user action. `PersonalToolProvider.read` giờ ghép lịch 24h tới (`calendar +agenda`) + email
+chưa đọc (`gmail +triage`) vào snapshot — chat DM lẫn briefing sáng tự giàu lên, degrade
+per-source "(chưa đọc được: …)" khi CLI lỗi (không cần cờ: pack personal theo định nghĩa là
+thư ký chủ máy; `gws_context: true` vẫn bật trong profile cho tier team-step). Smoke thật:
+snapshot trả calendar + inbox thật. +2 test, suite 2407.
+
+**3b còn lại (GHI) — phát hiện kiến trúc:** chat chỉ thực thi được hành động qua catalog
+`commands.py` của pack (v5 M12), và catalog CẤM type `email_send` by design (v31 P2 —
+`_VETTED_COMMAND_TYPES` chỉ cho mcp_tool/schedule_update/team_task/gws_write). Đường khả thi:
+lệnh `gws_write` (calendar insert / gmail send qua gws nếu verb qua được Lớp A) + auto_approve
+trusted-sender. Cần chốt: những verb ghi nào đáng làm đợt đầu → hỏi CEO trước khi code.
 
 ## Implementation Steps
 

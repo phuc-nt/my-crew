@@ -3,7 +3,7 @@ title: Thư ký riêng CEO trên Telegram (v57)
 description: >-
   Agent thư ký riêng cho CEO, full-ga trong khung an toàn, tham chiếu năng lực
   Pong (openclaw)
-status: pending
+status: in-progress
 priority: P1
 created: 2026-08-03T00:00:00.000Z
 ---
@@ -35,7 +35,7 @@ heartbeat (watchers + cron đã phủ), multi-agent spawn (team feature đã có
 |-------|------|--------|
 | 1 | [Personal pack + hồ sơ thư ký + chat lõi](./phase-01-personal-pack-h-s-th-k-chat-l-i.md) | Completed |
 | 2 | [Briefing chủ động (morning + weekly)](./phase-02-briefing-ch-ng-morning-weekly.md) | Completed |
-| 3 | [Gmail Calendar Drive (gws)](./phase-03-gmail-calendar-drive-gws.md) | Pending |
+| 3 | [Gmail Calendar Drive (gws)](./phase-03-gmail-calendar-drive-gws.md) | In Progress |
 | 4 | [Web search cho thư ký](./phase-04-web-search-cho-th-k.md) | Pending |
 | 5 | [Memory nâng cao (daily notes + search)](./phase-05-memory-n-ng-cao-daily-notes-search.md) | Pending |
 
