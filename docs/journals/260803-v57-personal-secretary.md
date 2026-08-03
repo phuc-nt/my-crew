@@ -1,5 +1,5 @@
 # v57 — Thư ký riêng CEO trên Telegram (personal-pack)
-2026-08-03 · ✅ 4/5 phase (P4 web-search chờ API key) · **Plan:** `plans/260803-1816-personal-secretary-agent/` · **Suite:** 2418 BE + 280 FE + 8 e2e · 6 commit trên main
+2026-08-03 · ✅ 5/5 phase · **Plan:** `plans/260803-1816-personal-secretary-agent/` · **Suite:** 2423 BE + 280 FE + 8 e2e · 8 commit trên main
 
 ## Làm gì
 
@@ -41,7 +41,10 @@
 
 ## Mở / sang sau
 
-- P4 web-search: chỉ chờ `TAVILY_API_KEY`/`BRAVE_API_KEY` vào .env rồi bật cờ.
+- ~~P4 web-search~~ xong ngay trong ngày: KHÔNG mua key — Brave dùng lại từ config openclaw,
+  Firecrawl self-host `localhost:3002` (chung hạ tầng Pong); chat M11 không có tool-loop →
+  nhịp 2-pass marker `WEB_SEARCH:` (code chạy search + formatter chống-injection của v20.5,
+  kết quả chỉ vào user message). UAT thật: giá vàng SJC → trả lời có nguồn.
 - Thư ký chưa biết roster crew (gợi ý giao việc nói chung chung) — cần capability block chứa
   danh sách staff; gửi email từ chat = quyết định nới vetted-types riêng nếu CEO cần.
 - Xác nhận briefing 7:00 sáng 04/08 tự đến (điểm mở cuối của P2).
