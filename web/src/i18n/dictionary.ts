@@ -376,6 +376,9 @@ const vi = {
   'teamKanban.stepsDone': '{done}/{total} bước',
   'teamKanban.sandboxTitle': 'Bước cần chạy shell trong hộp cát Docker (deep_agent)',
   'teamKanban.sandboxBadge': '🔒 {n} sandbox',
+  'teamKanban.queuedBehind': '⏳ xếp sau {n} việc (~{n} phút)',
+  'teamKanban.queuedTitle':
+    'Điều phối xử lý 1 hành động mỗi phút, việc cũ trước — việc này đang chờ tới lượt',
   'teamKanban.loadError': 'không tải được bảng việc đội',
 
   // components/TeamTaskCost.tsx
@@ -1346,6 +1349,9 @@ const en = {
   'teamKanban.stepsDone': '{done}/{total} steps',
   'teamKanban.sandboxTitle': 'This step needs shell access in a Docker sandbox (deep_agent)',
   'teamKanban.sandboxBadge': '🔒 {n} sandbox',
+  'teamKanban.queuedBehind': '⏳ behind {n} task(s) (~{n} min)',
+  'teamKanban.queuedTitle':
+    'The coordinator handles one action per minute, oldest first — this task is waiting its turn',
   'teamKanban.loadError': 'could not load the team task board',
 
   // components/TeamTaskCost.tsx

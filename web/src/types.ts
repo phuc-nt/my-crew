@@ -645,6 +645,9 @@ export interface TeamBoardCard {
   steps_done: number
   steps_total: number
   steps_needs_shell?: number // v50: count of steps needing the deep_agent (Docker sandbox) tier
+  // v58: vị trí trong hàng đợi coordinator (0 = tới lượt; ≥1 = xếp sau N việc; absent =
+  // không trong hàng dispatchable). Ticker 1 hành-động/phút nên N ≈ số phút chờ.
+  queue_position?: number
 }
 
 export interface TeamBoardLane {

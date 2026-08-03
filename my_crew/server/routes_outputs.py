@@ -170,6 +170,15 @@ def team_task_board() -> dict:
         tasks = store.list_recent_tasks(_INDEX_TASK_LIMIT, include_planning=True)
     finally:
         store.close()
+    # v58 P2 (queue transparency): ticker phục vụ task CŨ NHẤT có action trước
+    # (list_dispatchable = open/running ORDER BY created_at, 1 action/tick 60s) — một
+    # task đứng sau N task cũ hơn thì chờ ~N tick trong im lặng. Tính vị trí từ CHÍNH
+    # danh sách đã fetch (không thêm query); field optional nên client cũ không vỡ.
+    dispatchable = sorted(
+        (t for t in tasks if t.status in ("open", "running")),
+        key=lambda x: x.created_at,
+    )
+    queue_position = {t.id: i for i, t in enumerate(dispatchable)}
     lanes: dict[str, list[dict]] = {lane: [] for lane in _BOARD_LANES}
     for t in tasks:
         done = sum(1 for s in t.steps if s.status == "done")
@@ -184,6 +193,8 @@ def team_task_board() -> dict:
             "steps_done": done, "steps_total": len(t.steps),
             "steps_needs_shell": needs_shell,
         }
+        if t.id in queue_position:
+            card["queue_position"] = queue_position[t.id]
         lane = t.status if t.status in lanes else "khac"
         lanes[lane].append(card)
     return {"lanes": [{"id": lane, "cards": lanes[lane]} for lane in _BOARD_LANES]}

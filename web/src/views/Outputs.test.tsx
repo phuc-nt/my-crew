@@ -79,6 +79,12 @@ const board: TeamBoardPayload = {
         task_id: 't9', title: 'Soạn kế hoạch quý', pic_id: 'truong-phong',
         room_id: 'room-9', status: 'running', created_at: '2026-07-13',
         steps_done: 1, steps_total: 3,
+      }, {
+        // v58: việc xếp hàng sau 2 việc — badge ⏳ phải hiện; card đầu (position 0
+        // implicit absent) không badge.
+        task_id: 't10', title: 'Việc xếp hàng', pic_id: 'noi-dung',
+        room_id: 'room-10', status: 'running', created_at: '2026-07-14',
+        steps_done: 0, steps_total: 2, queue_position: 2,
       }],
     },
     { id: 'done', cards: [] },
@@ -96,11 +102,15 @@ test('kanban renders non-empty lanes and links cards to their workroom', async (
     </MemoryRouter>,
   )
 
-  expect(await screen.findByText('Đang chạy (1)')).toBeInTheDocument()
+  expect(await screen.findByText('Đang chạy (2)')).toBeInTheDocument()
   expect(screen.queryByText(/Chờ xác nhận/)).not.toBeInTheDocument()
   const card = screen.getByText('Soạn kế hoạch quý').closest('a')
   expect(card).toHaveAttribute('href', '/office?room=room-9')
   expect(screen.getByText('1/3 bước')).toBeInTheDocument()
+  // v58: card có queue_position ≥ 1 hiện badge hàng đợi; card không có field thì không.
+  expect(screen.getByText('⏳ xếp sau 2 việc (~2 phút)')).toBeInTheDocument()
+  const first = screen.getByText('Soạn kế hoạch quý').closest('a')
+  expect(first?.textContent).not.toContain('xếp sau')
 })
 
 test('kanban renders nothing when the board is empty', async () => {

@@ -169,6 +169,32 @@ def test_board_card_counts_needs_shell_steps(client, tmp_path):
     assert card["steps_needs_shell"] == 1 and card["steps_total"] == 2
 
 
+def test_board_queue_position_orders_dispatchable_oldest_first(client, tmp_path):
+    """v58 P2: open/running mang queue_position theo ĐÚNG thứ tự ticker phục vụ
+    (created_at cũ trước — khớp list_dispatchable); planning/done/stalled không có field
+    (client cũ không vỡ, card không badge)."""
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+
+    store = TeamTaskStore(team_tasks_db_path())
+    for i, (tid, status) in enumerate(
+        [("q1", "running"), ("q2", "open"), ("q3", "open"), ("qdone", "done")]
+    ):
+        store.create_task(task_id=tid, title=f"Việc {i}", pic_id="")
+        store._conn.execute(
+            "UPDATE team_tasks SET status=?, created_at=? WHERE id=?",
+            (status, f"2026-08-03T10:0{i}:00+00:00", tid),
+        )
+    store._conn.commit()
+    store.close()
+
+    board = client.get("/api/team-tasks/board").json()
+    cards = {c["task_id"]: c for lane in board["lanes"] for c in lane["cards"]}
+    assert cards["q1"]["queue_position"] == 0  # cũ nhất — đang tới lượt
+    assert cards["q2"]["queue_position"] == 1
+    assert cards["q3"]["queue_position"] == 2
+    assert "queue_position" not in cards["qdone"]  # ngoài hàng dispatchable
+
+
 def test_task_cost_no_captures_returns_zero_totals(client):
     """v50: a task with no capture rows (or no store yet) returns empty steps + zero totals,
     never a 500."""

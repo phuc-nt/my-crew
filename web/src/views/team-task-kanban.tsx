@@ -62,6 +62,13 @@ export function TeamTaskKanban() {
                             {t('teamKanban.stepsDone', { done: c.steps_done, total: c.steps_total })}
                           </span>
                         )}
+                        {/* v58: hàng đợi coordinator lộ ra mắt — "chờ" khác "kẹt". Chỉ hiện
+                            khi thật sự có việc xếp trước (vị trí 0 = đang tới lượt). */}
+                        {(c.queue_position ?? 0) >= 1 && (
+                          <span className="team-kanban-queued" title={t('teamKanban.queuedTitle')}>
+                            {t('teamKanban.queuedBehind', { n: c.queue_position ?? 0 })}
+                          </span>
+                        )}
                         {/* v50: flag tasks with steps that escalate to the deep_agent (Docker
                             sandbox) tier — the rest run create_agent with no Docker. */}
                         {(c.steps_needs_shell ?? 0) > 0 && (
