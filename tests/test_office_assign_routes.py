@@ -36,6 +36,9 @@ def test_staff_endpoint_lists_assignable(monkeypatch, client):
         lambda *a, **k: (_ for _ in ()).throw(
             AssertionError("load_profile bị gọi — nợ M1 tái phát")),
     )
+    # Route giờ tự load_dotenv (v58 fix) — chặn nó nạp .env THẬT của máy dev để
+    # delenv bên dưới giữ được thế giới "không key".
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: None)
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.delenv("BRAVE_API_KEY", raising=False)
     r = client.get("/api/office/assign/staff")

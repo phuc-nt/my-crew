@@ -38,8 +38,16 @@ def get_assignable_staff() -> dict:
     """
     import os
 
+    from dotenv import load_dotenv
+
     from my_crew.agent.team_task_roster import assignable_staff
+    from my_crew.config.settings import MY_CREW_HOME
     from my_crew.profile.crew_roster import peek_profile_yaml
+
+    # v58 UAT bắt được: os.getenv trần trả false ngay cả khi .env CÓ key — process web
+    # mới boot chưa ai load_dotenv (v56 viết lúc máy chưa có key nên nhánh true chưa
+    # từng chạy thật). Idempotent + rẻ, cùng pattern config_builders.
+    load_dotenv(MY_CREW_HOME / ".env")
 
     # v58 P3 (nợ M1 v56): cờ web_search đọc bằng yaml-peek thay cho load_profile đầy đủ
     # per-staff per-request — payload giữ nguyên byte, chi phí rơi từ N profile-build
