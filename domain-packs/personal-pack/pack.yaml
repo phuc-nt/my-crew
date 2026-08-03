@@ -1,0 +1,11 @@
+# personal-pack manifest (v57) — thư ký riêng của chủ nhân (CEO), kênh Telegram DM.
+#
+# Một kind duy nhất: `briefing` — bản tin chủ động thư ký gửi chủ nhân (sáng/tuần tùy
+# cron trong profile). Chat DM (inbox) ground trên cùng kind này qua ToolProvider.
+# `servers` rỗng: thư ký không ghi qua MCP nào — kênh ra duy nhất là telegram_send
+# (native type, allowlist 2 chiều theo chat_ids của profile, không đi qua allowlist pack).
+id: personal
+name: Personal (Thư ký riêng)
+report_kinds:
+  - briefing
+servers: []

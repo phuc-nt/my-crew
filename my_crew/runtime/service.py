@@ -263,6 +263,36 @@ class Service:
         _archive_stale_skills_best_effort(now)
         return outcomes
 
+    def start_telegram_listeners(self, *, spawn: Spawn = _real_spawn) -> list:
+        """v57: một thread long-poll per telegram agent — DM trả lời ~1-2s thay vì chờ tick.
+
+        Listener chỉ "peek" (không LLM, không offset) rồi spawn ĐÚNG worker inbox
+        subprocess như tick lịch vẫn spawn — cách ly tiến trình + pipeline giữ nguyên.
+        Best-effort: hỏng ở đây không được giết daemon (tick lịch vẫn là fallback)."""
+        from my_crew.runtime.agent_paths import agent_data_dir
+        from my_crew.runtime.telegram_listener import start_telegram_listeners
+
+        agents = []
+        for entry in load_registry():
+            if not entry.enabled:
+                continue
+            try:
+                loaded = load_profile(entry.id)
+            except FileNotFoundError as exc:
+                logger.warning("listener: skipping agent %r: %s", entry.id, exc)
+                continue
+            if not loaded.enabled or loaded.config.telegram is None:
+                continue
+            agents.append((entry.id, loaded.config.telegram, agent_data_dir(entry.id)))
+
+        def run_inbox_worker(agent_id: str) -> None:
+            outcome = _supervise(
+                spawn, _worker_argv(agent_id, "inbox", "internal"), timeout=self._timeout
+            )
+            logger.info("listener-triggered inbox %s: %s", agent_id, outcome.get("status"))
+
+        return start_telegram_listeners(agents, run_inbox_worker=run_inbox_worker)
+
     def run_forever(self, *, interval: int = _TICK_INTERVAL_S) -> None:  # pragma: no cover
         """The daemon loop: tick, sleep, repeat. Thin wrapper over run_tick.
 
@@ -271,6 +301,12 @@ class Service:
         local, not UTC.
         """
         logger.info("service started; tick interval %ds", interval)
+        try:
+            listeners = self.start_telegram_listeners()
+            logger.info("telegram listeners: %d thread(s)", len(listeners))
+        except Exception:  # noqa: BLE001 — instant-chat là tiện nghi, không được giết daemon
+            logger.warning("telegram listeners failed to start (scheduled inbox still runs)",
+                           exc_info=True)
         while True:
             _write_coordinator_heartbeat()
             self.run_tick(datetime.now())  # noqa: DTZ005 — local time, matches cron intent

@@ -42,11 +42,15 @@ _MAX_BUTTONS = 4
 _CALLBACK_DATA_MAX = 64
 
 
-def api_call(token: str, method: str, payload: dict[str, Any] | None = None) -> Any:
+def api_call(
+    token: str, method: str, payload: dict[str, Any] | None = None, *,
+    timeout_s: float = 30,
+) -> Any:
     """One Bot API call. POST JSON when a payload is given, GET otherwise.
 
     Raises RuntimeError on an API-level failure (ok=false) — the caller decides whether
-    that is retryable. Network errors propagate as urllib exceptions.
+    that is retryable. Network errors propagate as urllib exceptions. `timeout_s` is the
+    SOCKET timeout — a long-poll getUpdates (listener) cần nó lớn hơn `timeout` của API.
     """
     url = f"{_API_BASE}/bot{token}/{method}"
     if payload is None:
@@ -58,7 +62,7 @@ def api_call(token: str, method: str, payload: dict[str, Any] | None = None) -> 
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=timeout_s) as resp:
         out = json.loads(resp.read().decode("utf-8"))
     if not isinstance(out, dict) or not out.get("ok"):
         desc = out.get("description") if isinstance(out, dict) else out

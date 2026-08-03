@@ -357,7 +357,8 @@ OPS_COMMANDS: dict[str, dict] = {
                    "hint": "một mã kỹ thuật viết thường, không dấu, không khoảng trắng "
                            "(vd 'sales-pm')"},
             "domain": {"prompt": "Vai trò của agent? (pm = quản lý dự án, hr = nhân sự, "
-                                 "admin = giám sát đội, office = nhân viên văn phòng)",
+                                 "admin = giám sát đội, office = nhân viên văn phòng, "
+                                 "personal = thư ký riêng)",
                        "required": True, "max_len": 20,
                        "choices": {
                            "pm": ("quản lý dự án", "quan ly du an", "project", "dự án", "du an"),
@@ -365,10 +366,13 @@ OPS_COMMANDS: dict[str, dict] = {
                            "admin": ("giám sát", "giam sat", "vận hành", "van hanh", "quản trị"),
                            "office": ("văn phòng", "van phong", "nhân viên văn phòng",
                                       "nhan vien van phong", "office"),
+                           "personal": ("thư ký", "thu ky", "thư ký riêng", "thu ky rieng",
+                                        "trợ lý riêng", "tro ly rieng"),
                        },
-                       "hint": "đúng MỘT mã: pm, hr, admin, hoặc office"},
+                       "hint": "đúng MỘT mã: pm, hr, admin, office, hoặc personal"},
             "reports": {"prompt": "Loại báo cáo agent sẽ làm (vd 'daily' cho pm, "
-                                  "'headcount' cho hr; nếu agent chỉ nhận việc qua giao "
+                                  "'headcount' cho hr, 'briefing' cho personal; nếu agent "
+                                  "chỉ nhận việc qua giao "
                                   "việc — không có báo cáo định kỳ — nhắn 'không')? "
                                   "Nhiều loại cách nhau bởi dấu phẩy.",
                         "required": True, "max_len": 100, "lower": True,
