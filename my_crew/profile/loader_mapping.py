@@ -84,7 +84,14 @@ def build_settings_dict(yaml_doc: dict[str, Any], data_dir: Any) -> dict[str, An
 
     # Booleans: a present YAML key wins (incl. an explicit `false`); else env; else omit.
     _put(out, "dry_run", _explicit_bool(safety, "dry_run", "DRY_RUN"))
-    _put(out, "write_disabled", _explicit_bool(safety, "write_disabled", "AGENT_WRITE_DISABLED"))
+    # KILL-SWITCH ĐẶC CÁCH (v58 P5 — drill go-live bắt được): mọi profile đều ghi
+    # `write_disabled: false` tường minh, nên luật "profile wins" khiến
+    # AGENT_WRITE_DISABLED=true KHÔNG chặn nổi fleet — kill-switch phải BẤT KHẢ ĐÈ.
+    # Env true thắng tuyệt đối; env vắng/false giữ nguyên luật cũ (profile → env).
+    write_disabled = _explicit_bool(safety, "write_disabled", "AGENT_WRITE_DISABLED")
+    if str(os.getenv("AGENT_WRITE_DISABLED", "")).strip().lower() in ("1", "true", "yes"):
+        write_disabled = True
+    _put(out, "write_disabled", write_disabled)
     # v30: per-agent trust mode — yaml wins, else TRUST_MODE env, else the from_dict
     # default ("autonomous"). String field, so the _fallback empty-defers-to-env rule
     # applies (same shape as runtime.checkpointer below).

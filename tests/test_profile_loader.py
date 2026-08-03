@@ -180,6 +180,20 @@ def test_unset_dry_run_uses_default_true(clean_env, tmp_path):
     assert loaded.settings.dry_run is True
 
 
+def test_kill_switch_env_overrides_explicit_profile_false(clean_env, tmp_path, monkeypatch):
+    """v58 P5 (drill go-live bắt được): mọi profile ghi `write_disabled: false` tường minh
+    → luật profile-wins từng khiến AGENT_WRITE_DISABLED=true bất lực. Kill-switch phải
+    BẤT KHẢ ĐÈ: env true thắng tuyệt đối; env vắng thì profile vẫn quyết như cũ."""
+    monkeypatch.setenv("AGENT_WRITE_DISABLED", "true")
+    pdir, pid = _write_profile(tmp_path, "name: a\nsafety:\n  write_disabled: false\n")
+    loaded = load_profile(pid, profiles_dir=pdir)
+    assert loaded.settings.write_disabled is True  # kill-switch thắng profile
+
+    monkeypatch.delenv("AGENT_WRITE_DISABLED")
+    loaded2 = load_profile(pid, profiles_dir=pdir)
+    assert loaded2.settings.write_disabled is False  # env vắng ⇒ hành vi cũ nguyên vẹn
+
+
 # --- failure modes ---
 
 
