@@ -1,66 +1,53 @@
 ---
 phase: 2
-title: "Briefing chủ động (morning + weekly)"
-status: pending
+title: Briefing chủ động (morning + weekly)
+status: completed
 priority: P1
-effort: "1d"
-dependencies: [1]
+effort: 0.5d
+dependencies:
+  - 1
 ---
 
 # Phase 2: Briefing chủ động (morning + weekly)
 
 ## Overview
 
-Run-kind mới `briefing`: prompt cố định chạy theo cron, kết quả đẩy chủ động vào Telegram của
-agent (qua gateway `telegram_send`). Cấu hình cho thư ký: Morning Briefing 7:00 hằng ngày +
-Weekly Review CN 8:00 (Asia/Saigon) — ngang Pong.
+**Thiết kế đổi so với plan gốc** (phát hiện ở phase 1): không cần run-kind mới trong core —
+pack đã sở hữu kind `briefing` chạy được qua `schedule:` chuẩn. Phase 2 = thêm kind
+`weekly-review` vào pack + nối cron trong profile: Morning 7:00 hằng ngày + Weekly CN 8:00.
 
 ## Requirements
 
-- Functional: profile khai `briefings: [{id, cron, prompt}]` → mỗi mục due thì chạy LLM
-  (đường Q&A M11 với tools đọc của runtime) rồi gửi kết quả vào chat Telegram bound của agent.
-- Non-functional: dedup 1 lần/ngày/briefing (kể cả restart); DRY_RUN vẫn log-not-send;
-  không LLM khi không due; đi qua gateway như mọi send (audit + secret-scan).
-
-## Architecture
-
-- Tái dùng tối đa: `run_qa_task` (recurring_task.py) đã chạy "câu hỏi cố định → M11 answer" —
-  nhưng nó reply theo mention. Briefing = biến thể "không có tin nhắn đến": chạy answer path
-  với question = prompt, rồi `send_telegram_message` (actions/telegram_write.py) tới chat bound.
-  Pattern đẩy chủ động này ops_alert_runner.py / milestone_mirror_runner.py đã làm — soi trước.
-- Schedule: parse `briefings:` trong profile loader (`loader_mapping.py` + `loader.py`), synthesize
-  vào `_effective_schedule` (service.py) như watch/ops-alerts; dispatch kind mới trong `worker.py`.
-- Dedup: theo pattern dedup key hiện có (`qa-task:{digest}:{day}` là mẫu).
+- Functional: 7:00 sáng nhận bản tin ngày; CN 8:00 nhận bản nhìn-lại-tuần — không cần hỏi.
+- Non-functional: dedup 1 bản/ngày/kind (đã có, thêm kind vào hint); agent khác zero thay đổi;
+  weekly cũng internal-only như briefing.
 
 ## Related Code Files
 
-- Đọc trước: `my_crew/runtime/recurring_task.py`, `my_crew/runtime/ops_alert_runner.py`,
-  `my_crew/runtime/service.py::_effective_schedule`, `my_crew/runtime/worker.py`,
-  `my_crew/profile/loader_mapping.py`, `my_crew/actions/telegram_write.py`.
-- Create: `my_crew/runtime/briefing_runner.py` + tests.
-- Modify: `loader.py`/`loader_mapping.py` (field `briefings:`), `service.py`, `worker.py`,
-  `profiles/thu-ky/profile.yaml` (user-data: 2 briefing entries).
+- Modify: `domain-packs/personal-pack/graphs.py` (builder tham số hoá theo kind),
+  `pack.yaml` (thêm kind), `tests/test_personal_pack.py`.
+- Create: `domain-packs/personal-pack/prompts/weekly-review-system.md`.
+- User-data: `profiles/thu-ky/profile.yaml` — `reports: [briefing, weekly-review]`,
+  `schedule: {briefing: "0 7 * * *", weekly-review: "0 8 * * 0"}`.
 
 ## Implementation Steps
 
-1. Đọc 4 runner hiện có, chốt: briefing_runner tái dùng hàm nào của qa path (không copy).
-2. Parse + validate `briefings:` (id kebab, cron hợp lệ, prompt non-empty; floor cron 5 phút
-   dùng `hard_block.cron_floor_error` như schedule_update).
-3. `briefing_runner.py`: due-check → LLM answer → telegram_send qua gateway → dedup claim/ngày.
-   Yêu cầu agent có telegram binding; thiếu thì skip + log rõ (không crash tick).
-4. Tests: due/không-due, dedup qua restart, DRY_RUN không gửi, thiếu telegram skip, prompt
-   rỗng bị loader từ chối.
-5. Cấu hình thư ký: morning 7:00 (tóm hôm nay: lịch, việc mở, follow-up) + weekly CN 8:00.
-   Restart service, verify schedule; UAT: đổi cron tạm +5 phút để nhận thật 1 bản.
+1. Tham số hoá `build_briefing_graph` theo kind (prompt `<kind>-system`, dedup hint
+   `personal-<kind>:<chat>:<date>`, rationale riêng); `REPORT_KINDS` 2 kind.
+2. Prompt weekly: nhìn lại tuần từ TRÍ NHỚ (việc dặn còn treo, việc đã xong), hướng tuần tới.
+3. Tests: assembly 2 kind; weekly chạy offline; 2 kind cùng ngày KHÔNG dedup lẫn nhau.
+4. Profile: reports + schedule; restart service; verify /api/schedule/upcoming có 2 dòng.
+5. UAT: chạy tay `my-crew agent run thu-ky --report weekly-review` → nhận bản thật.
 
 ## Success Criteria
 
-- [ ] `thu-ky | briefing:morning | 07:00` và `briefing:weekly` hiện trong schedule.
-- [ ] Nhận briefing thật trên Telegram đúng giờ, chỉ 1 bản/ngày kể cả restart giữa chừng.
-- [ ] Suite xanh; agent không có `briefings:` → zero hành vi mới.
+- [x] Schedule hiện `thu-ky | briefing | 07:00 (04/08)` và `weekly-review | CN 09/08 08:00`.
+- [x] Weekly chạy tay giao bản thật (executed, $0.0008; xưng em/anh + plain text đúng
+      prompt mới; sửa thêm: lời chào lấy theo DATA thay vì hardcode "Chủ Nhật").
+- [x] Suite xanh (2406); dedup hai kind độc lập (test cross-kind trong live-send test).
+- [ ] Briefing 7:00 sáng mai tự đến — CEO xác nhận sau (điểm mở duy nhất).
 
 ## Risk Assessment
 
-- Prompt briefing tự do = bề mặt prompt-injection thấp (operator viết, không phải dữ liệu ngoài) —
-  giữ nguyên tầng format_internal_content khi nhét dữ liệu tool vào context.
-- Giờ chạy phụ thuộc tick daemon: chấp nhận lệch ≤1 poll interval, ghi rõ trong docs.
+- Giờ chạy lệch ≤1 tick phút — chấp nhận, như mọi kind.
+- Service seed lịch lúc boot → đổi schedule profile cần restart service (ghi vào hướng dẫn).

@@ -30,10 +30,11 @@ from my_crew.packs.registry import PackRegistry, discover_domains
 def test_personal_pack_discovered_and_assembled():
     assert "personal" in discover_domains()
     pack = PackRegistry().load("personal")
-    assert set(pack.report_kinds) == {"briefing"}
+    assert set(pack.report_kinds) == {"briefing", "weekly-review"}
     assert pack.allowlist == {}  # thư ký không ghi MCP nào — default-DENY nguyên vẹn
     assert "qa-system" in pack.prompts
     assert "briefing-system" in pack.prompts
+    assert "weekly-review-system" in pack.prompts
     assert pack.tools is not None
     assert pack.commands == {}  # chưa có catalog lệnh chat — chỉ Q&A
 
@@ -91,16 +92,16 @@ def test_briefing_graph_rejects_external_audience(tmp_path):
         )
 
 
-def test_briefing_live_send_dedups_per_day(tmp_path, monkeypatch):
-    """Non-dry-run qua gateway THẬT (api_call stub): lần 1 gửi, lần 2 CÙNG NGÀY bị dedup.
+def test_briefing_live_send_dedups_per_day_but_not_across_kinds(tmp_path, monkeypatch):
+    """Non-dry-run qua gateway THẬT (api_call stub): lần 1 gửi, lần 2 CÙNG NGÀY bị dedup,
+    nhưng weekly-review CÙNG NGÀY vẫn gửi (kind nằm trong dedup hint).
 
-    Chốt chặn cho dedup_hint `personal-briefing:{chat}:{date}` — dry-run return trước
-    tầng dedup nên test dry-run không bao giờ chạm được hành vi này."""
+    Dry-run return trước tầng dedup nên test dry-run không bao giờ chạm hành vi này."""
     calls: list[dict] = []
     monkeypatch.setenv("TK_TEST_BOT_TOKEN", "test-token")
     monkeypatch.setattr(
         "my_crew.actions.telegram_write.api_call",
-        lambda token, method, payload: calls.append(payload) or {"message_id": 7},
+        lambda token, method, payload, **kw: calls.append(payload) or {"message_id": 7},
     )
     pack = PackRegistry().load("personal")
     settings = build_settings_from_dict({"data_dir": tmp_path, "dry_run": False})
@@ -113,6 +114,9 @@ def test_briefing_live_send_dedups_per_day(tmp_path, monkeypatch):
     assert second["delivered"] is False  # cùng ngày ⇒ dedup, không gửi lại
     assert second["delivery_summary"] == "telegram=deduplicated"
     assert len(calls) == 1
+    weekly = pack.report_kinds["weekly-review"](None, config=config, settings=settings).invoke({})
+    assert weekly["delivered"] is True  # kind khác ⇒ hint khác ⇒ không dedup chéo
+    assert len(calls) == 2
 
 
 def test_briefing_gateway_denies_mcp_with_empty_pack_allowlist(tmp_path):

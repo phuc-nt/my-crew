@@ -34,7 +34,7 @@ heartbeat (watchers + cron đã phủ), multi-agent spawn (team feature đã có
 | Phase | Name | Status |
 |-------|------|--------|
 | 1 | [Personal pack + hồ sơ thư ký + chat lõi](./phase-01-personal-pack-h-s-th-k-chat-l-i.md) | Completed |
-| 2 | [Briefing chủ động (morning + weekly)](./phase-02-briefing-ch-ng-morning-weekly.md) | Pending |
+| 2 | [Briefing chủ động (morning + weekly)](./phase-02-briefing-ch-ng-morning-weekly.md) | Completed |
 | 3 | [Gmail Calendar Drive (gws)](./phase-03-gmail-calendar-drive-gws.md) | Pending |
 | 4 | [Web search cho thư ký](./phase-04-web-search-cho-th-k.md) | Pending |
 | 5 | [Memory nâng cao (daily notes + search)](./phase-05-memory-n-ng-cao-daily-notes-search.md) | Pending |
