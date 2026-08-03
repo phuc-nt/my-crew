@@ -6,8 +6,9 @@ LLM chỉ điền slot title/start/end/attendees, không bao giờ chạm argv; 
 bị Lớp A marker chặn trước cả allowlist. Body sự kiện tái dùng builder của chat-ops v39
 (`ops_calendar_event._build_event_body`) — một nguồn sự thật cho shape resource.
 
-Gmail send KHÔNG có ở đây: catalog cấm type `email_send` by design (v31 P2) — thư ký
-muốn gửi mail phải qua thiết kế riêng, không phải nới catalog.
+`gui_email` (v58, CEO chốt 2026-08-03): gửi mail qua native `email_send` — vetted-types
+đã nới ĐÚNG type này. Chat không bao giờ gửi file: schema không có `attachment_path`, và
+field lạ bị `validate_args` chặn từ vòng ngoài; Lớp A email (secret-scan, shape) nguyên vẹn.
 """
 
 from __future__ import annotations
@@ -30,7 +31,45 @@ def _calendar_event_args(args: dict[str, str], config: Any) -> dict[str, Any]:
     }
 
 
+def _email_args(args: dict[str, str], config: Any) -> dict[str, Any]:
+    """Payload `email_send` từ slots đã qua schema. Fail RÕ khi thiếu SMTP (trả lời được
+    cho chủ nhân thay vì lỗi ngầm lúc dispatch); không bao giờ mang attachment_path.
+
+    Dedup theo (người nhận, tiêu đề, phút): gửi lại cùng mail trong một phút = trùng;
+    mail khác tiêu đề/người nhận/lúc khác là mail mới."""
+    from datetime import datetime
+
+    if getattr(config, "smtp", None) is None:
+        raise ValueError(
+            "chưa cấu hình SMTP cho agent này (khối smtp: trong profile.yaml + "
+            "SMTP_PASSWORD trong .env) — cấu hình xong nhắn lại giúp mình."
+        )
+    stamp = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    return {
+        "to": args["to"],
+        "subject": args["subject"],
+        "body": args["body"],
+        "dedup_hint": f"personal-email:{args['to']}:{args['subject'][:40]}:{stamp}",
+    }
+
+
 COMMANDS: dict[str, dict] = {
+    "gui_email": {
+        "description": (
+            "Gửi một email thay chủ nhân. args: to (địa chỉ email người nhận), "
+            "subject (tiêu đề), body (nội dung — soạn trọn vẹn, lịch sự, ký tên chủ nhân). "
+            "CHỈ dùng khi chủ nhân bảo gửi/trả lời email rõ ràng; nhờ SOẠN NHÁP thì trả "
+            "intent question để soạn cho chủ nhân xem trước."
+        ),
+        "type": "email_send",
+        "args_schema": {
+            "to": {"required": True, "max_len": 200,
+                   "pattern": r"[^@\s]+@[^@\s]+\.[^@\s]+"},
+            "subject": {"required": True, "max_len": 200},
+            "body": {"required": True, "max_len": 4000},
+        },
+        "build_args": _email_args,
+    },
     "tao_lich": {
         "description": (
             "Tạo sự kiện Google Calendar cho chủ nhân — CHỈ khi chủ nhân muốn một SỰ KIỆN "

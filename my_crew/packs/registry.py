@@ -277,11 +277,15 @@ class PackRegistry:
 
 
 #: Gateway action types a pack catalog may declare (v31 P2). Everything else — incl.
-#: real native types like `email_send`/`telegram_send`/`gh_cli` that have their own
-#: dedicated build paths and policies — is rejected BY NAME at pack load: a pack must
-#: not be able to reach an arbitrary gateway type by declaring it in a catalog.
+#: real native types like `telegram_send`/`gh_cli` that have their own dedicated build
+#: paths and policies — is rejected BY NAME at pack load: a pack must not be able to
+#: reach an arbitrary gateway type by declaring it in a catalog.
+#: `email_send` được nới v58 (quyết định CEO 2026-08-03, thư ký gửi mail từ chat) — CHỈ
+#: mở tầng catalog: `_hard_deny_email` (secret-scan + attachment confinement + shape) và
+#: needs_interrupt của email giữ nguyên, guarded mode vẫn queue như cũ.
 _VETTED_COMMAND_TYPES = frozenset(
-    {"mcp_tool", "schedule_update", "team_task_create", "team_task_move", "gws_write"}
+    {"mcp_tool", "schedule_update", "team_task_create", "team_task_move", "gws_write",
+     "email_send"}
 )
 
 

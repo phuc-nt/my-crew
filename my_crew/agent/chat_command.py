@@ -155,8 +155,13 @@ def maybe_handle_command(
 
     # Callability was validated at pack load (registry._load_commands) — no silent
     # fallback here: a command without build_args ships the schema-clean args as-is.
+    # v58: build_args được RAISE ValueError với thông điệp cho người dùng (vd "chưa cấu
+    # hình SMTP") — thành câu trả lời, không thành run lỗi câm của worker.
     build_args = spec.get("build_args")
-    action_args = build_args(clean, config) if build_args is not None else dict(clean)
+    try:
+        action_args = build_args(clean, config) if build_args is not None else dict(clean)
+    except ValueError as exc:
+        return (f"Lệnh `{command_id}` chưa chạy được: {exc}", cost)
     # v31 P2: a catalog entry may declare a NATIVE gateway type (vetted at pack load —
     # registry._load_commands). Default stays "mcp_tool" so every existing catalog is
     # byte-identical. A native action carries the payload fields directly (no

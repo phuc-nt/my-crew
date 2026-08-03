@@ -37,7 +37,7 @@ def test_personal_pack_discovered_and_assembled():
     assert "briefing-system" in pack.prompts
     assert "weekly-review-system" in pack.prompts
     assert pack.tools is not None
-    assert set(pack.commands) == {"tao_lich"}  # 3b: lệnh ghi đầu tiên (calendar insert)
+    assert set(pack.commands) == {"tao_lich", "gui_email"}  # 3b calendar + v58 email
 
 
 def test_tool_provider_reads_day_context_plus_gws(monkeypatch):
@@ -198,6 +198,63 @@ def test_tao_lich_destructive_slot_cannot_escape_argv():
               "dedup_hint": "x"}
     verdict = _hard_deny_gws(forged)
     assert verdict is not None and verdict.blocked  # Lớp A giữ nguyên
+
+
+# --- chat-command gui_email (v58) ---
+
+
+def test_vetted_command_types_widened_exactly_once():
+    """Pin danh sách vetted: CHỈ email_send được nới (CEO 2026-08-03) — một lần nới sau
+    không thể lặng lẽ đi kèm type khác."""
+    from my_crew.packs.registry import _VETTED_COMMAND_TYPES
+
+    assert _VETTED_COMMAND_TYPES == frozenset(
+        {"mcp_tool", "schedule_update", "team_task_create", "team_task_move",
+         "gws_write", "email_send"}
+    )
+
+
+def test_gui_email_builds_action_and_never_carries_attachment():
+    from types import SimpleNamespace
+
+    pack = PackRegistry().load("personal")
+    spec = pack.commands["gui_email"]
+    config = SimpleNamespace(smtp=object())
+    payload = spec["build_args"](
+        {"to": "a@b.com", "subject": "Chào", "body": "Nội dung."}, config
+    )
+    assert payload["to"] == "a@b.com"
+    assert "attachment_path" not in payload  # chat không bao giờ gửi file
+    assert payload["dedup_hint"].startswith("personal-email:a@b.com:Chào:")
+    # Field lạ (kể cả attachment_path bịa) chết từ vòng schema — không tới build_args.
+    from my_crew.agent.chat_command import validate_args
+
+    _, err = validate_args(spec, {"to": "a@b.com", "subject": "s", "body": "b",
+                                  "attachment_path": "/tmp/x.xlsx"})
+    assert err is not None and "attachment_path" in err
+
+
+def test_gui_email_without_smtp_fails_with_user_message():
+    from types import SimpleNamespace
+
+    pack = PackRegistry().load("personal")
+    with pytest.raises(ValueError, match="SMTP"):
+        pack.commands["gui_email"]["build_args"](
+            {"to": "a@b.com", "subject": "s", "body": "b"}, SimpleNamespace(smtp=None)
+        )
+
+
+def test_email_layer_a_still_scans_secrets():
+    """Nới catalog KHÔNG nới Lớp A: body chứa credential vẫn bị hard-deny.
+
+    Token giả ghép lúc chạy để file test không chứa literal dạng secret."""
+    from my_crew.actions.hard_block import classify
+
+    fake_token = "ghp_" + "a1b2c3d4" * 5  # noqa: S105 — giả, ghép runtime
+    action = {"type": "email_send", "to": "a@b.com", "subject": "s",
+              "body": f"token: {fake_token}"}
+    verdict = classify(action)
+    assert verdict.blocked
 
 
 def test_briefing_gateway_denies_mcp_with_empty_pack_allowlist(tmp_path):
