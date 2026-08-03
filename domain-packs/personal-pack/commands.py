@@ -33,7 +33,10 @@ def _calendar_event_args(args: dict[str, str], config: Any) -> dict[str, Any]:
 COMMANDS: dict[str, dict] = {
     "tao_lich": {
         "description": (
-            "Tạo sự kiện Google Calendar cho chủ nhân. args: title (tiêu đề sự kiện), "
+            "Tạo sự kiện Google Calendar cho chủ nhân — CHỈ khi chủ nhân muốn một SỰ KIỆN "
+            "LỊCH có thời điểm cụ thể (họp, hẹn, cuộc gọi, 'đặt lịch…'). Lời dặn dò hay nhờ "
+            "nhắc việc ('dặn em nhớ…', 'nhắc anh làm X') KHÔNG phải tạo lịch — thư ký tự "
+            "ghi nhớ, hãy trả intent question. args: title (tiêu đề sự kiện), "
             "start (giờ bắt đầu RFC3339 kèm múi giờ, vd 2026-08-05T09:00:00+07:00 — "
             "tính từ mốc BÂY GIỜ khi tin nhắn nói tương đối như 'mai', 'thứ Sáu'), "
             "end (tuỳ chọn, RFC3339), attendees (tuỳ chọn, email cách nhau dấu phẩy)."

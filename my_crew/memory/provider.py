@@ -22,9 +22,14 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class MemoryConfig:
-    """Parsed `memory:` block from profile.yaml. Absent ⇒ MemoryConfig() (static)."""
+    """Parsed `memory:` block from profile.yaml. Absent ⇒ MemoryConfig() (static).
+
+    `daily_notes` (v57 P5, opt-in): sau mỗi lượt chat internal đã gửi thật, trích fact vào
+    `profiles/<id>/memory/YYYY-MM-DD.md`; các ngày gần nhất được nạp lại vào context.
+    Tắt (mặc định) ⇒ hành vi byte-identical pre-v57."""
 
     provider: str = "static"
+    daily_notes: bool = False
 
 
 @runtime_checkable
@@ -59,7 +64,10 @@ def parse_memory_config(raw: object) -> MemoryConfig:
         raise RuntimeError(
             f"profile memory: unknown provider {provider!r} (known: static, kioku)."
         )
-    return MemoryConfig(provider=provider)
+    daily_notes = raw.get("daily_notes", False)
+    if not isinstance(daily_notes, bool):
+        raise RuntimeError("profile memory.daily_notes: phải là true/false.")
+    return MemoryConfig(provider=provider, daily_notes=daily_notes)
 
 
 def resolve_memory_text(loaded: LoadedProfile) -> str:
@@ -78,7 +86,19 @@ def resolve_memory_text(loaded: LoadedProfile) -> str:
     config = getattr(loaded, "memory_config", None) or MemoryConfig()
     provider = config.provider
     if provider == "static":
-        return StaticMemoryProvider().load_context(loaded)
+        base = StaticMemoryProvider().load_context(loaded)
+        if not config.daily_notes:
+            return base  # byte-identical pre-v57 khi không opt-in
+        profile_id = getattr(loaded, "profile_id", "") or ""
+        if not profile_id:
+            return base  # stand-in không danh tính ⇒ không có thư mục notes để nạp
+        from my_crew.memory.daily_notes import recent_notes_text
+
+        notes = recent_notes_text(profile_id)
+        if not notes:
+            return base
+        label = "NHẬT KÝ GẦN ĐÂY (tự ghi, các ngày gần nhất):"
+        return f"{base}\n\n{label}\n{notes}" if base else f"{label}\n{notes}"
     if provider == "kioku":
         raise RuntimeError(
             "memory provider 'kioku' chưa hỗ trợ (dời sang v19.5 — my-kioku adapter). "

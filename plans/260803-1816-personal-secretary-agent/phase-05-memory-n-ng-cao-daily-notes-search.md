@@ -1,10 +1,11 @@
 ---
 phase: 5
-title: "Memory nâng cao (daily notes + search)"
-status: pending
+title: Memory nâng cao (daily notes + search)
+status: completed
 priority: P2
-effort: "1.5d"
-dependencies: [1]
+effort: 1.5d
+dependencies:
+  - 1
 ---
 
 # Phase 5: Memory nâng cao (daily notes + search)
@@ -59,9 +60,29 @@ consolidation đêm) và history.search (SQLite keyword trên steps/audit, KHÔN
 
 ## Success Criteria
 
-- [ ] Dặn việc → xuất hiện trong daily note; session mới trả lời đúng không cần nhắc lại.
-- [ ] `memory.search` tìm được note cũ; external audience không truy cập được.
-- [ ] Agent không bật `memory:` mới → hành vi y hệt cũ; suite xanh.
+- [x] Dặn việc → xuất hiện trong daily note; session mới trả lời đúng không cần nhắc lại
+      (UAT thật: dặn quà sinh nhật → note có mốc 08/08 tự tính; hỏi lại ở session mới →
+      trả lời từ nhật ký + dữ liệu gws thật).
+- [x] ~~`memory.search`~~ **BỎ có chủ đích**: chat DM đi đường M11 không có tool-loop —
+      tool search chỉ phục vụ team-step, trong khi cửa sổ 7 ngày nạp thẳng context đã phủ
+      "tuần trước dặn gì". Làm khi có pain signal thật (ghi roadmap, không làm mù).
+- [x] Agent không bật `memory.daily_notes` → hành vi byte-identical; suite 2418 xanh.
+
+## Kết quả (2026-08-03)
+
+- **Phát hiện nền:** đường chat trước v57 KHÔNG có trí nhớ nào — "dặn em nhớ X" trả lời
+  xong là quên. Core của phase hoá ra là hook remember vào chat, không phải search.
+- Đã dựng: `my_crew/memory/daily_notes.py` (append theo ngày + nạp 7 ngày, cap file/ngày
+  4K + cap context 8K, path-confined, file lạ bỏ qua) · `chat_memory.remember_chat_exchange`
+  (chạy SAU khi reply đã gửi — không cộng độ trễ; không bao giờ raise) · `resolve_memory_text`
+  ghép "NHẬT KÝ GẦN ĐÂY" khi opt-in `memory.daily_notes: true` · extractor nhận `system`
+  prompt riêng cho chat (tiêu chí "đáng nhớ" của thư ký ≠ sự kiện dự án — prompt dự án
+  lúc trích lúc không với chat).
+- **UAT bắt 2 lỗi hành vi:** (1) classifier tạo lịch quá tay — "nhắc anh review…" thành
+  sự kiện Calendar thật → siết description `tao_lich` (chỉ sự kiện có thời điểm cụ thể;
+  lời dặn ⇒ question); (2) markdown `**` vẫn lọt dù prompt cấm → strip cấu trúc trong
+  `sanitize_reply` (hope-level → guarantee). Sự kiện lạc đã xoá.
+- 9 test mới (tests/test_memory_daily_notes.py); suite 2418; ruff sạch.
 
 ## Risk Assessment
 

@@ -63,6 +63,9 @@ def sanitize_reply(reply: str, agent_id: str) -> str:
     <!here>, <!everyone>) so an injected question cannot make the agent mass-ping.
     """
     cleaned = re.sub(rf"@{re.escape(agent_id)}", agent_id, reply, flags=re.IGNORECASE)
+    # Telegram/Slack đều hiển thị THÔ chuỗi `**` (không kênh nào dùng bold kiểu đó) — prompt
+    # đã cấm nhưng model vẫn lỡ tay; strip cấu trúc để đảm bảo không còn hope-level (v57 P5).
+    cleaned = cleaned.replace("**", "")
     return cleaned.replace("<!", "<​!")  # zero-width space defuses the broadcast
 
 
@@ -155,6 +158,8 @@ def answer_mention(
         if handled is not None:
             reply_text, cost = handled
             outcome = _post_reply(gw, loaded, mention, channel, reply_text)
+            _maybe_remember(loaded, settings, mention=mention, reply=reply_text,
+                            outcome=outcome)
             return outcome, cost
         return _answer_question(
             loaded, settings, mention=mention, pack=pack, gateway=gw,
@@ -245,7 +250,22 @@ def _answer_question(
     if not reply.strip():
         raise RuntimeError("QA compose returned empty content — not posting an empty reply.")
     outcome = _post_reply(gateway, loaded, mention, channel, reply)
+    _maybe_remember(loaded, settings, mention=mention, reply=reply, outcome=outcome)
     return outcome, result.cost_usd
+
+
+def _maybe_remember(loaded, settings, *, mention: dict, reply: str, outcome) -> None:
+    """v57 P5: sau một reply ĐÃ GỬI THẬT, ghi điều đáng nhớ (opt-in `memory.daily_notes`).
+
+    Chạy SAU khi gửi nên không cộng độ trễ vào câu trả lời; tự nuốt mọi lỗi (chat_memory
+    không bao giờ raise). Nhánh ops (config dialog) không đi qua đây — không đáng nhớ."""
+    if getattr(outcome, "status", "") != "executed":
+        return
+    from my_crew.agent.chat_memory import remember_chat_exchange
+
+    remember_chat_exchange(
+        loaded, settings, question=str(mention.get("text") or ""), reply=reply
+    )
 
 
 def _post_reply(gw, loaded, mention: dict, channel: str, reply: str) -> GatewayResult:

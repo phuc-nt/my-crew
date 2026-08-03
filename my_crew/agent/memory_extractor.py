@@ -41,19 +41,22 @@ _SYSTEM = (
 )
 
 
-def make_llm_costed_extractor(client: LlmClient) -> CostedMemoryExtractor:
+def make_llm_costed_extractor(
+    client: LlmClient, *, system: str = _SYSTEM
+) -> CostedMemoryExtractor:
     """Extractor that also reports its call cost: `(facts, cost_usd)`.
 
     Cost is None when the call failed (facts=[]) or the provider reported no cost. The
     team-step capture path folds this into the step's total so a captured cost includes the
-    remember-extraction spend rather than silently omitting it.
+    remember-extraction spend rather than silently omitting it. `system` cho phép call-site
+    đổi tiêu chí "đáng nhớ" (mặc định: sự kiện dự án; chat thư ký dùng prompt riêng — v57 P5).
     """
 
     def _extract(report_text: str) -> tuple[list[str], float | None]:
         try:
             result = client.complete(
                 [
-                    {"role": "system", "content": _SYSTEM},
+                    {"role": "system", "content": system},
                     {"role": "user", "content": report_text},
                 ]
             )
@@ -65,13 +68,13 @@ def make_llm_costed_extractor(client: LlmClient) -> CostedMemoryExtractor:
     return _extract
 
 
-def make_llm_extractor(client: LlmClient) -> MemoryExtractor:
+def make_llm_extractor(client: LlmClient, *, system: str = _SYSTEM) -> MemoryExtractor:
     """Default extractor: ask the LLM for salient facts; tolerate failure (return []).
 
     Thin facts-only wrapper over the costed extractor (DRY) for the report path, which does
     not account for the extraction cost separately.
     """
-    costed = make_llm_costed_extractor(client)
+    costed = make_llm_costed_extractor(client, system=system)
 
     def _extract(report_text: str) -> list[str]:
         facts, _cost = costed(report_text)
