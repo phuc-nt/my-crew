@@ -163,6 +163,9 @@ def summarize_office_event(kind: str, body: dict) -> dict:
             "criteria_total": int(body.get("criteria_total") or 0),
             "criteria_passed": int(body.get("criteria_passed") or 0),
             "assigned_to": _short(body.get("assigned_to")),
+            # v58 P4: id MỜ của attempt review (identifier — cùng phân loại attempt_id
+            # của step_status, không phải content). Rỗng cho event trước v58.
+            "attempt_id": _short(body.get("attempt_id")),
         }
     return {}
 

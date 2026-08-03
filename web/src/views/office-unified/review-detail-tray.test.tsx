@@ -56,6 +56,30 @@ test('renders criterion rows from the resolved capture detail', async () => {
   expect(screen.getByText('missing validation')).toBeTruthy()
 })
 
+test('v58: event mang attempt_id join thẳng capture — không quét candidates', async () => {
+  const listSpy = vi.spyOn(api, 'getCaptures')
+  vi.spyOn(api, 'getCaptureDetail').mockResolvedValue(detailOf([
+    { criterion: 'tiêu chí trực tiếp', passed: true, note: '' },
+  ]))
+
+  render(
+    <LanguageProvider>
+      <ReviewDetailTray
+        message={reviewMessage({
+          task_title: 'Ra mắt', step_title: 'soát', verdict: 'passed',
+          failure_count: 0, criteria_total: 1, criteria_passed: 1,
+          assigned_to: 'reviewer', attempt_id: 'att-direct',
+        })}
+        onClose={() => {}}
+      />
+    </LanguageProvider>,
+  )
+
+  await waitFor(() => expect(screen.getByText('tiêu chí trực tiếp')).toBeTruthy())
+  expect(api.getCaptureDetail).toHaveBeenCalledWith('att-direct')
+  expect(listSpy).not.toHaveBeenCalled() // hết heuristic khi có id
+})
+
 test('falls back to the empty state when no candidate matches the event counts', async () => {
   vi.spyOn(api, 'getCaptures').mockResolvedValue({ captures: [ROW] })
   vi.spyOn(api, 'getCaptureDetail').mockResolvedValue(

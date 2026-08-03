@@ -107,6 +107,26 @@ def test_review_event_carries_counts_only(monkeypatch):
     )
     assert captured["criteria_total"] == 2 and captured["criteria_passed"] == 1
     assert "criteria" not in captured  # texts never reach the room
+    assert "attempt_id" not in captured  # không truyền ⇒ không field rỗng (event cũ)
+
+
+def test_review_event_carries_opaque_attempt_id(monkeypatch):
+    """v58 P4: attempt_id MỜ đi kèm event review (identifier, không phải content) —
+    FE tray join thẳng capture, retry cùng round hết lẫn."""
+    from my_crew.runtime import team_step_runner as runner
+
+    captured = {}
+    monkeypatch.setattr(
+        "my_crew.runtime.office_room_append.append_office_event",
+        lambda room, *, author, kind, body, also_office=False: captured.update(body),
+    )
+    monkeypatch.setattr("my_crew.runtime.office_room_append.room_for_task", lambda t: t)
+    runner._append_review_event(
+        "t1", author="kiem-dinh", task_title="T", step_title="S", passed=True,
+        failures=[], criteria=[{"criterion": "c1", "passed": True}], attempt_id="att-9",
+    )
+    assert captured["attempt_id"] == "att-9"
+    assert "criteria" not in captured  # posture không đổi
 
 
 def test_projection_passes_criteria_counts():
@@ -115,10 +135,11 @@ def test_projection_passes_criteria_counts():
     body = summarize_office_event("review", {
         "task_title": "T", "step_title": "S", "verdict": "needs_rework",
         "failure_count": 2, "criteria_total": 3, "criteria_passed": 1,
-        "assigned_to": "kiem-dinh",
+        "assigned_to": "kiem-dinh", "attempt_id": "att-9",
         "criteria": [{"criterion": "bí mật nội dung"}],  # must NOT pass through
     })
     assert body["criteria_total"] == 3 and body["criteria_passed"] == 1
+    assert body["attempt_id"] == "att-9"  # v58 P4: id mờ qua allowlist
     assert "criteria" not in body
 
 

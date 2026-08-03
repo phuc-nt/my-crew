@@ -54,6 +54,17 @@ export async function resolveReviewCapture(
   body: OfficeMessage['body'],
   taskId?: string | null,
 ): Promise<CaptureDetail | null> {
+  // v58 P4: event mới mang attempt_id MỜ của chính attempt review — join thẳng, hết
+  // heuristic (retry cùng round không còn lẫn). Fetch hỏng/id lạ → rơi xuống đường
+  // đếm-khớp cũ, event trước v58 (không id) cũng đi đường đó — tương thích ngược.
+  if (body.attempt_id) {
+    try {
+      const direct = await api.getCaptureDetail(body.attempt_id)
+      if (direct?.criteria && direct.criteria.length > 0) return direct
+    } catch {
+      // id không resolve được (capture đã GC?) — thử heuristic bên dưới
+    }
+  }
   if (!body.assigned_to || !body.criteria_total) return null
   let rows
   try {

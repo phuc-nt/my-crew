@@ -163,6 +163,7 @@ def run_team_step(
                 step_title=step.title, passed=result.get("passed"),
                 failures=result.get("failures") or [],
                 criteria=result.get("criteria") or [],
+                attempt_id=attempt_id,
             )
         else:
             _append_step_event(
@@ -282,7 +283,7 @@ def _append_step_event(
 
 def _append_review_event(
     task_id: str, *, author: str, task_title: str, step_title: str, passed: bool | None,
-    failures: list[str], criteria: list | None = None,
+    failures: list[str], criteria: list | None = None, attempt_id: str = "",
 ) -> None:
     """try/degrade room-event append for a review-step's own verdict (M32) — never
     raises, matching `office_room_append.append_office_event`'s own contract.
@@ -304,6 +305,11 @@ def _append_review_event(
         "verdict": "passed" if passed else "needs_rework",
         "failure_count": len(failures), "assigned_to": author,
     }
+    # v58 P4: id MỜ của chính attempt review — identifier, không phải content (cùng
+    # phân loại với attempt_id trên step_status, không phạm no-content-echo). FE tray
+    # join thẳng capture theo id thay vì heuristic đếm-khớp; retry cùng round hết lẫn.
+    if attempt_id:
+        body["attempt_id"] = attempt_id
     # v34 P5: per-criterion COUNTS only (never the criterion text — same
     # no-content-echo posture as failure_count vs the failures list).
     if criteria:
