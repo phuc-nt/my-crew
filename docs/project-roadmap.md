@@ -98,6 +98,21 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
 - [x] Archive doc cũ (v1/v2/interview) + gộp UAT.
 - [ ] Đồng bộ header `codebase-summary.md` (ghi v13 → v18) + gộp phần lịch sử dài.
 
+### v57 — Thư ký riêng CEO trên Telegram (2026-08-03, 4/5 phase)
+
+Domain pack thứ 5 `personal` (tham chiếu Pong/openclaw; "full-ga trong khung": autonomous +
+dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm fallback) · briefing
+7:00 + weekly CN 8:00 (kind pack tự sở hữu) · đọc Gmail/Calendar qua `gws` · lệnh `tao_lich`
+(gws_write) · chat có trí nhớ (daily notes 7 ngày + mirror MEMORY.md, opt-in
+`memory.daily_notes`). `plans/260803-1816-personal-secretary-agent/` +
+`docs/journals/260803-v57-personal-secretary.md`. Còn mở từ v57:
+
+- [ ] **P4 web-search cho thư ký**: chỉ chờ `TAVILY_API_KEY`/`BRAVE_API_KEY` vào .env rồi bật cờ.
+- [ ] Thư ký biết roster crew (capability block chứa danh sách staff) — gợi ý giao việc đang
+  nói chung chung.
+- [ ] Gửi email từ chat = nới `_VETTED_COMMAND_TYPES` (quyết định an ninh riêng, chỉ khi CEO cần).
+- [ ] `memory.search` trên notes >7 ngày — chờ pain signal thật.
+
 ### Sản phẩm
 - [ ] **Web-search key cảnh báo → hành động**: agent bật web_search thiếu key mới chỉ
   cảnh báo; cân nhắc auto-tắt flag hoặc nhắc rõ ở luồng giao việc.
