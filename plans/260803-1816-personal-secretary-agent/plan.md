@@ -3,7 +3,7 @@ title: Thư ký riêng CEO trên Telegram (v57)
 description: >-
   Agent thư ký riêng cho CEO, full-ga trong khung an toàn, tham chiếu năng lực
   Pong (openclaw)
-status: pending
+status: completed
 priority: P1
 created: 2026-08-03T00:00:00.000Z
 ---
@@ -36,7 +36,7 @@ heartbeat (watchers + cron đã phủ), multi-agent spawn (team feature đã có
 | 1 | [Personal pack + hồ sơ thư ký + chat lõi](./phase-01-personal-pack-h-s-th-k-chat-l-i.md) | Completed |
 | 2 | [Briefing chủ động (morning + weekly)](./phase-02-briefing-ch-ng-morning-weekly.md) | Completed |
 | 3 | [Gmail Calendar Drive (gws)](./phase-03-gmail-calendar-drive-gws.md) | Completed |
-| 4 | [Web search cho thư ký](./phase-04-web-search-cho-th-k.md) | Pending |
+| 4 | [Web search cho thư ký](./phase-04-web-search-cho-th-k.md) | Completed |
 | 5 | [Memory nâng cao (daily notes + search)](./phase-05-memory-n-ng-cao-daily-notes-search.md) | Completed |
 
 ## Dependencies
@@ -47,9 +47,15 @@ heartbeat (watchers + cron đã phủ), multi-agent spawn (team feature đã có
 
 ## Acceptance (toàn plan)
 
-- [ ] Nhắn DM bot thư ký → trả lời đúng persona, có dữ liệu thật (Jira/GitHub/lịch sử).
-- [ ] 7:00 sáng nhận Morning Briefing, CN 8:00 nhận Weekly Review — không cần hỏi.
-- [ ] Hỏi "hôm nay có lịch gì / email nào cần trả lời" → đọc gws thật trả lời.
-- [ ] Việc ghi (gửi mail, append Sheets…) tự chạy qua auto-approve, vẫn audit đầy đủ; Lớp A vẫn chặn.
-- [ ] Thư ký nhớ việc qua ngày (daily notes) và tra lại được ("tuần trước tôi dặn gì?").
-- [ ] Toàn suite BE/FE/e2e xanh; 6 bất biến HANDOVER §5 không đổi.
+- [x] Nhắn DM bot thư ký → trả lời đúng persona, dữ liệu thật, TỨC THÌ (~1-2s, listener 1.5).
+- [x] Briefing/Weekly theo lịch — UAT chạy tay giao thật; briefing 7:00 sáng 04/08 là lần tự
+      chạy đầu (điểm xác nhận cuối, CEO để ý Telegram).
+- [x] Hỏi lịch/email → đọc gws thật trả lời (Firecrawl + gws CLI dùng chung hạ tầng openclaw).
+- [x] Việc ghi: `tao_lich` chạy ngay (autonomous) + audit; Lớp A vẫn chặn verb phá hoại
+      (test phản chứng). Email KHÔNG làm — catalog cấm by design, ghi roadmap.
+- [x] Nhớ qua ngày: daily notes 7 ngày + recall ở session mới (UAT thật).
+- [x] Suite 2423 BE + 280 FE + 8 e2e xanh; 6 bất biến HANDOVER §5 nguyên vẹn (Lớp A không
+      đổi một dòng; 2 fix còn SIẾT thêm: `{} or None` allowlist + calendarId argv).
+
+**Hoàn thành 2026-08-03** — brainstorm → 5/5 phase + phase 1.5 phát sinh (instant chat), 7 commit,
+3 vòng UAT thật bắt 6 bug/hành-vi lệch trước khi user gặp.

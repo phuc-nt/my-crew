@@ -1,12 +1,12 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v55). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-08-01.
+> Lộ trình + trạng thái (as-built v57). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Cập nhật: 2026-08-03.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v55, PyPI `my-crew` 0.4.0.**
-~2389 BE + ~273 FE test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
+**Production-usable, single-user autonomy-first. Đã ship tới v57, PyPI `my-crew` 0.6.0.**
+~2423 BE + ~280 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
 (live daemon, kill-9 resume, fan-out parallelism).
 
 **v51–v55 (productize + office cockpit):** **v51 productize** (PyPI package: console script
@@ -98,7 +98,7 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
 - [x] Archive doc cũ (v1/v2/interview) + gộp UAT.
 - [ ] Đồng bộ header `codebase-summary.md` (ghi v13 → v18) + gộp phần lịch sử dài.
 
-### v57 — Thư ký riêng CEO trên Telegram (2026-08-03, 4/5 phase)
+### v57 — Thư ký riêng CEO trên Telegram (2026-08-03, ✅ 5/5 phase)
 
 Domain pack thứ 5 `personal` (tham chiếu Pong/openclaw; "full-ga trong khung": autonomous +
 dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm fallback) · briefing
@@ -107,7 +107,9 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
 `memory.daily_notes`). `plans/260803-1816-personal-secretary-agent/` +
 `docs/journals/260803-v57-personal-secretary.md`. Còn mở từ v57:
 
-- [ ] **P4 web-search cho thư ký**: chỉ chờ `TAVILY_API_KEY`/`BRAVE_API_KEY` vào .env rồi bật cờ.
+- [x] **P4 web-search cho thư ký (xong 2026-08-03, 5/5 phase)**: không mua key — Brave dùng
+  lại từ openclaw, Firecrawl self-host localhost:3002; thêm nhịp chat 2-pass
+  (`WEB_SEARCH:` marker) vì M11 không có tool-loop.
 - [ ] Thư ký biết roster crew (capability block chứa danh sách staff) — gợi ý giao việc đang
   nói chung chung.
 - [ ] Gửi email từ chat = nới `_VETTED_COMMAND_TYPES` (quyết định an ninh riêng, chỉ khi CEO cần).

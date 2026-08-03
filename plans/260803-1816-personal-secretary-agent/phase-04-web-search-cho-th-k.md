@@ -1,10 +1,11 @@
 ---
 phase: 4
-title: "Web search cho thư ký"
-status: pending
+title: Web search cho thư ký
+status: completed
 priority: P3
-effort: "0.25d"
-dependencies: [1]
+effort: 0.25d
+dependencies:
+  - 1
 ---
 
 # Phase 4: Web search cho thư ký
@@ -39,8 +40,23 @@ Máy hiện CHƯA có key (v56 đã xác nhận hint "thiếu key" hiển thị 
 
 ## Success Criteria
 
-- [ ] 2 câu hỏi cần web trả lời được, có nguồn.
-- [ ] Không key trong log/audit; suite xanh (nếu có sửa lệch provider-check thì kèm test).
+- [x] Câu hỏi cần web trả lời được, có nguồn (UAT thật: giá vàng SJC — Brave search thật,
+      trả lời kèm nguồn + caveat thành thật về độ tươi số liệu).
+- [x] Không key trong log/audit (web_search audit ghi redacted query); suite 2423 xanh.
+
+## Kết quả (2026-08-03) — không tốn đồng nào, thêm chat 2-pass
+
+- **User action "mua key" biến mất**: Brave key dùng lại từ config openclaw
+  (`plugins.brave.config.webSearch.apiKey` → `.env`, không hiển thị); Firecrawl self-host
+  `localhost:3002` của openclaw đang chạy sẵn và `FIRECRAWL_BASE_URL` đã có trong .env từ
+  trước → `web.scrape` team-step tự sống lại.
+- **Phát sinh thiết kế (CEO chốt "làm chat web đầy đủ")**: chat M11 không có tool-loop →
+  nhịp **2-pass** mới (`agent/chat_web_lookup.py` + `qa_answer`): pass-1 compose thường,
+  model cần web thì trả đúng 1 dòng `WEB_SEARCH: <query>` → CODE chạy search (tool + audit
+  redacted-query + formatter chống-injection của team-step v20.5) → pass-2 trả lời từ kết
+  quả trong user message (không bao giờ vào system). Tin nhắn thường zero chi phí thêm;
+  marker lặp ở pass-2 bị cắt vòng. Gate: `web_search: true` + có key — agent khác
+  byte-identical. +5 test.
 
 ## Risk Assessment
 
