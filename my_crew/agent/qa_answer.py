@@ -233,8 +233,10 @@ def _answer_question(
     from my_crew.profile.capability_block import build_capability_block
 
     capability = build_capability_block(loaded, pack)  # internal-only (user-msg path)
+    question = str(mention.get("text") or "").strip()
     context = build_context_block(
-        loaded.project, resolve_memory_text(loaded), capability
+        # v58 P7: câu hỏi làm query recall kioku — provider static bỏ qua tham số.
+        loaded.project, resolve_memory_text(loaded, query=question), capability
     )  # internal-only path
     # M19: the opted-in company docs (e.g. HR's leave policy) so a Q&A grounds on them.
     # The Q&A path is inherently internal (a mention reply), so audience is "internal".
@@ -242,7 +244,6 @@ def _answer_question(
     from my_crew.company_docs.pool import load_company_docs
 
     docs_block = render_company_docs(list(load_company_docs(getattr(loaded, "company_docs", ()))))
-    question = str(mention.get("text") or "").strip()
     user = (
         (f"{context}\n\n" if context else "")
         + (f"{docs_block}\n\n" if docs_block else "")

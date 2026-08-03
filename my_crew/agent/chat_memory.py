@@ -58,6 +58,12 @@ def remember_chat_exchange(
         profile_id = getattr(loaded, "profile_id", "") or ""
         written = append_daily_note(profile_id, facts)
         write_memory_file(profile_memory_path(profile_id), facts)
+        # v58 P7: provider kioku ⇒ fact còn vào vault (một entry/lượt) cho recall ngữ
+        # nghĩa về sau. Best-effort như mọi thứ ở đây — kioku_remember tự degrade.
+        if getattr(config, "provider", "static") == "kioku":
+            from my_crew.memory.kioku_provider import kioku_remember
+
+            kioku_remember(profile_id, "\n".join(facts))
         return written
     except Exception:  # noqa: BLE001 — trí nhớ hỏng không được phá lượt chat đã xong
         logger.warning("chat remember thất bại (bỏ qua)", exc_info=True)

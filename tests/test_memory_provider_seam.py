@@ -90,11 +90,21 @@ def test_static_provider_record_is_noop(tmp_path):
     assert (tmp_path / "a3" / "MEMORY.md").read_text(encoding="utf-8") == "fact\n"
 
 
-def test_kioku_provider_deferred_raises_runtimeerror(tmp_path):
+def test_kioku_provider_now_wired_falls_back_to_static_without_query(tmp_path):
+    """v58 P7 thi công v19.5: kioku hết raise — không query ⇒ đúng text static; provider
+    lạ vẫn fail-loud (bảo toàn hành vi chống-typo của seam)."""
     _write_profile(tmp_path, "a4", "name: A4\nmemory:\n  provider: kioku\n")
     loaded = load_profile("a4", profiles_dir=tmp_path, data_dir=tmp_path / ".data")
-    with pytest.raises(RuntimeError, match="v19.5"):
-        resolve_memory_text(loaded)
+    assert resolve_memory_text(loaded) == loaded.memory  # static path, không recall mù
+
+    # provider lạ: parse chặn từ vòng ngoài nên dựng stand-in trực tiếp để pin nhánh raise
+    from types import SimpleNamespace
+
+    weird = SimpleNamespace(profile_id="w", memory="", soul="", project="",
+                            memory_config=SimpleNamespace(provider="vector9000",
+                                                          daily_notes=False))
+    with pytest.raises(RuntimeError, match="không hợp lệ"):
+        resolve_memory_text(weird)
 
 
 def test_loader_threads_memory_config(tmp_path):
