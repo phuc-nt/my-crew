@@ -66,7 +66,9 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
 Định giá lại 2026-08-01 sau 0.5.0: `plans/reports/260801-1940-roadmap-reassessment-post-0.5.0.md`
 — hướng chốt cho 1–2 vòng tới: **Nền vững** (Playwright smoke → vòng dọn dẹp quick wins → attempt_id).
 
-### Go-live có kiểm soát (chưa xếp lịch — CEO quyết thời điểm)
+### Go-live có kiểm soát (checklist + drill XONG v58 — chờ CEO quyết pilot)
+Xem `docs/go-live-checklist.md` (kiểm kê fleet thật + lộ trình 2 nấc + drill kill-switch
+đã chạy, bug env-bị-profile-đè đã vá). Còn lại là quyết định vận hành:
 - [ ] **Tắt DRY_RUN, chạy thật**: `trust_mode: guarded` (mọi Lớp B chờ duyệt tại action
   rail v54) → nâng dần autonomous cho hành động ổn định. Đây là giá trị cốt lõi chưa
   thu hoạch — trust-ladder (v30) + rail (v54) build sẵn để phục vụ chính bước này.
@@ -82,7 +84,8 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
   sandbox, fail-closed allowlist, PII gate) + wizard chọn runtime theo role. Red-team 3 reviewer
   (6 Critical, đọc deepagents wheel) → provider đổi sang Docker (không dịch vụ ngoài). **DeepAgent
   tự chủ trong Docker verify THẬT** (LLM tự gọi docker exec, container token-free, teardown sạch).
-- [ ] **v19.5 (kioku adapter)** *(chưa xếp lịch — chờ tín hiệu pain memory từ usage thật)*:
+- [x] **v19.5 (kioku adapter)** — **XONG v58 P7 (2026-08-03)**, đủ 7 điều kiện dưới (chi
+  tiết docs/journals/260803-v58-roadmap-sweep.md):
   cắm my-kioku sau khi giải 7 điều kiện red-team — dist
   (`bun link`+`MY_KIOKU_BIN`, BỎ `bun x`); recall `<query>` (không `--digest`); wrap digest
   `format_internal_content`; env allowlist subprocess; flock per-vault + stagger reflect;
@@ -111,18 +114,17 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
 - [x] **P4 web-search cho thư ký (xong 2026-08-03, 5/5 phase)**: không mua key — Brave dùng
   lại từ openclaw, Firecrawl self-host localhost:3002; thêm nhịp chat 2-pass
   (`WEB_SEARCH:` marker) vì M11 không có tool-loop.
-- [ ] Thư ký biết roster crew (capability block chứa danh sách staff) — gợi ý giao việc đang
-  nói chung chung.
-- [ ] Gửi email từ chat = nới `_VETTED_COMMAND_TYPES` (quyết định an ninh riêng, chỉ khi CEO cần).
-- [ ] `memory.search` trên notes >7 ngày — chờ pain signal thật.
+- [x] ~~Thư ký biết roster crew~~ — xong v58 (yaml-peek, UAT gợi ý đúng @nghien-cuu).
+- [x] ~~Gửi email từ chat~~ — CEO chốt + xong v58 (`gui_email`, nới đúng 1 type có test pin);
+  UAT gửi thật chờ cấu hình SMTP.
+- [x] ~~`memory.search` trên notes >7 ngày~~ — giải bằng kioku v58 (recall ngữ nghĩa toàn vault).
 
 ### Sản phẩm
 - [x] ~~**Web-search key cảnh báo → hành động**~~ — **đóng 2026-08-03**: v56 đã nhắc ngay
   preview giao việc (và chốt KHÔNG auto-tắt flag — flag là ý định người dùng); v57 máy đã có
   key (Brave dùng lại từ openclaw). Hết việc.
-- [ ] **Queue transparency**: coordinator 1 hành-động/tick (60s) theo thứ tự cũ→mới →
-  task mới chờ vài phút khi hàng đợi đông; UI nên hiện "đang xếp sau N việc". *(Định giá
-  2026-08-01: ROI tốt nhất nhóm sản phẩm — ứng viên đầu khi mở lại hướng sản phẩm.)*
+- [x] ~~**Queue transparency**~~ — xong v58: card kanban hiện "⏳ xếp sau N việc (~N phút)"
+  theo đúng thứ tự ticker phục vụ.
 - [ ] **QA reply persist (tùy chọn)**: câu trả lời "hỏi tiến độ" hiện không lưu — thêm
   kind lưu nếu CEO muốn lịch sử hỏi-đáp.
 - [ ] **Chi phí classify/QA vào cost-cap**: hiện chỉ log, chưa tính vào trần chi phí việc.
@@ -138,11 +140,10 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
   detail như write) · GC artifact dir mồ côi (guard kép: không task row + >7 ngày).
   Bonus từ review: audit orphan v36 quét SAI đường dẫn từ đầu (chưa bao giờ thấy gì) —
   sửa bằng helper path chung `team_task_artifacts_root()`.
-- [ ] **3. Opaque `attempt_id` cho review tray** (treo từ v54): join review line ↔ capture
-  hiện theo (task, step, round) — chỉ sai khi retry cùng round (hiếm); làm khi đụng
-  review tray lần tới.
-- [ ] `/api/office/assign/staff` gọi `load_profile` đầy đủ per-staff per-request (v56
-  review M1) — đúng nhưng nặng hơn cần thiết; đọc yaml-only hoặc cache khi chạm lại.
+- [x] ~~**3. Opaque `attempt_id` cho review tray**~~ — xong v58: event review mang id mờ,
+  tray join thẳng, heuristic v54 thành fallback event cũ.
+- [x] ~~`/api/office/assign/staff` load_profile per-staff~~ — xong v58: yaml-peek chung
+  `peek_profile_yaml`, test chống tái phát.
 - Modularization >200 LOC: KHÔNG đứng riêng — `team_task_graph.py` (920 LOC) là lõi đã
   red-team nhiều vòng, refactor vì đếm dòng = rủi ro > lợi. Áp rule khi chạm file có lý
   do hành vi.
