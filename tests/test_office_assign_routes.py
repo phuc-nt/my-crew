@@ -24,13 +24,17 @@ def test_staff_endpoint_lists_assignable(monkeypatch, client):
         lambda: [("noi-dung", "office"), ("nghien-cuu", "office")],
     )
 
-    class _Profile:
-        def __init__(self, web_search):
-            self.web_search = web_search
-
-    profiles = {"noi-dung": _Profile(False), "nghien-cuu": _Profile(True)}
+    # v58 P3: cờ web đọc bằng yaml-peek — load_profile đầy đủ KHÔNG được gọi nữa
+    # (nợ M1 v56); peek trả dict thô của profile.yaml.
+    peeked = {"noi-dung": {"web_search": False}, "nghien-cuu": {"web_search": True}}
     monkeypatch.setattr(
-        "my_crew.profile.loader.load_profile", lambda agent_id: profiles[agent_id]
+        "my_crew.profile.crew_roster.peek_profile_yaml",
+        lambda agent_id, **kw: peeked[agent_id],
+    )
+    monkeypatch.setattr(
+        "my_crew.profile.loader.load_profile",
+        lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("load_profile bị gọi — nợ M1 tái phát")),
     )
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.delenv("BRAVE_API_KEY", raising=False)
@@ -52,10 +56,9 @@ def test_staff_endpoint_web_search_ready_presence_only(monkeypatch, client):
         "my_crew.agent.team_task_roster.assignable_staff", lambda: [("hong", "office")]
     )
 
-    def _boom(agent_id):
-        raise RuntimeError("broken profile")
-
-    monkeypatch.setattr("my_crew.profile.loader.load_profile", _boom)
+    monkeypatch.setattr(
+        "my_crew.profile.crew_roster.peek_profile_yaml", lambda agent_id, **kw: {}
+    )  # profile hỏng ⇒ peek trả {} ⇒ web_search False, roster vẫn sống
     monkeypatch.setenv("TAVILY_API_KEY", "tvly-secret")
     r = client.get("/api/office/assign/staff")
     assert r.status_code == 200

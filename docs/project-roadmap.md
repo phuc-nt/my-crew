@@ -87,8 +87,9 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
   (`bun link`+`MY_KIOKU_BIN`, BỎ `bun x`); recall `<query>` (không `--digest`); wrap digest
   `format_internal_content`; env allowlist subprocess; flock per-vault + stagger reflect;
   health probe thật; pin "zero network I/O". Xem `plans/260711-1543-v19-.../plan.md` §"Giữ cho v19.5".
-- [ ] **v20**: channel binding account→agent (mỗi agent 1 bot Telegram, OpenClaw-style).
-  3 bot token đã sẵn trong `.env` — hạ tầng Telegram có, giá trị cao khi mở lại hướng sản phẩm.
+- [x] ~~**v20**: channel binding account→agent (mỗi agent 1 bot Telegram, OpenClaw-style)~~ —
+  **đóng 2026-08-03**: đã là hiện thực từ v6 M13 (bot per-agent + allowlist 2 chiều); v57 còn
+  thêm listener long-poll trả lời tức thì. Không còn nội dung để làm.
 - [x] ~~**v21**: 2-mode UI (CEO đơn giản / Maintainer config+monitoring)~~ — **đóng
   2026-08-01**: v52 dual-lens (👁/🔬 + captures explorer + health strip) đã đáp ứng đủ
   ý tưởng gốc; phần còn lại không đáng một hạng mục riêng.
@@ -116,8 +117,9 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
 - [ ] `memory.search` trên notes >7 ngày — chờ pain signal thật.
 
 ### Sản phẩm
-- [ ] **Web-search key cảnh báo → hành động**: agent bật web_search thiếu key mới chỉ
-  cảnh báo; cân nhắc auto-tắt flag hoặc nhắc rõ ở luồng giao việc.
+- [x] ~~**Web-search key cảnh báo → hành động**~~ — **đóng 2026-08-03**: v56 đã nhắc ngay
+  preview giao việc (và chốt KHÔNG auto-tắt flag — flag là ý định người dùng); v57 máy đã có
+  key (Brave dùng lại từ openclaw). Hết việc.
 - [ ] **Queue transparency**: coordinator 1 hành-động/tick (60s) theo thứ tự cũ→mới →
   task mới chờ vài phút khi hàng đợi đông; UI nên hiện "đang xếp sau N việc". *(Định giá
   2026-08-01: ROI tốt nhất nhóm sản phẩm — ứng viên đầu khi mở lại hướng sản phẩm.)*

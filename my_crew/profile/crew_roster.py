@@ -21,11 +21,29 @@ from my_crew.config.settings import MY_CREW_HOME
 logger = logging.getLogger(__name__)
 
 _NAME_MAX = 40
+#: Cùng ràng buộc id với registry — chặn id lạ (traversal) trước khi ghép path.
+_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
 
 def _clean(text: str) -> str:
     """Một dòng, không backtick, bounded — user-data không được định dạng lại prompt."""
     return re.sub(r"[\r\n`]", " ", text).strip()[:_NAME_MAX]
+
+
+def peek_profile_yaml(profile_id: str, *, profiles_dir: Path | None = None) -> dict:
+    """Đọc THÔ profile.yaml của một agent — {} khi thiếu/hỏng/id lạ, không bao giờ raise.
+
+    Dùng cho các chỗ chỉ cần vài trường rẻ (web_search, name, domain) — thay cho
+    `load_profile` đầy đủ vốn dựng cả config/context (nợ M1 v56 ở /staff)."""
+    if not _ID_RE.fullmatch(profile_id or ""):
+        return {}
+    base = profiles_dir if profiles_dir is not None else (MY_CREW_HOME / "profiles")
+    try:
+        doc = yaml.safe_load((base / profile_id / "profile.yaml").read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        logger.info("peek profile: bỏ qua %s (%s)", profile_id, exc)
+        return {}
+    return doc if isinstance(doc, dict) else {}
 
 
 def crew_roster(
@@ -40,13 +58,8 @@ def crew_roster(
     for entry in load_registry(registry_path):
         if not entry.enabled or entry.id == exclude_id:
             continue
-        path = base / entry.id / "profile.yaml"
-        try:
-            doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except (OSError, yaml.YAMLError) as exc:
-            logger.info("crew roster: bỏ qua %s (%s)", entry.id, exc)
-            continue
-        if not isinstance(doc, dict) or doc.get("enabled") is False:
+        doc = peek_profile_yaml(entry.id, profiles_dir=base)
+        if not doc or doc.get("enabled") is False:
             continue
         out.append({
             "id": entry.id,

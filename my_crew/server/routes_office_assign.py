@@ -39,13 +39,13 @@ def get_assignable_staff() -> dict:
     import os
 
     from my_crew.agent.team_task_roster import assignable_staff
-    from my_crew.profile.loader import load_profile
+    from my_crew.profile.crew_roster import peek_profile_yaml
 
+    # v58 P3 (nợ M1 v56): cờ web_search đọc bằng yaml-peek thay cho load_profile đầy đủ
+    # per-staff per-request — payload giữ nguyên byte, chi phí rơi từ N profile-build
+    # xuống N lần đọc yaml 3 trường.
     def _wants_web(agent_id: str) -> bool:
-        try:
-            return bool(getattr(load_profile(agent_id), "web_search", False))
-        except Exception:  # noqa: BLE001 — one broken profile never blocks the roster
-            return False
+        return bool(peek_profile_yaml(agent_id).get("web_search", False))
 
     return {
         "web_search_ready": bool(os.getenv("TAVILY_API_KEY") or os.getenv("BRAVE_API_KEY")),

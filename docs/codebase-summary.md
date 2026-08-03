@@ -1,7 +1,11 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-07-16 — v50 COMPLETE.** ~2344 backend tests + 201 frontend, ruff/tsc clean.
+> Status: **2026-08-03 — as-built v58 (đang chạy).** ~2432 backend + ~280 frontend + 8 e2e
+> tests, ruff/tsc clean. PyPI `my-crew` 0.6.0. Sau v50: v51 productize PyPI · v52 dual-lens ·
+> v53 UI kỷ luật VN/EN · v54 cockpit action rail · v55 viewport shell · v56 Playwright e2e ·
+> **v57 personal-pack** (thư ký riêng Telegram: listener tức thì, briefing, gws, tao_lich,
+> daily-notes memory, chat web 2-pass) · v58 roster + gui_email + queue transparency.
 > Product usable single-user (agent office, team-task, màn 3D, registry user-data,
 > memory seam, AgentRuntime 3-tier + per-step routing, telemetry capture + unified cost,
 > deep_team in-sandbox subagent, benchmark-hardened robustness, governance-audit actor,
