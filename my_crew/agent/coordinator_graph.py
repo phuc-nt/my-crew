@@ -149,14 +149,19 @@ class CoordinatorDeps:
     # live process is actually THIS step's worker before sending SIGKILL — see
     # `team_tick_runner._kill_pid`'s docstring) — a test double may ignore it.
     kill_pid: Callable[[int, str], None] = lambda _pid, _attempt_id: None
-    # approval_status(approval_id) -> "pending" | "approved" | "rejected" | None. Reads
-    # the SAME `ApprovalStore` `mpm approve`/`mpm reject` write to (None ⇒ the id no
-    # longer resolves, e.g. a corrupted/foreign id — treated as still-pending, never
-    # as an implicit approve). Default: always "pending" (never auto-resumes) so a
-    # caller that does not wire this collaborator leaves an awaiting_approval step
-    # alone forever (never auto-resumed), matching every
-    # existing test that never sets `approval_id` on a step at all).
-    approval_status: Callable[[int], str | None] = lambda _approval_id: "pending"
+    # approval_status(approval_id, agent_id) -> "pending" | "approved" | "rejected" |
+    # None. Reads the SAME `ApprovalStore` `mpm approve`/`mpm reject` write to (None ⇒
+    # the id does not resolve in that agent's store — treated as still-pending, never
+    # as an implicit approve). `agent_id` = the step's `assigned_to`: approval ids are
+    # per-agent-FILE AUTOINCREMENT (1,2,3… in every store), so a bare-id cross-store
+    # scan could read a DIFFERENT agent's colliding row (v64 — closes the read half of
+    # the v63 H1 finding; the write half was scoped first). Default: always "pending"
+    # (never auto-resumes) so a caller that does not wire this collaborator leaves an
+    # awaiting_approval step alone forever, matching every existing test that never
+    # sets `approval_id` on a step at all.
+    approval_status: Callable[[int, str], str | None] = (
+        lambda _approval_id, _agent_id: "pending"
+    )
     # clarify_status(clarify_id) -> ("pending"|"answered"|"expired", answer) | None
     # (v34 P2). Reads the ClarifyStore the web/Telegram answer paths write to. Default
     # mirrors approval_status: always-pending, so a caller that does not wire this
@@ -238,20 +243,32 @@ def run_one_tick(deps: CoordinatorDeps) -> TickResult:
     if not open_tasks:
         return TickResult(task_id=None, action="none", detail="no open tasks")
 
-    # v64 anti-starvation (UAT-measured: two fresh tasks sat idle ~40 minutes while a
-    # busy sibling monopolized every tick): tasks that have NEVER run a step — every
-    # row still `pending` — are served FIRST, so a new assignment always gets its first
-    # dispatch promptly. Everything else keeps the original FIFO (list_dispatchable's
-    # oldest-first order; Python sort is stable). Deliberately minimal — a task is only
-    # "starving" in this sense once; mid-task fairness stays FIFO by design until a
-    # real need for full round-robin shows up.
-    open_tasks.sort(key=lambda t: 0 if all(s.status == "pending" for s in t.steps) else 1)
+    # v64 fairness: least-recently-ACTIVE task first — a stateless round-robin.
+    # A task's "recency" is the newest spawn/heartbeat timestamp across its steps
+    # (ISO strings compare lexicographically): serving a task stamps it (reserve sets
+    # `spawned_at`, workers heartbeat `last_seen`), which naturally rotates it behind
+    # its idle siblings on the next tick. A task that never ran a step has no stamp at
+    # all ("") and therefore always sorts FIRST — the anti-starvation guarantee
+    # (UAT-measured: two fresh tasks sat idle ~40 minutes behind one busy sibling).
+    # Ties (e.g. several never-started tasks) keep list_dispatchable's oldest-first
+    # FIFO via Python's stable sort. Still ONE task, ONE action per tick — fairness is
+    # across ticks, not within one.
+    open_tasks.sort(key=_last_activity_stamp)
 
     for task in open_tasks:
         result = _act_on_task(deps, task)
         if result.action != "none":
             return result
     return TickResult(task_id=None, action="none", detail="no actionable step in any open task")
+
+
+def _last_activity_stamp(task: TeamTask) -> str:
+    """The newest `spawned_at`/`last_seen` across a task's steps ("" when it never ran
+    any) — `run_one_tick`'s stateless round-robin key; see the sort's comment."""
+    return max(
+        (ts for s in task.steps for ts in (s.spawned_at, s.last_seen) if ts),
+        default="",
+    )
 
 
 def _act_on_task(deps: CoordinatorDeps, task: TeamTask) -> TickResult:

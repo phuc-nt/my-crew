@@ -98,7 +98,7 @@ def test_autopilot_approves_a_pending_lop_b_gate_and_respawns(tmp_path):
     try:
         result = run_one_tick(_deps(
             store,
-            approval_status=lambda aid: statuses.get(aid),
+            approval_status=lambda aid, agent: statuses.get(aid),
             approval_approve=_approve,
             autopilot_enabled=lambda: True,
         ))
@@ -114,7 +114,7 @@ def test_opted_out_task_is_never_auto_approved(tmp_path):
     try:
         result = run_one_tick(_deps(
             store,
-            approval_status=lambda aid: "pending",
+            approval_status=lambda aid, agent: "pending",
             approval_approve=lambda aid, agent: approved.append(aid) or True,
             autopilot_enabled=lambda: True,
         ))
@@ -131,7 +131,7 @@ def test_autopilot_off_leaves_pending_gate_alone(tmp_path):
     try:
         result = run_one_tick(_deps(
             store,
-            approval_status=lambda aid: "pending",
+            approval_status=lambda aid, agent: "pending",
             approval_approve=lambda aid, agent: approved.append(aid) or True,
         ))
         assert approved == []

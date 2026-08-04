@@ -495,3 +495,23 @@ def test_fresh_task_is_served_before_a_busy_older_task(tmp_path):
     assert result.action == "spawned"
     assert result.task_id == "t2"
     assert result.detail.startswith("b1")
+
+
+def test_two_busy_tasks_alternate_across_ticks(tmp_path):
+    """v64 stateless round-robin: serving a task stamps its steps (spawned_at), so the
+    NEXT tick prefers the sibling whose last activity is older — two busy tasks
+    alternate instead of the older one monopolizing every tick."""
+    store = _store(tmp_path)
+    _plan(store, task_id="t1",
+          steps=[{"step_id": "a1", "title": "a1", "assigned_to": "agent-a", "deps": []},
+                 {"step_id": "a2", "title": "a2", "assigned_to": "agent-a", "deps": []}])
+    _plan(store, task_id="t2",
+          steps=[{"step_id": "b1", "title": "b1", "assigned_to": "agent-b", "deps": []},
+                 {"step_id": "b2", "title": "b2", "assigned_to": "agent-b", "deps": []}])
+
+    served = []
+    for _ in range(2):
+        result = run_one_tick(_deps(store, concurrency=1))
+        assert result.action == "spawned"
+        served.append(result.task_id)
+    assert served == ["t1", "t2"]  # tick 1 stamps t1 -> tick 2 rotates to t2

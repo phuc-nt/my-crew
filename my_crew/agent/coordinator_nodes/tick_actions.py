@@ -221,7 +221,10 @@ def poll_awaiting_approval_step(
     """
     from my_crew.agent.coordinator_graph import TickResult
 
-    decision = deps.approval_status(step.approval_id) if step.approval_id else None
+    decision = (
+        deps.approval_status(step.approval_id, step.assigned_to)
+        if step.approval_id else None
+    )
     # v63 autopilot: a PENDING Lớp B gate on a non-opted-out task gets approved by the
     # secretary's standing delegation (CEO decision 2026-08-04). The approve goes
     # through the SAME store transition `mpm approve` uses (`transition_if_pending`),

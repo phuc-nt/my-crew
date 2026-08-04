@@ -328,38 +328,31 @@ def _clarify_status(clarify_id: int) -> tuple[str, str] | None:
     return clarify_status(clarify_id)
 
 
-def _approval_status(approval_id: int) -> str | None:
-    """Read-only poll against the shared `ApprovalStore` — the SAME store
+def _approval_status(approval_id: int, agent_id: str) -> str | None:
+    """Read-only poll against ONE agent's `ApprovalStore` — the SAME store
     `mpm approve`/`mpm reject` (per-agent `<agent_data_dir>/approvals.db`) write to.
 
-    An `approval_id` on a team step always originates from THAT step's `assigned_to`
-    agent's own gateway (per-agent isolation — a coordinator never runs its own
-    gateway for another agent's write), but this function has no `step` in scope, only
-    the raw id — the caller (`CoordinatorDeps.approval_status`) is agent-agnostic by
-    signature. CAVEAT (v63 review): approval ids are per-FILE AUTOINCREMENT (every
-    agent's store counts 1,2,3…), NOT process-wide unique — this scan returns the
-    FIRST store containing the id, which can be the wrong agent's row when ids
-    collide. Read-only, so the worst case is a wrong status string; the WRITE half
-    (`_approval_approve`) is id+agent scoped for exactly this reason. Tightening this
-    read to `assigned_to`'s store is tracked as follow-up.
+    Scoped to `agent_id` (the step's `assigned_to`) since v64: approval ids are
+    per-FILE AUTOINCREMENT (every agent's store counts 1,2,3…), so the old cross-store
+    scan could return a DIFFERENT agent's colliding row's status — a wrong-row READ
+    that could resume or fail a step off someone else's decision. The write half
+    (`_approval_approve`) was scoped in v63; this closes the read half.
 
-    Returns `None` when the id resolves in no store at all (unknown/stale id) — the
-    ticker treats that identically to `"pending"` (leave the step alone), never as an
-    implicit approve.
+    Returns `None` when the id does not resolve in that store (unknown/stale id) —
+    the ticker treats that identically to `"pending"` (leave the step alone), never
+    as an implicit approve.
     """
     from my_crew.actions.approval_store import ApprovalStore
     from my_crew.runtime.agent_paths import agent_data_dir
-    from my_crew.runtime.registry import load_registry
 
-    for entry in load_registry():
-        store = ApprovalStore(agent_data_dir(entry.id) / "approvals.db")
-        try:
-            approval = store.get(approval_id)
-        finally:
-            store.close()
-        if approval is not None:
-            return approval.status
-    return None
+    if not agent_id:
+        return None
+    store = ApprovalStore(agent_data_dir(agent_id) / "approvals.db")
+    try:
+        approval = store.get(approval_id)
+    finally:
+        store.close()
+    return approval.status if approval is not None else None
 
 
 def _autopilot_enabled() -> bool:

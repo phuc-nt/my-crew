@@ -876,7 +876,8 @@ def test_ticker_polls_real_approval_store_pending_then_approved_respawns(tmp_pat
         retry_tracker=in_memory_retry_tracker(),
         cost_cap_usd=2.0,
         spawn_step=_spawn,
-        approval_status=lambda aid: approvals.get(aid).status if approvals.get(aid) else None,
+        approval_status=lambda aid, agent: (
+            approvals.get(aid).status if approvals.get(aid) else None),
         now=lambda: far_future,
     )
 
@@ -931,7 +932,8 @@ def test_ticker_polls_real_approval_store_rejected_marks_step_failed_and_escalat
         store=store,
         retry_tracker=in_memory_retry_tracker(),
         cost_cap_usd=2.0,
-        approval_status=lambda aid: approvals.get(aid).status if approvals.get(aid) else None,
+        approval_status=lambda aid, agent: (
+            approvals.get(aid).status if approvals.get(aid) else None),
         escalate=lambda task, step, kind, msg: escalated.append(kind),
         now=lambda: far_future,
     )
