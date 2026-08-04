@@ -115,8 +115,8 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
   lại từ openclaw, Firecrawl self-host localhost:3002; thêm nhịp chat 2-pass
   (`WEB_SEARCH:` marker) vì M11 không có tool-loop.
 - [x] ~~Thư ký biết roster crew~~ — xong v58 (yaml-peek, UAT gợi ý đúng @nghien-cuu).
-- [x] ~~Gửi email từ chat~~ — CEO chốt + xong v58 (`gui_email`, nới đúng 1 type có test pin);
-  UAT gửi thật chờ cấu hình SMTP.
+- [x] ~~Gửi email từ chat~~ — xong v58, hoàn tất 2026-08-04: đổi kênh sang `gws gmail +send`
+  (OAuth sẵn, bỏ hẳn SMTP; vetted-types rút về 5). UAT thật: mail nằm trong Gmail.
 - [x] ~~`memory.search` trên notes >7 ngày~~ — giải bằng kioku v58 (recall ngữ nghĩa toàn vault).
 
 ### Sản phẩm
