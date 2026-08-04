@@ -131,11 +131,18 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
   create/update/delete_event, send_email, arg `at`, slot `request`); gỡ cặp M12
   giao_viec/chuyen_the (một bề mặt giao việc duy nhất).
   `plans/260804-1004-secretary-orchestration-gateway/`.
-- [ ] **Backlog — cross-agent memory cho thư ký (CEO 2026-08-04: làm SAU khi thư ký
-  hoàn thiện)**: cần dựng Postgres (`store: postgres` + `project_group` cho secretary và
-  crew) để trí nhớ chia sẻ giữa thư ký và các agent; kèm đánh giá chi phí vận hành.
-- [ ] **Nhắc việc theo giờ ("3h nhắc anh gọi X")**: thư ký mới ghi nhớ, chưa có cơ chế
-  bắn tin đúng giờ — cần thiết kế (one-shot schedule qua gateway, chưa chốt với CEO).
+- [ ] **Cross-agent memory — CEO chốt 2026-08-04: SQLite dùng chung TRƯỚC, Postgres để
+  sau khi đo nhu cầu thật** (khớp kết luận task đội tự nghiên cứu: SQLite ~0đ vận hành
+  vs Postgres ~3,5tr/tháng). Cần 1 phiên thiết kế riêng trước khi code: schema store
+  chia sẻ, seam `resolve_memory_text` (provider thứ 3 bên cạnh static/kioku), ranh giới
+  đọc/ghi per-agent, red-team injection bề mặt trí nhớ chung.
+- [x] ~~**Nhắc việc theo giờ**~~ — **xong v65 (2026-08-04)**: lệnh `set_reminder`/
+  `cancel_reminder` (M12 personal, native type `reminder_create`/`reminder_cancel`
+  actor-bound + nhánh Lớp A riêng), store per-agent `reminders.db`, pseudo-kind
+  `reminder-sweep` mỗi phút CHỈ mọc khi còn nhắc pending (no-LLM, gửi qua
+  telegram_send có dedup), snapshot thêm `upcoming_reminders`. Kèm fix ghép tầng:
+  ops-unsupported của thư ký giờ RƠI XUYÊN xuống catalog M12 thay vì trả listing chặn
+  đường (admin giữ nguyên).
 - [x] ~~**Cân chỉnh review theo cỡ việc (từ UAT v61)**~~ — **đóng v63 (2026-08-04)**:
   waiver code-side (task ≤3 bước VÀ không bước `external_write` → bỏ peer review, chỉ
   self-check; ngưỡng "kết hợp cả hai" do CEO chốt) + verdict `passed_with_notes` (đạt
