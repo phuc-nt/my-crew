@@ -136,10 +136,20 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
   crew) để trí nhớ chia sẻ giữa thư ký và các agent; kèm đánh giá chi phí vận hành.
 - [ ] **Nhắc việc theo giờ ("3h nhắc anh gọi X")**: thư ký mới ghi nhớ, chưa có cơ chế
   bắn tin đúng giờ — cần thiết kế (one-shot schedule qua gateway, chưa chốt với CEO).
-- [ ] **Cân chỉnh review theo cỡ việc (từ UAT v61)**: task đồ chơi 4 bước bị chèn 11
-  bước soát chéo/rework rồi `stalled` vì hết vòng review ở bước tổng hợp — human-gate
-  đúng thiết kế nhưng bar đắt cho việc nhỏ; cân nhắc ngưỡng chèn soát chéo / số vòng
-  theo số bước hoặc chi phí task.
+- [x] ~~**Cân chỉnh review theo cỡ việc (từ UAT v61)**~~ — **đóng v63 (2026-08-04)**:
+  waiver code-side (task ≤3 bước VÀ không bước `external_write` → bỏ peer review, chỉ
+  self-check; ngưỡng "kết hợp cả hai" do CEO chốt) + verdict `passed_with_notes` (đạt
+  kèm góp ý — không mint rework, góp ý vào aggregate). `external_write` vào plan_hash
+  CONDITIONAL như `needs_shell` — DAG cũ hash y nguyên.
+- [x] **Gỡ-stall một chạm (v63)**: 3 lệnh ops `accept_stalled_result` / `retry_stalled_step`
+  / `drop_stalled_step` + escalate kèm evidence pack (tóm tắt verdict trượt, wrapped).
+- [x] **Autopilot toàn quyền (v63, CEO chốt 2026-08-04 "Toàn quyền thật")**: flag
+  `company.yaml::autopilot` + lệnh `set_autopilot on|off`; bật → tự xác nhận kế hoạch
+  (đường hash-bind của `team_task_auto_confirm`), tự gỡ stall (thang retry→accept/drop,
+  trần 2 lượt/task, `autopilot_sweep`), tự duyệt Lớp B đang chờ trong ticker
+  (`transition_if_pending` — CEO bấm trước thì thắng). Opt-out per-task bằng cụm
+  "để anh duyệt" khi giao (`require_ceo_approval`). Bất biến giữ: Lớp A + cost cap;
+  audit + báo lại qua office event → admin mirror.
 
 ### Sản phẩm
 - [x] ~~**Web-search key cảnh báo → hành động**~~ — **đóng 2026-08-03**: v56 đã nhắc ngay

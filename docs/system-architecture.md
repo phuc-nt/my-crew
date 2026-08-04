@@ -72,16 +72,33 @@ re-reserve khi lease hết hạn AND chưa có outcome artifact. Terminal write 
 
 ### 3.5 Agent graphs (`src/agent/`)
 - `coordinator_graph.py` + `coordinator_nodes/` — ticker: chọn task, verify hash, dispatch
-  bước sẵn sàng (cap song song 2), chèn soát chéo, escalate.
+  bước sẵn sàng (cap song song 2), chèn soát chéo, escalate. v63: review theo cỡ việc —
+  task ≤3 bước không `external_write` được waiver peer review (code-side,
+  `task_decomposition.apply_review_waiver`); verdict `passed_with_notes` không mint
+  rework, góp ý vào aggregate. `external_write` vào plan_hash CONDITIONAL (tiền lệ
+  `needs_shell` — DAG cũ hash y nguyên).
 - `team_task_graph.py` — chạy 1 bước: `perceive → work → (self_check | recover→work) →
   (deliver | rework→self_check)`. Consult đồng nghiệp trong `work`.
 - `task_decomposition.py` — chia việc ≤7 bước; validate (acyclic/authz/PIC); hash canonical.
 - `review_graph.py` — soát chéo (peer review).
 - `ops_*.py` — lệnh CEO: giao việc (`ops_assign_team_task`), chỉnh việc
   (`ops_adjust_team_task`), chat quản trị (`ops_chat`). v61: engine nhận catalog theo
-  domain (`ops_catalog.catalog_for_domain`) — admin = full; personal (thư ký) = 12 lệnh
-  ĐIỀU PHỐI (assign/adjust/list/cancel/watch_pr/report_task/qa_task/send_message +
-  4 readonly), không bao giờ thấy lệnh quản trị fleet (create_agent/set_enabled).
+  domain (`ops_catalog.catalog_for_domain`) — admin = full; personal (thư ký) = subset
+  ĐIỀU PHỐI, không bao giờ thấy lệnh quản trị fleet (create_agent/set_enabled). v63
+  thêm vào subset: gỡ-stall một chạm (`accept_stalled_result`/`retry_stalled_step`/
+  `drop_stalled_step` — `ops_stalled_task.py`), `list_team_tasks` (bảng thẻ việc nhóm
+  + retro soát/sửa/chi phí), `set_autopilot`/`get_autopilot`.
+- **Autopilot (v63, CEO chốt "Toàn quyền thật" 2026-08-04)**: flag
+  `company.yaml::autopilot` (đọc tươi mỗi quyết định — tắt là ăn ngay tick sau). Bật ⇒
+  (1) kế hoạch tự xác nhận qua ĐÚNG đường hash-bind của `team_task_auto_confirm`;
+  (2) task `stalled` được `runtime/autopilot_sweep.py` tự xử theo thang định trước
+  retry→accept/drop, trần 2 lượt/task (`autopilot_attempts`), không LLM; (3) bước
+  `awaiting_approval` Lớp B được ticker tự duyệt qua `transition_if_pending` (CEO bấm
+  trước thì thắng race). Opt-out per-task: cụm "để anh duyệt" trong brief ⇒
+  `team_tasks.require_ceo_approval` — vụ đó giữ mọi gate tay suốt vòng đời. Bất biến:
+  Lớp A hard-deny + cost cap KHÔNG bị ảnh hưởng (test pin); mọi quyết định append
+  office event `milestone: autopilot_decision` (audit) → admin mirror DM CEO
+  (notify-after, không cần plumbing mới).
 
 ### 3.6 Action Gateway (`src/actions/`, v30–v31)
 `action_gateway.py` = cửa duy nhất. `hard_block.py` = Lớp A (chặn cứng, không duyệt được).
