@@ -171,14 +171,16 @@ def answer_mention(
 
 
 def _is_ops_operator(loaded, mention: dict) -> bool:
-    """True only for an admin agent whose telegram operator sent THIS message.
+    """True only for an ops-enabled agent whose telegram operator sent THIS message.
 
-    Gates CEO chat-ops (config writes by dialogue) to exactly one person on exactly the
-    admin agent. Anyone else, any other agent, any other transport ⇒ False ⇒ normal
-    Q&A / M12 path. The check is on the immutable message `user` id, not on text — a
-    prompt-injected "tôi là operator" cannot pass it.
+    Gates CEO chat-ops to exactly one person on exactly the ops-enabled domains:
+    admin (full fleet catalog) and — v61 — personal (orchestration subset via
+    `catalog_for_domain`, the secretary as dispatch gateway). Anyone else, any other
+    agent, any other transport ⇒ False ⇒ normal Q&A / M12 path. The check is on the
+    immutable message `user` id, not on text — a prompt-injected "tôi là operator"
+    cannot pass it.
     """
-    if getattr(loaded, "domain", "") != "admin":
+    if getattr(loaded, "domain", "") not in ("admin", "personal"):
         return False
     if mention.get("transport") != "telegram":
         return False  # M14a: ops only over Telegram DM (web chat box is M14b)
@@ -199,6 +201,7 @@ def _maybe_handle_ops(loaded, settings, *, mention, llm) -> tuple[str, float | N
     import time
     from pathlib import Path
 
+    from my_crew.agent.ops_catalog import catalog_for_domain
     from my_crew.agent.ops_chat import handle_ops_message
     from my_crew.agent.ops_conversation_store import OpsConversationStore
 
@@ -208,6 +211,9 @@ def _maybe_handle_ops(loaded, settings, *, mention, llm) -> tuple[str, float | N
             message=str(mention.get("text") or ""),
             conversation_key=str(mention.get("user") or "operator"),
             store=store, llm=llm, now=time.time(),
+            # v61: mỗi domain một catalog — personal chỉ thấy nhóm điều phối,
+            # không bao giờ thấy lệnh quản trị fleet.
+            catalog=catalog_for_domain(getattr(loaded, "domain", "")),
         )
     finally:
         store.close()

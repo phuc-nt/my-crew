@@ -91,12 +91,19 @@ def _confirm_decision(message: str) -> str:
     return "unclear"
 
 
-def classify_ops_intent(llm: LlmClient, message: str) -> dict:
-    """LLM → {intent, command_id?, slots?}. Safe default: any parse doubt ⇒ question."""
+def classify_ops_intent(
+    llm: LlmClient, message: str, commands: dict[str, dict] | None = None,
+) -> dict:
+    """LLM → {intent, command_id?, slots?}. Safe default: any parse doubt ⇒ question.
+
+    `commands` is the domain-scoped catalog (v61) — the classifier must only ever see
+    the commands this agent may serve, or it would route to an id the engine then
+    refuses confusingly. None ⇒ full catalog (admin, pre-v61 call sites)."""
+    commands = OPS_COMMANDS if commands is None else commands
     catalog = "\n".join(
         f"- {cid}: {spec['description']} | slots: "
         + ", ".join(spec["slots"].keys()) if spec["slots"] else f"- {cid}: {spec['description']}"
-        for cid, spec in OPS_COMMANDS.items()
+        for cid, spec in commands.items()
     )
     user = f"DANH SÁCH LỆNH:\n{catalog}\n\nTIN NHẮN:\n{message}"
     try:
@@ -188,38 +195,42 @@ def _next_missing_slot(spec: dict, slots: dict[str, str]) -> str | None:
 
 
 def handle_ops_message(
-    *, message: str, conversation_key: str, store: OpsConversationStore, llm: LlmClient, now: float,
+    *, message: str, conversation_key: str, store: OpsConversationStore, llm: LlmClient,
+    now: float, catalog: dict[str, dict] | None = None,
 ) -> tuple[str, float | None]:
     """Advance the ops dialogue by one message. Returns (reply, cost).
 
     Pure orchestration over the store + catalog + LLM — no I/O of its own beyond those.
     The caller (qa_answer) posts the reply through the Action Gateway like any other.
-    """
+    `catalog` (v61) scopes which commands this agent serves — None ⇒ full OPS_COMMANDS
+    (admin, byte-identical pre-v61)."""
+    commands = OPS_COMMANDS if catalog is None else catalog
     draft = store.load(conversation_key, now=now)
     if draft is None:
         return _start_new(message=message, conversation_key=conversation_key, store=store,
-                          llm=llm, now=now)
+                          llm=llm, now=now, commands=commands)
     if draft.phase == "awaiting_confirm":
         return _handle_confirm(draft=draft, message=message, conversation_key=conversation_key,
-                               store=store)
+                               store=store, commands=commands)
     return _collect_slot(draft=draft, message=message, conversation_key=conversation_key,
-                         store=store, llm=llm, now=now)
+                         store=store, llm=llm, now=now, commands=commands)
 
 
 def _start_new(
-    *, message: str, conversation_key: str, store: OpsConversationStore, llm: LlmClient, now: float,
+    *, message: str, conversation_key: str, store: OpsConversationStore, llm: LlmClient,
+    now: float, commands: dict[str, dict],
 ) -> tuple[str, float | None]:
-    intent = classify_ops_intent(llm, message)
+    intent = classify_ops_intent(llm, message, commands)
     cost = intent.get("_cost_usd")
     kind = intent.get("intent")
     if kind == "question":
         return "", cost  # caller falls through to the read-only Q&A path
-    if kind == "unsupported" or intent.get("command_id") not in OPS_COMMANDS:
-        return (f"Mình quản lý đội qua các lệnh: {command_listing()}. "
+    if kind == "unsupported" or intent.get("command_id") not in commands:
+        return (f"Mình quản lý đội qua các lệnh: {command_listing(commands)}. "
                 "Hoặc hỏi thông tin, mình trả lời được.", cost)
 
     command_id = str(intent["command_id"])
-    spec = OPS_COMMANDS[command_id]
+    spec = commands[command_id]
     # Seed slots from what the LLM already extracted, normalizing + validating each.
     slots: dict[str, str] = {}
     for name, value in (intent.get("slots") or {}).items():
@@ -242,14 +253,15 @@ def _start_new(
             logger.warning("ops readonly command %r failed: %s", command_id, exc)
             return f"Chưa lấy được thông tin: {exc}", cost
     return _advance_or_confirm(command_id=command_id, slots=slots,
-                               conversation_key=conversation_key, store=store, now=now, cost=cost)
+                               conversation_key=conversation_key, store=store, now=now,
+                               cost=cost, commands=commands)
 
 
 def _collect_slot(
     *, draft: OpsDraft, message: str, conversation_key: str, store: OpsConversationStore,
-    llm: LlmClient, now: float,
+    llm: LlmClient, now: float, commands: dict[str, dict],
 ) -> tuple[str, float | None]:
-    spec = get_command(draft.command_id)
+    spec = get_command(draft.command_id, commands)
     if spec is None:  # catalog changed under a live draft — abandon it cleanly
         store.clear(conversation_key)
         return "Lệnh không còn khả dụng, mình huỷ nháp. Bạn thử lại nhé.", None
@@ -272,15 +284,16 @@ def _collect_slot(
                 return f"Giá trị cho '{asking}' {err}. Bạn nhập lại giúp mình.", cost
             slots[asking] = normalized
     return _advance_or_confirm(command_id=draft.command_id, slots=slots,
-                               conversation_key=conversation_key, store=store, now=now, cost=cost)
+                               conversation_key=conversation_key, store=store, now=now,
+                               cost=cost, commands=commands)
 
 
 def _advance_or_confirm(
     *, command_id: str, slots: dict[str, str], conversation_key: str,
-    store: OpsConversationStore, now: float, cost: float | None,
+    store: OpsConversationStore, now: float, cost: float | None, commands: dict[str, dict],
 ) -> tuple[str, float | None]:
     """Ask for the next missing slot, or (all filled) save the draft and show the preview."""
-    spec = OPS_COMMANDS[command_id]
+    spec = commands[command_id]
     missing = _next_missing_slot(spec, slots)
     if missing is not None:
         store.save(conversation_key, OpsDraft(command_id, slots, "collecting", now))
@@ -313,8 +326,9 @@ def _advance_or_confirm(
 
 def _handle_confirm(
     *, draft: OpsDraft, message: str, conversation_key: str, store: OpsConversationStore,
+    commands: dict[str, dict],
 ) -> tuple[str, float | None]:
-    spec = get_command(draft.command_id)
+    spec = get_command(draft.command_id, commands)
     if _confirm_decision(message) == "confirm" and spec is not None:
         store.clear(conversation_key)  # consume the draft BEFORE running (no double-run on re-poll)
         try:

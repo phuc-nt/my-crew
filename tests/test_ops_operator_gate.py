@@ -70,3 +70,63 @@ def test_no_operator_configured_rejected(tmp_path):
 def test_no_telegram_block_rejected(tmp_path):
     loaded = _loaded(tmp_path, domain="admin", telegram=None)
     assert _is_ops_operator(loaded, _mention(user="555")) is False
+
+
+# --- v61: personal (secretary) is ops-enabled with the ORCHESTRATION catalog ---
+
+
+def test_operator_on_personal_telegram_passes(tmp_path):
+    loaded = _loaded(tmp_path, domain="personal", telegram=_TG)
+    assert _is_ops_operator(loaded, _mention(user="555")) is True
+
+
+def test_non_operator_on_personal_rejected(tmp_path):
+    loaded = _loaded(tmp_path, domain="personal", telegram=_TG)
+    assert _is_ops_operator(loaded, _mention(user="999")) is False
+
+
+def test_personal_catalog_is_orchestration_only():
+    """Pin an ninh: personal KHÔNG bao giờ thấy lệnh quản trị fleet; admin giữ nguyên
+    catalog đầy đủ (không đổi một byte hành vi pre-v61)."""
+    from my_crew.agent.ops_catalog import (
+        OPS_COMMANDS,
+        ORCHESTRATION_COMMAND_IDS,
+        catalog_for_domain,
+    )
+
+    assert catalog_for_domain("admin") is OPS_COMMANDS
+    personal = catalog_for_domain("personal")
+    assert set(personal) == ORCHESTRATION_COMMAND_IDS
+    assert "create_agent" not in personal and "set_enabled" not in personal
+    assert "create_calendar_event" not in personal  # thư ký đã có lệnh M12 riêng
+    assert "assign_team_task" in personal and "cancel_task" in personal
+    # subset phải là tập con thật của catalog gốc — không tự bịa lệnh mới
+    assert set(personal) <= set(OPS_COMMANDS)
+
+
+def test_personal_unsupported_lists_only_orchestration(tmp_path):
+    """Đường engine thật với catalog personal: lệnh fleet-admin bị coi là unsupported
+    và listing trả về KHÔNG chứa create_agent."""
+    import time
+
+    from my_crew.agent.ops_catalog import catalog_for_domain
+    from my_crew.agent.ops_chat import handle_ops_message
+    from my_crew.agent.ops_conversation_store import OpsConversationStore
+
+    class _Llm:
+        def complete(self, messages):
+            return type("R", (), {
+                "content": '{"intent":"command","command_id":"create_agent","slots":{}}',
+                "cost_usd": 0.0001,
+            })()
+
+    store = OpsConversationStore(tmp_path / "ops.sqlite3")
+    try:
+        reply, _cost = handle_ops_message(
+            message="tạo agent mới tên sales", conversation_key="ceo", store=store,
+            llm=_Llm(), now=time.time(), catalog=catalog_for_domain("personal"),
+        )
+    finally:
+        store.close()
+    assert "create_agent" not in reply
+    assert "assign_team_task" in reply  # listing giới thiệu đúng nhóm điều phối

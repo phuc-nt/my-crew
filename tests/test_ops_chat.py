@@ -428,7 +428,7 @@ def test_advance_or_confirm_skips_draft_after_auto_confirm(tmp_path, monkeypatch
     store = OpsConversationStore(tmp_path / "ops.sqlite3")
     reply, _cost = _advance_or_confirm(
         command_id="fake_auto_cmd", slots={"brief": "x"}, conversation_key="ceo",
-        store=store, now=time.time(), cost=None,
+        store=store, now=time.time(), cost=None, commands=OPS_COMMANDS,
     )
     assert reply == "ĐÃ TỰ XÁC NHẬN"
     assert store.load("ceo", now=time.time()) is None  # no awaiting_confirm draft parked
