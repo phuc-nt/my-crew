@@ -213,9 +213,10 @@ def test_vetted_command_types_back_to_original_five():
     )
 
 
-def test_gui_email_builds_gws_send_argv():
+def test_gui_email_builds_gws_send_argv(monkeypatch):
     from my_crew.actions.hard_block import _hard_deny_gws
 
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/local/bin/gws")  # CI không cài gws
     pack = PackRegistry().load("personal")
     spec = pack.commands["gui_email"]
     assert spec["type"] == "gws_write"  # OAuth gws, không SMTP
@@ -235,11 +236,12 @@ def test_gui_email_builds_gws_send_argv():
     assert err is not None and "attachment_path" in err
 
 
-def test_gui_email_accepts_multiple_recipients():
+def test_gui_email_accepts_multiple_recipients(monkeypatch):
     """UAT vòng 2 pattern D: 'gửi cho A và B' bị regex 1-địa-chỉ chặn oan — gws +send
     nhận comma-separated. Schema nới cho danh sách, build_args chuẩn hoá khoảng trắng."""
     from my_crew.agent.chat_command import validate_args
 
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/local/bin/gws")  # CI không cài gws
     pack = PackRegistry().load("personal")
     spec = pack.commands["gui_email"]
     clean, err = validate_args(
