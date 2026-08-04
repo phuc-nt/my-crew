@@ -350,6 +350,102 @@ def test_autonomous_duplicate_command_reports_dedup_not_refusal(tmp_path, monkey
         gw.close()
 
 
+# --- nhiều lệnh trong một tin nhắn (UAT vòng 2 pattern A) ---
+
+
+def _two_commands_llm():
+    return _FakeLlm(
+        '{"intent":"command","commands":['
+        '{"command_id":"create_issue","args":{"summary":"Bug A"}},'
+        '{"command_id":"create_issue","args":{"summary":"Bug B"}}]}'
+    )
+
+
+def test_two_commands_enqueue_in_order_with_two_reply_lines(tmp_path):
+    loaded = _loaded(tmp_path)
+    gw = _gw(loaded)
+    try:
+        reply, cost = maybe_handle_command(
+            loaded=loaded, config=loaded.config, mention=_mention(),
+            pack=_pm_pack(), gateway=gw, llm=_two_commands_llm(),
+        )
+        pending = gw.pending_approvals()
+        assert [p.action["args"]["summary"] for p in pending] == ["Bug A", "Bug B"]
+        assert reply.count("⏳") == 2 and len(reply.splitlines()) == 2
+        assert cost == 0.0002  # classifier chạy đúng 1 lần cho cả chuỗi
+    finally:
+        gw.close()
+
+
+def test_one_invalid_command_does_not_cancel_the_other(tmp_path):
+    loaded = _loaded(tmp_path)
+    gw = _gw(loaded)
+    try:
+        llm = _FakeLlm(
+            '{"intent":"command","commands":['
+            '{"command_id":"create_issue","args":{}},'
+            '{"command_id":"create_issue","args":{"summary":"Bug B"}}]}'
+        )
+        reply, _ = maybe_handle_command(
+            loaded=loaded, config=loaded.config, mention=_mention(),
+            pack=_pm_pack(), gateway=gw, llm=llm,
+        )
+        assert "thiếu field bắt buộc" in reply and "⏳" in reply
+        assert len(gw.pending_approvals()) == 1
+    finally:
+        gw.close()
+
+
+def test_commands_beyond_cap_are_cut_with_notice(tmp_path):
+    loaded = _loaded(tmp_path)
+    gw = _gw(loaded)
+    try:
+        items = ",".join(
+            f'{{"command_id":"create_issue","args":{{"summary":"Bug {i}"}}}}'
+            for i in range(4)
+        )
+        reply, _ = maybe_handle_command(
+            loaded=loaded, config=loaded.config, mention=_mention(),
+            pack=_pm_pack(), gateway=gw,
+            llm=_FakeLlm(f'{{"intent":"command","commands":[{items}]}}'),
+        )
+        assert len(gw.pending_approvals()) == 3
+        assert "tối đa 3" in reply
+    finally:
+        gw.close()
+
+
+def test_repoll_guard_is_per_command_not_per_message(tmp_path):
+    # Marker lệnh 0 giữ dạng cũ; lệnh 1 dùng "chat-command#1 ts=…" — dạng cũ KHÔNG
+    # phải substring của dạng mới, nên guard lệnh 0 không khớp nhầm approval lệnh 1,
+    # và re-poll toàn bộ tin không enqueue thêm gì.
+    loaded = _loaded(tmp_path)
+    gw = _gw(loaded)
+    try:
+        kwargs = dict(loaded=loaded, config=loaded.config, mention=_mention(ts="9.9"),
+                      pack=_pm_pack(), gateway=gw, llm=_two_commands_llm())
+        maybe_handle_command(**kwargs)
+        reply2, _ = maybe_handle_command(**kwargs)
+        assert len(gw.pending_approvals()) == 2
+        assert reply2.count("đã ở hàng chờ duyệt") == 2
+    finally:
+        gw.close()
+
+
+def test_empty_commands_list_replies_catalog_listing(tmp_path):
+    loaded = _loaded(tmp_path)
+    gw = _gw(loaded)
+    try:
+        reply, _ = maybe_handle_command(
+            loaded=loaded, config=loaded.config, mention=_mention(),
+            pack=_pm_pack(), gateway=gw,
+            llm=_FakeLlm('{"intent":"command","commands":[]}'),
+        )
+        assert "chưa hỗ trợ" in reply and not gw.pending_approvals()
+    finally:
+        gw.close()
+
+
 def test_autonomous_dry_run_reply_names_dry_run_not_refusal(tmp_path):
     loaded = _loaded_autonomous(tmp_path, dry_run=True)
     gw = _gw(loaded)
