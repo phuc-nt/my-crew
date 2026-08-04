@@ -205,7 +205,7 @@ hoạt-động / kết-quả + panel 3D (`views/office-3d/`, react-three-fiber).
 
 ## 4. Luồng dữ liệu chính: giao 1 việc
 
-1. CEO gõ `@noi-dung <việc>` → `routes_office_assign` → `ops_assign_team_task.preview` →
+1. CEO gõ `@content <việc>` → `routes_office_assign` → `ops_assign_team_task.preview` →
    1 LLM call phân rã → validate code-side → lưu draft (status `planning`) + hash.
 2. CEO xác nhận (hoặc auto-confirm) → `confirm_plan(hash)` TOCTOU-proof → task `open`.
 3. Coordinator daemon tick kế: đọc task, `_verify_plan_hash` (chống tamper), dispatch

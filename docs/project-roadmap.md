@@ -114,7 +114,7 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
 - [x] **P4 web-search cho thư ký (xong 2026-08-03, 5/5 phase)**: không mua key — Brave dùng
   lại từ openclaw, Firecrawl self-host localhost:3002; thêm nhịp chat 2-pass
   (`WEB_SEARCH:` marker) vì M11 không có tool-loop.
-- [x] ~~Thư ký biết roster crew~~ — xong v58 (yaml-peek, UAT gợi ý đúng @nghien-cuu).
+- [x] ~~Thư ký biết roster crew~~ — xong v58 (yaml-peek, UAT gợi ý đúng @researcher).
 - [x] ~~Gửi email từ chat~~ — xong v58, hoàn tất 2026-08-04: đổi kênh sang `gws gmail +send`
   (OAuth sẵn, bỏ hẳn SMTP; vetted-types rút về 5). UAT thật: mail nằm trong Gmail.
 - [x] ~~`memory.search` trên notes >7 ngày~~ — giải bằng kioku v58 (recall ngữ nghĩa toàn vault).
@@ -132,7 +132,7 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
   giao_viec/chuyen_the (một bề mặt giao việc duy nhất).
   `plans/260804-1004-secretary-orchestration-gateway/`.
 - [ ] **Backlog — cross-agent memory cho thư ký (CEO 2026-08-04: làm SAU khi thư ký
-  hoàn thiện)**: cần dựng Postgres (`store: postgres` + `project_group` cho thu-ky và
+  hoàn thiện)**: cần dựng Postgres (`store: postgres` + `project_group` cho secretary và
   crew) để trí nhớ chia sẻ giữa thư ký và các agent; kèm đánh giá chi phí vận hành.
 - [ ] **Nhắc việc theo giờ ("3h nhắc anh gọi X")**: thư ký mới ghi nhớ, chưa có cơ chế
   bắn tin đúng giờ — cần thiết kế (one-shot schedule qua gateway, chưa chốt với CEO).

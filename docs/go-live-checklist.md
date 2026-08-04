@@ -7,9 +7,9 @@
 
 | Agent | dry_run | Kênh ghi cấu hình sẵn | Ghi chú |
 |---|---|---|---|
-| admin, hr, thu-ky | **false (đã live)** | Telegram (bot riêng, allowlist CEO) | Đã chạy thật ổn định; thu-ky thêm gws calendar write |
-| truong-phong (coordinator) | true | — (ghi nội bộ store, không gateway) | dry_run chủ yếu ảnh hưởng escalate Telegram |
-| noi-dung, nghien-cuu, phan-tich, kiem-dinh, thiet-ke | true | qua env fallback: Jira + Slack + Confluence (token có sẵn trong .env) | Ghi ngoài chỉ khi team-task đụng external_action |
+| admin, hr, secretary | **false (đã live)** | Telegram (bot riêng, allowlist CEO) | Đã chạy thật ổn định; secretary thêm gws calendar write |
+| coordinator (coordinator) | true | — (ghi nội bộ store, không gateway) | dry_run chủ yếu ảnh hưởng escalate Telegram |
+| content, researcher, analyst, qa, designer | true | qua env fallback: Jira + Slack + Confluence (token có sẵn trong .env) | Ghi ngoài chỉ khi team-task đụng external_action |
 | sales-pm | true | schedule `daily` — sẽ post Slack + Confluence THẬT khi bật | Ứng viên pilot tốt nhất: 1 báo cáo/ngày, dễ soi |
 | default | true | — | Giữ nguyên (agent mẫu) |
 

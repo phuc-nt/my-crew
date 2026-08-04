@@ -184,7 +184,7 @@ Bấm **"Nâng cấp"** để áp, hoặc **"Huỷ"** để bỏ qua lần này 
 Cách nhanh nhất (v15): vào **Văn phòng** → ô **giao việc** ngay dưới màn hình, gõ theo 3 kiểu:
 
 - **`@tên-nhân-sự <việc>`** — chỉ định người **chịu trách nhiệm chính (PIC)**. Ví dụ:
-  `@noi-dung viết bài giới thiệu sản phẩm mới`. Gõ `@` sẽ hiện danh sách nhân sự để chọn.
+  `@content viết bài giới thiệu sản phẩm mới`. Gõ `@` sẽ hiện danh sách nhân sự để chọn.
 - **`@all <việc>`** hoặc **không @ ai** — đội tự chọn PIC: hệ thống đề xuất người có vai trò
   khớp nhất và hiện trong kế hoạch để bạn thấy trước.
 - PIC luôn đảm nhận **bước chốt/tổng hợp cuối cùng** của việc; các bước chuyên môn khác vẫn
@@ -196,7 +196,7 @@ Sau khi gõ: hệ thống phân rã thành tối đa 7 bước → hiện **kế
 **Phòng việc (v16):** mỗi việc giao xong mở một **phòng việc** riêng — danh sách phòng nằm
 bên trái màn Văn phòng (● đang chạy / ⚠ kẹt / ✓ xong). Vào phòng để: **hỏi tiến độ**
 ("tiến độ thế nào?"), **chỉnh kế hoạch** ("chỉnh: bỏ bước cuối…" — có xem DIFF trước),
-hoặc **giao việc con** cùng phòng ("giao @thiet-ke …"). Quay lại phòng cũ luôn thấy đủ
+hoặc **giao việc con** cùng phòng ("giao @designer …"). Quay lại phòng cũ luôn thấy đủ
 lịch sử hoạt động. Lưu ý: câu trả lời "hỏi tiến độ" chỉ hiện tại chỗ, không ghi vào nhật ký.
 
 > **Quan trọng:** đội chỉ thật sự CHẠY việc khi **bộ điều phối** đang bật

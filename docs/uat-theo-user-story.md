@@ -66,8 +66,8 @@ việc gửi ra ngoài công ty **chạy ngay** (mặc định) hoặc **chờ C
 ### US-2.1 — Giao việc và chỉ định người phụ trách (PIC) (v15)
 > **Là** CEO, **tôi muốn** giao một việc và nói rõ ai chịu trách nhiệm chính, **để** việc có chủ.
 
-- [ ] **Văn phòng** → ô giao việc → gõ `@noi-dung Soạn bài giới thiệu sản phẩm…` (gõ `@` hiện
-  danh sách chọn) → hệ thống hiện **kế hoạch + "PIC: noi-dung"** → **Xác nhận giao việc**.
+- [ ] **Văn phòng** → ô giao việc → gõ `@content Soạn bài giới thiệu sản phẩm…` (gõ `@` hiện
+  danh sách chọn) → hệ thống hiện **kế hoạch + "PIC: content"** → **Xác nhận giao việc**.
 - [ ] Bước chốt/tổng hợp cuối cùng thuộc về PIC; các bước chuyên môn khác chia đúng người.
 - [ ] Trên 3D, bàn của PIC có dấu **⭐** + nhãn **PIC**.
 
@@ -81,7 +81,7 @@ việc gửi ra ngoài công ty **chạy ngay** (mặc định) hoặc **chờ C
 ### US-2.3 — Giao là chạy ngay (tùy chọn) (v15)
 > **Là** CEO đã tin đội, **tôi muốn** bỏ bước bấm xác nhận, **để** giao việc nhanh hơn.
 
-- [ ] **Cài đặt → "Tự xác nhận kế hoạch khi giao việc"** bật → giao `@phan-tich …` → hiện
+- [ ] **Cài đặt → "Tự xác nhận kế hoạch khi giao việc"** bật → giao `@analyst …` → hiện
   **"ĐÃ TỰ XÁC NHẬN"**, việc chạy ngay không cần bấm; tắt → quay lại hỏi xác nhận.
 - [ ] Dù bật tự-xác-nhận, việc **gửi ra ngoài công ty** vẫn chờ duyệt riêng (xem US-4.1).
 
@@ -119,7 +119,7 @@ việc gửi ra ngoài công ty **chạy ngay** (mặc định) hoặc **chờ C
 - [ ] Gõ *"chỉnh: bỏ bước cuối, thêm bước X"* (hoặc `chỉnh <mã việc>: …` khi phòng nhiều
   việc) → hiện **DIFF** → **Xác nhận sửa** → việc tiếp tục theo kế hoạch mới; bước đã
   xong/đang chạy không bị đổi.
-- [ ] Gõ *"giao @thiet-ke …"* → tạo **việc con cùng phòng** (phòng hiện nhiều việc).
+- [ ] Gõ *"giao @designer …"* → tạo **việc con cùng phòng** (phòng hiện nhiều việc).
 
 ### US-3.4 — Xem kết quả bàn giao đầy đủ (v17)
 > **Là** CEO, **tôi muốn** đọc kết quả nhân sự làm ra, **để** kiểm tra và sử dụng.

@@ -106,7 +106,7 @@
   match chuỗi); ⭐ label + bubble PIC tag. Routes: `office`→unified (lazy chunk riêng),
   `office/timeline`→OfficeRoom (nav "Nhật ký văn phòng"), `office/3d`→redirect. Settings
   toggle auto-confirm.
-- **Demo v2**: registry demo TẮT `default` (E2E bắt LLM chọn nó làm PIC); truong-phong
+- **Demo v2**: registry demo TẮT `default` (E2E bắt LLM chọn nó làm PIC); coordinator
   telegram stub qua escalation-gate (F1); seed assignment pic+task_id. E2E Playwright
   13/13 trên demo + LLM thật: @/không-@/auto-confirm, soi DB pic_id, redirect.
 
@@ -243,7 +243,7 @@
   sandbox. DEPRECATED — v27 replaces via deep_agent_sanitizer.py sanitize-at-source của 5 kênh.
 - **Wizard chọn runtime** (`IdentityStep.tsx` + `use-create-agent-wizard.ts`): picker native/
   create_agent/deep_agent + mô tả guardrail-tier; role template `recommended_runtime` prefill
-  (kiem-dinh→native, noi-dung→create_agent, nghien-cuu→deep_agent); user override. Folded vào
+  (qa→native, content→create_agent, researcher→deep_agent); user override. Folded vào
   IdentityStep (không step-renumber — red-team F7). Backend whitelist `agent_runtime` (agent_create).
 - **Firecrawl web-scrape** (`my_crew/tools/firecrawl_tool.py`, v20.5): fetch 1 URL → markdown qua
   Firecrawl self-host local (`http://localhost:3002`). Đây là năng lực `web_search_tool` cố ý
