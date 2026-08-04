@@ -43,6 +43,55 @@ def assignable_staff() -> list[tuple[str, str]]:
     return roster
 
 
+def sandbox_capable_ids() -> set[str]:
+    """Assignable agents whose `agent_runtime.kind == "deep_agent"` — the ONLY tier a
+    `needs_shell` step can actually run on (every other tier fail-closes at dispatch,
+    v45). Read by the decompose/amend shell guard (v64, UAT-found): a plan carrying a
+    shell step no assignable agent can run must be rejected at PLAN time with a clear
+    message, not die at runtime and hand its dependents an empty handoff."""
+    from my_crew.profile.loader import load_profile
+    from my_crew.runtime.agent_paths import agent_data_dir
+    from my_crew.runtime_backends.protocol import runtime_kind_for
+
+    capable: set[str] = set()
+    for agent_id, _domain in assignable_staff():
+        try:
+            loaded = load_profile(agent_id, data_dir=agent_data_dir(agent_id))
+        except (FileNotFoundError, RuntimeError):
+            continue
+        if runtime_kind_for(loaded) == "deep_agent":
+            capable.add(agent_id)
+    return capable
+
+
+def validate_shell_steps(steps, *, capable_ids: set[str] | None = None) -> None:
+    """v64 plan-time shell guard: every `needs_shell` step must be assigned to a
+    sandbox-capable agent. Raises `DecompositionError` (CEO/retry-facing message) —
+    called inside the decompose AND amend retry loops so the model first gets a chance
+    to drop the flag/reassign, and the CEO gets an honest error if it never does.
+    `capable_ids` is injectable for tests; None ⇒ read the live roster."""
+    from my_crew.agent.task_decomposition import DecompositionError
+
+    shell_steps = [s for s in steps if getattr(s, "needs_shell", False)]
+    if not shell_steps:
+        return
+    capable = sandbox_capable_ids() if capable_ids is None else capable_ids
+    bad = [s for s in shell_steps if s.assigned_to not in capable]
+    if not bad:
+        return
+    ids = ", ".join(f"[{s.step_id}]→{s.assigned_to}" for s in bad)
+    if capable:
+        raise DecompositionError(
+            f"bước cần chạy code thật ({ids}) phải giao cho agent có sandbox "
+            f"({', '.join(sorted(capable))}) — đổi assigned_to hoặc bỏ needs_shell"
+        )
+    raise DecompositionError(
+        f"bước {ids} đặt needs_shell nhưng đội CHƯA có agent nào cấu hình sandbox "
+        "(agent_runtime: deep_agent) — hãy làm bước này không cần chạy code "
+        "(needs_shell=false), hoặc CEO bật sandbox cho một agent trước"
+    )
+
+
 #: Cap on the per-colleague role hint pulled from SOUL.md's first line — a targeting
 #: nudge, never a persona mirror (the full SOUL only ever reaches the ANSWER call,
 #: `team_task_consult.ask_colleague`, not the roster listing every step sees).

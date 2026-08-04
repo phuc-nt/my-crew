@@ -96,7 +96,7 @@ class TeamStep:
     needs_shell: bool = False
     # v63 risk-tier routing: True iff this step performs a write leaving the company
     # (email/calendar invite/PR/publish). Feeds the small-task review waiver
-    # (`task_decomposition.apply_review_waiver`) + binds into `decomposition_content_hash`
+    # (`task_decomposition.apply_review_policy`) + binds into `decomposition_content_hash`
     # conditionally (only when True) exactly like `needs_shell` — all-internal rows,
     # i.e. every pre-v63 row, hash byte-identical to before.
     external_write: bool = False

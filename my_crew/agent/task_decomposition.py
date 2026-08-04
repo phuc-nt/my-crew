@@ -290,28 +290,43 @@ def validate_decomposition(
                 f"PIC {effective_pic!r} không có trong danh sách nhân sự có thể giao việc"
             )
         validate_pic_terminal(task.steps, effective_pic)
-    return apply_review_waiver(task)
+    return apply_review_policy(task)
 
 
-def apply_review_waiver(task: DecomposedTask) -> DecomposedTask:
-    """v63 small-task review waiver — CODE-side policy, never trusted from the LLM.
+def apply_review_policy(task: DecomposedTask) -> DecomposedTask:
+    """Review policy — CODE decides `needs_review`, the LLM's flags are only a hint.
 
-    A task of at most `SMALL_TASK_MAX_STEPS` steps where NO step is `external_write`
-    gets every `needs_review` forced False: peer review on a tiny all-internal task
-    costs more than the work itself (v61 UAT evidence in the constant's docstring),
-    and each step's own self-check acceptance gate still runs. Any larger task, or any
-    task touching the outside world, keeps whatever `needs_review` flags it proposed.
+    v63 waiver (unchanged): a task of at most `SMALL_TASK_MAX_STEPS` all-internal steps
+    gets ZERO peer review — self-check acceptance remains the only gate.
+
+    v64 terminal-only rule (CEO decision 2026-08-04, after two UAT rounds showed
+    LLM-flagged review inflating a 5-step task into 23 rows and stalling it): any
+    larger/external task reviews ONLY (a) its terminal step(s) — the synthesis the CEO
+    actually receives (the PIC's step on a PIC task; every terminal on a no-PIC one) —
+    and (b) every `external_write` step (a write leaving the company is always worth a
+    second pair of eyes). Intermediate steps rely on their own self-check; a bad
+    intermediate still gets caught at the terminal review, one round later.
+
     `needs_review` is NOT part of `decomposition_content_hash`, so this override never
     shifts the hash the CEO's confirm binds to."""
-    if len(task.steps) > SMALL_TASK_MAX_STEPS:
-        return task
-    if any(s.external_write for s in task.steps):
-        return task
-    if not any(s.needs_review for s in task.steps):
+    small_internal = (
+        len(task.steps) <= SMALL_TASK_MAX_STEPS
+        and not any(s.external_write for s in task.steps)
+    )
+    if small_internal:
+        desired = {s.step_id: False for s in task.steps}
+    else:
+        dep_targets = {d for s in task.steps for d in s.deps}
+        desired = {
+            s.step_id: (s.step_id not in dep_targets) or s.external_write
+            for s in task.steps
+        }
+    if all(s.needs_review == desired[s.step_id] for s in task.steps):
         return task
     return task.model_copy(update={
         "steps": tuple(
-            s.model_copy(update={"needs_review": False}) if s.needs_review else s
+            s if s.needs_review == desired[s.step_id]
+            else s.model_copy(update={"needs_review": desired[s.step_id]})
             for s in task.steps
         ),
     })

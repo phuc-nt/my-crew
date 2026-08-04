@@ -189,6 +189,11 @@ def _decompose_with_retries(
                 raise DecompositionError(
                     "thiếu pic_id — phải chọn MỘT nhân sự chịu trách nhiệm chính (PIC)"
                 )
+            # v64 shell guard: a needs_shell step nobody can run must fail HERE (the
+            # retry loop lets the model drop the flag) — never at dispatch time.
+            from my_crew.agent.team_task_roster import validate_shell_steps
+
+            validate_shell_steps(task.steps)
             return task, total_cost
         except DecompositionError as exc:
             last_error = str(exc)

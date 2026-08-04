@@ -238,6 +238,15 @@ def run_one_tick(deps: CoordinatorDeps) -> TickResult:
     if not open_tasks:
         return TickResult(task_id=None, action="none", detail="no open tasks")
 
+    # v64 anti-starvation (UAT-measured: two fresh tasks sat idle ~40 minutes while a
+    # busy sibling monopolized every tick): tasks that have NEVER run a step — every
+    # row still `pending` — are served FIRST, so a new assignment always gets its first
+    # dispatch promptly. Everything else keeps the original FIFO (list_dispatchable's
+    # oldest-first order; Python sort is stable). Deliberately minimal — a task is only
+    # "starving" in this sense once; mid-task fairness stays FIFO by design until a
+    # real need for full round-robin shows up.
+    open_tasks.sort(key=lambda t: 0 if all(s.status == "pending" for s in t.steps) else 1)
+
     for task in open_tasks:
         result = _act_on_task(deps, task)
         if result.action != "none":

@@ -34,8 +34,17 @@ from my_crew.runtime.team_task_store import TeamStep, TeamTask, TeamTaskStore
 
 logger = logging.getLogger(__name__)
 
-#: Placeholder text a dropped step delivers to its dependents' handoff readers.
-_DROPPED_RESULT_TEXT = "(bước này được CEO chủ động bỏ qua — không có kết quả)"
+#: Placeholder a dropped step delivers to its dependents' handoff readers. Worded as a
+#: hard directive, not a neutral note (v64, UAT-found): a summarizing step that read the
+#: old bland "(bước bị bỏ qua)" filled the gap with FABRICATED measurements presented as
+#: real. The work-step SYSTEM prompt carries the same rule (`team_task_prompt._SYSTEM`)
+#: since the content wrapper marks handoff text as data-not-instructions.
+_DROPPED_RESULT_TEXT = (
+    "KHÔNG CÓ KẾT QUẢ — bước này đã bị chủ động bỏ qua, không tạo ra bất kỳ dữ liệu "
+    "hay số liệu nào. Bước sau TUYỆT ĐỐI không được suy diễn/ước lượng/bịa kết quả "
+    "thay cho bước này; nếu sản phẩm cuối phụ thuộc nó, phải ghi rõ 'thiếu dữ liệu "
+    "từ bước bị bỏ qua'."
+)
 
 
 class _StalledTaskContext:

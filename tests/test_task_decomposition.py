@@ -248,24 +248,52 @@ def test_small_internal_task_waives_every_needs_review():
     assert all(s.needs_review is False for s in validated.steps)
 
 
-def test_small_task_with_external_write_keeps_review():
+def test_small_task_with_external_write_reviews_terminal_and_external_only():
     task = parse_decomposed_task(
         _raw([_reviewed_step("s1"),
               _reviewed_step("s2", deps=["s1"], external_write=True)])
     )
     validated = validate_decomposition(task, staff_ids=["agent-a"])
-    assert any(s.needs_review for s in validated.steps)
-    # The waiver is all-or-nothing: no step was touched, not just the external one.
-    assert [s.needs_review for s in validated.steps] == [True, True]
+    # v64 policy: an external task is never waived; review lands on the terminal
+    # (which here is also the external step) — the intermediate relies on self-check.
+    assert [s.needs_review for s in validated.steps] == [False, True]
 
 
-def test_four_step_internal_task_keeps_review():
+def test_large_internal_task_reviews_only_the_terminal():
+    """v64 (UAT evidence: 5 work steps ballooned to 23 rows under LLM-flagged review):
+    only the terminal synthesis step is peer-reviewed; intermediates self-check."""
     steps = [_reviewed_step("s1")] + [
-        _reviewed_step(f"s{i}", deps=[f"s{i - 1}"]) for i in range(2, 5)
+        _reviewed_step(f"s{i}", deps=[f"s{i - 1}"]) for i in range(2, 6)
     ]
     task = parse_decomposed_task(_raw(steps))
     validated = validate_decomposition(task, staff_ids=["agent-a"])
-    assert all(s.needs_review for s in validated.steps)
+    assert [s.needs_review for s in validated.steps] == [False, False, False, False, True]
+
+
+def test_external_write_step_is_always_reviewed_even_mid_chain():
+    steps = [
+        _step("s1"),
+        {**_step("s2", deps=["s1"]), "external_write": True},  # mid-chain external
+        _step("s3", deps=["s2"]),
+        _step("s4", deps=["s3"]),
+    ]
+    task = parse_decomposed_task(_raw(steps))
+    validated = validate_decomposition(task, staff_ids=["agent-a"])
+    assert [s.needs_review for s in validated.steps] == [False, True, False, True]
+
+
+def test_no_pic_fanout_reviews_every_terminal():
+    # Two parallel leaves, no gather: both are terminals → both reviewed.
+    steps = [_step("s1"), _step("s2")]
+    task = parse_decomposed_task(_raw(steps))
+    validated = validate_decomposition(task, staff_ids=["agent-a"])
+    # 2 steps, all-internal → small-task waiver wins (0 review). Push past the waiver:
+    steps4 = [_step("s1"), _step("s2"), _step("s3"), _step("s4")]
+    validated4 = validate_decomposition(
+        parse_decomposed_task(_raw(steps4)), staff_ids=["agent-a"]
+    )
+    assert all(s.needs_review is False for s in validated.steps)
+    assert [s.needs_review for s in validated4.steps] == [True, True, True, True]
 
 
 def test_review_waiver_never_shifts_the_plan_hash():
@@ -275,3 +303,33 @@ def test_review_waiver_never_shifts_the_plan_hash():
     validated = validate_decomposition(task, staff_ids=["agent-a"])
     assert all(s.needs_review is False for s in validated.steps)
     assert decomposition_content_hash(task) == decomposition_content_hash(validated)
+
+
+# --- v64 plan-time shell guard -------------------------------------------------------
+
+
+def test_shell_step_rejected_when_fleet_has_no_sandbox_agent():
+    from my_crew.agent.team_task_roster import validate_shell_steps
+
+    task = parse_decomposed_task(_raw([{**_step("s1"), "needs_shell": True}]))
+    with pytest.raises(DecompositionError, match="CHƯA có agent nào cấu hình sandbox"):
+        validate_shell_steps(task.steps, capable_ids=set())
+
+
+def test_shell_step_rejected_when_assigned_to_non_sandbox_agent():
+    from my_crew.agent.team_task_roster import validate_shell_steps
+
+    task = parse_decomposed_task(_raw([{**_step("s1", assigned_to="agent-a"),
+                                        "needs_shell": True}]))
+    with pytest.raises(DecompositionError, match="phải giao cho agent có sandbox"):
+        validate_shell_steps(task.steps, capable_ids={"agent-b"})
+
+
+def test_shell_step_passes_on_sandbox_capable_assignee_and_no_shell_never_checks():
+    from my_crew.agent.team_task_roster import validate_shell_steps
+
+    task = parse_decomposed_task(_raw([{**_step("s1", assigned_to="agent-b"),
+                                        "needs_shell": True}]))
+    validate_shell_steps(task.steps, capable_ids={"agent-b"})  # no raise
+    plain = parse_decomposed_task(_raw([_step("s1")]))
+    validate_shell_steps(plain.steps, capable_ids=set())  # no shell step -> no raise

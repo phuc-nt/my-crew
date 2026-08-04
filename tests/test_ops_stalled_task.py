@@ -400,3 +400,19 @@ def test_superseded_failed_review_does_not_count_as_review_stall(tmp_path):
     # And drop correctly treats it as a dead-step stall.
     reply = run_drop_stalled_step({"task_id": "t4"})
     assert "Đã bỏ 1 bước" in reply
+
+
+# --- v64 honest-drop handoff ---------------------------------------------------------
+
+
+def test_dropped_placeholder_forbids_downstream_fabrication(tmp_path):
+    """UAT-found: the old bland placeholder let a summarizing step FABRICATE plausible
+    measurements. The placeholder is now a hard directive, and the work-step SYSTEM
+    prompt + aggregate prompt carry the same data-honesty rule."""
+    from my_crew.agent.ops_stalled_task import _DROPPED_RESULT_TEXT
+    from my_crew.llm.team_task_prompt import _SYSTEM
+
+    assert "KHÔNG CÓ KẾT QUẢ" in _DROPPED_RESULT_TEXT
+    assert "không được suy diễn" in _DROPPED_RESULT_TEXT.lower() \
+        or "không được" in _DROPPED_RESULT_TEXT
+    assert "bịa" in _SYSTEM  # work-step system prompt carries the honesty rule

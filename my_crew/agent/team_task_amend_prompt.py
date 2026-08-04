@@ -145,7 +145,11 @@ def amend_with_retries(task, request: str, staff: list[tuple[str, str]]) -> tupl
         try:
             amendment = parse_decomposed_task(result.content)
             combined = DecomposedTask(steps=frozen_plan_steps + amendment.steps)
-            validate_decomposition(combined, staff_ids={a for a, _ in staff})
+            # v64: CAPTURE the validated result (it was previously discarded) — the
+            # review policy normalizes `needs_review` inside validate, and new_pending
+            # must persist the NORMALIZED flags, not the model's raw proposal.
+            validated = validate_decomposition(combined, staff_ids={a for a, _ in staff})
+            amended_tail = validated.steps[len(frozen_plan_steps):]
             # v15 PIC (red-team F2): a PIC task's amend must keep/re-establish the
             # "one terminal owned by the PIC" invariant. Scoped to the NEW pending
             # slice, not `combined`: frozen (done/running) steps have no new
@@ -154,15 +158,20 @@ def amend_with_retries(task, request: str, staff: list[tuple[str, str]]) -> tupl
             pic_id = getattr(task, "pic_id", "") or ""
             if pic_id:
                 validate_pic_terminal(amendment.steps, pic_id)
+            # v64 shell guard — same rule as decompose: new pending shell steps must
+            # land on a sandbox-capable agent or fail at plan time.
+            from my_crew.agent.team_task_roster import validate_shell_steps
+
+            validate_shell_steps(amendment.steps)
             new_pending = [
                 {"step_id": s.step_id, "title": s.title, "assigned_to": s.assigned_to,
                  "deps": list(s.deps), "acceptance": s.acceptance,
                  "step_type": s.step_type, "needs_review": s.needs_review,
                  "needs_shell": s.needs_shell,  # v45 tier-0 routing
                  "external_write": s.external_write}  # v63 — hash-bound conditionally
-                for s in amendment.steps
+                for s in amended_tail
             ]
-            return new_pending, combined, total_cost
+            return new_pending, validated, total_cost
         except DecompositionError as exc:
             last_error = str(exc)
             logger.warning("adjust_team_task amend attempt failed: %s", exc)

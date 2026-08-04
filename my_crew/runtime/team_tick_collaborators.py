@@ -136,7 +136,10 @@ def make_aggregate(loaded: Any, settings: Any):
             client = LlmClient(settings)
             prompt = (
                 f"Tóm tắt ngắn gọn (tiếng Việt) kết quả của việc '{task.title}' cho "
-                f"CEO, dựa trên các bước sau:\n\n" + "\n\n".join(wrapped_parts)
+                "CEO, dựa trên các bước sau. QUY TẮC TRUNG THỰC: bước nào ghi 'KHÔNG "
+                "CÓ KẾT QUẢ'/bị bỏ qua thì phải nêu rõ là thiếu dữ liệu — tuyệt đối "
+                "không suy diễn hay bịa số liệu thay cho bước đó.\n\n"
+                + "\n\n".join(wrapped_parts)
             )
             result = client.complete([{"role": "user", "content": prompt}])
             return result.content or fallback_summary, result.cost_usd

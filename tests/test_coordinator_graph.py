@@ -470,3 +470,28 @@ def test_cancelled_task_is_also_invisible_to_the_ticker(tmp_path):
     assert result.action == "none"
     assert spawned == []
     assert store.get("t1").status == "cancelled"
+
+
+# --- v64 anti-starvation: never-started tasks are served first -----------------------
+
+
+def test_fresh_task_is_served_before_a_busy_older_task(tmp_path):
+    """UAT-measured starvation: a busy old task monopolized every tick while fresh
+    tasks sat idle ~40 minutes. A task whose every step is still pending must get its
+    first dispatch before FIFO resumes."""
+    store = _store(tmp_path)
+    # Older task t1: one step already running (in-flight, would win pure FIFO).
+    _plan(store, task_id="t1",
+          steps=[{"step_id": "a1", "title": "busy", "assigned_to": "agent-a", "deps": []},
+                 {"step_id": "a2", "title": "next", "assigned_to": "agent-a", "deps": ["a1"]}])
+    store.reserve_step("t1", "a1")
+    store.mark_running("t1", "a1")
+    # Newer task t2: never ran anything.
+    _plan(store, task_id="t2",
+          steps=[{"step_id": "b1", "title": "fresh", "assigned_to": "agent-b", "deps": []}])
+
+    result = run_one_tick(_deps(store))
+
+    assert result.action == "spawned"
+    assert result.task_id == "t2"
+    assert result.detail.startswith("b1")
