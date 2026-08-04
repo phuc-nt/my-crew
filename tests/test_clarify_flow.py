@@ -80,7 +80,7 @@ def test_ask_ceo_sanitizes_stores_and_notifies(wired, monkeypatch):
         "my_crew.runtime.operator_notify.notify_operator_best_effort", _notify
     )
     note, clarify_id = clarify_service.ask_ceo(
-        agent_id="nghien-cuu", task_id="t1",
+        agent_id="researcher", task_id="t1",
         question="Ưu tiên\x00 chi phí   hay tốc độ?", options=["Chi phí", "Tốc độ"],
     )
     assert "Đã gửi câu hỏi cho CEO" in note and clarify_id is not None

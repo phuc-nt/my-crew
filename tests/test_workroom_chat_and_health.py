@@ -73,7 +73,7 @@ def test_resolve_intent_hard_prefixes_no_llm(monkeypatch):
         raise AssertionError("hard prefix must not call the LLM")
 
     monkeypatch.setattr(mod, "_classify_with_llm", _boom)
-    assert mod.resolve_intent("@noi-dung viết bài") == ("new_task", "@noi-dung viết bài", "", True)
+    assert mod.resolve_intent("@content viết bài") == ("new_task", "@content viết bài", "", True)
     assert mod.resolve_intent("giao thêm việc phân tích") == \
         ("new_task", "thêm việc phân tích", "", True)
     intent, payload, task, hard = mod.resolve_intent("chỉnh abc123: bỏ bước cuối")
@@ -194,7 +194,7 @@ def test_coordinator_health_states(client, monkeypatch, tmp_path):
     assert client.get("/api/health/coordinator").json()["reason"] == "no_coordinator"
 
     monkeypatch.setattr(company_mod, "load_company",
-                        lambda: SimpleNamespace(coordinator_id="truong-phong"))
+                        lambda: SimpleNamespace(coordinator_id="coordinator"))
     assert client.get("/api/health/coordinator").json()["reason"] == "no_heartbeat"
 
     beat = tmp_path / "coordinator.heartbeat"

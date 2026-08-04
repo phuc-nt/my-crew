@@ -17,7 +17,7 @@ def _store(tmp_path):
 def test_record_and_read_back(tmp_path):
     cs = _store(tmp_path)
     cs.record(
-        attempt_id="a1", task_id="t1", step_id="S1", agent_id="nghien-cuu",
+        attempt_id="a1", task_id="t1", step_id="S1", agent_id="researcher",
         engine="deep_agent", status="done", step_type="work", review_round=0,
         cost_usd=0.005, cost_source="estimated", input_tokens=100, output_tokens=200,
         started_at="2026-07-12T00:00:00+00:00", ended_at="2026-07-12T00:00:05+00:00",

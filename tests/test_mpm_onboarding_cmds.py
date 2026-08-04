@@ -67,19 +67,19 @@ def test_crew_init_calls_create_crew_and_prints_summary(monkeypatch, capsys):
     monkeypatch.setattr(
         "my_crew.server.template_create.create_crew",
         lambda: {"crew": "starter", "created": ["a", "b"], "skipped": [],
-                 "failed": [], "coordinator_id": "truong-phong"},
+                 "failed": [], "coordinator_id": "coordinator"},
     )
     rc = onb.run_crew("init", [])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "tạo mới 2" in out and "truong-phong" in out
+    assert "tạo mới 2" in out and "coordinator" in out
 
 
 def test_crew_init_idempotent_all_skipped(monkeypatch, capsys):
     monkeypatch.setattr(
         "my_crew.server.template_create.create_crew",
         lambda: {"crew": "starter", "created": [], "skipped": ["a", "b"],
-                 "failed": [], "coordinator_id": "truong-phong"},
+                 "failed": [], "coordinator_id": "coordinator"},
     )
     rc = onb.run_crew("init", [])
     assert rc == 0

@@ -133,7 +133,7 @@ _PIC_PREFIX_RE = re.compile(r"^@([A-Za-z0-9_.-]+)\s+(\S.*)$", re.S)
 def parse_pic_prefix(brief: str) -> tuple[str, str]:
     """Split an optional leading @-mention off a CEO brief.
 
-    Returns `(pic_requested, clean_brief)`: `"@noi-dung viết bài" -> ("noi-dung",
+    Returns `(pic_requested, clean_brief)`: `"@content viết bài" -> ("content",
     "viết bài")`; `"@all ..."` and a brief with no leading @ both return `("", ...)`
     (LLM proposes the PIC). Whether `pic_requested` is actually assignable is the
     CALLER's check (roster in hand there) — this is pure text parsing."""

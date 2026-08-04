@@ -97,10 +97,10 @@ def test_staff_templates_lists_sample_pm_template(client):
 
 def test_staff_templates_research_role_ships_web_search_on(client):
     templates = client.get("/api/staff-templates").json()["templates"]
-    research = next(t for t in templates if t["role_id"] == "nghien-cuu")
+    research = next(t for t in templates if t["role_id"] == "researcher")
     assert research["web_search"] is True
     # Every other role stays opt-out — the flag never defaults on across the gallery.
-    assert all(not t["web_search"] for t in templates if t["role_id"] != "nghien-cuu")
+    assert all(not t["web_search"] for t in templates if t["role_id"] != "researcher")
 
 
 def test_staff_templates_skips_broken_manifest(client, monkeypatch, tmp_path):

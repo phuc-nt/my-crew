@@ -39,25 +39,25 @@ def _wire_llm(monkeypatch, new_steps):
     monkeypatch.setattr(amend_mod, "_build_llm", lambda: (_Llm(), None))
 
 
-STAFF = [("noi-dung", "office"), ("nghien-cuu", "office")]
+STAFF = [("content", "office"), ("researcher", "office")]
 
 
 def test_amend_pic_task_accepts_single_terminal_owned_by_pic(monkeypatch):
     _wire_llm(monkeypatch, [
-        {"step_id": "n1", "title": "bổ sung", "assigned_to": "nghien-cuu", "deps": []},
-        {"step_id": "n2", "title": "tổng hợp lại", "assigned_to": "noi-dung", "deps": ["n1"]},
+        {"step_id": "n1", "title": "bổ sung", "assigned_to": "researcher", "deps": []},
+        {"step_id": "n2", "title": "tổng hợp lại", "assigned_to": "content", "deps": ["n1"]},
     ])
-    task = _task(pic_id="noi-dung", steps=[_frozen("s1", "noi-dung")])
+    task = _task(pic_id="content", steps=[_frozen("s1", "content")])
     new_pending, combined, _cost = amend_mod.amend_with_retries(task, "thêm bước", STAFF)
     assert [s["step_id"] for s in new_pending] == ["n1", "n2"]
 
 
 def test_amend_pic_task_rejects_terminal_not_owned_by_pic(monkeypatch):
     _wire_llm(monkeypatch, [
-        {"step_id": "n1", "title": "bổ sung", "assigned_to": "noi-dung", "deps": []},
-        {"step_id": "n2", "title": "chốt", "assigned_to": "nghien-cuu", "deps": ["n1"]},
+        {"step_id": "n1", "title": "bổ sung", "assigned_to": "content", "deps": []},
+        {"step_id": "n2", "title": "chốt", "assigned_to": "researcher", "deps": ["n1"]},
     ])
-    task = _task(pic_id="noi-dung", steps=[_frozen("s1", "noi-dung")])
+    task = _task(pic_id="content", steps=[_frozen("s1", "content")])
     from my_crew.agent.task_decomposition import DecompositionError
 
     with pytest.raises(DecompositionError):
@@ -67,24 +67,24 @@ def test_amend_pic_task_rejects_terminal_not_owned_by_pic(monkeypatch):
 def test_amend_no_pic_task_unchanged_multiple_terminals_ok(monkeypatch):
     # two independent new steps (two terminals) — fine for a pre-v15 task without a PIC.
     _wire_llm(monkeypatch, [
-        {"step_id": "n1", "title": "a", "assigned_to": "noi-dung", "deps": []},
-        {"step_id": "n2", "title": "b", "assigned_to": "nghien-cuu", "deps": []},
+        {"step_id": "n1", "title": "a", "assigned_to": "content", "deps": []},
+        {"step_id": "n2", "title": "b", "assigned_to": "researcher", "deps": []},
     ])
-    task = _task(pic_id="", steps=[_frozen("s1", "noi-dung")])
+    task = _task(pic_id="", steps=[_frozen("s1", "content")])
     new_pending, _combined, _cost = amend_mod.amend_with_retries(task, "thêm bước", STAFF)
     assert len(new_pending) == 2
 
 
 def test_amend_prompt_carries_pic_line_only_for_pic_tasks():
     with_pic = amend_mod._build_amend_messages(
-        task=_task(pic_id="noi-dung", steps=[_frozen("s1", "noi-dung")]),
+        task=_task(pic_id="content", steps=[_frozen("s1", "content")]),
         request="đổi hướng", staff=STAFF,
     )
     without_pic = amend_mod._build_amend_messages(
-        task=_task(pic_id="", steps=[_frozen("s1", "noi-dung")]),
+        task=_task(pic_id="", steps=[_frozen("s1", "content")]),
         request="đổi hướng", staff=STAFF,
     )
-    assert "PIC: noi-dung" in with_pic[1]["content"]
+    assert "PIC: content" in with_pic[1]["content"]
     assert "PIC:" not in without_pic[1]["content"]
 
 

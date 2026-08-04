@@ -27,7 +27,7 @@ from my_crew.profile.context import EMPTY
 _OK_STATUSES = frozenset({"executed", "dry_run"})
 
 
-def _giao_buoi(hour: int) -> str:
+def _time_of_day_vi(hour: int) -> str:
     if hour < 11:
         return "sáng"
     if hour < 14:
@@ -41,10 +41,10 @@ def _fallback_briefing(snapshot: dict) -> str:
     """Bản tin thuần code khi LLM hỏng — vẫn hữu ích (ngày giờ), không bịa gì thêm."""
     now = datetime.now().astimezone()
     return (
-        f"Chào buổi {_giao_buoi(now.hour)}! Hôm nay là {snapshot.get('thu', '')}, "
+        f"Chào buổi {_time_of_day_vi(now.hour)}! Hôm nay là {snapshot.get('weekday', '')}, "
         f"{now.strftime('%d/%m/%Y')}.\n"
         f"(Trợ lý soạn tin đang lỗi — đây là bản tin rút gọn. "
-        f"{snapshot.get('ghi_chu', '')})"
+        f"{snapshot.get('note', '')})"
     )
 
 

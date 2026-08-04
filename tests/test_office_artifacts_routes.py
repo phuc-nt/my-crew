@@ -23,10 +23,10 @@ def _seed(tmp_path, *, with_artifact=True):
     from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
 
     store = TeamTaskStore(team_tasks_db_path())
-    store.create_task(task_id="t1", title="Việc A", pic_id="noi-dung")
+    store.create_task(task_id="t1", title="Việc A", pic_id="content")
     store.set_plan("t1", [
-        {"step_id": "s1", "title": "Nghiên cứu", "assigned_to": "nghien-cuu", "deps": []},
-        {"step_id": "s2", "title": "Tổng hợp", "assigned_to": "noi-dung", "deps": ["s1"]},
+        {"step_id": "s1", "title": "Nghiên cứu", "assigned_to": "researcher", "deps": []},
+        {"step_id": "s2", "title": "Tổng hợp", "assigned_to": "content", "deps": ["s1"]},
     ], "h1")
     seqs = {s.step_id: s.seq for s in store.get("t1").steps}
     store._conn.execute("UPDATE team_steps SET status='done' WHERE step_id='s1'")
@@ -45,7 +45,7 @@ def test_room_catalog_lists_tasks_and_steps(client, tmp_path):
     r = client.get("/api/office/rooms/t1/artifacts")
     assert r.status_code == 200
     tasks = r.json()["tasks"]
-    assert tasks[0]["task_id"] == "t1" and tasks[0]["pic_id"] == "noi-dung"
+    assert tasks[0]["task_id"] == "t1" and tasks[0]["pic_id"] == "content"
     steps = {s["step_id"]: s for s in tasks[0]["steps"]}
     assert steps["s1"]["status"] == "done" and steps["s1"]["step_type"] == "work"
     assert isinstance(steps["s1"]["seq"], int)
@@ -92,7 +92,7 @@ def test_timeout_kill_emits_step_status_failed(monkeypatch, tmp_path):
     from my_crew.runtime.team_task_paths import team_tasks_root
 
     task = SimpleNamespace(id="t-9", title="Việc X")
-    step = SimpleNamespace(title="Bước Y", assigned_to="noi-dung")
+    step = SimpleNamespace(title="Bước Y", assigned_to="content")
     _append_timeout_step_event(task, step)
 
     store = OfficeRoomStore(office_room_db_path(team_tasks_root()))
@@ -102,4 +102,4 @@ def test_timeout_kill_emits_step_status_failed(monkeypatch, tmp_path):
         store.close()
     assert events[0].kind == "step_status"
     assert events[0].body["status"] == "failed"
-    assert events[0].body["assigned_to"] == "noi-dung"
+    assert events[0].body["assigned_to"] == "content"

@@ -32,14 +32,14 @@ def _company(*, auto_confirm=False):
 
 
 def _wire(monkeypatch, *, auto_confirm=False):
-    """Routable escalation (coordinator has telegram) + roster [noi-dung, nghien-cuu]
+    """Routable escalation (coordinator has telegram) + roster [content, researcher]
     + a canned LLM decompose that honors the pic prompt line."""
     monkeypatch.setattr(company_mod, "load_company", lambda: _company(auto_confirm=auto_confirm))
     telegram = SimpleNamespace(bot_token_env="X", chat_ids=("op",), poll_minutes=5,
                                ops_operator_id="op")
 
     def _load_profile(agent_id, *, data_dir):
-        domain = {"coord-1": "pm", "noi-dung": "office", "nghien-cuu": "office"}[agent_id]
+        domain = {"coord-1": "pm", "content": "office", "researcher": "office"}[agent_id]
         return SimpleNamespace(domain=domain, config=SimpleNamespace(telegram=telegram),
                                soul="", project="", memory="")
 
@@ -47,8 +47,8 @@ def _wire(monkeypatch, *, auto_confirm=False):
     monkeypatch.setattr(
         registry_mod, "load_registry",
         lambda: (RegistryEntry(id="coord-1", enabled=True),
-                 RegistryEntry(id="noi-dung", enabled=True),
-                 RegistryEntry(id="nghien-cuu", enabled=True)),
+                 RegistryEntry(id="content", enabled=True),
+                 RegistryEntry(id="researcher", enabled=True)),
     )
 
     def _canned_llm():
@@ -56,12 +56,12 @@ def _wire(monkeypatch, *, auto_confirm=False):
             cost_usd = 0.001
             content = json.dumps({
                 "steps": [
-                    {"step_id": "s1", "title": "thu thập", "assigned_to": "nghien-cuu",
+                    {"step_id": "s1", "title": "thu thập", "assigned_to": "researcher",
                      "deps": []},
-                    {"step_id": "s2", "title": "tổng hợp", "assigned_to": "noi-dung",
+                    {"step_id": "s2", "title": "tổng hợp", "assigned_to": "content",
                      "deps": ["s1"]},
                 ],
-                "pic_id": "noi-dung",
+                "pic_id": "content",
                 "requires_approval": True,
             })
 
@@ -83,20 +83,20 @@ def _store():
 
 def test_at_pic_preview_persists_pic_and_renders_line(monkeypatch):
     _wire(monkeypatch)
-    slots = {"brief": "@noi-dung viết bộ tài liệu ra mắt"}
+    slots = {"brief": "@content viết bộ tài liệu ra mắt"}
     text = mod.preview_assign_team_task(slots)
 
-    assert "PIC (chịu trách nhiệm chính): noi-dung" in text
+    assert "PIC (chịu trách nhiệm chính): content" in text
     assert "xác nhận" in text.lower()  # still awaiting the CEO — flag off
-    assert slots["pic_id"] == "noi-dung"
+    assert slots["pic_id"] == "content"
     store = _store()
     try:
         task = store.get(slots["task_id"])
-        assert task.pic_id == "noi-dung"
+        assert task.pic_id == "content"
         assert task.status == "planning"  # NOT dispatched yet
         # the @prefix is stripped from the title but kept in the original request
         assert not task.title.startswith("@")
-        assert task.original_request.startswith("@noi-dung")
+        assert task.original_request.startswith("@content")
     finally:
         store.close()
 
@@ -114,7 +114,7 @@ def test_bad_at_pic_rejected_before_any_llm_call(monkeypatch):
 
 def test_auto_confirm_on_dispatches_immediately_and_flags_slot(monkeypatch):
     _wire(monkeypatch, auto_confirm=True)
-    slots = {"brief": "@noi-dung viết bộ tài liệu ra mắt"}
+    slots = {"brief": "@content viết bộ tài liệu ra mắt"}
     text = mod.preview_assign_team_task(slots)
 
     assert "ĐÃ TỰ XÁC NHẬN" in text
@@ -140,7 +140,7 @@ def test_auto_confirm_failure_cancels_draft_not_orphans(monkeypatch):
 
     monkeypatch.setattr(mod, "run_assign_team_task", _failing_run)
     with pytest.raises(ValueError, match="tự xác nhận thất bại"):
-        mod.preview_assign_team_task({"brief": "@noi-dung viết tài liệu"})
+        mod.preview_assign_team_task({"brief": "@content viết tài liệu"})
 
     store = _store()
     try:
@@ -153,7 +153,7 @@ def test_auto_confirm_failure_cancels_draft_not_orphans(monkeypatch):
 
 def test_assignment_event_carries_pic_and_task_id(monkeypatch):
     _wire(monkeypatch)
-    slots = {"brief": "@noi-dung viết tài liệu"}
+    slots = {"brief": "@content viết tài liệu"}
     mod.preview_assign_team_task(slots)
     mod.run_assign_team_task(slots)
 
@@ -166,6 +166,6 @@ def test_assignment_event_carries_pic_and_task_id(monkeypatch):
     finally:
         store.close()
     assignment = next(e for e in events if e.kind == "assignment")
-    assert assignment.body["pic"] == "noi-dung"
+    assert assignment.body["pic"] == "content"
     assert assignment.body["task_id"] == slots["task_id"]
-    assert assignment.body["summary"].startswith("PIC: noi-dung")
+    assert assignment.body["summary"].startswith("PIC: content")

@@ -36,24 +36,24 @@ def _rows(tmp_path, agent):
 def test_two_agents_attributed_and_filterable(settings_factory, tmp_path):
     """Cross-agent: each agent's actions carry its actor; a merged query filters by actor."""
     gw_hr = _gw(settings_factory, tmp_path, "hr")
-    gw_tp = _gw(settings_factory, tmp_path, "truong-phong")
+    gw_tp = _gw(settings_factory, tmp_path, "coordinator")
     gw_hr.execute(POST, handler=lambda a: "POSTED")
     gw_tp.execute(POST, handler=lambda a: "POSTED")
 
     hr_rows = _rows(tmp_path, "hr")
-    tp_rows = _rows(tmp_path, "truong-phong")
+    tp_rows = _rows(tmp_path, "coordinator")
     assert hr_rows and all(r["actor"] == "hr" for r in hr_rows)
-    assert tp_rows and all(r["actor"] == "truong-phong" for r in tp_rows)
+    assert tp_rows and all(r["actor"] == "coordinator" for r in tp_rows)
 
     # A cross-agent view (one log over merged rows) filters by the RECORDED actor, not the path.
     merged = tmp_path / "merged.jsonl"
     merged.write_text(
         (tmp_path / "hr" / "audit.jsonl").read_text()
-        + (tmp_path / "truong-phong" / "audit.jsonl").read_text()
+        + (tmp_path / "coordinator" / "audit.jsonl").read_text()
     )
     log = AuditLog(merged)
     assert all(r["actor"] == "hr" for r in log.query(actor="hr"))
-    assert all(r["actor"] == "truong-phong" for r in log.query(actor="truong-phong"))
+    assert all(r["actor"] == "coordinator" for r in log.query(actor="coordinator"))
     assert len(log.query()) == len(hr_rows) + len(tp_rows)  # no-filter = all
 
 

@@ -71,12 +71,12 @@ def test_external_write_routes_executed(monkeypatch):
 
     monkeypatch.setattr("my_crew.actions.slack_write.deliver_report", _fake_deliver)
     hook = mod.make_external_write(
-        gateway=object(), config=object(), agent_id="noi-dung",
+        gateway=object(), config=object(), agent_id="content",
         channel="C1", report_date="2026-07-11",
     )
     assert hook("Nội dung bài viết hoàn chỉnh.") is True
     assert seen["channel"] == "C1"
-    assert "noi-dung" in seen["rationale"]  # audit rationale carries the agent id
+    assert "content" in seen["rationale"]  # audit rationale carries the agent id
 
 
 def test_external_write_pending_approval_returns_false(monkeypatch):

@@ -5,10 +5,10 @@
 # khi tạo lại — chạy lại an toàn. `coordinator` được ghi vào company.yaml::coordinator_id
 # CHỈ KHI công ty chưa cấu hình coordinator (không ghi đè lựa chọn tay của CEO).
 name: "Đội văn phòng mẫu"
-coordinator: truong-phong
+coordinator: coordinator
 members:
-  - truong-phong
-  - nghien-cuu
-  - noi-dung
-  - phan-tich
-  - kiem-dinh
+  - coordinator
+  - researcher
+  - content
+  - analyst
+  - qa

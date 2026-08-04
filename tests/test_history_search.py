@@ -29,9 +29,9 @@ def _seed_step(tmp_path, text="Quyết định: chốt agenda 4 mục cho buổi
     from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
 
     store = TeamTaskStore(team_tasks_db_path())
-    store.create_task(task_id="t1", title="Họp tuần", pic_id="noi-dung")
+    store.create_task(task_id="t1", title="Họp tuần", pic_id="content")
     store.set_plan("t1", [
-        {"step_id": "s1", "title": "Chốt agenda", "assigned_to": "noi-dung", "deps": []},
+        {"step_id": "s1", "title": "Chốt agenda", "assigned_to": "content", "deps": []},
     ], "h1")
     seq = store.get("t1").steps[0].seq
     store._conn.execute(
@@ -47,10 +47,10 @@ def _seed_step(tmp_path, text="Quyết định: chốt agenda 4 mục cho buổi
 
 def _seed_audit(tmp_path, monkeypatch):
     class _Entry:
-        id = "noi-dung"
+        id = "content"
 
     monkeypatch.setattr("my_crew.runtime.registry.load_registry", lambda *a, **k: [_Entry()])
-    audit_dir = tmp_path / "agents" / "noi-dung" / "audit"
+    audit_dir = tmp_path / "agents" / "content" / "audit"
     audit_dir.mkdir(parents=True)
     (audit_dir / "audit.jsonl").write_text(
         json.dumps({"tool": "slack:post", "verdict": "allow",
@@ -76,7 +76,7 @@ def test_sweep_indexes_steps_and_audit_then_is_incremental(wired, monkeypatch):
         assert step_hits[0]["ref"].startswith("t1:")
         audit_hits = idx.search("báo cáo tuần")
         assert len(audit_hits) == 1 and audit_hits[0]["source"] == "audit"
-        assert audit_hits[0]["agent_id"] == "noi-dung"
+        assert audit_hits[0]["agent_id"] == "content"
     finally:
         idx.close()
 
@@ -100,7 +100,7 @@ def test_agent_and_days_filters(wired):
     idx = HistorySearchIndex()
     try:
         idx.sweep()
-        assert idx.search("agenda", agent="noi-dung")
+        assert idx.search("agenda", agent="content")
         assert idx.search("agenda", agent="ai-khac") == []
         assert idx.search("agenda", days=36500)
     finally:
@@ -124,7 +124,7 @@ def test_tool_returns_cited_wrapped_results(wired):
     _seed_step(wired)
     out = build_read_toolset(None, audience="internal")["history.search"](
         {"query": "agenda"})
-    assert "t1:" in out and "noi-dung" in out  # citation rides along
+    assert "t1:" in out and "content" in out  # citation rides along
 
 
 def test_ops_command_search_history(wired):

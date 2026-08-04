@@ -73,7 +73,7 @@ def _loop(peek_script, *, clock=None):
         return item
 
     tl.run_listener_loop(
-        "thu-ky", _TELEGRAM, Path("/nonexistent-dir-ok"),  # load_offset: missing → None
+        "secretary", _TELEGRAM, Path("/nonexistent-dir-ok"),  # load_offset: missing → None
         run_inbox_worker=spawned.append, stop_event=stop,
         peek=peek, clock=clock or (lambda: 0.0), sleep=slept.append,
     )
@@ -82,13 +82,13 @@ def _loop(peek_script, *, clock=None):
 
 def test_loop_spawns_worker_on_updates_and_rearms():
     spawned, slept = _loop([False, True, False])
-    assert spawned == ["thu-ky"]
+    assert spawned == ["secretary"]
     assert slept == []
 
 
 def test_loop_survives_peek_errors_with_backoff():
     spawned, slept = _loop([RuntimeError("409 Conflict"), OSError("net down"), True])
-    assert spawned == ["thu-ky"]
+    assert spawned == ["secretary"]
     assert slept == [tl._ERROR_BACKOFF_S, tl._ERROR_BACKOFF_S]
 
 
@@ -117,11 +117,11 @@ def test_loop_worker_failure_does_not_kill_listener():
 
     slept: list[float] = []
     tl.run_listener_loop(
-        "thu-ky", _TELEGRAM, Path("/nonexistent-dir-ok"),
+        "secretary", _TELEGRAM, Path("/nonexistent-dir-ok"),
         run_inbox_worker=worker, stop_event=stop,
         peek=peek, clock=lambda: 0.0, sleep=slept.append,
     )
-    assert calls == ["thu-ky", "thu-ky"]  # vẫn kích tiếp sau lỗi
+    assert calls == ["secretary", "secretary"]  # vẫn kích tiếp sau lỗi
 
 
 # --- service wiring ---

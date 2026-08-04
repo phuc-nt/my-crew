@@ -35,22 +35,22 @@ def _write_profile(tmp_path, aid, body: str):
 
 @pytest.fixture()
 def crew(tmp_path):
-    reg = _write_registry(tmp_path, {"nghien-cuu": True, "tat": False, "hong": True,
-                                      "tu-tat": True, "thu-ky": True})
-    _write_profile(tmp_path, "nghien-cuu",
+    reg = _write_registry(tmp_path, {"researcher": True, "tat": False, "hong": True,
+                                      "tu-tat": True, "secretary": True})
+    _write_profile(tmp_path, "researcher",
                    "name: Nghiên cứu\ndomain: office\nweb_search: true\n")
     _write_profile(tmp_path, "tat", "name: Đã tắt registry\ndomain: office\n")
     _write_profile(tmp_path, "hong", "name: [broken yaml\n  ::\n")
     _write_profile(tmp_path, "tu-tat", "name: Tự tắt\nenabled: false\ndomain: hr\n")
-    _write_profile(tmp_path, "thu-ky", "name: Thư ký\ndomain: personal\n")
+    _write_profile(tmp_path, "secretary", "name: Thư ký\ndomain: personal\n")
     return {"registry": reg, "profiles": tmp_path / "profiles"}
 
 
 def test_roster_filters_and_peeks_cheaply(crew):
-    roster = crew_roster("thu-ky", registry_path=crew["registry"],
+    roster = crew_roster("secretary", registry_path=crew["registry"],
                          profiles_dir=crew["profiles"])
-    assert [a["id"] for a in roster] == ["nghien-cuu"]  # tắt/hỏng/tự-tắt/chính-mình loại hết
-    assert roster[0] == {"id": "nghien-cuu", "name": "Nghiên cứu", "domain": "office",
+    assert [a["id"] for a in roster] == ["researcher"]  # tắt/hỏng/tự-tắt/chính-mình loại hết
+    assert roster[0] == {"id": "researcher", "name": "Nghiên cứu", "domain": "office",
                          "web_search": True}
 
 
@@ -63,9 +63,9 @@ def test_roster_defuses_freeform_name(tmp_path):
 
 
 def test_render_lines_show_capability(crew):
-    lines = render_roster_lines(crew_roster("thu-ky", registry_path=crew["registry"],
+    lines = render_roster_lines(crew_roster("secretary", registry_path=crew["registry"],
                                             profiles_dir=crew["profiles"]))
-    assert lines == ["  • nghien-cuu (Nghiên cứu) — office, tra được web"]
+    assert lines == ["  • researcher (Nghiên cứu) — office, tra được web"]
 
 
 # --- capability block integration ---
@@ -74,7 +74,7 @@ def test_render_lines_show_capability(crew):
 class _LP:
     def __init__(self, domain):
         self.domain = domain
-        self.profile_id = "thu-ky"
+        self.profile_id = "secretary"
         self.skills = ()
         self.web_search = False
         self.memory_config = None
@@ -83,12 +83,12 @@ class _LP:
 def test_capability_block_includes_roster_only_for_personal(monkeypatch):
     monkeypatch.setattr(
         "my_crew.profile.crew_roster.crew_roster",
-        lambda exclude_id="", **kw: [{"id": "nghien-cuu", "name": "Nghiên cứu",
+        lambda exclude_id="", **kw: [{"id": "researcher", "name": "Nghiên cứu",
                                       "domain": "office", "web_search": True}],
     )
     personal = build_capability_block(_LP("personal"), None)
     assert "Đồng nghiệp trong crew" in personal
-    assert "nghien-cuu (Nghiên cứu) — office, tra được web" in personal
+    assert "researcher (Nghiên cứu) — office, tra được web" in personal
     office = build_capability_block(_LP("office"), None)
     assert "Đồng nghiệp" not in office  # domain khác byte-identical
 

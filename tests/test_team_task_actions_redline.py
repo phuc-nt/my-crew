@@ -22,7 +22,7 @@ def _settings(tmp_path, trust_mode):
 
 
 def _create_action(**over):
-    return {"type": "team_task_create", "title": "Viết bài blog", "assignee": "noi-dung",
+    return {"type": "team_task_create", "title": "Viết bài blog", "assignee": "content",
             **over}
 
 
@@ -99,7 +99,7 @@ def task_env(tmp_path, monkeypatch):
     monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path / ".data")
     (tmp_path / ".data").mkdir()
     monkeypatch.setattr("my_crew.agent.team_task_roster.is_assignable",
-                        lambda agent_id: agent_id in {"noi-dung", "thiet-ke"})
+                        lambda agent_id: agent_id in {"content", "designer"})
     events = []
     monkeypatch.setattr(
         "my_crew.runtime.office_room_append.append_office_event",
@@ -115,7 +115,7 @@ def _store(data_root):
 
 def test_create_verifies_roster_and_records(task_env):
     data_root, events = task_env
-    summary = make_team_task_handler("truong-phong")(_create_action())
+    summary = make_team_task_handler("coordinator")(_create_action())
     assert "team task created" in summary
     store = _store(data_root)
     try:
@@ -123,8 +123,8 @@ def test_create_verifies_roster_and_records(task_env):
         assert len(tasks) == 1
         task = tasks[0]
         assert task.status == "planning"
-        assert task.assigned_by == "truong-phong"  # actor from closure
-        assert task.pic_id == "noi-dung"
+        assert task.assigned_by == "coordinator"  # actor from closure
+        assert task.pic_id == "content"
     finally:
         store.close()
     assert events and events[0]["kind"] == "assignment"
@@ -132,7 +132,7 @@ def test_create_verifies_roster_and_records(task_env):
 
 def test_create_rejects_non_roster_assignee(task_env):
     with pytest.raises(PermissionError, match="danh sách nhân sự"):
-        make_team_task_handler("truong-phong")(_create_action(assignee="admin"))
+        make_team_task_handler("coordinator")(_create_action(assignee="admin"))
 
 
 def test_move_requires_store_participation(task_env):
@@ -140,19 +140,19 @@ def test_move_requires_store_participation(task_env):
     store = _store(data_root)
     try:
         store.create_task(task_id="abc123def456", title="Việc A",
-                          assigned_by="truong-phong", pic_id="noi-dung")
+                          assigned_by="coordinator", pic_id="content")
     finally:
         store.close()
     # A stranger (not PIC/creator/step-assignee) cannot move the card…
     with pytest.raises(PermissionError, match="không phải PIC"):
-        make_team_task_handler("thiet-ke")(_move_action(status="done"))
+        make_team_task_handler("designer")(_move_action(status="done"))
     # …even if the payload smuggles identity fields (closure wins, args ignored).
     with pytest.raises(PermissionError, match="không phải PIC"):
-        make_team_task_handler("thiet-ke")(
-            _move_action(status="done", actor="noi-dung", agent_id="noi-dung")
+        make_team_task_handler("designer")(
+            _move_action(status="done", actor="content", agent_id="content")
         )
     # The PIC can.
-    summary = make_team_task_handler("noi-dung")(_move_action(status="done"))
+    summary = make_team_task_handler("content")(_move_action(status="done"))
     assert "→ done" in summary
     store = _store(data_root)
     try:
@@ -164,7 +164,7 @@ def test_move_requires_store_participation(task_env):
 
 def test_move_unknown_task_refused(task_env):
     with pytest.raises(PermissionError, match="không có việc"):
-        make_team_task_handler("noi-dung")(_move_action(task_id="feedfacecafe"))
+        make_team_task_handler("content")(_move_action(task_id="feedfacecafe"))
 
 
 def test_move_cannot_open_an_unconfirmed_plan(task_env):
@@ -175,23 +175,23 @@ def test_move_cannot_open_an_unconfirmed_plan(task_env):
     store = _store(data_root)
     try:
         store.create_task(task_id="abc123def456", title="Việc nháp",
-                          assigned_by="truong-phong", pic_id="noi-dung")
+                          assigned_by="coordinator", pic_id="content")
         store.set_draft_plan("abc123def456",
-                             [{"step_id": "s1", "title": "bước", "assigned_to": "noi-dung",
+                             [{"step_id": "s1", "title": "bước", "assigned_to": "content",
                                "deps": []}],
                              plan_hash="draft-hash")
     finally:
         store.close()
     for target in ("open", "running"):
         with pytest.raises(PermissionError, match="xác nhận"):
-            make_team_task_handler("noi-dung")(_move_action(status=target))
+            make_team_task_handler("content")(_move_action(status=target))
     store = _store(data_root)
     try:
         assert store.get("abc123def456").status == "planning"  # untouched
     finally:
         store.close()
     # cancelling a draft you participate in is still allowed (no dispatch risk)
-    summary = make_team_task_handler("noi-dung")(_move_action(status="cancelled"))
+    summary = make_team_task_handler("content")(_move_action(status="cancelled"))
     assert "→ cancelled" in summary
 
 
@@ -200,14 +200,14 @@ def test_step_assignee_may_move(task_env):
     store = _store(data_root)
     try:
         store.create_task(task_id="abc123def456", title="Việc B",
-                          assigned_by="truong-phong", pic_id="noi-dung")
+                          assigned_by="coordinator", pic_id="content")
         store.set_plan("abc123def456",
-                       [{"step_id": "s1", "title": "bước 1", "assigned_to": "thiet-ke",
+                       [{"step_id": "s1", "title": "bước 1", "assigned_to": "designer",
                          "deps": []}],
                        plan_hash="h1")
     finally:
         store.close()
-    summary = make_team_task_handler("thiet-ke")(_move_action(status="stalled"))
+    summary = make_team_task_handler("designer")(_move_action(status="stalled"))
     assert "→ stalled" in summary
 
 
@@ -226,7 +226,7 @@ def test_office_pack_ships_kanban_catalog():
 def test_agent_bound_dispatch_routes_team_task(task_env):
     from my_crew.actions.approved_dispatch import make_agent_bound_dispatch
 
-    summary = make_agent_bound_dispatch("truong-phong", config=object())(_create_action())
+    summary = make_agent_bound_dispatch("coordinator", config=object())(_create_action())
     assert "team task created" in summary
 
 

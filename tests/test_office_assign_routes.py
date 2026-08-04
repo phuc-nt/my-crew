@@ -21,12 +21,12 @@ def client(monkeypatch, tmp_path):
 def test_staff_endpoint_lists_assignable(monkeypatch, client):
     monkeypatch.setattr(
         "my_crew.agent.team_task_roster.assignable_staff",
-        lambda: [("noi-dung", "office"), ("nghien-cuu", "office")],
+        lambda: [("content", "office"), ("researcher", "office")],
     )
 
     # v58 P3: cờ web đọc bằng yaml-peek — load_profile đầy đủ KHÔNG được gọi nữa
     # (nợ M1 v56); peek trả dict thô của profile.yaml.
-    peeked = {"noi-dung": {"web_search": False}, "nghien-cuu": {"web_search": True}}
+    peeked = {"content": {"web_search": False}, "researcher": {"web_search": True}}
     monkeypatch.setattr(
         "my_crew.profile.crew_roster.peek_profile_yaml",
         lambda agent_id, **kw: peeked[agent_id],
@@ -46,8 +46,8 @@ def test_staff_endpoint_lists_assignable(monkeypatch, client):
     assert r.json() == {
         "web_search_ready": False,
         "staff": [
-            {"id": "noi-dung", "domain": "office", "web_search": False},
-            {"id": "nghien-cuu", "domain": "office", "web_search": True},
+            {"id": "content", "domain": "office", "web_search": False},
+            {"id": "researcher", "domain": "office", "web_search": True},
         ],
     }
 
@@ -75,15 +75,15 @@ def test_preview_maps_slots_and_auto_confirmed_flag(monkeypatch, client):
     def _fake_preview(slots):
         slots["task_id"] = "t-1"
         slots["plan_hash"] = "h-1"
-        slots["pic_id"] = "noi-dung"
+        slots["pic_id"] = "content"
         slots["auto_confirmed"] = "1"
         return "KẾ HOẠCH..."
 
     monkeypatch.setattr(assign_mod, "preview_assign_team_task", _fake_preview)
-    r = client.post("/api/office/assign/preview", json={"brief": "@noi-dung viết bài"})
+    r = client.post("/api/office/assign/preview", json={"brief": "@content viết bài"})
     assert r.status_code == 200
     assert r.json() == {"preview_text": "KẾ HOẠCH...", "task_id": "t-1", "plan_hash": "h-1",
-                        "pic_id": "noi-dung", "auto_confirmed": True}
+                        "pic_id": "content", "auto_confirmed": True}
 
 
 def test_preview_validation_error_is_400(monkeypatch, client):

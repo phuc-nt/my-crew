@@ -22,13 +22,13 @@ def _wire_souls(monkeypatch, souls: dict[str, str]):
 
 def test_hint_is_soul_first_line_markdown_heading_stripped(monkeypatch):
     _wire_souls(monkeypatch, {
-        "noi-dung": "# Chuyên viên nội dung marketing\nChi tiết dài...",
-        "kiem-dinh": "\n\n  ## Kiểm định chất lượng đầu ra  \nabc",
+        "content": "# Chuyên viên nội dung marketing\nChi tiết dài...",
+        "qa": "\n\n  ## Kiểm định chất lượng đầu ra  \nabc",
     })
-    out = roster_mod.roster_with_role_hints([("noi-dung", "content"), ("kiem-dinh", "qa")])
+    out = roster_mod.roster_with_role_hints([("content", "content"), ("qa", "qa")])
     assert out == [
-        ("noi-dung", "content — Chuyên viên nội dung marketing"),
-        ("kiem-dinh", "qa — Kiểm định chất lượng đầu ra"),
+        ("content", "content — Chuyên viên nội dung marketing"),
+        ("qa", "qa — Kiểm định chất lượng đầu ra"),
     ]
 
 

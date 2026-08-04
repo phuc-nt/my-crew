@@ -1,6 +1,6 @@
 """team_task_create / team_task_move WRITE — kanban card actions (v31 P3).
 
-An agent proposes a work card ("tạo việc X giao cho noi-dung") or moves one's status
+An agent proposes a work card ("tạo việc X giao cho content") or moves one's status
 ("chuyển việc T sang done") through the Action Gateway: Lớp A scans the payload
 (hard_block._hard_deny_team_task), Lớp B queues it in guarded mode / runs it audited
 in autonomous (v30).

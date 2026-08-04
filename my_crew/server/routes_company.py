@@ -159,7 +159,7 @@ def _load_one_template(role_dir) -> dict | None:
         "bindings_hint": [str(b) for b in (doc.get("bindings_hint") or [])],
         "persona": persona,
         # Opt-in web-search flag the wizard forwards into the created profile (only the
-        # nghien-cuu template ships true; absent ⇒ false, matching the profile default).
+        # researcher template ships true; absent ⇒ false, matching the profile default).
         "web_search": bool(doc.get("web_search", False)),
         # v20.5: which runtime backend this role is best served by (wizard prefill; user can
         # override). Absent ⇒ "native" (the safe default).

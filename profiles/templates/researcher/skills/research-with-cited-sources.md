@@ -1,5 +1,5 @@
 ---
-name: tra-cuu-co-trich-nguon
+name: research-with-cited-sources
 description: Khi tổng hợp thông tin nghiên cứu, luôn nêu rõ nguồn cho mỗi khẳng định.
 applies_to:
   - team-step

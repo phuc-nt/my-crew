@@ -101,7 +101,7 @@ def test_review_event_carries_counts_only(monkeypatch):
     )
     monkeypatch.setattr("my_crew.runtime.office_room_append.room_for_task", lambda t: t)
     runner._append_review_event(
-        "t1", author="kiem-dinh", task_title="T", step_title="S", passed=False,
+        "t1", author="qa", task_title="T", step_title="S", passed=False,
         failures=["a", "b"],
         criteria=[{"criterion": "c1", "passed": True}, {"criterion": "c2", "passed": False}],
     )
@@ -122,7 +122,7 @@ def test_review_event_carries_opaque_attempt_id(monkeypatch):
     )
     monkeypatch.setattr("my_crew.runtime.office_room_append.room_for_task", lambda t: t)
     runner._append_review_event(
-        "t1", author="kiem-dinh", task_title="T", step_title="S", passed=True,
+        "t1", author="qa", task_title="T", step_title="S", passed=True,
         failures=[], criteria=[{"criterion": "c1", "passed": True}], attempt_id="att-9",
     )
     assert captured["attempt_id"] == "att-9"
@@ -135,7 +135,7 @@ def test_projection_passes_criteria_counts():
     body = summarize_office_event("review", {
         "task_title": "T", "step_title": "S", "verdict": "needs_rework",
         "failure_count": 2, "criteria_total": 3, "criteria_passed": 1,
-        "assigned_to": "kiem-dinh", "attempt_id": "att-9",
+        "assigned_to": "qa", "attempt_id": "att-9",
         "criteria": [{"criterion": "bí mật nội dung"}],  # must NOT pass through
     })
     assert body["criteria_total"] == 3 and body["criteria_passed"] == 1

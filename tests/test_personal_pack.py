@@ -48,10 +48,10 @@ def test_tool_provider_reads_day_context_plus_gws(monkeypatch):
     monkeypatch.setattr("my_crew.tools.gws_read.gmail_triage", lambda: '{"unread": 2}')
     pack = PackRegistry().load("personal")
     snapshot = pack.tools.read("briefing", None, None)
-    assert snapshot["bay_gio"]  # ISO local time
-    assert snapshot["thu"].startswith(("Thứ", "Chủ"))
-    assert snapshot["lich_24h_toi"] == '{"events": []}'
-    assert snapshot["email_chua_doc"] == '{"unread": 2}'
+    assert snapshot["current_time"]  # ISO local time
+    assert snapshot["weekday"].startswith(("Thứ", "Chủ"))
+    assert snapshot["calendar_next_24h"] == '{"events": []}'
+    assert snapshot["unread_email"] == '{"unread": 2}'
 
 
 def test_tool_provider_degrades_per_source_on_gws_failure(monkeypatch):
@@ -66,8 +66,8 @@ def test_tool_provider_degrades_per_source_on_gws_failure(monkeypatch):
     monkeypatch.setattr("my_crew.tools.gws_read.gmail_triage", lambda: '{"unread": 0}')
     pack = PackRegistry().load("personal")
     snapshot = pack.tools.read("briefing", None, None)
-    assert snapshot["lich_24h_toi"].startswith("(chưa đọc được:")
-    assert snapshot["email_chua_doc"] == '{"unread": 0}'  # nguồn lành không bị vạ lây
+    assert snapshot["calendar_next_24h"].startswith("(chưa đọc được:")
+    assert snapshot["unread_email"] == '{"unread": 0}'  # nguồn lành không bị vạ lây
 
 
 # --- offline end-to-end graph run ---
@@ -77,8 +77,9 @@ class _FakeDayTools:
     """Provider giả cho graph tests — không chạm CLI gws thật (chậm + đọc data thật)."""
 
     def read(self, kind, config, settings):
-        return {"bay_gio": "2026-08-03T07:00+07:00", "thu": "Thứ Hai",
-                "lich_24h_toi": "(chưa đọc được: test)", "email_chua_doc": "(chưa đọc được: test)"}
+        return {"current_time": "2026-08-03T07:00+07:00", "weekday": "Thứ Hai",
+                "calendar_next_24h": "(chưa đọc được: test)",
+                "unread_email": "(chưa đọc được: test)"}
 
 
 def _config(with_telegram: bool):

@@ -24,7 +24,7 @@ def _gws_sources() -> dict[str, str]:
     from my_crew.tools.gws_read import GwsReadError, calendar_agenda, gmail_triage
 
     out: dict[str, str] = {}
-    for key, fetch in (("lich_24h_toi", calendar_agenda), ("email_chua_doc", gmail_triage)):
+    for key, fetch in (("calendar_next_24h", calendar_agenda), ("unread_email", gmail_triage)):
         try:
             out[key] = fetch()
         except GwsReadError as exc:
@@ -38,8 +38,8 @@ class PersonalToolProvider:
     def read(self, kind: str, config: Any, settings: Any) -> dict[str, Any]:
         now = datetime.now().astimezone()
         return {
-            "bay_gio": now.isoformat(timespec="minutes"),
-            "thu": _WEEKDAYS_VI[now.weekday()],
+            "current_time": now.isoformat(timespec="minutes"),
+            "weekday": _WEEKDAYS_VI[now.weekday()],
             **_gws_sources(),
         }
 

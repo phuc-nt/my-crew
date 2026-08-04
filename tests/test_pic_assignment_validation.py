@@ -17,7 +17,7 @@ from my_crew.agent.task_decomposition import (
     validate_decomposition,
 )
 
-STAFF = {"noi-dung", "nghien-cuu", "kiem-dinh"}
+STAFF = {"content", "researcher", "qa"}
 
 
 def _step(sid, who, deps=()):
@@ -31,7 +31,7 @@ def _task(pic="", *steps):
 # ---- parse_pic_prefix -------------------------------------------------------
 
 def test_at_id_prefix_extracts_pic_and_clean_brief():
-    assert parse_pic_prefix("@noi-dung viết bài giới thiệu") == ("noi-dung", "viết bài giới thiệu")
+    assert parse_pic_prefix("@content viết bài giới thiệu") == ("content", "viết bài giới thiệu")
 
 
 def test_at_all_and_no_prefix_mean_llm_proposes():
@@ -48,43 +48,43 @@ def test_email_like_or_mid_string_at_is_not_a_prefix():
 
 def test_valid_pic_plan_passes_and_keeps_pic():
     task = _task(
-        "noi-dung",
-        _step("s1", "nghien-cuu"),
-        _step("s2", "noi-dung", deps=["s1"]),
+        "content",
+        _step("s1", "researcher"),
+        _step("s2", "content", deps=["s1"]),
     )
     out = validate_decomposition(task, staff_ids=STAFF)
-    assert out.pic_id == "noi-dung"
+    assert out.pic_id == "content"
 
 
 def test_multiple_terminals_rejected():
-    task = _task("noi-dung", _step("s1", "nghien-cuu"), _step("s2", "noi-dung"))
+    task = _task("content", _step("s1", "researcher"), _step("s2", "content"))
     with pytest.raises(DecompositionError, match="ĐÚNG MỘT bước chốt cuối"):
         validate_decomposition(task, staff_ids=STAFF)
 
 
 def test_terminal_not_owned_by_pic_rejected():
-    task = _task("noi-dung", _step("s1", "noi-dung"), _step("s2", "kiem-dinh", deps=["s1"]))
+    task = _task("content", _step("s1", "content"), _step("s2", "qa", deps=["s1"]))
     with pytest.raises(DecompositionError, match="PIC"):
         validate_decomposition(task, staff_ids=STAFF)
 
 
 def test_pic_not_in_staff_rejected():
     # steps are all validly assigned — only the PIC id itself is bogus.
-    task = _task("ai-do", _step("s1", "noi-dung"))
+    task = _task("ai-do", _step("s1", "content"))
     with pytest.raises(DecompositionError, match="PIC .* không có trong danh sách"):
         validate_decomposition(task, staff_ids=STAFF)
 
 
 def test_single_step_task_must_belong_to_pic():
-    ok = validate_decomposition(_task("noi-dung", _step("s1", "noi-dung")), staff_ids=STAFF)
-    assert ok.pic_id == "noi-dung"
+    ok = validate_decomposition(_task("content", _step("s1", "content")), staff_ids=STAFF)
+    assert ok.pic_id == "content"
     with pytest.raises(DecompositionError):
-        validate_decomposition(_task("noi-dung", _step("s1", "kiem-dinh")), staff_ids=STAFF)
+        validate_decomposition(_task("content", _step("s1", "qa")), staff_ids=STAFF)
 
 
 def test_no_pic_task_skips_pic_rules_v14_compatible():
     # two terminals + no pic — exactly what every pre-v15 decompose produces; must pass.
-    task = _task("", _step("s1", "nghien-cuu"), _step("s2", "noi-dung"))
+    task = _task("", _step("s1", "researcher"), _step("s2", "content"))
     out = validate_decomposition(task, staff_ids=STAFF)
     assert out.pic_id == ""
 
@@ -92,30 +92,30 @@ def test_no_pic_task_skips_pic_rules_v14_compatible():
 # ---- F4: CEO-named PIC overrides the model's proposal -----------------------
 
 def test_ceo_named_pic_overrides_llm_proposal():
-    # model proposed kiem-dinh, CEO @-named noi-dung — code must win.
+    # model proposed qa, CEO @-named content — code must win.
     task = _task(
-        "kiem-dinh",
-        _step("s1", "nghien-cuu"),
-        _step("s2", "noi-dung", deps=["s1"]),
+        "qa",
+        _step("s1", "researcher"),
+        _step("s2", "content", deps=["s1"]),
     )
-    out = validate_decomposition(task, staff_ids=STAFF, pic_id="noi-dung")
-    assert out.pic_id == "noi-dung"
+    out = validate_decomposition(task, staff_ids=STAFF, pic_id="content")
+    assert out.pic_id == "content"
 
 
 def test_ceo_named_pic_still_requires_terminal_ownership():
     task = _task(
-        "kiem-dinh",
-        _step("s1", "nghien-cuu"),
-        _step("s2", "kiem-dinh", deps=["s1"]),
+        "qa",
+        _step("s1", "researcher"),
+        _step("s2", "qa", deps=["s1"]),
     )
     with pytest.raises(DecompositionError, match="PIC"):
-        validate_decomposition(task, staff_ids=STAFF, pic_id="noi-dung")
+        validate_decomposition(task, staff_ids=STAFF, pic_id="content")
 
 
 # ---- hash neutrality pin (Decision A pattern) --------------------------------
 
 def test_pic_id_is_outside_the_canonical_hash():
-    steps = (_step("s1", "nghien-cuu"), _step("s2", "noi-dung", deps=["s1"]))
-    with_pic = DecomposedTask(steps=steps, pic_id="noi-dung")
+    steps = (_step("s1", "researcher"), _step("s2", "content", deps=["s1"]))
+    with_pic = DecomposedTask(steps=steps, pic_id="content")
     without_pic = DecomposedTask(steps=steps)
     assert decomposition_content_hash(with_pic) == decomposition_content_hash(without_pic)
