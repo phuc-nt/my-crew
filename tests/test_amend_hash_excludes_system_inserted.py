@@ -44,3 +44,32 @@ def test_frozen_prefix_excludes_system_inserted_rows():
         decomposition_content_hash(SimpleNamespace(steps=list(frozen)))
         == decomposition_content_hash(confirmed_only)
     )
+
+
+# --- v63 H3 regression: frozen prefix must carry needs_shell/external_write ----------
+
+
+def test_amend_frozen_prefix_keeps_hash_bound_flags():
+    """`needs_shell`/`external_write` are CONDITIONAL plan_hash material — a frozen
+    prefix that dropped them would bind an amend hash that `_verify_plan_hash`'s
+    recompute over the store rows can never match (guaranteed stall after amending
+    any task with a flagged non-pending step)."""
+    from types import SimpleNamespace
+
+    from my_crew.agent.team_task_amend_prompt import _amend_frozen_prefix
+
+    task = SimpleNamespace(steps=[
+        SimpleNamespace(step_id="s1", title="chạy script", assigned_to="agent-a",
+                        deps=(), status="done", system_inserted=0,
+                        needs_shell=True, external_write=False),
+        SimpleNamespace(step_id="s2", title="gửi email", assigned_to="agent-b",
+                        deps=("s1",), status="running", system_inserted=0,
+                        needs_shell=False, external_write=True),
+        SimpleNamespace(step_id="s3", title="tổng hợp", assigned_to="agent-a",
+                        deps=("s2",), status="pending", system_inserted=0,
+                        needs_shell=False, external_write=False),
+    ])
+    frozen = _amend_frozen_prefix(task)
+    assert [s.step_id for s in frozen] == ["s1", "s2"]
+    assert frozen[0].needs_shell is True and frozen[0].external_write is False
+    assert frozen[1].needs_shell is False and frozen[1].external_write is True

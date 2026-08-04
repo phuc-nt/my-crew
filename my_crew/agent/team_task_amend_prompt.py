@@ -96,9 +96,18 @@ def _amend_frozen_prefix(task) -> tuple[TeamStepPlan, ...]:
     folding it into the amend hash would make the bound hash diverge from the recompute
     → the task stalls on the next tick after a perfectly valid amend. `step_type`/
     `needs_review` default here (a frozen step already passed `_step_type_bounds` when
-    it was first confirmed)."""
+    it was first confirmed). `needs_shell` (v45) and `external_write` (v63) MUST carry
+    over from the store row: both are CONDITIONAL plan_hash material, so dropping them
+    here would make the amend-bound hash diverge from `_verify_plan_hash`'s recompute
+    over the store rows — a guaranteed plan-hash-mismatch stall on the first tick after
+    amending any task with a flagged non-pending step (review-found v63 H3; the
+    `needs_shell` half was a latent v45 bug)."""
     return tuple(
-        TeamStepPlan(step_id=s.step_id, title=s.title, assigned_to=s.assigned_to, deps=s.deps)
+        TeamStepPlan(
+            step_id=s.step_id, title=s.title, assigned_to=s.assigned_to, deps=s.deps,
+            needs_shell=bool(getattr(s, "needs_shell", False)),
+            external_write=bool(getattr(s, "external_write", False)),
+        )
         for s in task.steps
         if s.status != "pending" and not getattr(s, "system_inserted", 0)
     )
@@ -149,7 +158,8 @@ def amend_with_retries(task, request: str, staff: list[tuple[str, str]]) -> tupl
                 {"step_id": s.step_id, "title": s.title, "assigned_to": s.assigned_to,
                  "deps": list(s.deps), "acceptance": s.acceptance,
                  "step_type": s.step_type, "needs_review": s.needs_review,
-                 "needs_shell": s.needs_shell}  # v45 tier-0 routing
+                 "needs_shell": s.needs_shell,  # v45 tier-0 routing
+                 "external_write": s.external_write}  # v63 — hash-bound conditionally
                 for s in amendment.steps
             ]
             return new_pending, combined, total_cost
