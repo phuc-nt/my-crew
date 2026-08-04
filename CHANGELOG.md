@@ -3,6 +3,61 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.7.0] — 2026-08-04
+
+The secretary arc (v57–v66): my-crew grows from "a company you watch work" into "a
+company you run from one chat". A personal secretary agent in Telegram becomes the
+operating surface for both the CEO's personal work and the whole team — and the final
+approver can now be the AI itself.
+
+### Added
+- **Personal secretary domain pack** (5th pack, `personal`): instant DM chat, morning
+  and weekly briefings, Gmail/Calendar read, multi-recipient email send, calendar
+  create/update/delete (a deliberate, narrow Lớp A carve-out), and multi-command
+  messages ("gửi mail cho X rồi đặt lịch 3h").
+- **Timed reminders**: "nhắc anh 15h gọi X" → actor-bound native reminder actions, a
+  per-agent reminders store, and a cap-exempt per-minute sweep that DMs Telegram at
+  the exact minute; cancel by id.
+- **Chat as orchestration gateway**: the secretary dispatches team tasks (LLM
+  decomposes, code validates the DAG), adjusts or cancels them mid-flight, and reads
+  the team kanban with costs — all in natural Vietnamese over Telegram. The ops
+  catalog is domain-scoped: coordination is not fleet admin, so a secretary can
+  never see `create_agent`.
+- **Autopilot** (`company.yaml::autopilot`): the AI is the final approver — plans
+  auto-confirm, stalled tasks auto-resolve on a two-step ladder, Lớp B writes
+  auto-approve. Per-task opt-out ("để anh duyệt"). Lớp A and cost caps stay
+  human-only (pinned by tests).
+- **Cross-agent persistent memory**: the memory store defaults to shared SQLite —
+  facts survive restarts and are readable across teammates; `memory_share:
+  full|read_only` per profile (the secretary is read-only, so the CEO's private
+  context never leaks into team output); 90-day retention in the sweep.
+- **Sandboxed real code execution**: `needs_shell` steps run in a hardened Docker
+  container (no host mount, tmpfs workdir, scrubbed env, network off unless opted
+  in, fail-closed without Docker) — proven exfil-proof by an adversarial UAT round
+  that tried to read `.env` through a delegated task.
+
+### Changed
+- **Risk-tiered peer review**: only terminal steps and external writes are reviewed
+  (small tasks get a waiver) — ends the failure mode where a 5-step task exploded
+  into 20+ review rounds and stalled.
+- **Fair scheduler**: stateless round-robin across agents each tick; exact-time
+  kinds (reminder sweep) are exempt from the per-tick cap.
+- **English-only backend identifiers** (ids, keys, functions); Vietnamese remains in
+  the user-facing layer. Fleet agents renamed accordingly.
+- Backend suite grew 2392 → 2530 tests across the arc.
+
+### Fixed
+- Three adversarial UAT rounds of hardening: the ops layer no longer shadows the
+  personal catalog (unsupported command-like messages fall through to the agent's
+  own commands); reminder synonyms route to `cancel_reminder` instead of the
+  team-task cancel; a mid-collection change of mind re-classifies the message
+  instead of stuffing the whole sentence into a slot; stalled-task previews
+  validate the task id before promising anything; numeric JSON slot values coerce
+  to strings; a dropped step's placeholder forbids downstream agents from
+  fabricating its data; and the persistent-memory store is actually wired into
+  graph compile (machinery existed since v2 but had never carried current — found
+  only by live UAT).
+
 ## [0.6.0] — 2026-08-01
 
 Hardening round: browser-measured layout tests plus three small usability/hygiene
