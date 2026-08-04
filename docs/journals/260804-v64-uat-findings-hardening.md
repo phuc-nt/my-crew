@@ -39,5 +39,11 @@
 
 ## Mở / sang sau
 
-- Round-robin đầy đủ cho ticker: backlog, chờ nhu cầu thật.
-- `_approval_status` read-path vẫn scan cross-store theo bare id (đã ghi caveat v63).
+- ~~Round-robin đầy đủ~~ — đóng cùng ngày: round-robin KHÔNG CẦN STATE — sort task theo
+  "hoạt động cũ nhất trước" (max spawned_at/last_seen các bước; task chưa chạy = "" nên
+  luôn đứng đầu, nuốt luôn rule chống-đói): phục vụ task nào là task đó tự bị stamp lùi
+  xuống sau ở tick kế. Test pin 2 task bận luân phiên.
+- ~~`_approval_status` scan cross-store~~ — đóng cùng ngày: read-path scope theo
+  `assigned_to` y hệt write-path (approval id là AUTOINCREMENT per-FILE, đọc chéo store
+  có thể trúng hàng của agent khác).
+- Còn chờ CEO quyết: nhắc-việc-theo-giờ · cross-agent memory (SQLite-trước vs Postgres).

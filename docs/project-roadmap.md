@@ -148,7 +148,8 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
   (needs_shell không ai chạy được → chết lúc lập kế hoạch; analyst bật sandbox Docker,
   chuỗi viết-code→chạy-thật→báo-cáo đã sống, engine=deep_agent) · review CHỈ terminal +
   external_write (hết nổ 23 dòng) · queue ưu tiên task chưa-chạy (hết đói 40').
-  Còn backlog: round-robin đầy đủ · scope read-path `_approval_status` theo agent.
+  Đuôi v64 đóng cùng ngày: round-robin stateless (task hoạt-động-cũ-nhất trước, nuốt
+  rule chống-đói) · read-path `_approval_status` scope theo assigned_to như write-path.
 - [x] **Autopilot toàn quyền (v63, CEO chốt 2026-08-04 "Toàn quyền thật")**: flag
   `company.yaml::autopilot` + lệnh `set_autopilot on|off`; bật → tự xác nhận kế hoạch
   (đường hash-bind của `team_task_auto_confirm`), tự gỡ stall (thang retry→accept/drop,
