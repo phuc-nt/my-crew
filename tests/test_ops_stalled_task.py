@@ -334,6 +334,21 @@ def test_list_team_tasks_empty_store(tmp_path):
     assert run_list_team_tasks({}) == "Chưa có thẻ việc nhóm nào."
 
 
+def test_list_team_tasks_flags_done_but_undelivered(tmp_path):
+    from my_crew.agent.ops_list_team_tasks import run_list_team_tasks
+
+    store = _open_store(tmp_path)
+    try:
+        store.create_task(task_id="t1", title="Demo xong nhung mat tin")
+        store.set_task_status("t1", "done")
+        store.set_delivery("t1", status="failed", summary="tong ket")
+    finally:
+        store.close()
+
+    reply = run_list_team_tasks({})
+    assert "CHƯA BÁO ĐƯỢC" in reply
+
+
 # --- C1 regression: the tick AFTER a retry must dispatch the rework, not re-stall -----
 
 

@@ -179,9 +179,11 @@ class CoordinatorDeps:
     roster_ok: Callable[[str], bool] = lambda _agent_id: True
     # aggregate(task) -> (summary_text, cost_usd). One LLM call over all step results.
     aggregate: Callable[[TeamTask], tuple[str, float | None]] = lambda _t: ("", None)
-    # deliver_room(task, message) -> None. Posts the final summary to the group room
-    # (P4's room store — until that lands this may be a no-op/log-only double).
-    deliver_room: Callable[[TeamTask, str], None] = lambda *_: None
+    # deliver_room(task, message) -> bool | None. Posts the final summary to the group
+    # room. v67: the real implementation reports whether the milestone actually landed
+    # (feeds `delivery_status`); `None` (a legacy fire-and-forget double) reads as
+    # delivered — only an explicit False marks the delivery leg failed.
+    deliver_room: Callable[[TeamTask, str], bool | None] = lambda *_: None
     # escalate(task, step, event_kind, message) -> None. Telegram best-effort —
     # MUST NOT raise (try/degrade is the caller's job per the phase spec); this
     # callable's own contract is "never raises", enforced by team_tick_runner's real

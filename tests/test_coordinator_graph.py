@@ -515,3 +515,40 @@ def test_two_busy_tasks_alternate_across_ticks(tmp_path):
         assert result.action == "spawned"
         served.append(result.task_id)
     assert served == ["t1", "t2"]  # tick 1 stamps t1 -> tick 2 rotates to t2
+
+
+# --- v67 delivery split ----------------------------------------------------------------
+
+
+def test_aggregate_marks_delivered_and_persists_summary(tmp_path):
+    store = _store(tmp_path)
+    _plan(store, steps=[{"step_id": "s1", "title": "draft", "assigned_to": "agent-a", "deps": []}])
+    store.reserve_step("t1", "s1")
+    store.mark_done("t1", "s1")
+
+    # legacy fire-and-forget double (returns None) must still read as delivered
+    result = run_one_tick(_deps(store, aggregate=lambda task: ("tong ket", None)))
+
+    assert result.action == "aggregated"
+    task = store.get("t1")
+    assert task.status == "done"
+    assert task.delivery_status == "delivered"
+    assert task.final_summary == "tong ket"
+
+
+def test_aggregate_with_failed_delivery_marks_failed_but_task_stays_done(tmp_path):
+    store = _store(tmp_path)
+    _plan(store, steps=[{"step_id": "s1", "title": "draft", "assigned_to": "agent-a", "deps": []}])
+    store.reserve_step("t1", "s1")
+    store.mark_done("t1", "s1")
+
+    result = run_one_tick(_deps(
+        store, aggregate=lambda task: ("tong ket", None),
+        deliver_room=lambda task, summary: False,
+    ))
+
+    assert result.action == "aggregated"
+    task = store.get("t1")
+    assert task.status == "done"          # execution finished — that truth stands
+    assert task.delivery_status == "failed"  # ...but the CEO was never told
+    assert task.final_summary == "tong ket"  # retry material, no re-aggregate needed

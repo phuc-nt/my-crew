@@ -52,14 +52,29 @@ def append_office_event(
     the connection-open cost is negligible next to the LLM/subprocess work around it,
     and a fresh connection sidesteps any lifetime-management question entirely.
     """
+    append_office_event_checked(
+        room_id, author=author, kind=kind, body=body, also_office=also_office
+    )
+
+
+def append_office_event_checked(
+    room_id: str, *, author: str, kind: str, body: dict, also_office: bool = False,
+) -> bool:
+    """Same append, but REPORTS success — still never raises. The one caller that
+    must know whether the event actually landed is the team-task delivery leg (v67):
+    a swallowed failure there means the CEO never learns a task finished, so the
+    delivery-retry sweep needs a truthful bool to act on. Every other caller keeps
+    the fire-and-forget `append_office_event` above."""
     try:
         store = OfficeRoomStore(office_room_db_path(team_tasks_root()))
         try:
             store.append(room_id, author=author, kind=kind, body=body, also_office=also_office)
         finally:
             store.close()
+        return True
     except Exception:  # noqa: BLE001 — an office-room append must never block the pipeline
         logger.warning(
             "office-room append failed (room=%s kind=%s) — continuing without it",
             room_id, kind, exc_info=True,
         )
+        return False

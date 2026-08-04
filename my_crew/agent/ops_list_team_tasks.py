@@ -44,6 +44,10 @@ def run_list_team_tasks(slots: dict[str, str]) -> str:
         reworks = [s for s in t.steps if s.step_type == "rework"]
         done = len([s for s in t.steps if s.status == "done"])
         label = _STATUS_LABELS.get(t.status, t.status)
+        # v67 delivery split: a `done` task whose summary never landed in the room is
+        # invisible-done — the CEO must see that the result exists but was not posted.
+        if t.status == "done" and t.delivery_status in ("pending", "failed"):
+            label = "xong — CHƯA BÁO ĐƯỢC kết quả"
         if t.status in ("planning", "stalled"):
             waiting += 1
         retro = f"{done}/{len(t.steps)} bước"

@@ -94,6 +94,12 @@ class TeamTask:
     # v63 autopilot: stall auto-resolutions already spent on this task (capped in
     # `autopilot_sweep` — auto-recovery must converge, never loop).
     autopilot_attempts: int = 0
+    # v67 delivery split — execution status (`status`) vs "did the final summary
+    # actually reach the room milestone". Only the ticker's aggregate path uses these;
+    # CEO-interactive completions (accept_stalled_result, cancel) stay 'not_applicable'.
+    delivery_status: str = "not_applicable"
+    delivery_attempts: int = 0
+    final_summary: str | None = None
     steps: tuple[TeamStep, ...] = field(default_factory=tuple)
 
 
@@ -152,6 +158,14 @@ class TeamTaskStore:
             "ALTER TABLE team_tasks ADD COLUMN follow_up_level INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE team_tasks ADD COLUMN require_ceo_approval INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE team_tasks ADD COLUMN autopilot_attempts INTEGER NOT NULL DEFAULT 0",
+            # v67 delivery split: a task can be `done` (execution) while its final
+            # summary never reached the room milestone (delivery). `final_summary` is
+            # persisted BEFORE the first delivery attempt so a retry re-sends the same
+            # text instead of re-running the aggregate LLM call.
+            "ALTER TABLE team_tasks ADD COLUMN delivery_status TEXT NOT NULL "
+            "DEFAULT 'not_applicable'",
+            "ALTER TABLE team_tasks ADD COLUMN delivery_attempts INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE team_tasks ADD COLUMN final_summary TEXT",
         ):
             try:
                 self._conn.execute(ddl)
@@ -266,6 +280,9 @@ class TeamTaskStore:
             room_id=str(data.get("room_id") or ""),
             require_ceo_approval=bool(int(data.get("require_ceo_approval") or 0)),
             autopilot_attempts=int(data.get("autopilot_attempts") or 0),
+            delivery_status=str(data.get("delivery_status") or "not_applicable"),
+            delivery_attempts=int(data.get("delivery_attempts") or 0),
+            final_summary=data.get("final_summary"),
             steps=steps,
         )
 
@@ -396,6 +413,49 @@ class TeamTaskStore:
             "SELECT autopilot_attempts FROM team_tasks WHERE id = ?", (task_id,)
         ).fetchone()
         return int(row[0]) if row else 0
+
+    _DELIVERY_STATUSES = ("not_applicable", "pending", "delivered", "failed")
+
+    def set_delivery(self, task_id: str, *, status: str, summary: str | None = None) -> None:
+        """v67: record the delivery leg of a finished task. `summary` is only
+        written when given (the pending-write persists it once; the later
+        delivered/failed flips leave it untouched)."""
+        if status not in self._DELIVERY_STATUSES:
+            raise ValueError(
+                f"invalid delivery status {status!r}; expected one of {self._DELIVERY_STATUSES}"
+            )
+        if summary is not None:
+            self._conn.execute(
+                "UPDATE team_tasks SET delivery_status = ?, final_summary = ? WHERE id = ?",
+                (status, summary, task_id),
+            )
+        else:
+            self._conn.execute(
+                "UPDATE team_tasks SET delivery_status = ? WHERE id = ?", (status, task_id),
+            )
+        self._conn.commit()
+
+    def increment_delivery_attempts(self, task_id: str) -> int:
+        """v67: bump + return this task's delivery retry count (sweep cap bookkeeping)."""
+        self._conn.execute(
+            "UPDATE team_tasks SET delivery_attempts = delivery_attempts + 1 WHERE id = ?",
+            (task_id,),
+        )
+        self._conn.commit()
+        row = self._conn.execute(
+            "SELECT delivery_attempts FROM team_tasks WHERE id = ?", (task_id,)
+        ).fetchone()
+        return int(row[0]) if row else 0
+
+    def list_undelivered(self) -> list[TeamTask]:
+        """v67: `done` tasks whose summary never reached the room (`pending` — the
+        crash window between mark-done and the delivery write — or `failed`). The
+        delivery-retry sweep is the only caller; it owns the attempts cap."""
+        rows = self._conn.execute(
+            "SELECT id FROM team_tasks WHERE status = 'done' "
+            "AND delivery_status IN ('pending', 'failed') ORDER BY created_at"
+        ).fetchall()
+        return [t for (task_id,) in rows if (t := self.get(task_id)) is not None]
 
     def set_task_status(self, task_id: str, status: str) -> None:
         if status not in _TASK_STATUSES:

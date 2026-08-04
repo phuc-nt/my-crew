@@ -152,15 +152,20 @@ def make_aggregate(loaded: Any, settings: Any):
 
 def make_deliver_room():
     """Posts the aggregate summary to the group room as a "task done" milestone (also
-    mirrored into the shared office room — `also_office=True`). `append_office_event`
-    is itself try/degrade, so this callable never raises (a missing/broken room store
-    is not a reason to leave a 100%-done task undelivered/un-marked-done)."""
+    mirrored into the shared office room — `also_office=True`). Never raises, but since
+    v67 REPORTS whether the milestone actually landed: this event is what the admin
+    milestone mirror DMs the CEO from, so a swallowed failure here used to mean "task
+    done, CEO never told, nothing retries". The bool feeds `delivery_status` +
+    the delivery-retry sweep."""
 
-    def _deliver(task: TeamTask, summary: str) -> None:
-        from my_crew.runtime.office_room_append import append_office_event, room_for_task
+    def _deliver(task: TeamTask, summary: str) -> bool:
+        from my_crew.runtime.office_room_append import (
+            append_office_event_checked,
+            room_for_task,
+        )
 
         logger.info("team-tick: task %s aggregate ready: %s", task.id, summary[:200])
-        append_office_event(
+        return append_office_event_checked(
             room_for_task(task.id), author="coordinator", kind="milestone",
             body={"task_id": task.id, "task_title": task.title, "milestone": "done",
                   "message": summary},

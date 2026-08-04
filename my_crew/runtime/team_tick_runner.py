@@ -114,6 +114,15 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
             run_follow_up_sweep(store)
         except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
             logger.warning("team-tick: follow-up sweep failed", exc_info=True)
+        # v67 P1: re-send finished-task summaries whose room milestone never landed
+        # (delivery split — "done" execution vs "the CEO was actually told"). Bounded
+        # per task; the attempts==cap transition escalates exactly once.
+        try:
+            from my_crew.runtime.delivery_retry_sweep import run_delivery_retry_sweep
+
+            run_delivery_retry_sweep(store, deps.deliver_room, deps.escalate)
+        except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
+            logger.warning("team-tick: delivery retry sweep failed", exc_info=True)
         # v63 autopilot: with the company flag ON, resolve stalled tasks in the CEO's
         # place on a bounded deterministic ladder (retry → accept/drop, capped per
         # task). No-op with the flag off; every decision audited + mirrored to the CEO.

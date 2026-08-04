@@ -285,11 +285,22 @@ def poll_waiting_clarify_step(
 
 
 def aggregate_and_deliver(deps: CoordinatorDeps, task: TeamTask) -> TickResult:
+    """All steps done → summarize once, persist the summary, mark done, THEN deliver.
+
+    v67 delivery split: the summary is written to `final_summary` with
+    `delivery_status='pending'` BEFORE the room post, so a crash or a failed append
+    leaves a truthful record ("done but the CEO was never told") that the
+    delivery-retry sweep can re-send WITHOUT re-running the aggregate LLM call.
+    `deliver_room` returning `None` (every pre-v67 test double — fire-and-forget
+    contract) still reads as delivered; only an explicit `False` marks the leg failed.
+    """
     from my_crew.agent.coordinator_graph import TickResult
 
     summary, cost = deps.aggregate(task)
     if cost is not None:
         deps.store.record_task_cost(task.id, aggregate=cost)
-    deps.deliver_room(task, summary)
+    deps.store.set_delivery(task.id, status="pending", summary=summary)
     deps.store.set_task_status(task.id, "done")
+    delivered = deps.deliver_room(task, summary) is not False
+    deps.store.set_delivery(task.id, status="delivered" if delivered else "failed")
     return TickResult(task_id=task.id, action="aggregated", detail=summary[:80])

@@ -947,3 +947,55 @@ def test_ticker_polls_real_approval_store_rejected_marks_step_failed_and_escalat
 
     approvals.close()
     store.close()
+
+
+# --- v67 delivery split -----------------------------------------------------------
+
+
+def test_delivery_defaults_and_pending_write_persists_summary(tmp_path):
+    store = _store(tmp_path)
+    store.create_task(task_id="t1", title="viec")
+    task = store.get("t1")
+    assert task.delivery_status == "not_applicable"
+    assert task.delivery_attempts == 0
+    assert task.final_summary is None
+
+    store.set_delivery("t1", status="pending", summary="tong ket cuoi")
+    task = store.get("t1")
+    assert task.delivery_status == "pending"
+    assert task.final_summary == "tong ket cuoi"
+
+    # delivered/failed flips WITHOUT summary leave the persisted text untouched
+    store.set_delivery("t1", status="failed")
+    task = store.get("t1")
+    assert task.delivery_status == "failed"
+    assert task.final_summary == "tong ket cuoi"
+
+    with pytest.raises(ValueError):
+        store.set_delivery("t1", status="lost")
+    store.close()
+
+
+def test_increment_delivery_attempts_counts_up(tmp_path):
+    store = _store(tmp_path)
+    store.create_task(task_id="t1", title="viec")
+    assert store.increment_delivery_attempts("t1") == 1
+    assert store.increment_delivery_attempts("t1") == 2
+    assert store.get("t1").delivery_attempts == 2
+    store.close()
+
+
+def test_list_undelivered_only_done_pending_or_failed(tmp_path):
+    store = _store(tmp_path)
+    for task_id, status, delivery in (
+        ("t1", "done", "failed"),        # in — the sweep's main case
+        ("t2", "done", "pending"),       # in — crash window between done + delivery write
+        ("t3", "done", "delivered"),     # out — story finished
+        ("t4", "done", "not_applicable"),  # out — CEO-interactive completion
+        ("t5", "running", "failed"),     # out — not done yet, aggregate owns it
+    ):
+        store.create_task(task_id=task_id, title=task_id)
+        store.set_task_status(task_id, status)
+        store.set_delivery(task_id, status=delivery, summary="s")
+    assert [t.id for t in store.list_undelivered()] == ["t1", "t2"]
+    store.close()
