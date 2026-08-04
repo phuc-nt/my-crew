@@ -29,6 +29,13 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 #: CEO preview and bounds worst-case fan-out cost.
 MAX_STEPS = 7
 
+#: v63 review waiver threshold (CEO decision 2026-08-04: "kết hợp cả hai"): a task with
+#: at most this many steps AND no `external_write` step gets every `needs_review` forced
+#: False at validate time — self-check acceptance remains the only quality gate. Evidence
+#: for the rule: v61 UAT saw a 4-step task balloon to 15 rows (11 review/rework) and
+#: stall; review cost exceeded work cost on small internal tasks.
+SMALL_TASK_MAX_STEPS = 3
+
 #: Valid `step_type` values a DECOMPOSE proposal may set. Only "work" is ever proposed
 #: by the LLM/CEO-confirmed DAG — "review"/"rework" are minted EXCLUSIVELY by the
 #: ticker rule (`coordinator_nodes.tick_actions`) after confirm, never by decompose;
@@ -69,6 +76,16 @@ class TeamStepPlan(BaseModel):
     # change its shell posture post-confirm. Fail-closed: the light tier has no shell, so
     # mis-setting this False only fails a shell task; it can never grant unsafe shell access.
     needs_shell: bool = False
+    # v63 risk-tier routing: LLM-settable, True when the step performs a write that leaves
+    # the company (send an email, create a calendar invite, open a PR, publish anything).
+    # It feeds the small-task review waiver in `validate_decomposition` (a task of at most
+    # SMALL_TASK_MAX_STEPS all-internal steps skips peer review entirely) and, like
+    # `needs_shell`, binds into `decomposition_content_hash` CONDITIONALLY (key present
+    # only when True) so every all-internal DAG hashes byte-identical to pre-v63.
+    # A model that forgets to set it only re-enables review it could have waived — and an
+    # external write mislabeled internal still hits the per-agent Lớp B approval gate at
+    # action time, so this flag can never grant an unsafe write by itself.
+    external_write: bool = False
 
     @field_validator("step_id", "assigned_to")
     @classmethod
@@ -273,7 +290,31 @@ def validate_decomposition(
                 f"PIC {effective_pic!r} không có trong danh sách nhân sự có thể giao việc"
             )
         validate_pic_terminal(task.steps, effective_pic)
-    return task
+    return apply_review_waiver(task)
+
+
+def apply_review_waiver(task: DecomposedTask) -> DecomposedTask:
+    """v63 small-task review waiver — CODE-side policy, never trusted from the LLM.
+
+    A task of at most `SMALL_TASK_MAX_STEPS` steps where NO step is `external_write`
+    gets every `needs_review` forced False: peer review on a tiny all-internal task
+    costs more than the work itself (v61 UAT evidence in the constant's docstring),
+    and each step's own self-check acceptance gate still runs. Any larger task, or any
+    task touching the outside world, keeps whatever `needs_review` flags it proposed.
+    `needs_review` is NOT part of `decomposition_content_hash`, so this override never
+    shifts the hash the CEO's confirm binds to."""
+    if len(task.steps) > SMALL_TASK_MAX_STEPS:
+        return task
+    if any(s.external_write for s in task.steps):
+        return task
+    if not any(s.needs_review for s in task.steps):
+        return task
+    return task.model_copy(update={
+        "steps": tuple(
+            s.model_copy(update={"needs_review": False}) if s.needs_review else s
+            for s in task.steps
+        ),
+    })
 
 
 def decomposition_content_hash(task: DecomposedTask) -> str:
@@ -283,8 +324,9 @@ def decomposition_content_hash(task: DecomposedTask) -> str:
     hashes the same, and any mutation (added/removed/reassigned step) changes the hash
     — confirm re-verifies this hash before dispatch is ever allowed.
 
-    Reads `step_id`/`title`/`assigned_to`/`deps` always, plus `needs_shell` (v45) ONLY on
-    steps where it is True — `acceptance` (a per-step self-check rubric) is never included.
+    Reads `step_id`/`title`/`assigned_to`/`deps` always, plus `needs_shell` (v45) and
+    `external_write` (v63) ONLY on steps where they are True — `acceptance` (a per-step
+    self-check rubric) is never included.
 
     `needs_shell` binds into the hash because it selects a step's RUNTIME + trust boundary
     (create_agent vs the deep_agent Docker sandbox), so the CEO's confirm must cover it.
@@ -303,6 +345,11 @@ def decomposition_content_hash(task: DecomposedTask) -> str:
              "deps": list(s.deps)}
         if bool(getattr(s, "needs_shell", False)):
             d["needs_shell"] = True  # present only when True → all-False DAG hashes as pre-v45
+        if bool(getattr(s, "external_write", False)):
+            # Same conditional-emit contract as needs_shell (v63): the flag drives the
+            # review-waiver policy the CEO's confirm should bind, and all-internal DAGs
+            # — every pre-v63 task — keep their stored plan_hash byte-identical.
+            d["external_write"] = True
         return d
 
     canonical = json.dumps(

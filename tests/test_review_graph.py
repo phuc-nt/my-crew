@@ -76,6 +76,43 @@ def test_run_review_step_passed_writes_verdict_artifact(tmp_path, monkeypatch):
     assert artifact["round"] == 0
 
 
+# --- v63 passed_with_notes: passed=True + notes never becomes a rework ----------------
+
+
+def test_run_review_step_passed_with_notes_stays_passed_and_persists_notes(tmp_path, monkeypatch):
+    write_step_artifact(
+        tmp_path, "t1", 1, {"result_text": "báo cáo có 12 số liệu", "version": "attempt-1"},
+    )
+    _wire_llm(
+        monkeypatch,
+        verdict={"passed": True, "failures": [],
+                 "notes": ["nên thêm biểu đồ", "câu kết hơi dài"]},
+    )
+
+    result = run_review_step(None, _settings(tmp_path), data_dir=tmp_path, review_input=_input())
+
+    assert result["passed"] is True  # the ticker keys on this alone → no rework minted
+    assert result["notes"] == ["nên thêm biểu đồ", "câu kết hơi dài"]
+    assert "đạt (kèm 2 góp ý)" in result["room_message"]
+
+    artifact = read_review_verdict_artifact(tmp_path, "t1", 1, 0)
+    assert artifact["passed"] is True
+    assert artifact["notes"] == ["nên thêm biểu đồ", "câu kết hơi dài"]
+
+
+def test_run_review_step_notes_absent_from_llm_defaults_empty(tmp_path, monkeypatch):
+    # Pre-v63 model output (no notes key) must parse unchanged.
+    write_step_artifact(
+        tmp_path, "t1", 1, {"result_text": "ok", "version": "attempt-1"},
+    )
+    _wire_llm(monkeypatch, verdict={"passed": True, "failures": []})
+
+    result = run_review_step(None, _settings(tmp_path), data_dir=tmp_path, review_input=_input())
+
+    assert result["notes"] == []
+    assert result["room_message"].endswith("đạt")
+
+
 # --- needs_rework verdict: result_text carries prior output + failures ----------------
 
 

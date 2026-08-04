@@ -94,6 +94,12 @@ class TeamStep:
     # when True) so the CEO's confirm covers the step's shell posture. Defaulted (not positional)
     # so pre-v45 `TeamStep(...)` constructions and fixtures stay valid.
     needs_shell: bool = False
+    # v63 risk-tier routing: True iff this step performs a write leaving the company
+    # (email/calendar invite/PR/publish). Feeds the small-task review waiver
+    # (`task_decomposition.apply_review_waiver`) + binds into `decomposition_content_hash`
+    # conditionally (only when True) exactly like `needs_shell` — all-internal rows,
+    # i.e. every pre-v63 row, hash byte-identical to before.
+    external_write: bool = False
     # v34 P4: JSON list [{"title","assigned_to"}] the step proposed instead of doing
     # the work itself ("Đã chia bước"). Set at mark_done; the ticker's fanout-insert
     # rule reads it, mints the sub/gather rows, and the children's existence is the
@@ -156,6 +162,9 @@ def create_schema(conn: sqlite3.Connection) -> None:
         # and, because `decomposition_content_hash` emits needs_shell only when True, an old
         # row (all 0) hashes byte-identical to before — no plan-hash-mismatch stall on migrate.
         "ALTER TABLE team_steps ADD COLUMN needs_shell INTEGER NOT NULL DEFAULT 0",
+        # v63: same conditional-hash contract as needs_shell — default 0 keeps every
+        # pre-v63 row's plan_hash recompute byte-identical (no mismatch stall on migrate).
+        "ALTER TABLE team_steps ADD COLUMN external_write INTEGER NOT NULL DEFAULT 0",
     ):
         try:
             conn.execute(ddl)
@@ -188,6 +197,7 @@ def _row_to_step(data: dict[str, Any]) -> TeamStep:
         step_type=data.get("step_type") or "work",
         needs_review=bool(int(data.get("needs_review") or 0)),
         needs_shell=bool(int(data.get("needs_shell") or 0)),
+        external_write=bool(int(data.get("external_write") or 0)),
         system_inserted=bool(int(data.get("system_inserted") or 0)),
         parent_step_id=data.get("parent_step_id"),
         review_round=int(data.get("review_round") or 0),
@@ -217,8 +227,8 @@ def replace_steps(conn: sqlite3.Connection, task_id: str, steps: list[dict[str, 
         conn.execute(
             "INSERT INTO team_steps "
             "(task_id, step_id, title, assigned_to, deps_json, status, acceptance, "
-            " step_type, needs_review, needs_shell, system_inserted) "
-            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, 0)",
+            " step_type, needs_review, needs_shell, external_write, system_inserted) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, 0)",
             (
                 task_id, step["step_id"], step.get("title", ""), step.get("assigned_to", ""),
                 json.dumps(list(step.get("deps", ())), ensure_ascii=False),
@@ -226,6 +236,7 @@ def replace_steps(conn: sqlite3.Connection, task_id: str, steps: list[dict[str, 
                 step.get("step_type") or "work",
                 1 if step.get("needs_review") else 0,
                 1 if step.get("needs_shell") else 0,  # v45: default 0 (no-shell → create_agent)
+                1 if step.get("external_write") else 0,  # v63: hash-bound conditionally
             ),
         )
 
@@ -380,6 +391,47 @@ def heartbeat(conn: sqlite3.Connection, task_id: str, step_id: str, *, lease_ttl
     )
 
 
+def reset_step_to_pending(
+    conn: sqlite3.Connection, task_id: str, step_id: str, *, attempt_id: str | None = None,
+) -> bool:
+    """v63 stall recovery: put a terminal `failed`/`timeout` row back to `pending`,
+    clearing every lease/attempt field so the ticker's `reserve_step` treats it as a
+    never-attempted step. The status guard in the WHERE clause makes this a no-op on
+    any row that is not actually dead — a running/done step can never be yanked back."""
+    where = ("WHERE task_id = ? AND step_id = ? AND status IN ('failed', 'timeout')")
+    params: tuple[Any, ...] = (task_id, step_id)
+    if attempt_id is not None:
+        where += " AND attempt_id = ?"
+        params = (*params, attempt_id)
+    cur = conn.execute(
+        "UPDATE team_steps SET status = 'pending', attempt_id = NULL, child_pid = NULL, "
+        "spawned_at = NULL, last_seen = NULL, lease_expires_at = NULL " + where,
+        params,
+    )
+    return cur.rowcount > 0
+
+
+def mark_step_dropped(
+    conn: sqlite3.Connection, task_id: str, step_id: str, *,
+    outcome_ref: str | None = None, attempt_id: str | None = None,
+) -> bool:
+    """v63 stall recovery: `done` + `needs_review = 0` in one write (see
+    `TeamTaskStore.mark_step_dropped` for why the review flag must fall with it).
+    Same dead-only status guard as `reset_step_to_pending` — only a `failed`/`timeout`
+    row can be dropped."""
+    where = "WHERE task_id = ? AND step_id = ? AND status IN ('failed', 'timeout')"
+    params: tuple[Any, ...] = (task_id, step_id)
+    if attempt_id is not None:
+        where += " AND attempt_id = ?"
+        params = (*params, attempt_id)
+    cur = conn.execute(
+        "UPDATE team_steps SET status = 'done', needs_review = 0, "
+        "outcome_ref = COALESCE(?, outcome_ref) " + where,
+        (outcome_ref, *params),
+    )
+    return cur.rowcount > 0
+
+
 def set_step_status(
     conn: sqlite3.Connection, task_id: str, step_id: str, status: str, *,
     outcome_ref: str | None = None, cost_usd: float | None = None,
@@ -507,8 +559,8 @@ def swap_pending_steps(
         conn.execute(
             "INSERT INTO team_steps "
             "(task_id, step_id, title, assigned_to, deps_json, status, acceptance, "
-            " step_type, needs_review, needs_shell, system_inserted) "
-            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, 0)",
+            " step_type, needs_review, needs_shell, external_write, system_inserted) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, 0)",
             (
                 task_id, step["step_id"], step.get("title", ""), step.get("assigned_to", ""),
                 json.dumps(list(step.get("deps", ())), ensure_ascii=False),
@@ -516,6 +568,7 @@ def swap_pending_steps(
                 step.get("step_type") or "work",
                 1 if step.get("needs_review") else 0,
                 1 if step.get("needs_shell") else 0,  # v45 tier-0 routing
+                1 if step.get("external_write") else 0,  # v63: hash-bound conditionally
             ),
         )
     return []

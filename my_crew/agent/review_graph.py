@@ -72,12 +72,18 @@ logger = logging.getLogger(__name__)
 
 
 class ReviewVerdict(BaseModel):
-    """The review LLM call's parsed judgment — binary + failures-first, exactly two
-    fields (no steering surface: nothing here can change `assigned_to` or insert a
-    step; only the ticker rule, in CODE, ever does that)."""
+    """The review LLM call's parsed judgment — binary + failures-first (no steering
+    surface: nothing here can change `assigned_to` or insert a step; only the ticker
+    rule, in CODE, ever does that — it keys on `passed` alone, every other field is
+    display/handoff data)."""
 
     passed: bool
     failures: list[str] = Field(default_factory=list)
+    # v63 "đạt kèm góp ý": minor suggestions that violate NO acceptance criterion —
+    # carried alongside `passed=True` so nitpicks stop minting rework rounds (the
+    # policy fix for review-cost > work-cost on small tasks). Display-only data: the
+    # ticker rule keys on `passed` alone, so notes can never insert a row.
+    notes: list[str] = Field(default_factory=list)
     # v34 P5: optional per-criterion checklist — [] from any pre-P5 model output.
     # Same shape as `team_task_check_prompt.CriterionGrade`; kept as raw dicts here to
     # avoid a cross-module model import for a display-only field. Tolerant (review
@@ -214,17 +220,23 @@ def run_review_step(
         data_dir, review_input.task_id, review_input.verdict_seq, review_input.review_round,
         {
             "passed": verdict.passed, "failures": list(verdict.failures),
-            "criteria": list(verdict.criteria),
+            "notes": list(verdict.notes), "criteria": list(verdict.criteria),
             "reviewed_version": review_input.locked_version, "round": review_input.review_round,
             "result_text": _rework_handoff_text(result_text, verdict.failures),
         },
     )
-    verdict_label = "đạt" if verdict.passed else f"cần sửa ({len(verdict.failures)} lỗi)"
+    if verdict.passed:
+        verdict_label = (
+            f"đạt (kèm {len(verdict.notes)} góp ý)" if verdict.notes else "đạt"
+        )
+    else:
+        verdict_label = f"cần sửa ({len(verdict.failures)} lỗi)"
     room_message = f"Soát chéo [{review_input.step_title}]: {verdict_label}"
     return {
         "status": "done", "cost_usd": result.cost_usd, "delivered": True,
         "room_message": room_message, "passed": verdict.passed,
-        "failures": list(verdict.failures), "criteria": list(verdict.criteria),
+        "failures": list(verdict.failures), "notes": list(verdict.notes),
+        "criteria": list(verdict.criteria),
     }
 
 

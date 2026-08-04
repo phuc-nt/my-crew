@@ -31,6 +31,48 @@ _AMEND_SUGGESTION_TEMPLATE = (
     "\n\nCEO có thể chỉnh kế hoạch: `chỉnh kế hoạch {task_id}: <yêu cầu>`"
 )
 
+#: v63 one-touch suggestions — same constant-template rule as above (`{task_id}` only).
+_ONE_TOUCH_SUGGESTION_TEMPLATE = (
+    "\nXử nhanh: `accept_stalled_result {task_id}` (chấp nhận kết quả) · "
+    "`retry_stalled_step {task_id}` (thử thêm 1 lượt) · "
+    "`drop_stalled_step {task_id}` (bỏ bước chết)"
+)
+
+
+def _review_evidence_block(task: TeamTask, step: TeamStep | None) -> str:
+    """v63 evidence pack: the failing round's verdict summary, so the CEO/secretary can
+    decide accept/retry/drop from the escalation alone. The failure lines are reviewer
+    LLM output (second-order untrusted) — wrapped through `format_internal_content`,
+    never concatenated raw into the constant template. Empty string on any miss:
+    evidence is best-effort garnish, never a reason an escalation fails to send."""
+    if step is None:
+        return ""
+    try:
+        from my_crew.agent.team_task_artifact import read_review_verdict_artifact
+        from my_crew.tools.search_result_formatter import format_internal_content
+
+        reviews = [s for s in task.steps
+                   if s.step_type == "review" and s.parent_step_id == step.step_id]
+        for review in sorted(reviews, key=lambda s: s.seq, reverse=True):
+            verdict = read_review_verdict_artifact(
+                team_tasks_root(), task.id, step.seq, review.review_round,
+            )
+            if verdict is None or bool(verdict.get("passed")):
+                continue
+            # Truncate BEFORE wrapping (review M1): slicing the wrapped text could
+            # sever `format_internal_content`'s closing delimiter, leaving an
+            # unterminated untrusted block right before the command suggestions.
+            failures = [str(f)[:150] for f in list(verdict.get("failures") or [])[:3]]
+            if not failures:
+                return ""
+            wrapped = format_internal_content(
+                "\n".join(f"- {f}" for f in failures), label="lý do soát chéo không đạt",
+            )
+            return f"\n\nLý do vòng soát cuối không đạt:\n{wrapped}"
+    except Exception:  # noqa: BLE001 — evidence must never break the escalation itself
+        logger.exception("team-tick: evidence block failed for task %s", task.id)
+    return ""
+
 
 def make_aggregate(loaded: Any, settings: Any):
     """One LLM call summarizing every step's handoff artifact into a room-ready message.
@@ -48,11 +90,32 @@ def make_aggregate(loaded: Any, settings: Any):
     """
 
     def _aggregate(task: TeamTask) -> tuple[str, float | None]:
-        from my_crew.agent.team_task_artifact import read_step_artifact
+        from my_crew.agent.team_task_artifact import (
+            read_review_verdict_artifact,
+            read_step_artifact,
+        )
         from my_crew.tools.search_result_formatter import format_internal_content
 
+        seq_by_step_id = {s.step_id: s.seq for s in task.steps}
         parts: list[str] = []
         for step in sorted(task.steps, key=lambda s: s.seq):
+            if step.step_type == "review":
+                # v63 "đạt kèm góp ý": a passed review's notes are worth surfacing in
+                # the CEO summary (they never minted a rework, so this is their only
+                # delivery path). A failed review's failures already reach the CEO
+                # through the rework round it minted — no separate line needed.
+                content_seq = seq_by_step_id.get(step.parent_step_id or "")
+                verdict = (
+                    read_review_verdict_artifact(
+                        team_tasks_root(), task.id, content_seq, step.review_round,
+                    )
+                    if content_seq is not None else None
+                )
+                notes = list(verdict.get("notes") or []) if verdict else []
+                if verdict and bool(verdict.get("passed")) and notes:
+                    joined = "; ".join(str(n)[:200] for n in notes[:5])
+                    parts.append(f"- {step.title}: đạt — góp ý thêm: {joined}")
+                continue
             artifact = read_step_artifact(team_tasks_root(), task.id, step.seq)
             text = ""
             if artifact:
@@ -111,8 +174,11 @@ def make_escalate(loaded: Any, settings: Any):
     callable's documented contract (`CoordinatorDeps.escalate`) is "never raises"."""
 
     def _escalate(task: TeamTask, step: TeamStep | None, event_kind: str, message: str) -> None:
+        if event_kind == "review_rounds_exhausted":
+            message = message + _review_evidence_block(task, step)
         if event_kind in _STALL_EVENT_KINDS:
-            message = message + _AMEND_SUGGESTION_TEMPLATE.format(task_id=task.id)
+            message = (message + _AMEND_SUGGESTION_TEMPLATE.format(task_id=task.id)
+                       + _ONE_TOUCH_SUGGESTION_TEMPLATE.format(task_id=task.id))
 
         # Room append comes FIRST and unconditionally: the admin agent's milestone
         # mirror polls the room store and DMs the CEO, so an escalation reaches

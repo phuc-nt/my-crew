@@ -244,7 +244,8 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
         {"step_id": s.step_id, "title": s.title, "assigned_to": s.assigned_to,
          "deps": list(s.deps), "acceptance": s.acceptance,
          "step_type": s.step_type, "needs_review": s.needs_review,
-         "needs_shell": s.needs_shell}  # v45 tier-0 routing
+         "needs_shell": s.needs_shell,  # v45 tier-0 routing
+         "external_write": s.external_write}  # v63 review-waiver + conditional hash
         for s in task.steps
     ]
 
@@ -277,11 +278,26 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
     # manual "xác nhận" uses — nothing about the bind/audit/room-event trail changes,
     # only who presses the button. `auto_confirmed` in slots tells the ops-chat state
     # machine NOT to park an awaiting_confirm draft (no ghost "huỷ/xác nhận" turn).
+    from my_crew.agent.ops_autopilot import autopilot_enabled, brief_opts_out
     from my_crew.runtime.company import load_company
+
+    # v63 per-task opt-out: an opt-out phrase in the brief ("để anh duyệt", ...) pins
+    # THIS task to the manual gates for its whole life — the flag persists on the task
+    # row (ticker autopilot decisions check it) and also blocks this turn's
+    # auto-confirm below via the same `no_auto_confirm` mechanism v16 introduced.
+    if brief_opts_out(brief):
+        slots["no_auto_confirm"] = "1"
+        store2 = TeamTaskStore(team_tasks_db_path())
+        try:
+            store2.set_require_ceo_approval(task_id, True)
+        finally:
+            store2.close()
 
     # getattr-default: pre-v15 Company doubles (tests) and any stale cached shape
     # simply mean "flag off" — the safe branch.
-    if getattr(load_company(), "team_task_auto_confirm", False) \
+    # v63: `autopilot` implies auto-confirm (the CEO delegated the whole decision, the
+    # plan-confirm button included) — same hash-bind path, same audit trail.
+    if (getattr(load_company(), "team_task_auto_confirm", False) or autopilot_enabled()) \
             and not slots.get("no_auto_confirm"):
         # `no_auto_confirm` (v16 red-team M3): an LLM-classified chat intent may reuse
         # this preview but must NEVER inherit the auto-confirm privilege — only the

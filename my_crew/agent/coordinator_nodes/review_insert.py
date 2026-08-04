@@ -136,6 +136,20 @@ def maybe_handle_review_done(deps: CoordinatorDeps, task: TeamTask, review_step:
         return False  # normal DAG continuation — nothing more to insert.
 
     if review_step.review_round >= MAX_REVIEW_ROUNDS:
+        # v63 CEO-override guard (review-found C1): `retry_stalled_step` deliberately
+        # mints ONE rework row AT this exhausted round — that row IS the override
+        # signal. Without this check the ticker re-reads the same failed verdict on
+        # the very next tick and re-stalls BEFORE the override rework ever dispatches
+        # (review rules run ahead of dispatch), making the retry command futile. With
+        # it: the rework runs, `maybe_insert_review_after_rework` mints the next
+        # round's review, and a round beyond THAT failing has no rework at its own
+        # round → stalls again — exactly one extra round per retry, never a loop.
+        override_pending = any(
+            s.step_type == "rework" and s.parent_step_id == content_step_id
+            and s.review_round >= review_step.review_round for s in task.steps
+        )
+        if override_pending:
+            return False
         deps.store.set_task_status(task.id, "stalled")
         deps.escalate(
             task, content_step, "review_rounds_exhausted",

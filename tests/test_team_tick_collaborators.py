@@ -174,3 +174,135 @@ def test_step_level_escalation_does_not_get_the_amend_suggestion(tmp_path, monke
     finally:
         store.close()
     assert "chỉnh kế hoạch" not in office_rows[0].body["message"]
+
+
+# --- v63 make_aggregate: passed-with-notes review rows surface their notes ------------
+
+
+def _step_row(step_id, seq, *, step_type="work", parent=None, review_round=0, title=None):
+    return TeamStep(
+        task_id="t1", step_id=step_id, seq=seq, title=title or step_id,
+        assigned_to="agent-a", deps=(), status="done", outcome_ref=None, cost_usd=None,
+        attempt_id=f"attempt-{seq}", child_pid=None, spawned_at=None, last_seen=None,
+        lease_expires_at=None, escalated_at=None, approval_id=None, acceptance="",
+        step_type=step_type, needs_review=False, system_inserted=step_type != "work",
+        parent_step_id=parent, review_round=review_round,
+    )
+
+
+def _aggregate_fallback(tmp_path, monkeypatch, task):
+    """Run make_aggregate's no-LLM path (no openrouter key → deterministic join)."""
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_tick_collaborators import make_aggregate
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    aggregate = make_aggregate(
+        _loaded_no_telegram(), settings=SimpleNamespace(openrouter_api_key=""),
+    )
+    summary, cost = aggregate(task)
+    assert cost is None
+    return summary
+
+
+def test_aggregate_includes_notes_of_a_passed_with_notes_review(tmp_path, monkeypatch):
+    from my_crew.agent.team_task_artifact import (
+        write_review_verdict_artifact,
+        write_step_artifact,
+    )
+
+    content = _step_row("s1", 1, title="draft báo cáo")
+    review = _step_row("s1-review-0-0", 2, step_type="review", parent="s1",
+                       title="Soát chéo: draft báo cáo")
+    task = _task()
+    task = type(task)(**{**task.__dict__, "steps": (content, review)})
+
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": "nội dung", "version": "attempt-1"})
+    write_review_verdict_artifact(
+        tmp_path, "t1", 1, 0,
+        {"passed": True, "failures": [], "notes": ["nên thêm biểu đồ"],
+         "reviewed_version": "attempt-1", "round": 0, "result_text": "nội dung"},
+    )
+
+    summary = _aggregate_fallback(tmp_path, monkeypatch, task)
+    assert "góp ý thêm: nên thêm biểu đồ" in summary
+    assert "nội dung" in summary  # the content step's own line is still there
+
+
+def test_aggregate_omits_review_rows_without_notes(tmp_path, monkeypatch):
+    from my_crew.agent.team_task_artifact import (
+        write_review_verdict_artifact,
+        write_step_artifact,
+    )
+
+    content = _step_row("s1", 1, title="draft báo cáo")
+    review = _step_row("s1-review-0-0", 2, step_type="review", parent="s1",
+                       title="Soát chéo: draft báo cáo")
+    task = _task()
+    task = type(task)(**{**task.__dict__, "steps": (content, review)})
+
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": "nội dung", "version": "attempt-1"})
+    write_review_verdict_artifact(
+        tmp_path, "t1", 1, 0,
+        {"passed": True, "failures": [], "notes": [],
+         "reviewed_version": "attempt-1", "round": 0, "result_text": "nội dung"},
+    )
+
+    summary = _aggregate_fallback(tmp_path, monkeypatch, task)
+    # A clean pass adds no line of its own — the summary lists only real content steps.
+    assert "Soát chéo" not in summary
+
+
+# --- v63 stall escalation: evidence pack + one-touch suggestions ----------------------
+
+
+def test_review_exhausted_escalation_carries_evidence_and_one_touch_commands(
+    tmp_path, monkeypatch,
+):
+    from my_crew.agent.team_task_artifact import write_review_verdict_artifact
+    from my_crew.runtime import team_task_paths
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+
+    content = _step_row("s1", 1, title="draft báo cáo")
+    review = _step_row("s1-review-2-2", 2, step_type="review", parent="s1", review_round=2)
+    task = _task("stalled-task-9")
+    task = type(task)(**{**task.__dict__, "steps": (content, review)})
+    write_review_verdict_artifact(
+        tmp_path, "stalled-task-9", 1, 2,
+        {"passed": False, "failures": ["thiếu số liệu quý 2"], "notes": [],
+         "reviewed_version": "attempt-1", "round": 2, "result_text": "x"},
+    )
+
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+    escalate(task, content, "review_rounds_exhausted", "việc bị dừng — cần CEO xem lại.")
+
+    store = OfficeRoomStore(team_task_paths.team_tasks_root() / "office_room.sqlite3")
+    try:
+        message = store.list(OFFICE_ROOM_ID)[0].body["message"]
+    finally:
+        store.close()
+    assert "Lý do vòng soát cuối không đạt" in message
+    assert "thiếu số liệu quý 2" in message
+    assert "accept_stalled_result stalled-task-9" in message
+    assert "retry_stalled_step stalled-task-9" in message
+    assert "drop_stalled_step stalled-task-9" in message
+    # The amend suggestion (pre-v63 behavior) must still be there too.
+    assert "chỉnh kế hoạch stalled-task-9" in message
+
+
+def test_dead_step_stall_gets_one_touch_but_no_review_evidence(tmp_path, monkeypatch):
+    from my_crew.runtime import team_task_paths
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+    escalate(_task("stalled-task-8"), None, "task_stalled_dead_step",
+             "việc bị dừng: bước chết.")
+
+    store = OfficeRoomStore(team_task_paths.team_tasks_root() / "office_room.sqlite3")
+    try:
+        message = store.list(OFFICE_ROOM_ID)[0].body["message"]
+    finally:
+        store.close()
+    assert "retry_stalled_step stalled-task-8" in message
+    assert "Lý do vòng soát cuối" not in message

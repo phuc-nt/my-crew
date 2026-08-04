@@ -202,3 +202,76 @@ def test_decompose_prompt_instructs_needs_review_and_acceptance():
     system = msgs[0]["content"]
     assert "needs_review" in system
     assert "acceptance" in system
+    assert "external_write" in system  # v63: review-waiver flag must be described too
+
+
+# --- v63 external_write + small-task review waiver -----------------------------------
+
+
+def test_external_write_defaults_false_and_parses_true():
+    assert parse_decomposed_task(_raw([_step("s1")])).steps[0].external_write is False
+    raw = _raw([{**_step("s1"), "external_write": True}])
+    assert parse_decomposed_task(raw).steps[0].external_write is True
+
+
+def test_hash_changes_when_external_write_set():
+    """external_write drives the review-waiver policy → the CEO confirm must bind it."""
+    task_a = parse_decomposed_task(_raw([_step("s1")]))
+    task_b = parse_decomposed_task(_raw([{**_step("s1"), "external_write": True}]))
+    assert decomposition_content_hash(task_a) != decomposition_content_hash(task_b)
+
+
+def test_hash_all_false_external_write_is_migration_identical():
+    """All-internal DAG (every pre-v63 task) must hash byte-identical to the pre-v63
+    canonical form — no plan-hash-mismatch stall after the field was added."""
+    import hashlib
+
+    task = parse_decomposed_task(_raw([_step("s1"), _step("s2", deps=["s1"])]))
+    pre_v63 = json.dumps(
+        {"steps": [{"step_id": s.step_id, "title": s.title, "assigned_to": s.assigned_to,
+                    "deps": list(s.deps)} for s in task.steps]},
+        sort_keys=True, ensure_ascii=True, separators=(",", ":"),
+    )
+    assert decomposition_content_hash(task) == hashlib.sha256(pre_v63.encode()).hexdigest()
+
+
+def _reviewed_step(step_id: str, deps: list[str] | None = None, **extra) -> dict:
+    return {**_step(step_id, deps=deps), "needs_review": True, **extra}
+
+
+def test_small_internal_task_waives_every_needs_review():
+    task = parse_decomposed_task(
+        _raw([_reviewed_step("s1"), _reviewed_step("s2", deps=["s1"]),
+              _reviewed_step("s3", deps=["s2"])])
+    )
+    validated = validate_decomposition(task, staff_ids=["agent-a"])
+    assert all(s.needs_review is False for s in validated.steps)
+
+
+def test_small_task_with_external_write_keeps_review():
+    task = parse_decomposed_task(
+        _raw([_reviewed_step("s1"),
+              _reviewed_step("s2", deps=["s1"], external_write=True)])
+    )
+    validated = validate_decomposition(task, staff_ids=["agent-a"])
+    assert any(s.needs_review for s in validated.steps)
+    # The waiver is all-or-nothing: no step was touched, not just the external one.
+    assert [s.needs_review for s in validated.steps] == [True, True]
+
+
+def test_four_step_internal_task_keeps_review():
+    steps = [_reviewed_step("s1")] + [
+        _reviewed_step(f"s{i}", deps=[f"s{i - 1}"]) for i in range(2, 5)
+    ]
+    task = parse_decomposed_task(_raw(steps))
+    validated = validate_decomposition(task, staff_ids=["agent-a"])
+    assert all(s.needs_review for s in validated.steps)
+
+
+def test_review_waiver_never_shifts_the_plan_hash():
+    """needs_review is not hash material — the waiver must not invalidate the hash the
+    preview/confirm flow computed on the validated task."""
+    task = parse_decomposed_task(_raw([_reviewed_step("s1"), _reviewed_step("s2", deps=["s1"])]))
+    validated = validate_decomposition(task, staff_ids=["agent-a"])
+    assert all(s.needs_review is False for s in validated.steps)
+    assert decomposition_content_hash(task) == decomposition_content_hash(validated)
