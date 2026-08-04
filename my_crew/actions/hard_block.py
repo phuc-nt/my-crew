@@ -22,6 +22,7 @@ red line is the worst possible bug, so the design defaults to denial.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from enum import StrEnum
@@ -510,18 +511,48 @@ _GWS_ALLOWLIST_PREFIXES: tuple[tuple[str, ...], ...] = (
     ("docs", "documents", "create"),
     ("docs", "+write"),
     # v39 #3: create a Google Calendar event. Reversible-but-sensitive ⇒ ordinary Lớp B
-    # (guarded queues, autonomous runs audited). Calendar delete/acl-share are caught by
-    # the destructive/permission marker scan above, so they never reach this allowlist.
+    # (guarded queues, autonomous runs audited). Calendar acl-share vẫn chết ở vòng
+    # marker security; delete chỉ sống khi khớp shape `_is_calendar_event_delete` (v60).
     ("calendar", "events", "insert"),
     # v58 (CEO 2026-08-04): gửi email qua OAuth của gws thay vì SMTP — cùng phân loại
     # Lớp B như calendar insert. Secret-scan (_credential_verdict trên toàn action) +
     # marker scan mọi token đã phủ trước khi chạm allowlist này. CHỈ +send: +reply/
     # +forward/+watch không thêm (reply đọc thread cũ = bề mặt khác, chưa cần).
     ("gmail", "+send"),
+    # v60 (CEO 2026-08-04): thư ký được sửa/xoá event lịch. `patch` không phải marker
+    # data-loss nên chỉ cần prefix; `delete` là marker Lớp A — chỉ đi qua được khi argv
+    # khớp ĐÚNG shape `_is_calendar_event_delete` (kiểm tra cấu trúc bên dưới), mọi
+    # biến thể khác vẫn chết ở vòng marker như cũ.
+    ("calendar", "events", "patch"),
+    ("calendar", "events", "delete"),
 )
 #: Destructive/permission verbs anywhere in a gws argv = Lớp A, both trust modes.
 _GWS_DATA_LOSS_MARKERS = ("delete", "clear", "trash", "batchclear")
 _GWS_SECURITY_MARKERS = ("share", "permission", "permissions", "publish", "acl")
+
+#: Event-id shape for the one sanctioned delete (Google Calendar ids are base32-ish).
+_GCAL_EVENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{5,128}$")
+
+
+def _is_calendar_event_delete(argv: list[str]) -> bool:
+    """True CHỈ khi argv là đúng shape xoá MỘT event trên calendar primary — carve-out
+    duy nhất khỏi marker data-loss (CEO 2026-08-04: thư ký được xoá lịch). Kiểm tra
+    CẤU TRÚC chứ không kiểm tra chuỗi: đúng 5 phần tử, JSON params chỉ có
+    calendarId=primary + eventId đúng shape id. Thêm một flag, một key, một calendar
+    khác — False, và vòng marker phía trên xử như mọi delete khác."""
+    if len(argv) != 5 or argv[:4] != ["calendar", "events", "delete", "--params"]:
+        return False
+    try:
+        params = json.loads(argv[4])
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(params, dict) or set(params) != {"calendarId", "eventId"}:
+        return False
+    return (
+        params.get("calendarId") == "primary"
+        and isinstance(params.get("eventId"), str)
+        and bool(_GCAL_EVENT_ID_RE.match(params["eventId"]))
+    )
 
 
 def _hard_deny_gws(action: dict[str, Any]) -> BlockVerdict | None:
@@ -551,10 +582,16 @@ def _hard_deny_gws(action: dict[str, Any]) -> BlockVerdict | None:
             category=BlockCategory.SECURITY,
             reason="gws_write must carry a non-empty argv",
         )
+    # v60: carve-out cấu trúc DUY NHẤT khỏi marker DATA_LOSS — xoá một event trên
+    # calendar primary (shape check trên argv GỐC, JSON giữ nguyên hoa/thường).
+    # Security markers + credential-scan + prefix table vẫn chạy đầy đủ phía dưới.
+    calendar_delete_ok = _is_calendar_event_delete(argv_raw)
     for marker_set, category, label in (
         (_GWS_DATA_LOSS_MARKERS, BlockCategory.DATA_LOSS, "destructive"),
         (_GWS_SECURITY_MARKERS, BlockCategory.SECURITY, "permission/visibility"),
     ):
+        if calendar_delete_ok and marker_set is _GWS_DATA_LOSS_MARKERS:
+            continue
         for tok in argv:
             if any(m in tok for m in marker_set):
                 return BlockVerdict(

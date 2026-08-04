@@ -37,7 +37,9 @@ def test_personal_pack_discovered_and_assembled():
     assert "briefing-system" in pack.prompts
     assert "weekly-review-system" in pack.prompts
     assert pack.tools is not None
-    assert set(pack.commands) == {"tao_lich", "gui_email"}  # 3b calendar + v58 email
+    # 3b calendar + v58 email + v60 (sửa/xoá lịch + cổng điều phối)
+    assert set(pack.commands) == {"tao_lich", "doi_lich", "xoa_lich", "gui_email",
+                                  "giao_viec", "chuyen_the"}
 
 
 def test_tool_provider_reads_day_context_plus_gws(monkeypatch):
@@ -277,6 +279,160 @@ def test_email_layer_a_still_scans_secrets():
                        "--body", f"token: {fake_token}"], "dedup_hint": "x"}
     verdict = classify(action)
     assert verdict.blocked  # secret trong body vẫn chết ở _credential_verdict
+
+
+# --- v60: sửa/xoá lịch ---
+
+
+def _stub_events(monkeypatch, events):
+    monkeypatch.setattr(
+        "my_crew.tools.gws_read.calendar_events_window", lambda q="", days=14: events
+    )
+
+
+_EV = {"id": "abc123DEF", "summary": "Họp với anh Minh",
+       "start": {"dateTime": "2026-08-05T09:00:00+07:00"},
+       "end": {"dateTime": "2026-08-05T09:30:00+07:00"}}
+
+
+def test_doi_lich_patch_keeps_old_duration(monkeypatch):
+    import json
+
+    _stub_events(monkeypatch, [_EV])
+    pack = PackRegistry().load("personal")
+    payload = pack.commands["doi_lich"]["build_args"](
+        {"title": "anh Minh", "new_start": "2026-08-05T14:00:00+07:00"}, None
+    )
+    assert payload["argv"][:3] == ["calendar", "events", "patch"]
+    params = json.loads(payload["argv"][4])
+    assert params == {"calendarId": "primary", "eventId": "abc123DEF"}
+    body = json.loads(payload["argv"][6])
+    assert body["start"]["dateTime"] == "2026-08-05T14:00:00+07:00"
+    assert body["end"]["dateTime"].startswith("2026-08-05T14:30")  # duration 30' giữ nguyên
+    # qua Lớp A: patch nằm trong prefix table, không dính marker
+    from my_crew.actions.hard_block import _hard_deny_gws
+
+    assert _hard_deny_gws({**payload, "type": "gws_write"}) is None
+
+
+def test_doi_lich_resolver_zero_and_many_matches_ask_back(monkeypatch):
+    pack = PackRegistry().load("personal")
+    build = pack.commands["doi_lich"]["build_args"]
+    _stub_events(monkeypatch, [])
+    with pytest.raises(ValueError, match="không thấy lịch"):
+        build({"title": "hop ma", "new_start": "2026-08-05T14:00:00+07:00"}, None)
+    _stub_events(monkeypatch, [_EV, {**_EV, "id": "zzz999", "summary": "Họp với anh Minh 2"}])
+    with pytest.raises(ValueError, match="nói cụ thể"):
+        build({"title": "anh Minh", "new_start": "2026-08-05T14:00:00+07:00"}, None)
+
+
+def test_luc_hint_disambiguates_same_title(monkeypatch):
+    """Trùng tên → arg `luc` (prefix ngày/giờ) chọn đúng một event."""
+    import json
+
+    twin = {**_EV, "id": "zzz999",
+            "start": {"dateTime": "2026-08-06T09:00:00+07:00"},
+            "end": {"dateTime": "2026-08-06T09:30:00+07:00"}}
+    _stub_events(monkeypatch, [_EV, twin])
+    pack = PackRegistry().load("personal")
+    payload = pack.commands["xoa_lich"]["build_args"](
+        {"title": "anh Minh", "luc": "2026-08-06"}, None
+    )
+    assert json.loads(payload["argv"][4])["eventId"] == "zzz999"
+
+
+def test_xoa_lich_delete_argv_passes_carveout(monkeypatch):
+    from my_crew.actions.hard_block import _hard_deny_gws
+
+    _stub_events(monkeypatch, [_EV])
+    pack = PackRegistry().load("personal")
+    payload = pack.commands["xoa_lich"]["build_args"]({"title": "anh Minh"}, None)
+    assert payload["argv"][:3] == ["calendar", "events", "delete"]
+    assert payload["dedup_hint"] == "personal-calendar-del:abc123DEF"
+    assert _hard_deny_gws({**payload, "type": "gws_write"}) is None
+
+
+def test_calendar_delete_carveout_rejects_every_variant():
+    """Pin an ninh v60: carve-out CHỈ mở đúng một shape. Mọi biến thể lệch — service
+    khác, calendar khác, thêm flag, params sai key, eventId shape lạ — chết như cũ."""
+    import json
+
+    from my_crew.actions.hard_block import _hard_deny_gws
+
+    good_params = json.dumps({"calendarId": "primary", "eventId": "abc123DEF"})
+    variants = [
+        ["sheets", "delete", "--params", good_params],
+        ["drive", "files", "delete", "--params", good_params],
+        ["calendar", "calendars", "delete", "--params", good_params],
+        ["calendar", "events", "delete", "--params",
+         json.dumps({"calendarId": "team@group.calendar.google.com", "eventId": "abc123"})],
+        ["calendar", "events", "delete", "--params",
+         json.dumps({"calendarId": "primary", "eventId": "abc123", "sendUpdates": "all"})],
+        ["calendar", "events", "delete", "--params", good_params, "--json", "{}"],
+        ["calendar", "events", "delete", "--params", "not-json"],
+        ["calendar", "events", "delete"],
+        ["calendar", "events", "delete", "--params",
+         json.dumps({"calendarId": "primary", "eventId": "x y z"})],
+    ]
+    for argv in variants:
+        verdict = _hard_deny_gws({"type": "gws_write", "argv": argv, "dedup_hint": "x"})
+        assert verdict is not None and verdict.blocked, argv
+    # và share/permission markers vẫn vô điều kiện, kể cả kèm shape delete hợp lệ
+    verdict = _hard_deny_gws({"type": "gws_write", "dedup_hint": "x",
+                              "argv": ["calendar", "acl", "insert", "--params", "{}"]})
+    assert verdict is not None and verdict.blocked
+
+
+# --- v60: cổng điều phối — giao việc / chuyển thẻ ---
+
+
+def test_giao_viec_builds_team_task_create_payload():
+    from my_crew.actions.hard_block import classify
+
+    pack = PackRegistry().load("personal")
+    spec = pack.commands["giao_viec"]
+    assert spec["type"] == "team_task_create"
+    payload = spec["build_args"](
+        {"title": "Tìm hiểu thị trường X", "assignee": "nghien-cuu", "detail": "gấp"}, None
+    )
+    assert payload["title"] == "Tìm hiểu thị trường X"
+    assert payload["assignee"] == "nghien-cuu" and payload["detail"] == "gấp"
+    assert payload["dedup_hint"].startswith("create:nghien-cuu:")
+    # Lớp A structural: assignee shape bịa vẫn chết trước handler
+    bad = {"type": "team_task_create", "title": "x", "assignee": "../evil"}
+    assert classify(bad).blocked
+
+
+def test_chuyen_the_builds_team_task_move_payload():
+    pack = PackRegistry().load("personal")
+    spec = pack.commands["chuyen_the"]
+    assert spec["type"] == "team_task_move"
+    payload = spec["build_args"]({"task_id": "abc123def456", "status": "cancelled"}, None)
+    assert payload["task_id"] == "abc123def456" and payload["status"] == "cancelled"
+    assert payload["dedup_hint"].startswith("move:abc123def456:cancelled:")
+
+
+def test_team_task_handler_refuses_assignee_outside_roster(monkeypatch):
+    """Quyền thật nằm ở store-verified roster (handler actor-bound) — thư ký không giao
+    được việc cho id ngoài danh sách nhân sự, dù schema shape hợp lệ."""
+    from my_crew.actions.team_task_write import make_team_task_handler
+
+    monkeypatch.setattr("my_crew.agent.team_task_roster.is_assignable", lambda a: False)
+    handler = make_team_task_handler("thu-ky")
+    with pytest.raises(PermissionError, match="không nằm trong danh sách"):
+        handler({"type": "team_task_create", "title": "x", "assignee": "ai-do"})
+
+
+def test_roster_hint_survives_missing_registry(monkeypatch):
+    """Import-time hint không được nổ khi registry vắng (CI/test) — fallback text tĩnh."""
+    from my_crew.packs.registry import _load_pack_module
+
+    module = _load_pack_module("personal", "commands")
+    monkeypatch.setattr(
+        "my_crew.agent.team_task_roster.assignable_staff",
+        lambda: (_ for _ in ()).throw(FileNotFoundError("no registry")),
+    )
+    assert module._roster_hint() == "xem bảng nhân sự"
 
 
 def test_briefing_gateway_denies_mcp_with_empty_pack_allowlist(tmp_path):

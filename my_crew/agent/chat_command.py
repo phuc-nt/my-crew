@@ -209,7 +209,12 @@ def _run_one_command(
         # in guarded mode only a trusted sender gets here (v8 M23 trust ladder).
         why = ("chế độ tự chủ" if loaded.settings.trust_mode == "autonomous"
                else "bạn trong danh sách tin cậy")
-        return f"✅ Đã chạy `{command_id}` ({_args_preview(action_args)}) — tự duyệt ({why})."
+        # Handler summary carries state the user needs next (v60: task id để 'hủy thẻ
+        # <id>' — classifier không có hội thoại cũ nên id phải nằm ngay trong reply).
+        summary = str(result.summary or "").strip()
+        tail = f" — {summary[:160]}" if summary else ""
+        return (f"✅ Đã chạy `{command_id}` ({_args_preview(action_args)}) — tự duyệt "
+                f"({why}).{tail}")
     if result.status == "deduplicated":
         # Idempotency, not a refusal — an identical command already ran once.
         return f"Lệnh `{command_id}` trùng với một lệnh đã chạy — bỏ qua (chống chạy đúp)."

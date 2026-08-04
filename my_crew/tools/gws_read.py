@@ -30,6 +30,7 @@ _MAX_CHARS = 6000
 _READ_ALLOWLIST: dict[str, list[str]] = {
     "gmail": ["gmail", "+triage"],
     "calendar": ["calendar", "+agenda"],
+    "calendar_events": ["calendar", "events", "list"],
     "drive": ["drive", "files", "list"],
 }
 
@@ -77,6 +78,29 @@ def calendar_agenda() -> str:
     """Upcoming events across the user's calendars. Bounded text."""
     data = _run("calendar")
     return json.dumps(data, ensure_ascii=False)[:_MAX_CHARS]
+
+
+def calendar_events_window(query: str = "", days: int = 14) -> list[dict]:
+    """Upcoming events on the PRIMARY calendar in the next `days` days, as raw event
+    dicts (id/summary/start/end). `query` rides the Calendar API free-text `q`. Read-only
+    lookup for the v60 edit/delete chat commands — the resolver matches titles on top."""
+    from datetime import datetime, timedelta
+
+    now = datetime.now().astimezone()
+    params: dict = {
+        "calendarId": "primary",
+        "timeMin": now.isoformat(timespec="seconds"),
+        "timeMax": (now + timedelta(days=max(1, min(days, 60)))).isoformat(timespec="seconds"),
+        "singleEvents": "true",
+        "orderBy": "startTime",
+        "maxResults": 50,
+    }
+    q = (query or "").strip()[:200]
+    if q:
+        params["q"] = q
+    data = _run("calendar_events", params=params)
+    items = data.get("items", [])
+    return [e for e in items if isinstance(e, dict)]
 
 
 def drive_list(query: str = "") -> str:
