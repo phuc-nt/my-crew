@@ -78,7 +78,10 @@ re-reserve khi lease hết hạn AND chưa có outcome artifact. Terminal write 
 - `task_decomposition.py` — chia việc ≤7 bước; validate (acyclic/authz/PIC); hash canonical.
 - `review_graph.py` — soát chéo (peer review).
 - `ops_*.py` — lệnh CEO: giao việc (`ops_assign_team_task`), chỉnh việc
-  (`ops_adjust_team_task`), chat quản trị (`ops_chat`).
+  (`ops_adjust_team_task`), chat quản trị (`ops_chat`). v61: engine nhận catalog theo
+  domain (`ops_catalog.catalog_for_domain`) — admin = full; personal (thư ký) = 12 lệnh
+  ĐIỀU PHỐI (assign/adjust/list/cancel/watch_pr/report_task/qa_task/send_message +
+  4 readonly), không bao giờ thấy lệnh quản trị fleet (create_agent/set_enabled).
 
 ### 3.6 Action Gateway (`src/actions/`, v30–v31)
 `action_gateway.py` = cửa duy nhất. `hard_block.py` = Lớp A (chặn cứng, không duyệt được).

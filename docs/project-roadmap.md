@@ -124,11 +124,22 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
   lại + arg `luc` phân biệt trùng tên; xoá qua carve-out Lớp A cấu trúc
   `_is_calendar_event_delete` — CHỈ đúng shape 1 event calendar primary, test pin đủ
   biến thể xấu). `plans/260804-0840-secretary-dispatch-calendar-edit/`.
+- [x] **v61 (2026-08-04): thư ký = điều phối viên (ops orchestration)**: mở tầng
+  ops-chat cho domain personal với catalog 12 lệnh ĐIỀU PHỐI (`catalog_for_domain` —
+  assign_team_task DAG nhiều agent + confirm, adjust/list/cancel, việc định kỳ,
+  send_message, 4 readonly; KHÔNG fleet-admin). Backend 100% English (id lệnh
+  create/update/delete_event, send_email, arg `at`, slot `request`); gỡ cặp M12
+  giao_viec/chuyen_the (một bề mặt giao việc duy nhất).
+  `plans/260804-1004-secretary-orchestration-gateway/`.
 - [ ] **Backlog — cross-agent memory cho thư ký (CEO 2026-08-04: làm SAU khi thư ký
   hoàn thiện)**: cần dựng Postgres (`store: postgres` + `project_group` cho thu-ky và
   crew) để trí nhớ chia sẻ giữa thư ký và các agent; kèm đánh giá chi phí vận hành.
 - [ ] **Nhắc việc theo giờ ("3h nhắc anh gọi X")**: thư ký mới ghi nhớ, chưa có cơ chế
   bắn tin đúng giờ — cần thiết kế (one-shot schedule qua gateway, chưa chốt với CEO).
+- [ ] **Cân chỉnh review theo cỡ việc (từ UAT v61)**: task đồ chơi 4 bước bị chèn 11
+  bước soát chéo/rework rồi `stalled` vì hết vòng review ở bước tổng hợp — human-gate
+  đúng thiết kế nhưng bar đắt cho việc nhỏ; cân nhắc ngưỡng chèn soát chéo / số vòng
+  theo số bước hoặc chi phí task.
 
 ### Sản phẩm
 - [x] ~~**Web-search key cảnh báo → hành động**~~ — **đóng 2026-08-03**: v56 đã nhắc ngay
