@@ -4,7 +4,31 @@
 >
 > Dashboard and team operations for CEO / team leads (no technical knowledge required).
 > All work via browser dashboard or Telegram.
-> **Updated:** 2026-07-18.
+> **Updated:** 2026-08-04.
+
+---
+
+## What's new since v57 — the personal secretary & autopilot
+
+Since v57 the primary operating surface is **chatting with a personal secretary agent
+on Telegram** (create one via the Assistant: agent role `personal`); the dashboard
+becomes the observation room. In one DM you can:
+
+- **Personal work**: morning/weekly briefings, read Gmail/Calendar, send email, create/
+  edit/delete calendar events, exact-time reminders ("nhắc anh 15h gọi X" → Telegram
+  pings at 15:00), multiple commands in one message.
+- **Team work**: assign a brief (decomposed into a validated multi-agent plan you
+  confirm), adjust or cancel mid-flight, view the kanban with costs, one-touch stall
+  recovery (accept / one retry / drop dead steps).
+- **Autopilot** (`company.yaml: autopilot: true`, default false): the AI becomes the
+  final approver — plans auto-confirm, stalls auto-resolve, routine Lớp B writes
+  auto-approve, each decision reported back and audited. Say "để anh duyệt" when
+  assigning to keep a specific task human-gated. Lớp A hard-denies and cost caps
+  never change.
+- **Team memory** (v66): facts persist in a shared store across restarts and agents;
+  the secretary is read-only so your private context never leaks into team output.
+
+Details (Vietnamese): [huong-dan-su-dung.md — Phần C](huong-dan-su-dung.md).
 
 ---
 

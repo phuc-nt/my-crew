@@ -1,6 +1,6 @@
 # Code Standards — my-crew
 
-> Quy ước code. Status: **Initial 2026-06-21**. Cập nhật khi convention thật hình thành.
+> Quy ước code. Status: **cập nhật 2026-08-04 (v62 English identifiers)**.
 
 ## Ngôn ngữ & stack
 
@@ -13,6 +13,9 @@
 - File/module Python: `snake_case`, tên mô tả dài cũng OK (self-documenting cho Grep/Glob). Vd `jira_read.py`, `action_gateway.py`.
 - Class: `PascalCase`. Hàm/biến: `snake_case`. Hằng: `UPPER_SNAKE`.
 - Tránh tên mơ hồ (`utils.py`, `helpers.py` chung chung) — đặt theo concern.
+- **Định danh backend 100% English (v62)**: id, key, tên hàm/biến, agent id, command id,
+  action type — tiếng Việt CHỈ ở lớp người dùng (label UI, reply chat, mô tả trong
+  catalog). Agent id mới: English (`analyst`, `secretary`, …).
 
 ## Cấu trúc & modularization
 

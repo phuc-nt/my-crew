@@ -15,7 +15,7 @@
 | Node.js + npm | Build FE + MCP servers |
 | `git` | |
 | `gh` (GitHub CLI) | `gh auth login` (bước tương tác, không tự động) |
-| `gws` (tùy chọn) | Chỉ cho hr-pack (Google Sheets) |
+| `gws` (tùy chọn) | Google Workspace CLI — hr-pack (Sheets) và personal-pack (đọc Gmail/Calendar, gửi email, ghi lịch) |
 
 ### Tài khoản & Token
 
@@ -251,6 +251,19 @@ safety:
 
 > **Hard-deny (Lớp A):** Hành động mất dữ liệu vĩnh viễn (xoá, lộ credential) **không bao giờ cho phép**, kể cả guarded. Xem [action-gateway-explainer.md](action-gateway-explainer.md).
 
+### Autopilot (v63) — AI là người quyết cuối
+
+Flag toàn công ty trong `company.yaml` (cạnh repo, hoặc dưới `MY_CREW_HOME`):
+
+```yaml
+autopilot: true    # mặc định false
+```
+
+Khi bật: kế hoạch việc đội tự xác nhận, việc kẹt tự gỡ theo thang 2 nấc, duyệt Lớp B
+đang chờ tự duyệt — mỗi quyết định báo lại qua Telegram + ghi audit. Opt-out per-task:
+CEO nói "để anh duyệt" khi giao. Lớp A + trần chi phí per-task KHÔNG bị flag này ảnh
+hưởng (pin bằng test).
+
 ---
 
 ## 9. Backup & Khôi Phục
@@ -311,6 +324,14 @@ Idempotent: image có → no-op. Daemon offline → in thông báo rõ (không c
 ---
 
 ## 12. Upgrade Path & Breaking Change
+
+### 0.6.x → 0.7.0: store trí nhớ bền mặc định
+
+Default `runtime.store` của profile đổi `memory` → `sqlite` (dùng chung
+`.data/memory_store.sqlite3`): fact rút ra sống qua restart, cả đội đọc chéo, retention
+90 ngày. Profile cũ giữ nguyên khai báo — còn `store: memory` vẫn chạy nhưng fact mất
+khi restart; đổi sang `store: sqlite` để vào trí nhớ chung. Field mới `memory_share:
+full | read_only` (mặc định full) — thư ký shipped là `read_only`.
 
 ### v51 Rename Thông báo
 

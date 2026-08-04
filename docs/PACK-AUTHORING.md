@@ -1,6 +1,6 @@
 # Viết một domain-pack
 
-> Cách thêm một "nghề" mới (admin/hr/marketer/researcher…) vào harness mà KHÔNG sửa lõi `src/`.
+> Cách thêm một "nghề" mới (admin/hr/marketer/researcher…) vào harness mà KHÔNG sửa lõi `my_crew/`.
 > Đây là một trong 3 ổ cắm community (skill = agentskills.io · tool = MCP · **domain = pack**).
 > Aspirational: harness hướng tới cộng đồng; hiện `_template-pack` + doc này là bộ khung, chưa
 > có quy trình governance duyệt pack ngoài (xem §An toàn).
@@ -8,8 +8,8 @@
 ## 1. Một pack là gì
 
 Mỗi nghề = 1 thư mục `domain-packs/<tên>-pack/` theo hình dạng **đọc → phân tích → soạn →
-(duyệt) → hành động**. Lõi (`src/`) không chứa logic nghề; pack đóng góp qua các module cố định.
-hr-pack đã chứng minh: thêm pack = `git diff src/` rỗng (M6 gate) — kể cả khi mang adapter mới
+(duyệt) → hành động**. Lõi (`my_crew/`) không chứa logic nghề; pack đóng góp qua các module cố định.
+hr-pack đã chứng minh: thêm pack = `git diff my_crew/` rỗng (M6 gate) — kể cả khi mang adapter mới
 (Google Sheets) lõi chưa từng biết.
 
 ## 2. Cấu trúc (copy từ `_template-pack/`)
@@ -58,7 +58,7 @@ guarded). Mọi mutation đi qua `ActionGateway` — pack không gọi write API
 ## 6. MCP server do pack khai (an toàn — spawn gate)
 
 Pack có thể khai MCP server riêng. NHƯNG một MCP server = spawn `node <dist>` với môi trường —
-nên **spawn gate** (`src/packs/pack_mcp_gate.py`) áp default-DENY:
+nên **spawn gate** (`my_crew/packs/pack_mcp_gate.py`) áp default-DENY:
 
 - `mcp_dist` phải là **absolute path** (không cho tương đối trỏ vào thư mục pack);
 - phải nằm trong allowlist operator `PACK_MCP_ALLOWED_DIST` (`:`-phân tách) — **rỗng = từ chối tất**;
@@ -75,9 +75,9 @@ inject raw. Skill copy từ community vào `profiles/<id>/skills/` = untrusted t
 ## 8. Test pack
 
 - `PackRegistry().load("<tên>")` load được; `report_kinds` đúng.
-- `git diff src/` rỗng cho phần report-kind (M6 gate). *Lưu ý:* nếu pack cần MCP server mới qua
+- `git diff my_crew/` rỗng cho phần report-kind (M6 gate). *Lưu ý:* nếu pack cần MCP server mới qua
   spawn-gate hoặc field pack.yaml mới, đó là core change RIÊNG — commit tách, không gộp vào
-  bằng chứng `git diff src/=∅`.
+  bằng chứng `git diff my_crew/=∅`.
 
 ## An toàn (đọc trước khi nhận pack ngoài)
 

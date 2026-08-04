@@ -36,7 +36,7 @@ Chi tiết đầy đủ: **[docs/action-gateway-explainer.md](docs/action-gatewa
 
 ## Đã lớn thành gì
 
-Một agent PM (báo cáo ngày/tuần/OKR/nguồn lực) đã thành **công ty nhân sự ảo do CEO điều hành**: nhiều agent độc lập, dashboard trình duyệt, văn phòng 3D, template nhân sự một-click, chat-ops, nhiều tầng runtime (native / tool-calling / deep-agent sandbox). Bất biến an toàn giữ nguyên qua mọi bước. Lịch sử đầy đủ: **[docs/project-roadmap.md](docs/project-roadmap.md)**.
+Một agent PM (báo cáo ngày/tuần/OKR/nguồn lực) đã thành **một công ty điều hành trọn vẹn qua MỘT cửa chat**: agent **thư ký riêng** trên Telegram lo việc cá nhân của bạn (briefing sáng/tuần, đọc Gmail/Calendar, gửi email, nhắc đúng giờ) *và* giao việc cho cả đội — một câu tiếng Việt thành DAG đa-agent có kiểm chứng, soát chéo theo rủi ro. Bên dưới: nhiều agent độc lập, cockpit trình duyệt, template nhân sự một-click, nhiều tầng runtime (native / tool-calling / deep-agent chạy code THẬT trong Docker sandbox), **trí nhớ bền dùng chung giữa agent**, và **chế độ autopilot** — AI là người quyết cuối: kế hoạch tự xác nhận, task kẹt tự gỡ, việc ghi thường tự duyệt — còn Lớp A + trần chi phí vẫn chỉ người thật đổi được. Bất biến an toàn giữ nguyên qua mọi bước. Lịch sử đầy đủ: **[docs/project-roadmap.md](docs/project-roadmap.md)**.
 
 ## Tài liệu
 
@@ -73,7 +73,7 @@ Toàn bộ setup — tích hợp, cron, trust mode: **[docs/deployment-guide.vi.
 
 ```bash
 git clone git@github.com:phuc-nt/my-crew.git && cd my-crew && uv sync
-uv run pytest    # 2364 BE + 201 FE test pass, không cần bí mật
+uv run pytest    # 2530 BE test pass, không cần bí mật (FE: 279 vitest + 8 Playwright)
 ```
 
 `DRY_RUN=true` mặc định — agent log ý định mà không đăng gì. Để chạy thật, theo **[docs/deployment-guide.vi.md](docs/deployment-guide.vi.md)**.

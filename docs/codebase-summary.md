@@ -1,11 +1,17 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-08-03 — as-built v58 (đang chạy).** ~2432 backend + ~280 frontend + 8 e2e
-> tests, ruff/tsc clean. PyPI `my-crew` 0.6.0. Sau v50: v51 productize PyPI · v52 dual-lens ·
+> Status: **2026-08-04 — as-built v66 (đang chạy).** 2530 backend + 279 frontend + 8 e2e
+> tests, ruff/tsc clean. PyPI `my-crew` 0.7.0. Sau v50: v51 productize PyPI · v52 dual-lens ·
 > v53 UI kỷ luật VN/EN · v54 cockpit action rail · v55 viewport shell · v56 Playwright e2e ·
 > **v57 personal-pack** (thư ký riêng Telegram: listener tức thì, briefing, gws, tao_lich,
-> daily-notes memory, chat web 2-pass) · v58 roster + gui_email + queue transparency.
+> daily-notes memory, chat web 2-pass) · v58 roster + gui_email + queue transparency ·
+> **v59–v60 UAT + dispatch qua thư ký** (multi-command, calendar edit) · **v61 chat = cổng
+> điều phối** (catalog scope theo domain, ops trước M12 + unsupported fallthrough v65) ·
+> **v62 English identifiers** (fleet rename) · **v63 autopilot + review theo rủi ro +
+> stall recovery 1 chạm** · **v64 UAT hardening** (chống bịa sau bước bị bỏ) · **v65 nhắc
+> đúng-giờ (`reminders.db` + reminder-sweep miễn trần) + scheduler round-robin** · **v66
+> cross-agent memory** (store sqlite chung, `memory_share`, retention 90d).
 > Product usable single-user (agent office, team-task, màn 3D, registry user-data,
 > memory seam, AgentRuntime 3-tier + per-step routing, telemetry capture + unified cost,
 > deep_team in-sandbox subagent, benchmark-hardened robustness, governance-audit actor,

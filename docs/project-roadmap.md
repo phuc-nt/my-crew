@@ -1,13 +1,22 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v57). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-08-03.
+> Lộ trình + trạng thái (as-built v66 / 0.7.0). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Cập nhật: 2026-08-04.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v57, PyPI `my-crew` 0.6.0.**
-~2423 BE + ~280 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
-(live daemon, kill-9 resume, fan-out parallelism).
+**Production-usable, single-user autonomy-first. Đã ship tới v66, PyPI `my-crew` 0.7.0.**
+2530 BE + 279 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
+(live daemon, kill-9 resume, fan-out parallelism, 3 vòng UAT đối kháng trong ngày 04/08).
+
+**v57–v66 (arc thư ký — 0.7.0):** **v57–v60 thư ký cá nhân** (pack `personal`: chat DM,
+briefing sáng/tuần, Gmail/Calendar, gửi email, sửa/xoá lịch, multi-command) · **v61 chat
+= cổng điều phối đội** (giao/chỉnh/huỷ việc + kanban qua Telegram, catalog scope domain) ·
+**v62 English identifiers** · **v63 autopilot** (AI quyết cuối: tự xác nhận / tự gỡ kẹt /
+tự duyệt Lớp B — Lớp A + cost cap bất biến) + review theo rủi ro + gỡ-kẹt 1 chạm ·
+**v64 UAT hardening** (chống bịa sau bước bị bỏ) · **v65 nhắc đúng-giờ + scheduler
+round-robin công bằng** · **v66 cross-agent memory SQLite** (fact sống qua restart, đội
+đọc chéo, thư ký read-only). Retro đầy đủ: `plans/reports/retro-260804-1721-*`.
 
 **v51–v55 (productize + office cockpit):** **v51 productize** (PyPI package: console script
 `my-crew`, serve supervisor, Docker, CI secret-free + OIDC release, MY_CREW_HOME) ·
@@ -62,9 +71,18 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
 
 ## Việc nên làm tiếp (từ UAT + nợ kỹ thuật)
 
-Ưu tiên giảm dần. Nguồn: `plans/260711-0711-.../reports/uat-*findings*.md` + HANDOVER §8.
-Định giá lại 2026-08-01 sau 0.5.0: `plans/reports/260801-1940-roadmap-reassessment-post-0.5.0.md`
-— hướng chốt cho 1–2 vòng tới: **Nền vững** (Playwright smoke → vòng dọn dẹp quick wins → attempt_id).
+**Định giá lại 2026-08-04 sau 0.7.0** (retro `plans/reports/retro-260804-1721-*`):
+1. **Chất lượng NỘI DUNG chuỗi handoff/extractor** — điểm yếu số 1 (drift kiểu "Nghị
+   định 206", fact vụn theo dòng): cơ chế tròn, óc viết chưa sắc — cần vòng riêng.
+2. **Go-live pilot sales-pm** — checklist + drill sẵn (v58), chờ CEO bấm.
+3. **Soak autopilot + review policy mới** — mới chạy vài giờ, retro metrics đã cài trong
+   `list_team_tasks` để đo dài hạn.
+4. Postgres deferred có chủ đích (SQLite chung đủ cho single-user).
+
+Bên dưới là danh sách tích lũy cũ hơn (ưu tiên giảm dần). Nguồn:
+`plans/260711-0711-.../reports/uat-*findings*.md` + HANDOVER §8. Định giá 2026-08-01 sau
+0.5.0: `plans/reports/260801-1940-roadmap-reassessment-post-0.5.0.md` — hướng "Nền vững"
+(Playwright smoke → dọn dẹp quick wins → attempt_id) ĐÃ XONG ở v56.
 
 ### Go-live có kiểm soát (checklist + drill XONG v58 — chờ CEO quyết pilot)
 Xem `docs/go-live-checklist.md` (kiểm kê fleet thật + lộ trình 2 nấc + drill kill-switch

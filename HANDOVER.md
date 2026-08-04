@@ -11,6 +11,9 @@ chỉ cần đủ context để làm tiếp an toàn.
 Một **đội nhân sự ảo AI** cho công ty một-người. CEO (không kỹ thuật) giao việc qua web/
 Telegram; các agent tự làm việc PM/nội dung/nghiên cứu/phân tích/kiểm định, đọc dữ liệu
 thật từ Jira·GitHub·Confluence·Slack, và *tự hành động* (viết báo cáo, tạo trang, cảnh báo).
+Từ v57–v66: **thư ký riêng** trên Telegram là cửa vận hành chính (việc cá nhân: briefing/
+Gmail/Calendar/nhắc đúng giờ + giao việc đội qua chat), **autopilot** cho AI tự quyết
+(Lớp A + trần chi phí vẫn bất biến), trí nhớ SQLite bền dùng chung giữa agent.
 
 **Triết lý cốt lõi — thuộc nằm lòng:** *tự chủ về TỐC ĐỘ, không bao giờ tự chủ về TRÁCH
 NHIỆM.* Mọi hành động ghi ra ngoài công ty đi qua MỘT cửa kiểm soát (Action Gateway);
@@ -23,8 +26,8 @@ việc mất-dữ-liệu/lộ-bí-mật bị chặn cứng, LLM không vượt �
 - **Frontend**: React 19 + TypeScript + Vite; react-three-fiber/three cho màn 3D "Văn phòng".
   Build dist commit vào `my_crew/server/static/app/` (server serve tĩnh).
 - **Tích hợp ngoài**: MCP servers (Jira/Confluence/Slack) + `gh` CLI (GitHub) + `gws` CLI
-  (Google Sheets, hr-pack). LLM qua OpenRouter.
-- **Test**: `uv run python -m pytest` (~2418 BE — dùng `python -m`, shim `uv run pytest`
+  (Google Sheets hr-pack; Gmail/Calendar personal-pack). LLM qua OpenRouter.
+- **Test**: `uv run python -m pytest` (~2530 BE — dùng `python -m`, shim `uv run pytest`
   có thể bắt nhầm Python Homebrew ngoài venv; nhớ `uv sync --extra deep` kẻo 68 test deep
   biến mất) · `cd web && npx vitest run` (~280 FE) · `npx tsc -b` ·
   `cd web && npm run test:e2e` (~8 Playwright smoke đo DOM layout cockpit — toàn bộ /api
@@ -82,7 +85,9 @@ hiểu chúng = tạo lỗ hổng. Chi tiết trong codebase-summary "THE INVARI
 1. **Action Gateway = cửa DUY NHẤT ra ngoài.** Mọi ghi external (Slack/Jira/Confluence/
    email) qua gateway → allowlist default-deny + Lớp A hard-block. Thêm handler ghi mới
    PHẢI đi qua đây, không đi tắt.
-2. **Ghi ra ngoài = Lớp B (chờ CEO duyệt).** Không tự chạy trừ khi trust-ladder bật.
+2. **Ghi ra ngoài = Lớp B qua máy-duyệt.** autonomous (mặc định) chạy ngay + audit;
+   guarded xếp hàng chờ CEO; autopilot (v63, `company.yaml`) tự duyệt hàng chờ — nhưng
+   MỌI đường đều qua approval-machinery + audit, và Lớp A/trần chi phí không đường nào đổi được.
 3. **PII firewall cho office events** (`office_event_projection.py`): allowlist theo kind
    AT WRITE TIME. Không nhét nội dung tự do (tài liệu, câu trả lời đầy đủ) vào room event.
 4. **Hash-bind khi giao/chỉnh việc**: CEO xác nhận kế hoạch → hash khóa; `_verify_plan_hash`
@@ -123,9 +128,9 @@ service chạy, nếu không màn Văn phòng hiện banner đỏ "bộ điều 
 
 - **`docs/codebase-summary.md`** phần thân vẫn dài theo dòng lịch sử v1→v18 — bản đồ
   chính xác nhưng nên gộp phần cũ thành mục ngắn (header đã đồng bộ v18).
-- **Cải thiện đã ghi nhận từ UAT v17/v18** (chưa làm): xem
-  `plans/260711-0711-.../reports/uat-260711-0908-*findings*.md` + `docs/project-roadmap.md`
-  §"Việc nên làm tiếp" — vd hr/sales-pm là hồ sơ agent mồ côi chưa đăng ký; web_search cần key.
+- **Đang chờ quyết ở 0.7.0**: chất lượng NỘI DUNG chuỗi handoff/extractor là điểm yếu
+  số 1 (cơ chế tròn, óc viết chưa sắc — cần vòng riêng); go-live pilot sales-pm chưa bấm;
+  Postgres deferred có chủ đích. Xem `docs/project-roadmap.md` §"Việc nên làm tiếp".
 - Nhật ký/plan rất nhiều (100+ journal, 50+ plan) — là lịch sử, KHÔNG cần đọc để làm
   tiếp; tra khi cần "vì sao quyết định X".
 - **Hạ tầng máy dev**: repo từng có checkout cũ tên `my-project-manager` (đã xoá

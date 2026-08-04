@@ -1,4 +1,10 @@
-# UAT theo User Story — my-crew (v18, 2026-07-11)
+# UAT theo User Story — my-crew (v18 gốc 2026-07-11 · bổ sung epic thư ký 2026-08-04)
+
+> **Bổ sung 0.7.0:** arc thư ký (v57–v66) thêm một bề mặt sản phẩm chưa có story chính
+> thức ở đây — thư ký riêng Telegram (briefing, email, lịch, nhắc đúng giờ), giao việc
+> đội qua chat, autopilot, trí nhớ chung. Hành vi đã được nghiệm thu bằng 3 vòng UAT
+> đối kháng sống (xem `plans/reports/260804-1734-uat-monkey-round-secretary-findings.md`
+> + journals v59/v64/v66); viết epic 8 chính thức khi bề mặt này ổn định sau soak.
 
 Tài liệu nghiệm thu **theo góc nhìn người dùng**: mỗi mục là một *user story* (CEO / người
 quản lý một-người muốn gì) + kịch bản kiểm thử để tự tay xác nhận sản phẩm làm đúng story.

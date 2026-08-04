@@ -1,9 +1,9 @@
 # System Architecture — my-crew
 
-> Kiến trúc kỹ thuật (as-built, v50). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
+> Kiến trúc kỹ thuật (as-built, v66 / 0.7.0). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
 > (vì sao) + [action-gateway-explainer](action-gateway-explainer.md) (mô hình an toàn) +
 > [codebase-summary](codebase-summary.md) (cái gì ở file nào).
-> Cập nhật: 2026-07-16.
+> Cập nhật: 2026-08-04.
 
 ## 1. Nguyên tắc kiến trúc
 
@@ -25,52 +25,56 @@
 ## 2. Sơ đồ tổng thể
 
 ```
-   CEO ──(web / Telegram)──►  FastAPI (src/server) ──► SQLite stores  ◄── Coordinator daemon
-        giao việc/duyệt          routes_*.py              (.data/)          (src/runtime/service.py)
+   CEO ──(web / Telegram)──►  FastAPI (my_crew/server) ──► SQLite stores  ◄── Coordinator daemon
+        giao việc/duyệt          routes_*.py              (.data/)          (my_crew/runtime/service.py)
                                     │  SSE                    ▲                    │ mỗi phút: tick
                                     ▼                         │                    ▼
                               React SPA (web/)          team_tasks.sqlite3   spawn worker subprocess
-                              màn Văn phòng 3D          office_room.sqlite3   (src/runtime/worker.py)
+                              màn Văn phòng 3D          office_room.sqlite3   (my_crew/runtime/worker.py)
                                                         approvals/dedup.db          │
                                                                               LangGraph step graph
-                                                                              (src/agent/*_graph.py)
+                                                                              (my_crew/agent/*_graph.py)
                                                                                     │
-                                                                          Action Gateway (src/actions)
+                                                                          Action Gateway (my_crew/actions)
                                                                                     │
                                                                      Jira · Confluence · Slack · Email
 ```
 
 ## 3. Các thành phần
 
-### 3.1 Web server (`src/server/`)
+### 3.1 Web server (`my_crew/server/`)
 FastAPI + 17 routers (`app.include_router`). Serve React SPA tĩnh từ
 `static/app/`. SSE store-tail cho feed realtime (`routes_office_stream.py`). Auth
 middleware: localhost + chưa đặt password ⇒ auth OFF; bind LAN bị từ chối trừ khi bật
 web-auth (`assert_bind_safe`). `office_event_projection.py` = **PII firewall** (allowlist
 theo kind AT WRITE TIME — room event không chứa nội dung tự do).
 
-### 3.2 Coordinator daemon (`src/runtime/service.py`)
+### 3.2 Coordinator daemon (`my_crew/runtime/service.py`)
 Vòng lặp mỗi phút: đọc registry, chạy scheduler (báo cáo định kỳ) + **team-tick**
 (điều phối đội). Ghi `coordinator.heartbeat` mỗi vòng (health API + banner đỏ đọc file
 này). Là process TÁCH BIỆT web app — web không tự dispatch việc.
+**v65 — scheduler công bằng 2 tầng**: chọn agent theo round-robin STATELESS mỗi tick
+(không agent nào đói định mệnh khi hàng đợi vượt trần spawn); pseudo-kind đúng-giờ
+(`reminder-sweep`, mỗi phút quét `reminders.db` per-agent, DM Telegram đúng phút hẹn)
+được MIỄN trần spawn — đúng-giờ không xếp hàng sau việc thường.
 
-### 3.2a Integration health (`src/server/integration_health.py`, v47)
+### 3.2a Integration health (`my_crew/server/integration_health.py`, v47)
 **Health check Docker chủ động** (`_docker_check`): probe `docker info` giới hạn 5s, báo ✓/✗ sạch khi daemon tắt/offline — panel Sức khỏe noti lỗi TRƯỚC khi giao việc deep_agent (no-shell step chạy 0-Docker qua `create_agent`, chỉ needs_shell→deep_agent thì dùng Docker).
 **Warm image opt-in** (`prepull_sandbox_image` + `mpm sandbox prepull`): tự tìm `SANDBOX_DEFAULT_IMAGE` ("python:3.12-slim"), present-check no-op → else pull không raise khi daemon tắt.
 
-### 3.3 Worker (`src/runtime/worker.py`)
+### 3.3 Worker (`my_crew/runtime/worker.py`)
 Mỗi lần ticker cần chạy 1 bước việc → spawn 1 worker subprocess (`kind=team-step`) với
 `--task-id --step-id --attempt-id`. Worker chạy LangGraph step graph rồi thoát. Isolation
 per-agent (profile/data-dir/gateway riêng). Cũng chạy các kind khác: report, ops-alert,
 milestone-mirror.
 
-### 3.4 Team-task store + lease (`src/runtime/team_task_store.py`)
+### 3.4 Team-task store + lease (`my_crew/runtime/team_task_store.py`)
 SQLite WAL, single source of truth cho state đội. **Reserve-before-spawn + lease**:
 `reserve_step` cấp `attempt_id` UUID + ghi `child_pid`/`lease_expires_at`; ticker chỉ
 re-reserve khi lease hết hạn AND chưa có outcome artifact. Terminal write mang `attempt_id`
 → một worker cũ (zombie) ghi trễ thành no-op, không corrupt attempt mới.
 
-### 3.5 Agent graphs (`src/agent/`)
+### 3.5 Agent graphs (`my_crew/agent/`)
 - `coordinator_graph.py` + `coordinator_nodes/` — ticker: chọn task, verify hash, dispatch
   bước sẵn sàng (cap song song 2), chèn soát chéo, escalate. v63: review theo cỡ việc —
   task ≤3 bước không `external_write` được waiver peer review (code-side,
@@ -100,14 +104,14 @@ re-reserve khi lease hết hạn AND chưa có outcome artifact. Terminal write 
   office event `milestone: autopilot_decision` (audit) → admin mirror DM CEO
   (notify-after, không cần plumbing mới).
 
-### 3.6 Action Gateway (`src/actions/`, v30–v31)
+### 3.6 Action Gateway (`my_crew/actions/`, v30–v31)
 `action_gateway.py` = cửa duy nhất. `hard_block.py` = Lớp A (chặn cứng, không duyệt được).
 Lớp B = phụ thuộc `safety.trust_mode` per-agent:
 - **autonomous** (mặc định): tự chạy ngay → audit log rationale "trust_mode=autonomous".
 - **guarded** (opt-in): chờ CEO duyệt (`approval_store.py` + `auto_approve_policy.py` chỉ dùng khi guarded).
 **Native action types (v31)**: `schedule_update` (agent đổi lịch báo cáo chính mình), `team_task_create`/`team_task_move` (kanban), `gws_write` (Google Sheets/Docs append+create), `academic_search` (read-only). Các handler `*_write.py` khác (jira/confluence/slack/email) — đều gọi qua gateway, không lối tắt.
 
-**Agent creation (v32)**: Template-based create-from-template / crew bootstrap (`src/server/template_create.py`) both build spec server-side from `profiles/templates/`, then go through the same `agent_create.create_agent(spec)` door as wizard — no bypass, new agents land DISABLED (CEO sets .env tokens, then enables on Team page).
+**Agent creation (v32)**: Template-based create-from-template / crew bootstrap (`my_crew/server/template_create.py`) both build spec server-side from `profiles/templates/`, then go through the same `agent_create.create_agent(spec)` door as wizard — no bypass, new agents land DISABLED (CEO sets .env tokens, then enables on Team page).
 
 ### 3.6a Fleet activity audit (v31, v46, v50 UI)
 **Hậu kiểm đội**: mọi hành động qua gateway ghi vào `audit.jsonl` (per-agent), `runs.jsonl` (lịch sử chạy), `captures.sqlite3` (chi phí). **Web surface** (`routes_visualize.py` + `visualize_views.py`): GET `/api/company/activity` trả audit rows (allowlist-projected, KHÔNG raw args chứa dữ liệu nhạy), phân trang, filter theo agent/loại. **Ops-chat command** (`ops_company_activity.py`): readonly lệnh mới `company_activity` (LLM tóm tắt hành động đội tuần này → gửi chat nội bộ, KHÔNG external).
@@ -115,11 +119,13 @@ Lớp B = phụ thuộc `safety.trust_mode` per-agent:
 **v50 — UI surface**: AuditTable column "Ai thực hiện" render `actor` (or "—" nếu rỗng); CompanyActivity tag "[bởi {actor}]" khi actor≠log-owner (điều phối).
 
 ### 3.7 Domain packs (`domain-packs/`)
-Kiến trúc pluggable: `pm-pack` (mặc định), `hr-pack`, `office-pack`, `admin-pack`. Mỗi
-pack = graphs + tools + analyzers + write_handlers + allowlist. `src/packs/registry.py`
-discover pack từ filesystem. Lõi (`src/`) không chứa logic domain.
+Kiến trúc pluggable: `pm-pack` (mặc định), `hr-pack`, `office-pack`, `admin-pack`,
+`personal-pack` (v57 — thư ký riêng: catalog M12 set_reminder/send_email/create_event…,
+briefing, gws Gmail/Calendar). Mỗi pack = graphs + tools + analyzers + write_handlers +
+allowlist. `my_crew/packs/registry.py` discover pack từ filesystem. Lõi (`my_crew/`)
+không chứa logic domain.
 
-### 3.8 Memory provider seam (`src/memory/`, v19)
+### 3.8 Memory provider seam (`my_crew/memory/`, v19)
 `resolve_memory_text(loaded)` là MỘT cửa mọi prompt path lấy memory text (thay 6 call-site
 đọc `loaded.memory`). Provider chọn qua `memory:` block trong profile.yaml: `static`
 (MEMORY.md verbatim, mặc định, byte-identical) | `kioku` (my-kioku subprocess — HOÃN v19.5,
@@ -127,8 +133,15 @@ chọn nay raise rõ). Memory tiếp tục vào INTERNAL user-msg qua `build_con
 (external nhận 0 byte — red line giữ). Workspace mỗi agent thêm `vault/` (reserved kioku)
 + `skills/` (per-agent, body wrap `format_internal_content`, không shadow pack skill).
 Capability block auto-gen (`capability_block.py`) cũng INTERNAL-only cùng path.
+**v66 — trí nhớ bền cross-agent**: `runtime.store` default `sqlite` → MỘT store chung
+`.data/memory_store.sqlite3` (langgraph SqliteStore, autocommit); fact rút ra sau mỗi
+việc sống qua restart và đọc chéo giữa agent (khối "trí nhớ đồng nghiệp" wrap
+`format_internal_content` — data-not-instructions). Per-profile `memory_share:
+full|read_only` (thư ký = read_only: đọc của đội, KHÔNG chia sẻ ngữ cảnh riêng tư CEO
+ngược lại). Retention 90 ngày trong sweep. Bài học v66: máy móc có từ v2 nhưng store
+chưa từng được truyền vào graph compile — "đã wired ≠ có điện", chỉ UAT sống mới lộ.
 
-### 3.9 AgentRuntime backends (`src/runtime_backends/`, v20–v45)
+### 3.9 AgentRuntime backends (`my_crew/runtime_backends/`, v20–v45)
 Tách agent-LOOP khỏi điều phối + an toàn. Backend được chọn PER-STEP qua
 `resolve_step_runtime(loaded, step)` (v45 — xem "Định tuyến per-step" cuối §3.9); `resolve_runtime(loaded)`
 (chọn theo `agent_runtime:` của cả agent — native|create_agent|deep_agent; default native, kill-switch
@@ -196,7 +209,7 @@ RỘNG (nhiều nhánh độc lập) thì dùng native team (decompose→DAG→P
 passes `deep_team` + `deep_team_max_calls` → `agent_create` guarded passthrough.
 
 ### 3.9b Watcher (wake-gate, v31, perceive-only)
-**Không LLM poll — chỉ khi nội dung đổi:** `watchers:` block trong profile.yaml (jira/github/sheets sources). Service mỗi 5 phút poll → normalize → hash. Nội dung KHÔNG đổi = 0 LLM (measured capture store). Đổi → wake 1 lần: dispatcher tạo 1 step team-task pre-built (không LLM phân rã), assigned agent chính nó. **Alerts**: fail ×3 → CEO Telegram báo; no-change >24h → stale alert. Modules: `src/runtime/watcher_store.py`, `watcher_normalize.py`, `watcher_runner.py`, `operator_notify.py`.
+**Không LLM poll — chỉ khi nội dung đổi:** `watchers:` block trong profile.yaml (jira/github/sheets sources). Service mỗi 5 phút poll → normalize → hash. Nội dung KHÔNG đổi = 0 LLM (measured capture store). Đổi → wake 1 lần: dispatcher tạo 1 step team-task pre-built (không LLM phân rã), assigned agent chính nó. **Alerts**: fail ×3 → CEO Telegram báo; no-change >24h → stale alert. Modules: `my_crew/runtime/watcher_store.py`, `watcher_normalize.py`, `watcher_runner.py`, `operator_notify.py`.
 
 ### 3.10 Telemetry capture + unified cost (v26, v50 UI)
 Mỗi team-step attempt ghi telemetry vào `captures.sqlite3` (17 columns: attempt_id, task_id,
@@ -209,7 +222,7 @@ team_task_paths.py). Unified cost across 3 engines: create_agent + deep_agent d�
 estimate cost = Σ tokens × per-model price, column `cost_source = 'estimated' | 'exact'`.
 Remember-node extends team-step: deliver→remember→END (CostedMemoryExtractor ghi facts vào
 MEMORY.md, gộp cost LLM vào captured step cost), gated on delivered + internal + not-dry-run.
-Modules: `src/runtime/capture_store.py`, `src/llm/model_pricing.py`, `src/runtime/step_telemetry.py`.
+Modules: `my_crew/runtime/capture_store.py`, `my_crew/llm/model_pricing.py`, `my_crew/runtime/step_telemetry.py`.
 **v50 UI**: GET `/api/team-tasks/{id}/cost` (read-only, allowlist-projected) trả per-step-attempt cost + task total; TeamTaskCost component lazy-expand "Chi phí" trên kanban card.
 
 **v48 — MCP session pool wrapping team-step**: team-step call_tool (mcp_tool) giờ chạy TRONG `_run_with_mcp_pool` (như report/inbox/tasks branches) — 1 subprocess MCP/server dùng lại qua step thay vì spawn node mới per-call. Eliminate spawn-per-call overhead cho office cross-synth (92s→faster).
@@ -218,7 +231,7 @@ Modules: `src/runtime/capture_store.py`, `src/llm/model_pricing.py`, `src/runtim
 React 19 + Vite. Màn chính **Văn phòng** (`views/office-unified/`): 3 cột phòng-việc /
 hoạt-động / kết-quả + panel 3D (`views/office-3d/`, react-three-fiber). Reducer sự kiện
 (`agent-office-state.ts`) biến SSE stream → trạng thái bàn. Build dist commit vào
-`src/server/static/app/`.
+`my_crew/server/static/app/`.
 
 ## 4. Luồng dữ liệu chính: giao 1 việc
 
@@ -242,6 +255,8 @@ hoạt-động / kết-quả + panel 3D (`views/office-3d/`, react-three-fiber).
 | `approvals.db` | Hàng đợi Lớp B |
 | `dedup.db` | Chống gửi trùng |
 | `checkpoints.db` | LangGraph checkpoint (report graphs; team graph KHÔNG checkpoint) |
+| `memory_store.sqlite3` | Trí nhớ bền dùng chung cross-agent (v66; retention 90 ngày) |
+| `agents/<id>/reminders.db` | Nhắc hẹn giờ per-agent (v65; sweep mỗi phút) |
 | `artifacts/team-tasks/<id>/step-<n>.json` | Kết quả bàn giao từng bước (artifact viewer đọc) |
 
 User-data (gitignored): `.data/`, `registry.yaml`, `company.yaml`, `profiles/<id>/`

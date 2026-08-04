@@ -2,7 +2,7 @@
 
 > Full setup for installing, running, and configuring my-crew as a production system.
 > **For daily operations (CEO / team lead):** see [user-guide.md](user-guide.md).
-> **Updated:** 2026-07-18.
+> **Updated:** 2026-08-04 (0.7.0).
 
 ## 1. Prerequisites
 
@@ -13,7 +13,7 @@
 | Node.js + npm | For building the web SPA and running 3 MCP servers |
 | `git` | For cloning the repo |
 | `gh` (GitHub CLI) | `brew install gh && gh auth login` (interactive; required for GitHub reads) |
-| `gws` (optional) | Only needed for the hr-pack to read Google Sheets |
+| `gws` (optional) | Google Workspace CLI — hr-pack (Sheets) and personal-pack (Gmail/Calendar read, email send, calendar write) |
 
 ### Credentials & Tokens
 
@@ -269,6 +269,19 @@ safety:
 
 > **Hard-deny (Lớp A):** Actions that could lose data permanently (delete records, expose secrets) are **never allowed**, regardless of trust mode. See [action-gateway-explainer.md](action-gateway-explainer.md) for details.
 
+### Autopilot (v63) — the AI as final approver
+
+Company-wide flag in `company.yaml` (next to the repo, or under `MY_CREW_HOME`):
+
+```yaml
+autopilot: true    # default false
+```
+
+When on: team-task plans auto-confirm, stalled tasks auto-resolve on a two-step
+ladder, pending Lớp B approvals auto-approve — every decision is reported back over
+Telegram and audited. Per-task opt-out: the CEO says "để anh duyệt" when assigning.
+Lớp A hard-denies and per-task cost caps are unaffected by this flag (pinned by tests).
+
 ---
 
 ## 9. Backup & Recovery
@@ -337,6 +350,16 @@ Idempotent: if image exists, no-op. If daemon is offline, prints a clear message
 ---
 
 ## 12. Upgrade Path & Breaking Changes
+
+### 0.6.x → 0.7.0: persistent memory store default
+
+The profile default `runtime.store` changed `memory` → `sqlite` (shared
+`.data/memory_store.sqlite3`): extracted facts now survive restarts and are readable
+across agents, with 90-day retention. Existing profiles keep whatever they declare —
+a profile still on `store: memory` works but its facts vanish on restart; switch it
+to `store: sqlite` to join the shared memory. New per-profile field `memory_share:
+full | read_only` (default full) controls whether an agent's facts are shared or the
+agent only reads others' (the shipped secretary is `read_only`).
 
 ### v51 Rename Notification
 

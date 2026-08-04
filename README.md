@@ -36,7 +36,7 @@ Full walkthrough: **[docs/action-gateway-explainer.md](docs/action-gateway-expla
 
 ## What it grew into
 
-One PM agent (daily/weekly/OKR/resource reports) became a **CEO-operated virtual-staff company**: many isolated agents, a browser dashboard, a 3D office, one-click staff templates, chat-ops, multi-runtime tiers (native / tool-calling / sandboxed deep-agent). The safety invariant held across every step. Full history: **[docs/project-roadmap.md](docs/project-roadmap.md)**.
+One PM agent (daily/weekly/OKR/resource reports) became a **company you run from one chat**: a personal **secretary agent** on Telegram handles your own work (briefings, Gmail/Calendar, email, timed reminders) *and* dispatches the whole team — one Vietnamese sentence becomes a validated multi-agent task DAG with per-step peer review. Under it: many isolated agents, a browser cockpit, one-click staff templates, multi-runtime tiers (native / tool-calling / Docker-sandboxed deep-agent for real code), **cross-agent persistent memory**, and an **autopilot mode** where the AI is the final approver — plans auto-confirm, stalls auto-resolve, routine writes auto-approve — while Lớp A and cost caps stay human-only. The safety invariant held across every step. Full history: **[docs/project-roadmap.md](docs/project-roadmap.md)**.
 
 ## Documentation
 
@@ -74,7 +74,7 @@ Full setup — integrations, cron, trust modes: **[docs/deployment-guide.md](doc
 
 ```bash
 git clone git@github.com:phuc-nt/my-crew.git && cd my-crew && uv sync
-uv run pytest    # 2364 BE + 201 FE tests pass, no secrets needed
+uv run pytest    # 2530 BE tests pass, no secrets needed (FE: 279 vitest + 8 Playwright)
 ```
 
 `DRY_RUN=true` by default everywhere — the agent logs what it *would* do, posts nothing, until you flip it.

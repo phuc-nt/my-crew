@@ -1,4 +1,4 @@
-# Hướng dẫn sử dụng — my-crew (v50)
+# Hướng dẫn sử dụng — my-crew (v66)
 
 Trợ lý ảo tự động làm công việc quản lý dự án (PM / Scrum Master): đọc Jira · GitHub · Confluence ·
 Slack, phân tích, rồi *tự hành động* (viết báo cáo, cảnh báo rủi ro, theo dõi OKR) như một PM thật.
@@ -479,6 +479,61 @@ An toàn: dữ liệu thật (registry, company, hồ sơ nhân sự trùng tên
 **di chuyển** vào `.demo-backup/` (không copy-đè) và trả lại nguyên vẹn khi tắt; các
 nhân sự demo đặt `dry_run: true` nên không ghi gì ra kênh ngoài. Lưu ý: đang bật demo
 thì `registry.yaml` khác bản gốc — **tắt demo trước khi commit code**.
+
+---
+
+# Phần C — Thư ký riêng & chế độ tự chủ (v57–v66)
+
+Từ v57, cửa vận hành chính chuyển sang **chat Telegram với thư ký riêng**: việc cá nhân
+của bạn lẫn việc công ty đi qua một cửa. Web dashboard thành "phòng quan sát".
+
+## C.1. Tạo thư ký riêng
+
+Chat với admin trên web/Telegram: *"tạo agent thư ký"* → làm theo hội thoại, chọn vai trò
+**personal (thư ký riêng)**, gắn kênh Telegram DM riêng (bot token + chat id của bạn,
+xem A.4). Thư ký chỉ chat trong DM với bạn — không vào group đội.
+
+## C.2. Việc cá nhân — nhắn tự nhiên, thư ký tự làm
+
+| Bạn nhắn | Thư ký làm |
+|---|---|
+| "sáng nay có gì?" | Briefing sáng: lịch hôm nay + email chưa đọc + việc đội đang chạy |
+| "nhắc anh 15h gọi cho X" | Đặt nhắc đúng giờ — đúng 15:00 Telegram reo; "huỷ nhắc số 2" để bỏ |
+| "gửi mail cho a@b.com báo hoãn họp" | Soạn + gửi email (nhiều người nhận: cách nhau dấu phẩy) |
+| "đặt lịch họp 3h chiều mai với đội" | Tạo sự kiện Calendar; sửa/xoá lịch cũng bằng lời |
+| "gửi mail cho X rồi đặt lịch 3h" | Đa-lệnh trong MỘT tin — làm lần lượt từng việc |
+
+Thứ Hai hằng tuần thư ký gửi **tổng kết tuần** tự động.
+
+## C.3. Việc công ty — giao đội qua thư ký
+
+- *"giao đội nghiên cứu X rồi viết bài Y"* → thư ký phân rã thành kế hoạch nhiều bước
+  (mỗi bước một agent), đưa bạn xem trước, bạn "xác nhận" là đội chạy.
+- *"đang làm tới đâu?"* → bảng thẻ việc + chi phí + việc nào đang chờ quyết định.
+- *"chỉnh bước 2 giao cho analyst"* / *"huỷ việc Z"* — chỉnh/huỷ giữa chừng bằng lời.
+- Việc kẹt (soát chéo mãi không đạt, bước chết): *"chấp nhận kết quả"* / *"cho thử lại
+  1 lượt"* / *"bỏ bước chết"* — gỡ một chạm.
+- Thư ký là **điều phối, không phải quản trị fleet**: không tạo/xoá được agent — việc
+  đó vẫn qua admin.
+
+## C.4. Autopilot — AI là người quyết cuối (v63)
+
+Bật trong `~/.my-crew/company.yaml` (hoặc `company.yaml` cạnh repo):
+
+```yaml
+autopilot: true    # mặc định false — tắt là mọi thứ chờ bạn duyệt như cũ
+```
+
+Khi bật: kế hoạch **tự xác nhận**, việc kẹt **tự gỡ** (thang 2 nấc, hết nấc mới báo bạn),
+việc ghi Lớp B **tự duyệt** — mỗi quyết định đều báo lại qua Telegram + ghi audit.
+Muốn giữ quyền duyệt cho MỘT việc cụ thể: thêm *"để anh duyệt"* khi giao.
+**Không đổi:** Lớp A (mất dữ liệu/lộ bí mật) vẫn chặn cứng; trần chi phí vẫn giữ.
+
+## C.5. Trí nhớ đội (v66)
+
+Fact rút ra từ việc hôm nay **sống qua ngày mai** và cả đội đọc chéo được (SQLite dùng
+chung, tự dọn sau 90 ngày). Riêng thư ký ở chế độ **chỉ-đọc** — ngữ cảnh riêng tư của
+bạn không bao giờ chảy vào kết quả việc đội.
 
 ---
 
