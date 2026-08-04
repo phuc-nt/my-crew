@@ -118,6 +118,17 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
 - [x] ~~Gửi email từ chat~~ — xong v58, hoàn tất 2026-08-04: đổi kênh sang `gws gmail +send`
   (OAuth sẵn, bỏ hẳn SMTP; vetted-types rút về 5). UAT thật: mail nằm trong Gmail.
 - [x] ~~`memory.search` trên notes >7 ngày~~ — giải bằng kioku v58 (recall ngữ nghĩa toàn vault).
+- [x] **v60 (2026-08-04): cổng điều phối + sửa/xoá lịch**: thư ký giao việc cho crew
+  (`giao_viec`/`chuyen_the` — reuse team_task types + handler actor-bound, card planning
+  cho coordinator lo tiếp) · `doi_lich`/`xoa_lich` (resolver tiêu đề→eventId, mơ hồ hỏi
+  lại + arg `luc` phân biệt trùng tên; xoá qua carve-out Lớp A cấu trúc
+  `_is_calendar_event_delete` — CHỈ đúng shape 1 event calendar primary, test pin đủ
+  biến thể xấu). `plans/260804-0840-secretary-dispatch-calendar-edit/`.
+- [ ] **Backlog — cross-agent memory cho thư ký (CEO 2026-08-04: làm SAU khi thư ký
+  hoàn thiện)**: cần dựng Postgres (`store: postgres` + `project_group` cho thu-ky và
+  crew) để trí nhớ chia sẻ giữa thư ký và các agent; kèm đánh giá chi phí vận hành.
+- [ ] **Nhắc việc theo giờ ("3h nhắc anh gọi X")**: thư ký mới ghi nhớ, chưa có cơ chế
+  bắn tin đúng giờ — cần thiết kế (one-shot schedule qua gateway, chưa chốt với CEO).
 
 ### Sản phẩm
 - [x] ~~**Web-search key cảnh báo → hành động**~~ — **đóng 2026-08-03**: v56 đã nhắc ngay
