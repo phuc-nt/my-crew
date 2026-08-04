@@ -27,10 +27,48 @@ if TYPE_CHECKING:
 
 
 def get_store(settings: Settings) -> BaseStore:
-    """Return the Store the settings select (InMemoryStore default / PostgresStore opt-in)."""
+    """Return the Store the settings select.
+
+    v66 (CEO 2026-08-04, SQLite-first cross-agent memory): "sqlite" is the NEW DEFAULT
+    — one shared cross-agent file, so remembered facts survive the per-run worker
+    process AND sibling reads see every group member's facts. Explicit "memory" keeps
+    the old in-process store (byte-identical); "postgres" stays the opt-in durable
+    backend for when a real concurrent-writer need is measured.
+    """
     if settings.store == "postgres":
         return _postgres_store(settings)
+    if settings.store == "sqlite":
+        return _sqlite_store()
+    # "memory" — and any unknown value — stays the in-process store (pre-v66 pin: an
+    # unrecognized backend name must degrade safely, never invent persistence).
     return InMemoryStore()
+
+
+def _sqlite_store() -> BaseStore:
+    """Shared cross-agent SqliteStore at repo-root `.data/memory_store.sqlite3`.
+
+    ONE file for the whole fleet (the point is cross-agent reads), WAL + busy_timeout
+    for the multi-process reality every worker run lives in — the exact posture
+    `team_task_store` has proven for months. Namespacing `(agent_id, "memory")` keeps
+    per-agent isolation inside the shared file."""
+    import sqlite3
+
+    from langgraph.store.sqlite import SqliteStore
+
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    path = team_tasks_root() / "memory_store.sqlite3"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # isolation_level=None (autocommit): SqliteStore issues its own explicit BEGIN —
+    # python-sqlite3's implicit transactions would nest and raise ("cannot start a
+    # transaction within a transaction"), same connection posture its own
+    # `from_conn_string` uses.
+    conn = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=3000")
+    store = SqliteStore(conn)
+    store.setup()
+    return store
 
 
 def _postgres_store(settings: Settings) -> BaseStore:

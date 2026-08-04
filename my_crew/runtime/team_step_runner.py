@@ -466,7 +466,17 @@ def _run_graph(
     # after deliver, folding the extraction cost into the step total (capture honesty). Built only
     # for a real loaded profile (a step whose profile failed to load has no MEMORY.md to write).
     from my_crew.agent.memory_node import build_team_step_remember_node
+    from my_crew.agent.store import get_store
 
+    # v66: the shared memory Store must ride the graph compile or the remember node
+    # writes nowhere (store=None) — sibling reads then never see team-step facts.
+    # Best-effort: a store hiccup (or a partial test settings double) degrades to the
+    # pre-v66 no-store compile, never fails the step itself.
+    try:
+        _extra["memory_store"] = get_store(settings)
+    except Exception:  # noqa: BLE001 — memory wiring must never break the work
+        logger.warning("team-step: memory store unavailable — facts not persisted",
+                       exc_info=True)
     remember_node = (
         build_team_step_remember_node(step.assigned_to, settings) if loaded is not None else None
     )

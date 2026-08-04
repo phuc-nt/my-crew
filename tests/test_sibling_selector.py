@@ -40,10 +40,13 @@ def _ctx(facts=_FACTS, selector=_PICK_FIRST, project="acme"):
 # --- render ---
 
 
-def test_render_sibling_facts_labeled_block():
+def test_render_sibling_facts_wrapped_block():
+    # v66: facts persist across days -> the block rides format_internal_content
+    # (delimited/spotlighted), no longer the raw labeled join.
     out = render_sibling_facts(["fact one", "fact two"], "acme")
-    assert "--- Bộ nhớ agent khác (project: acme) ---" in out
     assert "fact one" in out and "fact two" in out
+    assert "acme" in out
+    assert not out.startswith("--- Bộ nhớ agent khác")
 
 
 def test_render_empty_is_empty_string():

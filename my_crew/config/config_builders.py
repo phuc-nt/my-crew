@@ -105,7 +105,9 @@ def build_settings_from_dict(d: dict[str, Any]) -> Settings:
         budget_warn_ratio=_d_float(d, "budget_warn_ratio", 0.8),
         data_dir=Path(data_dir) if not isinstance(data_dir, Path) else data_dir,
         checkpointer=(d.get("checkpointer") or "sqlite").lower(),
-        store=(d.get("store") or "memory").lower(),
+        # v66: absent ⇒ "sqlite" (persistent shared memory store, CEO decision
+        # 2026-08-04); an explicit "memory" keeps the old in-process behavior.
+        store=(d.get("store") or "sqlite").lower(),
         postgres_dsn=_d_str_or_none(d, "postgres_dsn"),
         tracing=_d_bool(d, "tracing", False),
         tavily_api_key=_d_str_or_none(d, "tavily_api_key"),

@@ -73,11 +73,23 @@ def select_sibling_text(
 
 
 def render_sibling_facts(facts: list[str], project_group: str | None) -> str:
-    """Wrap the kept sibling facts in a labeled block ("" when none)."""
+    """Wrap the kept sibling facts in a labeled block ("" when none).
+
+    v66: facts now PERSIST across days (shared SqliteStore), so a poisoned fact is a
+    long-lived second-order injection surface — the block goes through
+    `format_internal_content` (delimiter/scan/spotlight) like every other
+    artifact-derived prompt input, instead of raw concatenation."""
     if not facts:
         return ""
-    label = f"--- Bộ nhớ agent khác (project: {project_group}) ---"
-    return label + "\n" + "\n".join(facts)
+    from my_crew.tools.search_result_formatter import format_internal_content
+
+    wrapped = format_internal_content(
+        "\n".join(facts), label=f"bộ nhớ agent khác (project: {project_group})",
+    )
+    if not wrapped:  # formatter degraded — fall back to the pre-v66 labeled block
+        label = f"--- Bộ nhớ agent khác (project: {project_group}) ---"
+        return label + "\n" + "\n".join(facts)
+    return wrapped
 
 
 def _parse_lines(content: str) -> list[str]:

@@ -17,9 +17,16 @@ from my_crew.agent.store import get_store
 from my_crew.config.config_builders import build_settings_from_dict
 
 
-def test_default_is_in_memory_store():
+def test_default_is_shared_sqlite_store(monkeypatch, tmp_path):
+    """v66: absent config ⇒ the persistent shared SqliteStore (CEO decision 2026-08-04);
+    explicit "memory" keeps the old in-process store."""
+    from langgraph.store.sqlite import SqliteStore
+
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
     store = get_store(build_settings_from_dict({}))
-    assert isinstance(store, InMemoryStore)
+    assert isinstance(store, SqliteStore)
+    assert (tmp_path / "memory_store.sqlite3").exists()
+    assert isinstance(get_store(build_settings_from_dict({"store": "memory"})), InMemoryStore)
 
 
 def test_postgres_store_branch_reached_with_dsn(monkeypatch):

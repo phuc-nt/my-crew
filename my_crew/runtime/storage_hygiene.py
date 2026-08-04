@@ -33,6 +33,9 @@ RETENTION_DAYS = {
     # orphan is a bug signal the integrity audit should surface, not junk — only dirs
     # past this age are deleted.
     "artifact_orphans": 7,
+    # v66: remembered facts in the shared memory store. Persistence is the feature,
+    # unbounded growth (and an unboundedly-old poisoned fact) is not.
+    "memory_facts": 90,
 }
 
 #: The integrity audit is read-only but not free — run it at most once per local day,
@@ -77,7 +80,39 @@ def run_retention_sweep(*, now: datetime | None = None) -> dict[str, int]:
     _sweep("clarify", lambda: ClarifyStore(clarify_db_path()), RETENTION_DAYS["clarify"])
     _sweep_dedup(deleted, now)
     _sweep_artifact_orphans(deleted, now)
+    _sweep_memory_facts(deleted, now)
     return deleted
+
+
+def _sweep_memory_facts(deleted: dict[str, int], now: datetime) -> None:
+    """v66: prune remembered facts older than RETENTION_DAYS["memory_facts"] from the
+    shared memory store — via the Store API per registry-agent namespace (the store's
+    own table layout is langgraph-internal; raw SQL against it would be fragile).
+    Skips entirely when the file does not exist (fleet on `store: memory`/postgres)."""
+    from my_crew.runtime.registry import load_registry
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    path = team_tasks_root() / "memory_store.sqlite3"
+    if not path.exists():
+        deleted["memory_facts"] = 0  # ran, nothing to do — key presence means "swept"
+        return
+    try:
+        from my_crew.agent.memory_node import _NAMESPACE_KIND
+        from my_crew.agent.store import _sqlite_store
+
+        cutoff = _cutoff_iso(RETENTION_DAYS["memory_facts"], now)
+        store = _sqlite_store()
+        removed = 0
+        for entry in load_registry():
+            namespace = (entry.id, _NAMESPACE_KIND)
+            for item in store.search(namespace, limit=1000):
+                ts = str(item.value.get("ts") or "")
+                if ts and ts < cutoff:  # both UTC ISO — lexicographic compare is exact
+                    store.delete(namespace, item.key)
+                    removed += 1
+        deleted["memory_facts"] = removed
+    except Exception:  # noqa: BLE001 — retention is best-effort per store
+        logger.warning("retention sweep failed for memory_facts (ignored)", exc_info=True)
 
 
 def _sweep_dedup(deleted: dict[str, int], now: datetime) -> None:

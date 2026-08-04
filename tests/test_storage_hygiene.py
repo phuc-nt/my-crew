@@ -146,7 +146,7 @@ def test_retention_sweep_survives_a_broken_store(monkeypatch, tmp_path):
     out = storage_hygiene.run_retention_sweep(now=_NOW)
     # Broken stores are simply absent from the result; dedup ran (empty registry → 0)
     # and the artifact-orphan sweep ran against a home with no team-tasks DB (→ 0).
-    assert out == {"dedup": 0, "artifact_orphans": 0}
+    assert out == {"dedup": 0, "artifact_orphans": 0, "memory_facts": 0}
 
 
 def test_artifact_orphan_sweep_double_guard(monkeypatch, tmp_path):

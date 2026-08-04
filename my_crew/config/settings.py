@@ -87,11 +87,12 @@ class Settings:
     trust_mode: str = "autonomous"
 
     # M2-P8 runtime infra (opt-in; defaults keep the self-contained local install).
-    # checkpointer / store: "sqlite"|"postgres" and "memory"|"postgres". Postgres needs
-    # postgres_dsn. The graph state checkpointer + cross-thread memory Store select off
-    # these — SQLite + in-memory Store are the defaults (no infra dependency).
+    # checkpointer: "sqlite"|"postgres"; store: "sqlite"|"memory"|"postgres" (postgres
+    # needs postgres_dsn). v66: the memory Store default is "sqlite" — one shared
+    # cross-agent file so remembered facts persist across worker runs; "memory" keeps
+    # the old per-process store, "postgres" stays the opt-in durable backend.
     checkpointer: str = "sqlite"
-    store: str = "memory"
+    store: str = "sqlite"
     postgres_dsn: str | None = None
 
     # M3-P12 (B4): opt-in LangSmith tracing. Default OFF ⇒ no callbacks attached at

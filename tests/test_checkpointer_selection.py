@@ -76,7 +76,7 @@ def test_unknown_checkpointer_falls_back_to_sqlite(tmp_path):
 def test_config_default_sqlite_memory():
     s = build_settings_from_dict({})
     assert s.checkpointer == "sqlite"
-    assert s.store == "memory"
+    assert s.store == "sqlite"  # v66 default
     assert s.postgres_dsn is None
 
 
@@ -111,4 +111,4 @@ def test_profile_yaml_empty_runtime_defers_to_default(tmp_path, monkeypatch):
     yaml_doc = {"runtime": {"checkpointer": "", "store": "", "postgres_dsn": ""}}
     d = build_settings_dict(yaml_doc, tmp_path)
     s = build_settings_from_dict(d)
-    assert s.checkpointer == "sqlite" and s.store == "memory" and s.postgres_dsn is None
+    assert s.checkpointer == "sqlite" and s.store == "sqlite" and s.postgres_dsn is None  # v66

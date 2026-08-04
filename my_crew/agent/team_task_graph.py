@@ -849,6 +849,7 @@ def build_team_task_graph(
     work_override: Callable[[str, str, SearchHook | None], tuple[str, float | None]] | None = None,
     telemetry=None,
     remember_node=None,
+    memory_store=None,
     allow_split: bool = False,
 ) -> CompiledStateGraph:
     """Build + compile the team-task step graph. `deps` defaults to real wiring.
@@ -917,4 +918,7 @@ def build_team_task_graph(
         add_remember_node(builder, remember_node)
     else:
         builder.add_edge("deliver", END)
-    return builder.compile(checkpointer=checkpointer)
+    # v66: `memory_store` reaches the remember node via LangGraph's `store=` injection —
+    # without it the node's `store=None` silently dropped every team-step fact on the
+    # floor (MEMORY.md file only, never the shared cross-agent store).
+    return builder.compile(checkpointer=checkpointer, store=memory_store)

@@ -60,6 +60,11 @@ class LoadedProfile:
     skills: tuple[str, ...] = ()  # M3-P10: per-agent skill candidate pool (names)
     company_docs: tuple[str, ...] = ()  # M19: opted-in company-doc slugs (internal-only inject)
     project_group: str | None = None  # M3-P9: sibling group slug (None ⇒ no siblings)
+    # v66 privacy rule (CEO 2026-08-04): "full" (default) ⇒ siblings may read this
+    # agent's remembered facts; "read_only" ⇒ this agent READS its siblings' facts but
+    # its own are never injected into anyone else's prompt (the personal secretary —
+    # its memory carries the CEO's private email/calendar context).
+    memory_share: str = "full"
     domain: str = "pm"  # v3 M5: which domain pack drives this agent (absent ⇒ "pm")
     # v3 M11: ask-agent Slack inbox (opt-in). None ⇒ no polling, byte-identical pre-M11.
     # Shape: {"channel": "<slack channel ID>", "poll_minutes": int>=1}. INTERNAL channel
@@ -161,6 +166,11 @@ def load_profile(
     company_docs = yaml_doc.get("company_docs") or []
     project_raw = yaml_doc.get("project")
     project_group = str(project_raw).strip() or None if project_raw is not None else None
+    memory_share_raw = str(yaml_doc.get("memory_share") or "full").strip().lower()
+    if memory_share_raw not in ("full", "read_only"):
+        raise RuntimeError(
+            f"profile memory_share must be 'full' or 'read_only', got {memory_share_raw!r}"
+        )
     # A blank/absent `domain:` defaults to "pm" so every pre-v3 profile (which never
     # declared a domain) keeps loading as a PM agent — backward-compat is load-bearing.
     domain_raw = yaml_doc.get("domain")
@@ -193,6 +203,7 @@ def load_profile(
         skills=tuple(str(s) for s in skills) if isinstance(skills, list) else (),
         company_docs=tuple(str(s) for s in company_docs) if isinstance(company_docs, list) else (),
         project_group=project_group,
+        memory_share=memory_share_raw,
         domain=domain,
         inbox=inbox,
         auto_approve=auto_approve,

@@ -61,8 +61,14 @@ def enumerate_siblings(
             # own report run. Best-effort read of another agent's optional context → warn+skip.
             logger.warning("sibling %r skipped: profile failed to load (%s)", entry.id, exc)
             continue
-        if other.project_group == self_group:
-            siblings.append(entry.id)
+        if other.project_group != self_group:
+            continue
+        # v66 privacy rule: a `memory_share: read_only` sibling (the personal
+        # secretary) READS the group but is never itself a fact SOURCE — its namespace
+        # carries the CEO's private context and must not enter anyone else's prompt.
+        if getattr(other, "memory_share", "full") == "read_only":
+            continue
+        siblings.append(entry.id)
     return siblings
 
 
