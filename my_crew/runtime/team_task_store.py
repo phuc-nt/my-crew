@@ -87,6 +87,13 @@ class TeamTask:
     # pre-v16 task and every task assigned outside a room) — resolve via
     # `office_room_append.room_for_task`, never read this raw for routing.
     room_id: str = ""
+    # v63 autopilot: True ⇒ this task opted OUT of autopilot ("vụ này để anh duyệt") —
+    # every manual gate (plan confirm, Lớp B approval, stall decisions) stays with the
+    # CEO for it even while the global autopilot flag is on.
+    require_ceo_approval: bool = False
+    # v63 autopilot: stall auto-resolutions already spent on this task (capped in
+    # `autopilot_sweep` — auto-recovery must converge, never loop).
+    autopilot_attempts: int = 0
     steps: tuple[TeamStep, ...] = field(default_factory=tuple)
 
 
@@ -136,9 +143,15 @@ class TeamTaskStore:
             pass  # column already exists
         # v34 P3: follow-up ladder bookkeeping (cooldown + escalation level) — read and
         # written ONLY by `follow_up_sweep`; never part of the plan hash.
+        # v63 autopilot columns: `require_ceo_approval` (per-task opt-OUT of autopilot —
+        # this task keeps every manual gate) + `autopilot_attempts` (how many stall
+        # auto-resolutions autopilot already spent on this task, hard-capped by
+        # `autopilot_sweep` so auto-recovery can never loop). Neither enters plan_hash.
         for ddl in (
             "ALTER TABLE team_tasks ADD COLUMN last_follow_up_at TEXT",
             "ALTER TABLE team_tasks ADD COLUMN follow_up_level INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE team_tasks ADD COLUMN require_ceo_approval INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE team_tasks ADD COLUMN autopilot_attempts INTEGER NOT NULL DEFAULT 0",
         ):
             try:
                 self._conn.execute(ddl)
@@ -251,6 +264,8 @@ class TeamTaskStore:
             aggregate_cost_usd=float(data["aggregate_cost_usd"]),
             escalated_at=data["escalated_at"], pic_id=str(data.get("pic_id") or ""),
             room_id=str(data.get("room_id") or ""),
+            require_ceo_approval=bool(int(data.get("require_ceo_approval") or 0)),
+            autopilot_attempts=int(data.get("autopilot_attempts") or 0),
             steps=steps,
         )
 
@@ -340,6 +355,47 @@ class TeamTaskStore:
         ).fetchall()
         tasks = [self.get(r[0]) for r in rows]
         return [t for t in tasks if t is not None]
+
+    def list_stalled(self) -> list[TeamTask]:
+        """Every `stalled` task, no recency cap — the autopilot sweep and the
+        waiting-decision surfaces must see ALL of them (review M3: a stalled task
+        older than the N newest would otherwise silently never be swept/counted)."""
+        rows = self._conn.execute(
+            "SELECT id FROM team_tasks WHERE status = 'stalled' ORDER BY created_at DESC"
+        ).fetchall()
+        return [t for (task_id,) in rows if (t := self.get(task_id)) is not None]
+
+    def reopen_stalled(self, task_id: str) -> bool:
+        """Status-guarded `stalled → open` transition (review M2): the stall handlers
+        and the autopilot sweep both act on a read snapshot — the WHERE guard makes a
+        raced reopen (task already reopened/cancelled by the other actor) a clean
+        no-op instead of resurrecting a task from an arbitrary state."""
+        cur = self._conn.execute(
+            "UPDATE team_tasks SET status = 'open' WHERE id = ? AND status = 'stalled'",
+            (task_id,),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    def set_require_ceo_approval(self, task_id: str, value: bool) -> None:
+        """v63 per-task autopilot opt-out — set at assign time ("vụ này để anh duyệt")."""
+        self._conn.execute(
+            "UPDATE team_tasks SET require_ceo_approval = ? WHERE id = ?",
+            (1 if value else 0, task_id),
+        )
+        self._conn.commit()
+
+    def increment_autopilot_attempts(self, task_id: str) -> int:
+        """v63: bump + return this task's spent stall auto-resolutions (sweep cap)."""
+        self._conn.execute(
+            "UPDATE team_tasks SET autopilot_attempts = autopilot_attempts + 1 WHERE id = ?",
+            (task_id,),
+        )
+        self._conn.commit()
+        row = self._conn.execute(
+            "SELECT autopilot_attempts FROM team_tasks WHERE id = ?", (task_id,)
+        ).fetchone()
+        return int(row[0]) if row else 0
 
     def set_task_status(self, task_id: str, status: str) -> None:
         if status not in _TASK_STATUSES:
@@ -515,6 +571,31 @@ class TeamTaskStore:
         """Record the handoff-artifact path a step produced (does not change status)."""
         _steps.append_outcome(self._conn, task_id, step_id, outcome_ref)
         self._conn.commit()
+
+    def reset_step_to_pending(self, task_id: str, step_id: str, *,
+                              attempt_id: str | None = None) -> bool:
+        """v63 stall recovery (`retry_stalled_step` on a dead step): put a terminal
+        `failed`/`timeout` step back to `pending` with its lease fields cleared, so the
+        next tick re-dispatches it as a fresh attempt. The `attempt_id` guard mirrors
+        `mark_done`'s: pass the attempt the row was READ under so a concurrent
+        re-reservation turns this into a no-op instead of clobbering it."""
+        updated = _steps.reset_step_to_pending(
+            self._conn, task_id, step_id, attempt_id=attempt_id,
+        )
+        self._conn.commit()
+        return updated
+
+    def mark_step_dropped(self, task_id: str, step_id: str, *, outcome_ref: str | None = None,
+                          attempt_id: str | None = None) -> bool:
+        """v63 stall recovery (`drop_stalled_step`): mark a dead step `done` AND clear
+        its `needs_review` in the same write — a CEO-dropped step delivers a placeholder
+        artifact, and minting a peer review over a placeholder would immediately fail it
+        back into the rework loop this command exists to break."""
+        updated = _steps.mark_step_dropped(
+            self._conn, task_id, step_id, outcome_ref=outcome_ref, attempt_id=attempt_id,
+        )
+        self._conn.commit()
+        return updated
 
     def insert_step(self, task_id: str, step: dict[str, Any], *,
                     needs_review: bool = False) -> None:

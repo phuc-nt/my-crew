@@ -222,6 +222,24 @@ def poll_awaiting_approval_step(
     from my_crew.agent.coordinator_graph import TickResult
 
     decision = deps.approval_status(step.approval_id) if step.approval_id else None
+    # v63 autopilot: a PENDING Lớp B gate on a non-opted-out task gets approved by the
+    # secretary's standing delegation (CEO decision 2026-08-04). The approve goes
+    # through the SAME store transition `mpm approve` uses (`transition_if_pending`),
+    # so a concurrent manual decision wins the race and this becomes a no-op. Lớp A
+    # hard-denies never reach this point — they blocked inside the gateway before a
+    # pending-approval row could exist.
+    if (
+        decision == "pending" and step.approval_id
+        and deps.autopilot_enabled() and not getattr(task, "require_ceo_approval", False)
+        and deps.approval_approve(step.approval_id, step.assigned_to)
+    ):
+        from my_crew.agent.ops_autopilot import record_autopilot_decision
+
+        record_autopilot_decision(
+            decision="approve_step", task_id=task.id, task_title=task.title,
+            detail=f"Tự duyệt bước '{step.title}' (chờ phê duyệt Lớp B) thay CEO.",
+        )
+        decision = "approved"
     if decision == "approved":
         return reserve_and_spawn(deps, task, step)
     if decision == "rejected":

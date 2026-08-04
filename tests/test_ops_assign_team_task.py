@@ -204,3 +204,74 @@ def test_preview_assign_team_task_proceeds_past_escalation_gate_when_routable(mo
     monkeypatch.setattr(mod, "_staff_roster", lambda: [])
     with pytest.raises(ValueError, match="chưa có nhân sự"):
         mod.preview_assign_team_task({"brief": "chuẩn bị demo"})
+
+
+# --- v63 autopilot: auto-confirm + per-task opt-out ----------------------------------
+
+
+def _fake_decomposed_task():
+    from my_crew.agent.task_decomposition import DecomposedTask, TeamStepPlan
+
+    return DecomposedTask(steps=(
+        TeamStepPlan(step_id="s1", title="soạn nội dung", assigned_to="agent-a"),
+    ))
+
+
+def _wire_full_preview(monkeypatch):
+    monkeypatch.setattr(mod, "_escalation_routable", lambda: True)
+    monkeypatch.setattr(mod, "_staff_roster", lambda: [("agent-a", "office")])
+    monkeypatch.setattr(
+        mod, "_decompose_with_retries",
+        lambda brief, staff, pic: (_fake_decomposed_task(), None),
+    )
+
+
+def _autopilot_company(monkeypatch):
+    company = SimpleNamespace(
+        name="", coordinator_id="coord-1", team_task_cap_usd=2.0,
+        team_task_auto_confirm=False, autopilot=True,
+    )
+    monkeypatch.setattr(company_mod, "load_company", lambda path=None: company)
+
+
+def _store():
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    return TeamTaskStore(team_tasks_db_path())
+
+
+def test_autopilot_auto_confirms_the_previewed_plan(monkeypatch):
+    _wire_full_preview(monkeypatch)
+    _autopilot_company(monkeypatch)
+
+    slots = {"brief": "soạn nội dung tuần"}
+    reply = mod.preview_assign_team_task(slots)
+
+    assert "ĐÃ TỰ XÁC NHẬN" in reply
+    assert slots.get("auto_confirmed") == "1"
+    store = _store()
+    try:
+        task = store.get(slots["task_id"])
+        assert task.status == "open"  # confirmed through the SAME hash-bind path
+        assert task.require_ceo_approval is False
+    finally:
+        store.close()
+
+
+def test_opt_out_phrase_pins_the_task_to_manual_gates(monkeypatch):
+    _wire_full_preview(monkeypatch)
+    _autopilot_company(monkeypatch)
+
+    slots = {"brief": "soạn nội dung tuần, vụ này để anh duyệt"}
+    reply = mod.preview_assign_team_task(slots)
+
+    assert "Xác nhận giao việc" in reply  # manual confirm question, not auto-run
+    assert "auto_confirmed" not in slots
+    store = _store()
+    try:
+        task = store.get(slots["task_id"])
+        assert task.status == "planning"  # draft awaiting the CEO's confirm
+        assert task.require_ceo_approval is True  # persisted for the task's whole life
+    finally:
+        store.close()

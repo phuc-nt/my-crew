@@ -33,12 +33,26 @@ from my_crew.agent.ops_assign_team_task import (
     preview_assign_team_task,
     run_assign_team_task,
 )
+from my_crew.agent.ops_autopilot import (
+    preview_set_autopilot,
+    run_get_autopilot,
+    run_set_autopilot,
+)
 from my_crew.agent.ops_calendar_event import (
     preview_create_calendar_event,
     run_create_calendar_event,
 )
 from my_crew.agent.ops_company_activity import run_company_activity
+from my_crew.agent.ops_list_team_tasks import run_list_team_tasks
 from my_crew.agent.ops_send_message import preview_send_message, run_send_message
+from my_crew.agent.ops_stalled_task import (
+    preview_accept_stalled_result,
+    preview_drop_stalled_step,
+    preview_retry_stalled_step,
+    run_accept_stalled_result,
+    run_drop_stalled_step,
+    run_retry_stalled_step,
+)
 
 #: An agent whose work comes only from `assign_team_task` (e.g. office roles) has no
 #: report kind of its own — the CEO says this instead of a report-kind list.
@@ -148,6 +162,29 @@ def _run_get_status(slots: dict[str, str]) -> str:
     alerts = team_alerts(states)
     if alerts:
         lines.append(f"\n⚠️ {len(alerts)} cảnh báo — xem /approvals & dashboard.")
+    # v63: team tasks waiting on a decision (stalled / draft never confirmed) belong in
+    # the one status answer the CEO actually asks for — best-effort, a store hiccup
+    # must never break the fleet status itself.
+    try:
+        from my_crew.runtime.team_task_paths import team_tasks_db_path
+        from my_crew.runtime.team_task_store import TeamTaskStore
+
+        tstore = TeamTaskStore(team_tasks_db_path())
+        try:
+            # Stalled: uncapped (list_stalled — an old stalled task must never fall
+            # off the count); planning drafts: recent-only is fine, drafts are new by
+            # nature (they expire into cancel/confirm within a conversation).
+            stalled = tstore.list_stalled()
+            drafts = [t for t in tstore.list_recent_tasks(limit=50, include_planning=True)
+                      if t.status == "planning"]
+            waiting = stalled + drafts
+        finally:
+            tstore.close()
+        if waiting:
+            lines.append(f"\n⏳ {len(waiting)} thẻ việc nhóm đang chờ quyết định — "
+                         "xem `list_team_tasks`.")
+    except Exception:  # noqa: BLE001 — status must render even if the team store is unavailable
+        pass
     return "\n".join(lines)
 
 
@@ -475,13 +512,23 @@ OPS_COMMANDS: dict[str, dict] = {
         "preview": _preview_qa_task,
     },
     "list_tasks": {
-        "description": "Xem các việc đang mở của một agent",
+        "description": "Xem các việc ĐỊNH KỲ đang mở của MỘT agent (báo cáo/hỏi đáp/"
+                       "theo dõi PR) — thẻ việc nhóm thì dùng list_team_tasks",
         "readonly": True,
         "slots": {
             "agent_id": {"prompt": "Xem việc của agent nào?", "required": True,
                          "max_len": 40, "lower": True},
         },
         "run": _run_list_tasks,
+    },
+    # v63: the team-task board in chat — "liệt kê các thẻ việc" lands here, with the
+    # retro numbers (soát/sửa/chi phí) the review-policy calibration reads.
+    "list_team_tasks": {
+        "description": "Liệt kê các thẻ việc nhóm (việc giao cho cả đội) — tiến độ, "
+                       "số lượt soát/sửa, chi phí, và thẻ nào đang chờ quyết định",
+        "readonly": True,
+        "slots": {},
+        "run": run_list_team_tasks,
     },
     "cancel_task": {
         "description": "Huỷ một việc đã giao",
@@ -560,6 +607,66 @@ OPS_COMMANDS: dict[str, dict] = {
         "preview": preview_adjust_team_task,
         "on_cancel": cancel_adjust_team_task,
     },
+    # v63 one-touch stall recovery — the three fast exits for a `stalled` team task
+    # (the escalation message suggests them with the task id filled in).
+    "accept_stalled_result": {
+        "description": "Chấp nhận kết quả hiện có của một việc đội bị dừng (soát chéo "
+                       "chưa đạt nhưng CEO duyệt nguyên trạng)",
+        "readonly": False,
+        "slots": {
+            "task_id": {"prompt": "Mã việc đội bị dừng cần chấp nhận kết quả?",
+                        "required": True, "max_len": 20},
+        },
+        "run": run_accept_stalled_result,
+        "preview": preview_accept_stalled_result,
+    },
+    "retry_stalled_step": {
+        "description": "Cho bước đang kẹt của một việc đội bị dừng thêm ĐÚNG MỘT lượt "
+                       "thử lại (kèm ghi chú định hướng nếu có)",
+        "readonly": False,
+        "slots": {
+            "task_id": {"prompt": "Mã việc đội bị dừng cần thử lại?", "required": True,
+                        "max_len": 20},
+            "note": {"prompt": "Ghi chú định hướng cho lần sửa này (bỏ qua nếu không)?",
+                     "required": False, "max_len": 500},
+        },
+        "run": run_retry_stalled_step,
+        "preview": preview_retry_stalled_step,
+    },
+    "drop_stalled_step": {
+        "description": "Bỏ (các) bước chết của một việc đội bị dừng để phần còn lại "
+                       "chạy tiếp",
+        "readonly": False,
+        "slots": {
+            "task_id": {"prompt": "Mã việc đội bị dừng cần bỏ bước kẹt?", "required": True,
+                        "max_len": 20},
+        },
+        "run": run_drop_stalled_step,
+        "preview": preview_drop_stalled_step,
+    },
+    # v63 autopilot (CEO 2026-08-04): the secretary decides in the CEO's place.
+    "set_autopilot": {
+        "description": "Bật/tắt autopilot — thư ký thay CEO xác nhận kế hoạch, gỡ việc "
+                       "dừng và duyệt bước gửi ra ngoài (có nhật ký + báo lại)",
+        "readonly": False,
+        "slots": {
+            "mode": {"prompt": "Bật hay tắt autopilot? (on / off)", "required": True,
+                     "max_len": 8, "lower": True,
+                     "choices": {
+                         "on": ("on", "bật", "bat", "mở", "mo"),
+                         "off": ("off", "tắt", "tat", "đóng", "dong"),
+                     },
+                     "hint": "đúng MỘT: on hoặc off"},
+        },
+        "run": run_set_autopilot,
+        "preview": preview_set_autopilot,
+    },
+    "get_autopilot": {
+        "description": "Xem trạng thái autopilot hiện tại",
+        "readonly": True,
+        "slots": {},
+        "run": run_get_autopilot,
+    },
 }
 
 
@@ -569,9 +676,13 @@ OPS_COMMANDS: dict[str, dict] = {
 #: fleet itself — admin-only) and `create_calendar_event` (the secretary already has its
 #: own M12 calendar commands; two surfaces for one intent confuse the classifier).
 ORCHESTRATION_COMMAND_IDS = frozenset({
-    "assign_team_task", "adjust_team_task", "list_tasks", "cancel_task",
+    "assign_team_task", "adjust_team_task", "list_tasks", "list_team_tasks", "cancel_task",
     "watch_pr", "report_task", "qa_task", "send_message",
     "get_status", "get_cost", "company_activity", "search_history",
+    # v63 stall recovery — orchestration concern (unstick a team task), not fleet admin.
+    "accept_stalled_result", "retry_stalled_step", "drop_stalled_step",
+    # v63 autopilot — the secretary IS the surface this mode exists for.
+    "set_autopilot", "get_autopilot",
 })
 
 

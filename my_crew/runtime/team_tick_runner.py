@@ -59,6 +59,8 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
             pid_alive=_pid_alive,
             kill_pid=_kill_pid,
             approval_status=_approval_status,
+            approval_approve=_approval_approve,
+            autopilot_enabled=_autopilot_enabled,
             clarify_status=_clarify_status,
             roster_ok=_roster_ok,
             aggregate=make_aggregate(loaded, settings),
@@ -112,6 +114,15 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
             run_follow_up_sweep(store)
         except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
             logger.warning("team-tick: follow-up sweep failed", exc_info=True)
+        # v63 autopilot: with the company flag ON, resolve stalled tasks in the CEO's
+        # place on a bounded deterministic ladder (retry → accept/drop, capped per
+        # task). No-op with the flag off; every decision audited + mirrored to the CEO.
+        try:
+            from my_crew.runtime.autopilot_sweep import run_autopilot_sweep
+
+            run_autopilot_sweep(store)
+        except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
+            logger.warning("team-tick: autopilot sweep failed", exc_info=True)
         # v36 P1: retention GC (captures/office_room/clarify/dedup grew unbounded) +
         # a daily read-only integrity audit. Both best-effort; storage_hygiene guards
         # each store internally, this wrapper is the final backstop for the tick.
@@ -325,11 +336,12 @@ def _approval_status(approval_id: int) -> str | None:
     agent's own gateway (per-agent isolation — a coordinator never runs its own
     gateway for another agent's write), but this function has no `step` in scope, only
     the raw id — the caller (`CoordinatorDeps.approval_status`) is agent-agnostic by
-    signature. Since approval ids are process-wide unique (SQLite AUTOINCREMENT per
-    file) but stores are per-agent files, this scans every enabled agent's store for
-    the id rather than requiring the caller to also pass `assigned_to` — simplest
-    correct option; team tasks are low-volume (a handful of agents, single-digit
-    concurrent approvals) so an O(agents) scan per poll is not a real cost.
+    signature. CAVEAT (v63 review): approval ids are per-FILE AUTOINCREMENT (every
+    agent's store counts 1,2,3…), NOT process-wide unique — this scan returns the
+    FIRST store containing the id, which can be the wrong agent's row when ids
+    collide. Read-only, so the worst case is a wrong status string; the WRITE half
+    (`_approval_approve`) is id+agent scoped for exactly this reason. Tightening this
+    read to `assigned_to`'s store is tracked as follow-up.
 
     Returns `None` when the id resolves in no store at all (unknown/stale id) — the
     ticker treats that identically to `"pending"` (leave the step alone), never as an
@@ -348,6 +360,34 @@ def _approval_status(approval_id: int) -> str | None:
         if approval is not None:
             return approval.status
     return None
+
+
+def _autopilot_enabled() -> bool:
+    """Fresh read per decision — `set_autopilot off` must bite on the next tick."""
+    from my_crew.agent.ops_autopilot import autopilot_enabled
+
+    return autopilot_enabled()
+
+
+def _approval_approve(approval_id: int, agent_id: str) -> bool:
+    """v63 autopilot: flip ONE pending Lớp B row to approved, scoped to the STEP'S OWN
+    agent store (`agent_id` = the step's `assigned_to`) — approval ids are per-file
+    AUTOINCREMENT, so a cross-store scan would routinely hit a colliding id in another
+    agent's store and approve an unrelated action (review-found v63 H1). Same
+    `transition_if_pending` transition the manual `mpm approve` path uses, so a
+    concurrent CEO decision wins the race and this returns False."""
+    from my_crew.actions.approval_store import ApprovalStore
+    from my_crew.runtime.agent_paths import agent_data_dir
+
+    if not agent_id:
+        return False
+    store = ApprovalStore(agent_data_dir(agent_id) / "approvals.db")
+    try:
+        if store.get(approval_id) is None:
+            return False
+        return store.transition_if_pending(approval_id, "approved")
+    finally:
+        store.close()
 
 
 def _roster_ok(agent_id: str) -> bool:

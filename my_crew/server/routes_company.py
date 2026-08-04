@@ -90,6 +90,9 @@ def post_company(
         name.strip(), coord, cap,
         team_task_concurrency=current.team_task_concurrency,
         team_task_auto_confirm=auto_confirm,
+        # This route does not manage autopilot (chat-ops `set_autopilot` does) — a
+        # Setup-wizard save must never silently flip it (same F7 preserve rule).
+        autopilot=current.autopilot,
     )
     return {
         "name": name.strip(),

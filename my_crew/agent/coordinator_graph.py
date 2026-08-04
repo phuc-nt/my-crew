@@ -182,6 +182,15 @@ class CoordinatorDeps:
     # callable's own contract is "never raises", enforced by team_tick_runner's real
     # implementation, not by this graph.
     escalate: Callable[[TeamTask, TeamStep | None, str, str], None] = lambda *_: None
+    # v63 autopilot: autopilot_enabled() re-reads the company flag per decision;
+    # approval_approve(approval_id, agent_id) flips a PENDING Lớp B row to approved
+    # (returns True iff the transition happened — a concurrent CEO decision wins the
+    # race cleanly). `agent_id` = the step's `assigned_to`, because approval ids are
+    # per-agent-FILE AUTOINCREMENT (1,2,3… in every store) — a bare-id scan across
+    # stores would routinely approve a DIFFERENT agent's unrelated pending action
+    # (review-found v63 H1). Defaults keep non-autopilot callers byte-identical.
+    autopilot_enabled: Callable[[], bool] = lambda: False
+    approval_approve: Callable[[int, str], bool] = lambda _approval_id, _agent_id: False
     now: Callable[[], datetime] = lambda: datetime.now(UTC)
 
 

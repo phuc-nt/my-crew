@@ -216,6 +216,7 @@ def _wire_coordinator(coordinator_role: str, available: list[str]) -> str | None
         team_task_cap_usd=company.team_task_cap_usd,
         team_task_concurrency=company.team_task_concurrency,
         team_task_auto_confirm=company.team_task_auto_confirm,
+        autopilot=company.autopilot,
     )
     return coordinator_role
 

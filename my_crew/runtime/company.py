@@ -54,6 +54,13 @@ class Company:
     # who presses the button changes, never the bind/audit trail. Default False: the
     # CEO reviews every plan, byte-compatible with pre-v15 behavior.
     team_task_auto_confirm: bool = False
+    # v63 autopilot (explicit CEO decision 2026-08-04, "Toàn quyền thật"): True ⇒ the
+    # secretary decides in the CEO's place — plans auto-confirm, stalled tasks
+    # auto-resolve (autopilot_sweep), pending Lớp B approvals auto-approve. Every
+    # decision is audited + reported back; Lớp A hard-denies and cost caps are NOT
+    # affected (structural, checked before any gate this flag touches). Per-task
+    # opt-out: `team_tasks.require_ceo_approval`. Default False.
+    autopilot: bool = False
 
 
 def load_company(path: Path | None = None) -> Company:
@@ -103,11 +110,13 @@ def load_company(path: Path | None = None) -> Company:
         team_task_concurrency = DEFAULT_TEAM_TASK_CONCURRENCY
 
     team_task_auto_confirm = bool(doc.get("team_task_auto_confirm", False) is True)
+    autopilot = bool(doc.get("autopilot", False) is True)
 
     return Company(
         name=name, coordinator_id=coordinator_id, team_task_cap_usd=team_task_cap_usd,
         team_task_concurrency=team_task_concurrency,
         team_task_auto_confirm=team_task_auto_confirm,
+        autopilot=autopilot,
     )
 
 
@@ -124,6 +133,7 @@ def save_company(
     team_task_cap_usd: float = DEFAULT_TEAM_TASK_CAP_USD,
     team_task_concurrency: int = DEFAULT_TEAM_TASK_CONCURRENCY,
     team_task_auto_confirm: bool = False,
+    autopilot: bool = False,
     *,
     path: Path | None = None,
 ) -> None:
@@ -140,6 +150,7 @@ def save_company(
         "team_task_cap_usd": float(team_task_cap_usd),
         "team_task_concurrency": int(team_task_concurrency),
         "team_task_auto_confirm": bool(team_task_auto_confirm),
+        "autopilot": bool(autopilot),
     }
     text = yaml.safe_dump(doc, sort_keys=False, allow_unicode=True)
 
@@ -154,6 +165,7 @@ def save_company(
                 or loaded.team_task_cap_usd != doc["team_task_cap_usd"]
                 or loaded.team_task_concurrency != doc["team_task_concurrency"]
                 or loaded.team_task_auto_confirm != doc["team_task_auto_confirm"]
+                or loaded.autopilot != doc["autopilot"]
             ):
                 raise RuntimeError("company.yaml write did not round-trip the expected values")
         except Exception:
