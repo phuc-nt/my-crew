@@ -531,7 +531,9 @@ OPS_COMMANDS: dict[str, dict] = {
         "run": run_list_team_tasks,
     },
     "cancel_task": {
-        "description": "Huỷ một việc đã giao",
+        "description": "Huỷ một việc đã giao cho một agent trong đội (việc nền/định kỳ). "
+                       "KHÔNG dùng cho nhắc hẹn giờ cá nhân — 'huỷ nhắc'/'xoá nhắc'/"
+                       "'cancel reminder' không khớp lệnh nào ở đây",
         "readonly": False,
         "slots": {
             "agent_id": {"prompt": "Việc thuộc agent nào?", "required": True,

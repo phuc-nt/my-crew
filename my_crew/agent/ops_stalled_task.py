@@ -250,13 +250,22 @@ def run_drop_stalled_step(slots: dict[str, str]) -> str:
         ctx.close()
 
 
+def _require_stalled(slots: dict[str, str]) -> None:
+    """A preview must only promise what run can deliver: same existence + stalled
+    check as the run path, so a bad task id is refused at preview instead of
+    surviving to an optimistic "Mình sẽ..." and only failing at confirm."""
+    _StalledTaskContext(str(slots.get("task_id") or "")).close()
+
+
 def preview_accept_stalled_result(slots: dict[str, str]) -> str:
+    _require_stalled(slots)
     return (f"Mình sẽ CHẤP NHẬN kết quả hiện có của việc `{slots.get('task_id', '')}` "
             "(bỏ qua verdict soát chéo chưa đạt) và để đội tổng hợp bản chốt.\n"
             "Xác nhận? (trả lời: xác nhận / huỷ)")
 
 
 def preview_retry_stalled_step(slots: dict[str, str]) -> str:
+    _require_stalled(slots)
     return (f"Mình sẽ mở thêm ĐÚNG MỘT lượt thử lại cho bước đang kẹt của việc "
             f"`{slots.get('task_id', '')}`"
             + (" kèm ghi chú của CEO" if (slots.get("note") or "").strip() else "")
@@ -264,6 +273,7 @@ def preview_retry_stalled_step(slots: dict[str, str]) -> str:
 
 
 def preview_drop_stalled_step(slots: dict[str, str]) -> str:
+    _require_stalled(slots)
     return (f"Mình sẽ BỎ (các) bước chết của việc `{slots.get('task_id', '')}` — phần việc "
             "còn lại chạy tiếp, kết quả cuối sẽ thiếu phần của bước bị bỏ.\n"
             "Xác nhận? (trả lời: xác nhận / huỷ)")

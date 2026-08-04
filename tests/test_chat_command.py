@@ -150,7 +150,11 @@ def test_validate_args_rules():
     assert validate_args(spec, {"summary": "x", "hack": "y"})[1].startswith("field không")
     assert validate_args(spec, {"summary": "x" * 201})[1].startswith("field summary dài")
     assert validate_args(spec, "notdict")[1] == "args phải là một object"
-    assert validate_args(spec, {"summary": 42})[1] == "field summary phải là chuỗi"
+    # Numeric JSON coerces to its string form (LLMs emit {"reminder_id": 3}); bool
+    # and other non-string shapes stay errors.
+    assert validate_args(spec, {"summary": 42}) == ({"summary": "42"}, None)
+    assert validate_args(spec, {"summary": True})[1] == "field summary phải là chuỗi"
+    assert validate_args(spec, {"summary": ["x"]})[1] == "field summary phải là chuỗi"
 
 
 # --- the forced Lớp B flow ---

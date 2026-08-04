@@ -95,6 +95,12 @@ def validate_args(spec: dict, args: Any) -> tuple[dict[str, str], str | None]:
             if rule.get("required"):
                 return {}, f"thiếu field bắt buộc: {name}"
             continue
+        if isinstance(value, int) and not isinstance(value, bool):
+            # LLMs legitimately emit numeric JSON for numeric-looking slots
+            # ({"reminder_id": 3}); the string form still passes the schema's
+            # pattern/max_len checks below. Bool stays an error — True→"True"
+            # would hide a wrong answer behind a passing coercion.
+            value = str(value)
         if not isinstance(value, str):
             return {}, f"field {name} phải là chuỗi"
         value = value.strip()

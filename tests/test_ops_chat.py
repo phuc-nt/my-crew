@@ -263,7 +263,7 @@ def test_preview_value_error_becomes_friendly_reply_and_clears_draft(tmp_path, m
             llm=_FakeLlm('{"intent":"command","command_id":"assign_team_task",'
                          '"slots":{"brief":"viết báo cáo tháng"}}'), now=1.0,
         )
-        assert reply == "Chưa giao được việc: chưa có đường báo cáo sự cố"
+        assert reply == "Chưa thực hiện được: chưa có đường báo cáo sự cố"
         assert store.load("ceo", now=1.0) is None  # no half-formed draft left behind
     finally:
         store.close()
@@ -292,6 +292,61 @@ def test_invalid_slot_value_asks_again(tmp_path):
         assert "sai định dạng" in reply.lower() or "nhập lại" in reply.lower()
         draft = store.load("ceo", now=2.0)
         assert draft is not None and "id" not in draft.slots
+    finally:
+        store.close()
+
+
+def test_new_intent_mid_collection_falls_through_with_empty_reply(tmp_path):
+    """A collecting draft must not swallow a message that is a NEW request: the
+    extractor's `new_intent` signal drops the draft and reclassifies the message.
+    Unsupported + fallthrough ⇒ "" so the caller's own M12 catalog gets its shot
+    (the ghost-preview bug: "HUỶ việc #99 của agent 'nhắc anh lúc 6h chiều…'")."""
+    store = _store(tmp_path)
+    store.save("ceo", OpsDraft("cancel_task", {"task_id": "99"}, "collecting", 1.0))
+    try:
+        reply, _ = handle_ops_message(
+            message="nhắc anh lúc 6h chiều: gọi cho Bối", conversation_key="ceo", store=store,
+            llm=_FakeLlm('{"value":"","new_intent":true}', '{"intent":"unsupported"}'),
+            now=2.0, unsupported_fallthrough=True,
+        )
+        assert reply == ""
+        assert store.load("ceo", now=2.0) is None  # old draft gone, no ghost preview
+    finally:
+        store.close()
+
+
+def test_new_intent_mid_collection_starts_the_new_command(tmp_path):
+    """Changing one's mind toward ANOTHER ops command mid-collection abandons the old
+    draft and starts the new command's own slot dialogue."""
+    store = _store(tmp_path)
+    store.save("ceo", OpsDraft("cancel_task", {"task_id": "99"}, "collecting", 1.0))
+    try:
+        reply, _ = handle_ops_message(
+            message="thôi, tạo cho anh một agent mới", conversation_key="ceo", store=store,
+            llm=_FakeLlm('{"value":"","new_intent":true}',
+                         '{"intent":"command","command_id":"create_agent","slots":{}}'),
+            now=2.0,
+        )
+        assert "Mã định danh" in reply  # create_agent's first slot prompt
+        draft = store.load("ceo", now=2.0)
+        assert draft is not None and draft.command_id == "create_agent"
+    finally:
+        store.close()
+
+
+def test_new_intent_flag_with_a_value_stays_a_slot_answer(tmp_path):
+    """`new_intent` is honored ONLY with an empty value — a reply that still yields a
+    usable value fills the slot as before (never lose what the CEO typed)."""
+    store = _store(tmp_path)
+    store.save("ceo", OpsDraft("create_agent", {}, "collecting", 1.0))
+    try:
+        reply, _ = handle_ops_message(
+            message="dùng sales-pm nhé", conversation_key="ceo", store=store,
+            llm=_FakeLlm('{"value":"sales-pm","new_intent":true}'), now=2.0,
+        )
+        draft = store.load("ceo", now=2.0)
+        assert draft is not None and draft.slots.get("id") == "sales-pm"
+        assert "Vai trò" in reply or "?" in reply  # moved on to the next slot
     finally:
         store.close()
 

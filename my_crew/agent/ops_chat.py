@@ -57,10 +57,15 @@ _INTENT_SYSTEM = (
 )
 
 _EXTRACT_SYSTEM = (
-    "Người dùng đang cung cấp giá trị cho MỘT trường cấu hình. Cho tên trường, câu hỏi "
-    "đã hỏi, và câu trả lời của họ, trả về DUY NHẤT JSON {\"value\":\"...\"} với giá trị "
-    "đã trích (chuỗi gọn, không giải thích). Nếu họ từ chối/không cung cấp, trả "
-    '{"value":""}.'
+    "Người dùng vừa được hỏi MỘT câu để lấy giá trị cho MỘT trường cấu hình. Trả về "
+    "DUY NHẤT một JSON (không markdown, không giải thích).\n"
+    "BƯỚC 1 — xét trước: câu trả lời có ĐANG TRẢ LỜI câu hỏi đó không?\n"
+    "- KHÔNG (nó là một yêu cầu/mệnh lệnh MỚI khác hẳn — người dùng đổi ý sang việc "
+    'khác, ví dụ đang được hỏi mã agent mà lại nhắn "nhắc tôi 7h gọi điện"): trả '
+    '{"value":"","new_intent":true}.\n'
+    "- CÓ: sang bước 2.\n"
+    'BƯỚC 2 — trích giá trị: trả {"value":"<giá trị, chuỗi gọn>"}; họ từ chối/không '
+    'cung cấp thì trả {"value":""}.'
 )
 
 
@@ -122,14 +127,21 @@ def classify_ops_intent(
 
 def extract_slot_value(
     llm: LlmClient, *, field: str, prompt: str, answer: str, hint: str = "",
-) -> tuple[str, float | None]:
-    """LLM extracts one slot value from a free-text answer. Returns (value, cost).
+) -> tuple[str, float | None, bool]:
+    """LLM extracts one slot value from a free-text answer. Returns (value, cost, new_intent).
 
     A short answer is often just the value itself; the LLM tidies "à để tôi dùng SCRUM
     nhé" → "SCRUM". `hint` tells it the expected FORMAT (e.g. a technical id, or one of a
     fixed choice set) so a Vietnamese description like "quản lý dự án" is mapped to the
     code value "pm" rather than stored verbatim. On any parse trouble, fall back to the
-    raw trimmed answer — never lose what the CEO typed."""
+    raw trimmed answer — never lose what the CEO typed.
+
+    `new_intent` is True when the reply is not an answer at all but a different request
+    (the CEO changed their mind mid-collection). The caller drops the draft and
+    reclassifies the message instead of stuffing the whole sentence into the slot —
+    that stuffing is what produced ghost previews like "HUỶ việc #99 của agent
+    'nhắc anh lúc 6h chiều…'". Only honored when no value was extracted, so a reply
+    that both answers and asks stays a slot answer."""
     user = f"TRƯỜNG: {field}\nCÂU HỎI: {prompt}\nTRẢ LỜI: {answer}"
     if hint:
         user += f"\nĐỊNH DẠNG MONG MUỐN: {hint}"
@@ -139,11 +151,13 @@ def extract_slot_value(
         )
         parsed = _parse_json_object(result.content)
         value = str(parsed.get("value") or "").strip()
-        return (value or answer.strip()), result.cost_usd
+        if not value and bool(parsed.get("new_intent")):
+            return "", result.cost_usd, True
+        return (value or answer.strip()), result.cost_usd, False
     except INFRA_ERRORS:
         raise
     except Exception:  # noqa: BLE001 — fall back to the raw answer, don't drop it
-        return answer.strip(), None
+        return answer.strip(), None, False
 
 
 def _parse_json_object(content: str) -> dict:
@@ -223,7 +237,8 @@ def handle_ops_message(
         return _handle_confirm(draft=draft, message=message, conversation_key=conversation_key,
                                store=store, commands=commands)
     return _collect_slot(draft=draft, message=message, conversation_key=conversation_key,
-                         store=store, llm=llm, now=now, commands=commands)
+                         store=store, llm=llm, now=now, commands=commands,
+                         unsupported_fallthrough=unsupported_fallthrough)
 
 
 def _start_new(
@@ -272,6 +287,7 @@ def _start_new(
 def _collect_slot(
     *, draft: OpsDraft, message: str, conversation_key: str, store: OpsConversationStore,
     llm: LlmClient, now: float, commands: dict[str, dict],
+    unsupported_fallthrough: bool = False,
 ) -> tuple[str, float | None]:
     spec = get_command(draft.command_id, commands)
     if spec is None:  # catalog changed under a live draft — abandon it cleanly
@@ -286,9 +302,20 @@ def _collect_slot(
     cost: float | None = None
     if asking is not None:
         rule = spec["slots"][asking]
-        value, cost = extract_slot_value(
+        value, cost, new_intent = extract_slot_value(
             llm, field=asking, prompt=rule["prompt"], answer=message, hint=rule.get("hint", ""),
         )
+        if new_intent and not value:
+            # The CEO changed their mind: the message is a new request, not a slot
+            # answer. Drop the draft and classify it fresh — an "" reply keeps the
+            # caller's fallthrough contract (M12/QA gets its shot at the message).
+            store.clear(conversation_key)
+            reply, new_cost = _start_new(
+                message=message, conversation_key=conversation_key, store=store,
+                llm=llm, now=now, commands=commands,
+                unsupported_fallthrough=unsupported_fallthrough,
+            )
+            return reply, _add_costs(cost, new_cost)
         if value:
             normalized = _normalize_slot(rule, value)
             err = _validate_slot(rule, normalized)
@@ -316,14 +343,15 @@ def _advance_or_confirm(
     # mutation into the draft `_handle_confirm` later reloads (see `assign_team_task`'s
     # module docstring on why confirm must bind to the EXACT previewed plan).
     # A preview's ValueError is a user-facing validation message (missing escalation
-    # route, un-decomposable brief, ...) — surface it as the reply instead of letting it
-    # 500 the route into a generic "máy chủ đang gặp lỗi". The draft is dropped so the
-    # CEO retries the command fresh after fixing the cause.
+    # route, un-decomposable brief, unknown/not-stalled task id, ...) — surface it as
+    # the reply instead of letting it 500 the route into a generic "máy chủ đang gặp
+    # lỗi". The draft is dropped so the CEO retries the command fresh after fixing
+    # the cause.
     try:
         preview_text = spec["preview"](slots)
     except ValueError as exc:
         store.clear(conversation_key)
-        return f"Chưa giao được việc: {exc}", cost
+        return f"Chưa thực hiện được: {exc}", cost
     # v15 auto-confirm (red-team F3): a preview that ALREADY ran its own confirm
     # (assign_team_task under `team_task_auto_confirm`) must not park an
     # awaiting_confirm draft — there is nothing left to confirm/cancel, and a parked

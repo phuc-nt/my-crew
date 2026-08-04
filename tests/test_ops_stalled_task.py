@@ -7,6 +7,9 @@ from __future__ import annotations
 import pytest
 
 from my_crew.agent.ops_stalled_task import (
+    preview_accept_stalled_result,
+    preview_drop_stalled_step,
+    preview_retry_stalled_step,
     run_accept_stalled_result,
     run_drop_stalled_step,
     run_retry_stalled_step,
@@ -117,6 +120,30 @@ def test_commands_reject_a_task_that_is_not_stalled(tmp_path):
 def test_commands_reject_an_unknown_task(tmp_path):
     with pytest.raises(ValueError, match="không tìm thấy"):
         run_accept_stalled_result({"task_id": "ghost"})
+
+
+def test_previews_reject_an_unknown_task(tmp_path):
+    """A preview must never promise action on a task that run would refuse — the
+    same existence check fires at preview, so the CEO sees "không tìm thấy" instead
+    of an optimistic "Mình sẽ..." that only fails at confirm."""
+    for preview in (preview_accept_stalled_result, preview_retry_stalled_step,
+                    preview_drop_stalled_step):
+        with pytest.raises(ValueError, match="không tìm thấy"):
+            preview({"task_id": "ghost"})
+
+
+def test_previews_reject_a_task_that_is_not_stalled(tmp_path):
+    store = _open_store(tmp_path)
+    try:
+        store.create_task(task_id="t9", title="ok", assigned_by="ceo")
+        t9_steps = [{"step_id": "s1", "title": "a", "assigned_to": "x", "deps": []}]
+        store.set_plan("t9", t9_steps, _content_hash(t9_steps))
+    finally:
+        store.close()
+    for preview in (preview_accept_stalled_result, preview_retry_stalled_step,
+                    preview_drop_stalled_step):
+        with pytest.raises(ValueError, match="không phải 'stalled'"):
+            preview({"task_id": "t9"})
 
 
 # --- accept_stalled_result -----------------------------------------------------------
