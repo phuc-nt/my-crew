@@ -235,6 +235,25 @@ def test_gui_email_builds_gws_send_argv():
     assert err is not None and "attachment_path" in err
 
 
+def test_gui_email_accepts_multiple_recipients():
+    """UAT vòng 2 pattern D: 'gửi cho A và B' bị regex 1-địa-chỉ chặn oan — gws +send
+    nhận comma-separated. Schema nới cho danh sách, build_args chuẩn hoá khoảng trắng."""
+    from my_crew.agent.chat_command import validate_args
+
+    pack = PackRegistry().load("personal")
+    spec = pack.commands["gui_email"]
+    clean, err = validate_args(
+        spec, {"to": "a@b.com , c@d.org,e@f.vn", "subject": "s", "body": "b"}
+    )
+    assert err is None
+    payload = spec["build_args"](clean, None)
+    assert payload["argv"][2:4] == ["--to", "a@b.com,c@d.org,e@f.vn"]
+    # nửa vời vẫn chết: phần tử không phải email, hoặc phẩy treo cuối
+    for bad in ("a@b.com, không-phải-email", "a@b.com,", ",a@b.com", "a@b.com;c@d.org"):
+        _, err = validate_args(spec, {"to": bad, "subject": "s", "body": "b"})
+        assert err is not None, bad
+
+
 def test_gui_email_without_gws_cli_fails_with_user_message(monkeypatch):
     monkeypatch.setattr("shutil.which", lambda name: None)
     pack = PackRegistry().load("personal")
@@ -271,3 +290,22 @@ def test_briefing_gateway_denies_mcp_with_empty_pack_allowlist(tmp_path):
         allowlist=pack.allowlist,
     )
     assert verdict.blocked  # default-DENY thật sự — không rơi về allowlist core
+
+
+def test_no_gateway_construction_resurrects_default_allowlist():
+    """H1 sót (UAT vòng 2): telegram_inbox/inbox/task_runner còn `pack.allowlist or None`
+    — với pack allowlist rỗng (personal/office) điều đó hồi sinh allowlist MCP mặc định
+    rộng của core ngay trên đường xử lý chat thật. Pin toàn bộ source: cấm pattern này."""
+    import re
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parent.parent
+    code_line = re.compile(r"^\s*mcp_allowlist\s*=.*\bor None\b")  # code thật, bỏ docstring
+    offenders = [
+        str(path.relative_to(repo))
+        for scan_root in (repo / "my_crew", repo / "domain-packs")
+        for path in scan_root.rglob("*.py")
+        if any(code_line.match(line) for line in
+               path.read_text(encoding="utf-8").splitlines())
+    ]
+    assert offenders == []

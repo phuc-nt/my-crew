@@ -50,25 +50,31 @@ def _email_args(args: dict[str, str], config: Any) -> dict[str, Any]:
             "gws xong nhắn lại giúp mình."
         )
     stamp = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    # chuẩn hoá "a@x.com , b@y.com" → "a@x.com,b@y.com" cho gws (nhận comma-separated)
+    to = ",".join(part.strip() for part in args["to"].split(",") if part.strip())
     return {
-        "argv": ["gmail", "+send", "--to", args["to"], "--subject", args["subject"],
+        "argv": ["gmail", "+send", "--to", to, "--subject", args["subject"],
                  "--body", args["body"]],
-        "dedup_hint": f"personal-email:{args['to']}:{args['subject'][:40]}:{stamp}",
+        "dedup_hint": f"personal-email:{to}:{args['subject'][:40]}:{stamp}",
     }
 
 
 COMMANDS: dict[str, dict] = {
     "gui_email": {
         "description": (
-            "Gửi một email thay chủ nhân. args: to (địa chỉ email người nhận), "
+            "Gửi một email thay chủ nhân. args: to (địa chỉ email người nhận — "
+            "nhiều người thì cách nhau dấu phẩy), "
             "subject (tiêu đề), body (nội dung — soạn trọn vẹn, lịch sự, ký tên chủ nhân). "
             "CHỈ dùng khi chủ nhân bảo gửi/trả lời email rõ ràng; nhờ SOẠN NHÁP thì trả "
             "intent question để soạn cho chủ nhân xem trước."
         ),
         "type": "gws_write",
         "args_schema": {
-            "to": {"required": True, "max_len": 200,
-                   "pattern": r"[^@\s]+@[^@\s]+\.[^@\s]+"},
+            # một hoặc nhiều người nhận, cách nhau dấu phẩy (gws +send --to nhận
+            # chuỗi comma-separated) — mỗi phần vẫn phải là địa chỉ hợp lệ.
+            "to": {"required": True, "max_len": 400,
+                   "pattern": (r"[^@\s,]+@[^@\s,]+\.[^@\s,]+"
+                               r"(?:\s*,\s*[^@\s,]+@[^@\s,]+\.[^@\s,]+)*")},
             "subject": {"required": True, "max_len": 200},
             "body": {"required": True, "max_len": 4000},
         },
