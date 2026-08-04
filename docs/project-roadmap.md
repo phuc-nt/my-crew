@@ -131,11 +131,12 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
   create/update/delete_event, send_email, arg `at`, slot `request`); gỡ cặp M12
   giao_viec/chuyen_the (một bề mặt giao việc duy nhất).
   `plans/260804-1004-secretary-orchestration-gateway/`.
-- [ ] **Cross-agent memory — CEO chốt 2026-08-04: SQLite dùng chung TRƯỚC, Postgres để
-  sau khi đo nhu cầu thật** (khớp kết luận task đội tự nghiên cứu: SQLite ~0đ vận hành
-  vs Postgres ~3,5tr/tháng). Cần 1 phiên thiết kế riêng trước khi code: schema store
-  chia sẻ, seam `resolve_memory_text` (provider thứ 3 bên cạnh static/kioku), ranh giới
-  đọc/ghi per-agent, red-team injection bề mặt trí nhớ chung.
+- [x] ~~**Cross-agent memory**~~ — **xong v66 (2026-08-04, thiết kế + ship cùng ngày)**:
+  backend `store: sqlite` default (1 file chung `.data/memory_store.sqlite3`, WAL);
+  nhóm `project: company` 8 agent; `memory_share: read_only` cho secretary (đọc đội,
+  không chia ngược đời tư CEO); sibling block wrap `format_internal_content`; retention
+  90d. UAT sống: fact persist thật, đọc chéo đúng luật. Còn mở: chất lượng extractor
+  (tách theo dòng → fact vụn) · Postgres chỉ khi đo được tranh chấp ghi thật.
 - [x] ~~**Nhắc việc theo giờ**~~ — **xong v65 (2026-08-04)**: lệnh `set_reminder`/
   `cancel_reminder` (M12 personal, native type `reminder_create`/`reminder_cancel`
   actor-bound + nhánh Lớp A riêng), store per-agent `reminders.db`, pseudo-kind
