@@ -283,7 +283,9 @@ class PackRegistry:
 #: (v58: từng nới `email_send` một tối cho thư ký gửi mail, rồi RÚT LẠI ngay hôm sau —
 #: mail chuyển sang `gws gmail +send` qua gws_write, khỏi đụng vetted set.)
 _VETTED_COMMAND_TYPES = frozenset(
-    {"mcp_tool", "schedule_update", "team_task_create", "team_task_move", "gws_write"}
+    {"mcp_tool", "schedule_update", "team_task_create", "team_task_move", "gws_write",
+     # v65: one-shot timed reminders (actor-bound store write; own Lớp A branch).
+     "reminder_create", "reminder_cancel"}
 )
 
 

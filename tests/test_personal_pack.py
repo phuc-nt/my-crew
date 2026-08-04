@@ -38,9 +38,9 @@ def test_personal_pack_discovered_and_assembled():
     assert "weekly-review-system" in pack.prompts
     assert pack.tools is not None
     # 3b calendar + v58 email + v60 sửa/xoá lịch; v61: id English, giao việc đi qua
-    # tầng ops orchestration (không còn lệnh M12 riêng)
+    # tầng ops orchestration (không còn lệnh M12 riêng); v65: nhắc hẹn giờ một lần.
     assert set(pack.commands) == {"create_event", "update_event", "delete_event",
-                                  "send_email"}
+                                  "send_email", "set_reminder", "cancel_reminder"}
 
 
 def test_tool_provider_reads_day_context_plus_gws(monkeypatch):
@@ -207,13 +207,16 @@ def test_create_event_destructive_slot_cannot_escape_argv():
 # --- chat-command send_email (v58) ---
 
 
-def test_vetted_command_types_back_to_original_five():
-    """v58 hôm sau: email chuyển sang gws gmail +send ⇒ RÚT lại email_send khỏi vetted
-    set — pin để bề mặt catalog không phình mà không ai để ý."""
+def test_vetted_command_types_exact_set():
+    """Pin: bề mặt catalog không được phình mà không ai để ý. Mọi lần mở rộng phải là
+    quyết định có chủ đích + sửa pin này kèm lý do. v58: rút email_send (mail đi gws).
+    v65: thêm reminder_create/reminder_cancel (nhắc hẹn giờ, actor-bound store write,
+    có nhánh Lớp A riêng — CEO duyệt 2026-08-04)."""
     from my_crew.packs.registry import _VETTED_COMMAND_TYPES
 
     assert _VETTED_COMMAND_TYPES == frozenset(
-        {"mcp_tool", "schedule_update", "team_task_create", "team_task_move", "gws_write"}
+        {"mcp_tool", "schedule_update", "team_task_create", "team_task_move", "gws_write",
+         "reminder_create", "reminder_cancel"}
     )
 
 

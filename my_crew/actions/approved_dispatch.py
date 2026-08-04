@@ -19,7 +19,10 @@ from collections.abc import Callable
 
 #: Native types whose handler needs the AGENT's identity (a closure over its profile id).
 #: `dispatch_approved_action` alone cannot run them — see `make_agent_bound_dispatch`.
-_AGENT_BOUND_TYPES = frozenset({"schedule_update", "team_task_create", "team_task_move"})
+_AGENT_BOUND_TYPES = frozenset({
+    "schedule_update", "team_task_create", "team_task_move",
+    "reminder_create", "reminder_cancel",  # v65 — the actor's OWN reminder store
+})
 
 
 def make_agent_bound_dispatch(profile_id: str, config) -> Callable[[dict], str]:
@@ -41,6 +44,10 @@ def make_agent_bound_dispatch(profile_id: str, config) -> Callable[[dict], str]:
             from my_crew.actions.team_task_write import make_team_task_handler
 
             return make_team_task_handler(profile_id)(action)
+        if atype in ("reminder_create", "reminder_cancel"):
+            from my_crew.actions.reminder_write import make_reminder_handler
+
+            return make_reminder_handler(profile_id)(action)
         return dispatch_approved_action(action, config)
 
     return _handler

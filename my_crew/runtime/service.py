@@ -45,6 +45,12 @@ def _real_spawn(argv: list[str]) -> subprocess.Popen:
     return subprocess.Popen(argv)  # noqa: S603
 
 
+#: Kinds exempt from the per-tick spawn cap (see `run_tick`): instant, no-LLM bodies
+#: whose whole point is punctuality. Keep this set tiny — everything here bypasses the
+#: load bound.
+_CAP_EXEMPT_KINDS = frozenset({"reminder-sweep"})
+
+
 def _effective_schedule(loaded) -> tuple[dict[str, str], tuple[str, ...]]:
     """The agent's cron schedule + reports gate, with the inbox poll folded in.
 
@@ -104,6 +110,21 @@ def _effective_schedule(loaded) -> tuple[dict[str, str], tuple[str, ...]]:
         schedule["watch"] = "*/5 * * * *"
         reports.append("watch")
         changed = True
+    # v65: an agent with PENDING timed reminders gets a per-minute `reminder-sweep`
+    # pseudo-kind (no-LLM: read due rows → telegram_send → mark sent). Synthesized only
+    # while pending rows exist — the store probe is a cheap SQLite read (False without
+    # even creating the file), so agents that never set a reminder keep a byte-identical
+    # schedule. `_effective_schedule` runs per tick, so a reminder created a moment ago
+    # is picked up on the next tick without any restart.
+    if getattr(getattr(loaded, "config", None), "telegram", None) is not None:
+        from my_crew.runtime.agent_paths import agent_data_dir
+        from my_crew.runtime.reminder_store import has_pending_reminders
+
+        profile_id = getattr(loaded, "profile_id", "")
+        if profile_id and has_pending_reminders(agent_data_dir(profile_id)):
+            schedule["reminder-sweep"] = "* * * * *"
+            reports.append("reminder-sweep")
+            changed = True
     if not changed:
         return loaded.schedule, loaded.reports  # byte-identical when nothing synthesized
     return schedule, tuple(reports)
@@ -247,17 +268,22 @@ class Service:
             per_kind = {k: self._last_fire[(entry.id, k)]
                         for k in schedule if (entry.id, k) in self._last_fire}
             for kind, audience in due_reports(schedule, reports, now, per_kind):
-                if spawned >= self._cap:
+                # v65: time-critical no-LLM micro-kinds are cap-EXEMPT — the cap exists
+                # to bound LLM/worker load, and a deferred `reminder-sweep` starves
+                # DETERMINISTICALLY (same registry/kind order refills the cap every
+                # tick; UAT-observed: a due reminder sat pending forever behind 4
+                # inbox/team ticks). An exempt kind neither checks nor consumes the cap.
+                exempt = kind in _CAP_EXEMPT_KINDS
+                if not exempt and spawned >= self._cap:
                     logger.info("tick cap %d reached; deferring %s/%s", self._cap, entry.id, kind)
-                    break
+                    continue
                 argv = _worker_argv(entry.id, kind, audience)
                 outcome = _supervise(spawn, argv, timeout=self._timeout)
                 outcome.update(agent_id=entry.id, kind=kind)
                 outcomes.append(outcome)
                 self._last_fire[(entry.id, kind)] = now  # advance: no re-fire this period
-                spawned += 1
-            if spawned >= self._cap:
-                break
+                if not exempt:
+                    spawned += 1
         _reap_sandboxes_best_effort()
         _consolidate_memories_best_effort(now)
         _archive_stale_skills_best_effort(now)

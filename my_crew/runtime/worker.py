@@ -290,6 +290,27 @@ def main(argv: list[str] | None = None, *, run_report: RunReport = _default_run_
                     result.get("checked"))
         return 0  # a tick with zero new milestones is a SUCCESS
 
+    # v65: per-minute timed-reminder delivery — NO-LLM (read due rows → telegram_send
+    # via the gateway → mark sent). Branches before graph dispatch like the ticks above.
+    if kind == "reminder-sweep":
+        from my_crew.runtime.reminder_sweep import run_reminder_sweep
+
+        try:
+            result = run_reminder_sweep(loaded, settings)
+        except Exception as exc:  # noqa: BLE001 — record the failure, never crash
+            logger.exception("worker %s/reminder-sweep failed", agent_id)
+            append_run_event(data_dir, _event(agent_id, kind, "internal", "error", None, False))
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        append_run_event(
+            data_dir,
+            _event(agent_id, kind, "internal", result["status"], result.get("cost_usd"),
+                   bool(result.get("delivered"))),
+        )
+        logger.info("worker %s reminder-sweep: %s (checked=%s)", agent_id,
+                    result["status"], result.get("checked"))
+        return 0  # a tick with zero due reminders is a SUCCESS
+
     # v31 P5: the wake-gate watcher tick is a generic run kind — a NO-LLM poll over the
     # agent's declared watchers (read source → hash → wake only on diff). cost_usd is
     # always None here: an unchanged source must be measurably free.

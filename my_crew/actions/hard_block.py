@@ -112,6 +112,11 @@ def needs_interrupt(
         # v31 P3: creating/moving a team-task card changes shared team state —
         # sensitive but reversible ⇒ Lớp B (guarded queues; autonomous runs audited).
         return InterruptVerdict(True, "Lớp B: thao tác thẻ việc đội cần người duyệt")
+    if atype in ("reminder_create", "reminder_cancel"):
+        # v65: a timed reminder only ever messages the agent's OWN operator chat later
+        # (telegram_send re-gates the actual delivery) — sensitive-but-reversible ⇒
+        # ordinary Lớp B: guarded queues, autonomous runs audited.
+        return InterruptVerdict(True, "Lớp B: đặt/huỷ nhắc hẹn giờ cần người duyệt")
     if atype == "gws_write":
         # v31 P4: company Sheets/Docs are INTERNAL assets (not external-channel
         # semantics) — ordinary Lớp B: guarded queues, autonomous runs audited.
@@ -655,6 +660,44 @@ def _hard_deny_team_task(action: dict[str, Any]) -> BlockVerdict | None:
     return None
 
 
+# --- reminder_create / reminder_cancel (v65): one-shot timed reminders ---
+_REMINDER_TEXT_MAX = 500
+#: RFC3339-with-offset shape — the sweep parses this with `datetime.fromisoformat`;
+#: bounding the shape here means an unparsable due_at can never reach the store.
+_REMINDER_DUE_AT_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?([+-]\d{2}:\d{2}|Z)$"
+)
+
+
+def _hard_deny_reminder(action: dict[str, Any]) -> BlockVerdict | None:
+    """Lớp A checks for the two reminder types (v65). None = no red-line match.
+    Structural denies are HARD (SECURITY) — same posture as `_hard_deny_team_task`.
+    The chat_id destination check lives in the DELIVERY send (`telegram_send`'s own
+    two-way chat_ids allowlist), not here — this row only stores it."""
+    cred = _credential_verdict(action)
+    if cred:
+        return cred
+
+    def _deny(reason: str) -> BlockVerdict:
+        return BlockVerdict(blocked=True, category=BlockCategory.SECURITY, reason=reason)
+
+    if str(action.get("type", "")).lower() == "reminder_create":
+        text = action.get("text")
+        if not isinstance(text, str) or not text.strip():
+            return _deny("reminder_create must carry a non-empty text")
+        if len(text) > _REMINDER_TEXT_MAX:
+            return _deny(f"reminder_create text exceeds {_REMINDER_TEXT_MAX} chars")
+        due_at = action.get("due_at")
+        if not isinstance(due_at, str) or not _REMINDER_DUE_AT_RE.match(due_at):
+            return _deny("reminder_create due_at must be RFC3339 with an offset")
+        return None
+
+    raw_id = action.get("reminder_id")
+    if not isinstance(raw_id, int) or isinstance(raw_id, bool) or raw_id <= 0:
+        return _deny("reminder_cancel reminder_id must be a positive integer")
+    return None
+
+
 def _hard_deny_telegram(action: dict[str, Any]) -> BlockVerdict | None:
     """Lớp A checks for a telegram send (v6 M13). None = no red-line match.
 
@@ -865,6 +908,14 @@ def classify(
         # categories); permissions (assignee ∈ roster, actor may move THIS task) are
         # store-verified in the write handler with the actor's closure identity.
         denied = _hard_deny_team_task(action)
+        if denied:
+            return denied
+        return _ALLOW
+    elif action_type in ("reminder_create", "reminder_cancel"):
+        # v65: one-shot timed reminders. Secrets + structure here; the store written
+        # is actor-bound in the write handler; the eventual DELIVERY re-gates through
+        # telegram_send's own allowlist.
+        denied = _hard_deny_reminder(action)
         if denied:
             return denied
         return _ALLOW

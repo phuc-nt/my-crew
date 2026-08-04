@@ -214,6 +214,10 @@ def _maybe_handle_ops(loaded, settings, *, mention, llm) -> tuple[str, float | N
             # v61: mỗi domain một catalog — personal chỉ thấy nhóm điều phối,
             # không bao giờ thấy lệnh quản trị fleet.
             catalog=catalog_for_domain(getattr(loaded, "domain", "")),
+            # v65: thư ký có catalog M12 riêng ĐẰNG SAU tầng ops — lệnh ops không nhận
+            # ra phải rơi xuyên xuống đó (set_reminder/send_email/...), không trả
+            # listing ops chặn đường. Admin giữ listing (không có M12 phía sau).
+            unsupported_fallthrough=getattr(loaded, "domain", "") == "personal",
         )
     finally:
         store.close()

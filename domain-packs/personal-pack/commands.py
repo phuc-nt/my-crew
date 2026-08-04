@@ -158,7 +158,58 @@ def _email_args(args: dict[str, str], config: Any) -> dict[str, Any]:
     }
 
 
+def _set_reminder_args(args: dict[str, str], config: Any) -> dict[str, Any]:
+    """Payload `reminder_create` — chat_id là kênh operator của CHÍNH thư ký (không
+    bao giờ từ LLM args): tin nhắc chỉ có thể quay về chủ nhân."""
+    telegram = getattr(config, "telegram", None)
+    if telegram is None:
+        raise ValueError("chưa cấu hình Telegram — không có kênh để nhắc")
+    chat_id = str(telegram.ops_operator_id or telegram.chat_ids[0])
+    return {
+        "chat_id": chat_id,
+        "text": args["text"].strip(),
+        "due_at": args["at"].strip(),
+        "dedup_hint": f"personal-reminder-set:{args['at'].strip()}:{args['text'].strip()[:60]}",
+    }
+
+
+def _cancel_reminder_args(args: dict[str, str], config: Any) -> dict[str, Any]:
+    return {
+        "reminder_id": int(args["reminder_id"]),
+        "dedup_hint": f"personal-reminder-cancel:{args['reminder_id']}",
+    }
+
+
 COMMANDS: dict[str, dict] = {
+    "set_reminder": {
+        "description": (
+            "Đặt nhắc hẹn giờ MỘT LẦN cho chủ nhân ('3h nhắc anh gọi X') — đúng giờ "
+            "thư ký sẽ nhắn Telegram. args: at (thời điểm nhắc RFC3339 kèm múi giờ, "
+            "vd 2026-08-05T15:00:00+07:00 — tính từ mốc BÂY GIỜ khi nói tương đối như "
+            "'3h chiều', 'mai'), text (nội dung nhắc, ngắn gọn). CHỈ dùng khi chủ nhân "
+            "muốn được NHẮC vào một thời điểm; sự kiện lịch (họp/hẹn) thì dùng "
+            "create_event."
+        ),
+        "type": "reminder_create",
+        "args_schema": {
+            "at": {"required": True, "max_len": 40,
+                   "pattern": r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}[\d:.+\-Z]*"},
+            "text": {"required": True, "max_len": 500},
+        },
+        "build_args": _set_reminder_args,
+    },
+    "cancel_reminder": {
+        "description": (
+            "Huỷ MỘT nhắc hẹn giờ đã đặt. args: reminder_id (số id của nhắc — có trong "
+            "câu trả lời lúc đặt và trong danh sách upcoming_reminders). Chủ nhân hỏi "
+            "'sắp nhắc gì' thì trả lời từ snapshot, không cần lệnh."
+        ),
+        "type": "reminder_cancel",
+        "args_schema": {
+            "reminder_id": {"required": True, "max_len": 10, "pattern": r"[0-9]+"},
+        },
+        "build_args": _cancel_reminder_args,
+    },
     "send_email": {
         "description": (
             "Gửi một email thay chủ nhân. args: to (địa chỉ email người nhận — "

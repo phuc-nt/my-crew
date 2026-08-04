@@ -147,3 +147,23 @@ def test_once_runs_one_tick(monkeypatch):
     monkeypatch.setattr(service.Service, "run_tick", _counting)
     rc = service.main(["--once"])
     assert rc == 0 and ticks["n"] == 1  # exactly one tick, no loop
+
+
+def test_reminder_sweep_is_cap_exempt(monkeypatch):
+    """v65: the per-tick cap must never starve a due reminder — UAT-observed: the same
+    registry/kind order refilled the cap every tick and `reminder-sweep` deferred
+    forever. Exempt kinds spawn even with the cap exhausted and never consume it."""
+    entries = [RegistryEntry(f"ag{i}", True) for i in range(4)] + [RegistryEntry("sec", True)]
+    profiles = {f"ag{i}": _profile() for i in range(4)}
+    profiles["sec"] = _profile(schedule={"reminder-sweep": "* * * * *"},
+                               reports=("reminder-sweep",))
+    _patch(monkeypatch, entries, profiles)
+    svc = service.Service(cap=4)
+    svc._last_fire = {(f"ag{i}", "daily"): _YESTERDAY for i in range(4)}
+    svc._last_fire[("sec", "reminder-sweep")] = _YESTERDAY
+    svc._seeded = True
+    record = []
+    out = svc.run_tick(_8AM, spawn=_fake_spawn(record))
+    kinds = [(o["agent_id"], o["kind"]) for o in out]
+    assert ("sec", "reminder-sweep") in kinds  # spawned DESPITE the cap being full
+    assert len([k for k in kinds if k[1] == "daily"]) == 4  # cap still bounds the rest

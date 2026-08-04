@@ -53,6 +53,8 @@ logger = logging.getLogger(__name__)
 _MUTATING_TYPES = {
     "mcp_tool", "gh_cli", "email_send", "telegram_send", "schedule_update",
     "team_task_create", "team_task_move", "gws_write",
+    # v65: one-shot timed reminders (per-agent store write; delivery re-gates later).
+    "reminder_create", "reminder_cancel",
 }
 
 # Rate limit: max mutations per rolling window (blast-radius cap, PDR §7.5).

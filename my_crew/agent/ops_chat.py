@@ -197,18 +197,28 @@ def _next_missing_slot(spec: dict, slots: dict[str, str]) -> str | None:
 def handle_ops_message(
     *, message: str, conversation_key: str, store: OpsConversationStore, llm: LlmClient,
     now: float, catalog: dict[str, dict] | None = None,
+    unsupported_fallthrough: bool = False,
 ) -> tuple[str, float | None]:
     """Advance the ops dialogue by one message. Returns (reply, cost).
 
     Pure orchestration over the store + catalog + LLM — no I/O of its own beyond those.
     The caller (qa_answer) posts the reply through the Action Gateway like any other.
     `catalog` (v61) scopes which commands this agent serves — None ⇒ full OPS_COMMANDS
-    (admin, byte-identical pre-v61)."""
+    (admin, byte-identical pre-v61).
+
+    `unsupported_fallthrough` (v65): True ⇒ a command-like message that matches NO ops
+    command returns the empty-reply signal instead of the ops listing, so the caller
+    falls through to the agent's OWN M12 chat catalog. Wired for the personal secretary
+    — its ops layer sits IN FRONT of a real personal command catalog (set_reminder,
+    send_email, …), and the old always-listing reply shadowed every new M12 command the
+    ops classifier didn't recognize. Admin keeps the listing (False): it has no M12
+    catalog behind it, the listing IS its honest answer."""
     commands = OPS_COMMANDS if catalog is None else catalog
     draft = store.load(conversation_key, now=now)
     if draft is None:
         return _start_new(message=message, conversation_key=conversation_key, store=store,
-                          llm=llm, now=now, commands=commands)
+                          llm=llm, now=now, commands=commands,
+                          unsupported_fallthrough=unsupported_fallthrough)
     if draft.phase == "awaiting_confirm":
         return _handle_confirm(draft=draft, message=message, conversation_key=conversation_key,
                                store=store, commands=commands)
@@ -218,7 +228,7 @@ def handle_ops_message(
 
 def _start_new(
     *, message: str, conversation_key: str, store: OpsConversationStore, llm: LlmClient,
-    now: float, commands: dict[str, dict],
+    now: float, commands: dict[str, dict], unsupported_fallthrough: bool = False,
 ) -> tuple[str, float | None]:
     intent = classify_ops_intent(llm, message, commands)
     cost = intent.get("_cost_usd")
@@ -226,6 +236,8 @@ def _start_new(
     if kind == "question":
         return "", cost  # caller falls through to the read-only Q&A path
     if kind == "unsupported" or intent.get("command_id") not in commands:
+        if unsupported_fallthrough:
+            return "", cost  # v65: let the agent's own M12 catalog have a shot
         return (f"Mình quản lý đội qua các lệnh: {command_listing(commands)}. "
                 "Hoặc hỏi thông tin, mình trả lời được.", cost)
 

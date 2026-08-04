@@ -40,8 +40,33 @@ class PersonalToolProvider:
         return {
             "current_time": now.isoformat(timespec="minutes"),
             "weekday": _WEEKDAYS_VI[now.weekday()],
+            "upcoming_reminders": _upcoming_reminders(settings),
             **_gws_sources(),
         }
+
+
+def _upcoming_reminders(settings: Any) -> str:
+    """Pending timed reminders (v65) — "#id · giờ · nội dung" per line so chat can
+    answer "sắp nhắc gì?" and the CEO can cancel by the id. Degrade-soft like every
+    other snapshot source; "(không có)" khi trống."""
+    try:
+        from pathlib import Path
+
+        from my_crew.runtime.reminder_store import ReminderStore, reminders_db_path
+
+        path = reminders_db_path(Path(settings.data_dir))
+        if not path.exists():
+            return "(không có)"
+        store = ReminderStore(path)
+        try:
+            rows = store.list_pending()
+        finally:
+            store.close()
+        if not rows:
+            return "(không có)"
+        return "\n".join(f"#{r['id']} · {r['due_at']} · {r['text'][:80]}" for r in rows[:10])
+    except Exception as exc:  # noqa: BLE001 — snapshot must render even if store hiccups
+        return f"(chưa đọc được: {exc})"
 
 
 #: Required export name — PackRegistry nạp vào Pack.tools.

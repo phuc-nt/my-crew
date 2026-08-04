@@ -130,3 +130,45 @@ def test_personal_unsupported_lists_only_orchestration(tmp_path):
         store.close()
     assert "create_agent" not in reply
     assert "assign_team_task" in reply  # listing giới thiệu đúng nhóm điều phối
+
+
+def test_personal_unsupported_falls_through_to_m12_catalog():
+    """v65: an ops-unrecognized command from the secretary's operator must return the
+    empty-reply signal (fall through to the personal M12 catalog: set_reminder,
+    send_email, …) — the old ops listing shadowed every M12 command. Admin keeps the
+    listing (no M12 catalog behind it)."""
+    import time
+
+    from my_crew.agent.ops_catalog import catalog_for_domain
+    from my_crew.agent.ops_chat import handle_ops_message
+    from my_crew.agent.ops_conversation_store import OpsConversationStore
+
+    class _Llm:
+        def complete(self, messages):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(
+                content='{"intent": "unsupported"}', cost_usd=0.0,
+            )
+
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as td:
+        store = OpsConversationStore(Path(td) / "ops.sqlite3")
+        try:
+            reply, _cost = handle_ops_message(
+                message="đặt nhắc 3h gọi anh X", conversation_key="op",
+                store=store, llm=_Llm(), now=time.time(),
+                catalog=catalog_for_domain("personal"),
+                unsupported_fallthrough=True,
+            )
+            assert reply == ""  # falls through — M12 gets its shot
+            reply_admin, _ = handle_ops_message(
+                message="đặt nhắc 3h gọi anh X", conversation_key="op2",
+                store=store, llm=_Llm(), now=time.time(),
+                catalog=catalog_for_domain("admin"),
+            )
+            assert "Mình quản lý đội qua các lệnh" in reply_admin  # admin unchanged
+        finally:
+            store.close()
