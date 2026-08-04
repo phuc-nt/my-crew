@@ -203,29 +203,30 @@ def test_tao_lich_destructive_slot_cannot_escape_argv():
 # --- chat-command gui_email (v58) ---
 
 
-def test_vetted_command_types_widened_exactly_once():
-    """Pin danh sách vetted: CHỈ email_send được nới (CEO 2026-08-03) — một lần nới sau
-    không thể lặng lẽ đi kèm type khác."""
+def test_vetted_command_types_back_to_original_five():
+    """v58 hôm sau: email chuyển sang gws gmail +send ⇒ RÚT lại email_send khỏi vetted
+    set — pin để bề mặt catalog không phình mà không ai để ý."""
     from my_crew.packs.registry import _VETTED_COMMAND_TYPES
 
     assert _VETTED_COMMAND_TYPES == frozenset(
-        {"mcp_tool", "schedule_update", "team_task_create", "team_task_move",
-         "gws_write", "email_send"}
+        {"mcp_tool", "schedule_update", "team_task_create", "team_task_move", "gws_write"}
     )
 
 
-def test_gui_email_builds_action_and_never_carries_attachment():
-    from types import SimpleNamespace
+def test_gui_email_builds_gws_send_argv():
+    from my_crew.actions.hard_block import _hard_deny_gws
 
     pack = PackRegistry().load("personal")
     spec = pack.commands["gui_email"]
-    config = SimpleNamespace(smtp=object())
+    assert spec["type"] == "gws_write"  # OAuth gws, không SMTP
     payload = spec["build_args"](
-        {"to": "a@b.com", "subject": "Chào", "body": "Nội dung."}, config
+        {"to": "a@b.com", "subject": "Chào", "body": "Nội dung."}, None
     )
-    assert payload["to"] == "a@b.com"
-    assert "attachment_path" not in payload  # chat không bao giờ gửi file
+    assert payload["argv"][:2] == ["gmail", "+send"]
+    assert payload["argv"][2:] == ["--to", "a@b.com", "--subject", "Chào",
+                                   "--body", "Nội dung."]
     assert payload["dedup_hint"].startswith("personal-email:a@b.com:Chào:")
+    assert _hard_deny_gws({**payload, "type": "gws_write"}) is None  # qua Lớp A đúng prefix
     # Field lạ (kể cả attachment_path bịa) chết từ vòng schema — không tới build_args.
     from my_crew.agent.chat_command import validate_args
 
@@ -234,13 +235,12 @@ def test_gui_email_builds_action_and_never_carries_attachment():
     assert err is not None and "attachment_path" in err
 
 
-def test_gui_email_without_smtp_fails_with_user_message():
-    from types import SimpleNamespace
-
+def test_gui_email_without_gws_cli_fails_with_user_message(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda name: None)
     pack = PackRegistry().load("personal")
-    with pytest.raises(ValueError, match="SMTP"):
+    with pytest.raises(ValueError, match="gws"):
         pack.commands["gui_email"]["build_args"](
-            {"to": "a@b.com", "subject": "s", "body": "b"}, SimpleNamespace(smtp=None)
+            {"to": "a@b.com", "subject": "s", "body": "b"}, None
         )
 
 
@@ -251,10 +251,11 @@ def test_email_layer_a_still_scans_secrets():
     from my_crew.actions.hard_block import classify
 
     fake_token = "ghp_" + "a1b2c3d4" * 5  # noqa: S105 — giả, ghép runtime
-    action = {"type": "email_send", "to": "a@b.com", "subject": "s",
-              "body": f"token: {fake_token}"}
+    action = {"type": "gws_write",
+              "argv": ["gmail", "+send", "--to", "a@b.com", "--subject", "s",
+                       "--body", f"token: {fake_token}"], "dedup_hint": "x"}
     verdict = classify(action)
-    assert verdict.blocked
+    assert verdict.blocked  # secret trong body vẫn chết ở _credential_verdict
 
 
 def test_briefing_gateway_denies_mcp_with_empty_pack_allowlist(tmp_path):

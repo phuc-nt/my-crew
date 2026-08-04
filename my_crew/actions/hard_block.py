@@ -513,6 +513,11 @@ _GWS_ALLOWLIST_PREFIXES: tuple[tuple[str, ...], ...] = (
     # (guarded queues, autonomous runs audited). Calendar delete/acl-share are caught by
     # the destructive/permission marker scan above, so they never reach this allowlist.
     ("calendar", "events", "insert"),
+    # v58 (CEO 2026-08-04): gửi email qua OAuth của gws thay vì SMTP — cùng phân loại
+    # Lớp B như calendar insert. Secret-scan (_credential_verdict trên toàn action) +
+    # marker scan mọi token đã phủ trước khi chạm allowlist này. CHỈ +send: +reply/
+    # +forward/+watch không thêm (reply đọc thread cũ = bề mặt khác, chưa cần).
+    ("gmail", "+send"),
 )
 #: Destructive/permission verbs anywhere in a gws argv = Lớp A, both trust modes.
 _GWS_DATA_LOSS_MARKERS = ("delete", "clear", "trash", "batchclear")

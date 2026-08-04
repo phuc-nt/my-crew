@@ -6,9 +6,11 @@ LLM chỉ điền slot title/start/end/attendees, không bao giờ chạm argv; 
 bị Lớp A marker chặn trước cả allowlist. Body sự kiện tái dùng builder của chat-ops v39
 (`ops_calendar_event._build_event_body`) — một nguồn sự thật cho shape resource.
 
-`gui_email` (v58, CEO chốt 2026-08-03): gửi mail qua native `email_send` — vetted-types
-đã nới ĐÚNG type này. Chat không bao giờ gửi file: schema không có `attachment_path`, và
-field lạ bị `validate_args` chặn từ vòng ngoài; Lớp A email (secret-scan, shape) nguyên vẹn.
+`gui_email` (v58, đổi kênh 2026-08-04): gửi mail qua `gws gmail +send` (OAuth sẵn của
+gws CLI — CEO chốt bỏ SMTP). Cùng đường `gws_write` với tao_lich: secret-scan toàn action
++ marker scan mọi token (body chứa verb kiểu "delete"/"share" bị deny fail-closed — chấp
+nhận false-positive, diễn đạt lại được) + allowlist prefix cố định. Helper +send không
+nhận attachment — chat không bao giờ gửi file.
 """
 
 from __future__ import annotations
@@ -32,23 +34,25 @@ def _calendar_event_args(args: dict[str, str], config: Any) -> dict[str, Any]:
 
 
 def _email_args(args: dict[str, str], config: Any) -> dict[str, Any]:
-    """Payload `email_send` từ slots đã qua schema. Fail RÕ khi thiếu SMTP (trả lời được
-    cho chủ nhân thay vì lỗi ngầm lúc dispatch); không bao giờ mang attachment_path.
+    """Payload `gws_write` cho `gmail +send` — mail đi bằng OAuth sẵn của gws CLI
+    (CEO 2026-08-04: khỏi cần SMTP credential mới). Slots chỉ vào cờ --to/--subject/
+    --body, argv prefix CODE-fixed; helper +send không có attachment — đúng posture
+    "chat không bao giờ gửi file". Fail RÕ khi máy chưa cài gws.
 
     Dedup theo (người nhận, tiêu đề, phút): gửi lại cùng mail trong một phút = trùng;
     mail khác tiêu đề/người nhận/lúc khác là mail mới."""
+    import shutil
     from datetime import datetime
 
-    if getattr(config, "smtp", None) is None:
+    if shutil.which("gws") is None:
         raise ValueError(
-            "chưa cấu hình SMTP cho agent này (khối smtp: trong profile.yaml + "
-            "SMTP_PASSWORD trong .env) — cấu hình xong nhắn lại giúp mình."
+            "máy chưa cài gws CLI (kênh gửi mail qua OAuth Google) — cài + đăng nhập "
+            "gws xong nhắn lại giúp mình."
         )
     stamp = datetime.now().strftime("%Y-%m-%dT%H:%M")
     return {
-        "to": args["to"],
-        "subject": args["subject"],
-        "body": args["body"],
+        "argv": ["gmail", "+send", "--to", args["to"], "--subject", args["subject"],
+                 "--body", args["body"]],
         "dedup_hint": f"personal-email:{args['to']}:{args['subject'][:40]}:{stamp}",
     }
 
@@ -61,7 +65,7 @@ COMMANDS: dict[str, dict] = {
             "CHỈ dùng khi chủ nhân bảo gửi/trả lời email rõ ràng; nhờ SOẠN NHÁP thì trả "
             "intent question để soạn cho chủ nhân xem trước."
         ),
-        "type": "email_send",
+        "type": "gws_write",
         "args_schema": {
             "to": {"required": True, "max_len": 200,
                    "pattern": r"[^@\s]+@[^@\s]+\.[^@\s]+"},
