@@ -3,7 +3,7 @@
 Mirrors `ops_assign_team_task.py`'s preview -> confirm -> cancel state machine exactly,
 but operates on an EXISTING task's DAG instead of minting a new one:
 
-  1. `preview_adjust_team_task(slots)` (called once, when `task_id` + `yêu cầu` are both
+  1. `preview_adjust_team_task(slots)` (called once, when `task_id` + `request` are both
      filled): loads the task's current DAG, runs ONE bounded amend LLM call (retry
      capped — `team_task_amend_prompt.amend_with_retries`), validates the RESULTING
      full DAG (kept done/running/failed steps + the LLM's new pending steps) through
@@ -75,7 +75,7 @@ def preview_adjust_team_task(slots: dict[str, str]) -> str:
     from my_crew.runtime.team_task_store import TeamTaskStore
 
     task_id = slots.get("task_id", "").strip()
-    request = slots.get("yêu cầu", "").strip()
+    request = slots.get("request", "").strip()
     if not task_id or not request:
         raise ValueError("cần mã việc và yêu cầu chỉnh sửa")
 

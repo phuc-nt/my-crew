@@ -150,7 +150,7 @@ def post_room_chat(room_id: str, message: str = Body(..., embed=True)) -> dict:
                     f"Phòng có nhiều việc đang chạy ({ids}) — ghi rõ: chỉnh <mã việc>: ..."}
         from my_crew.agent.ops_adjust_team_task import preview_adjust_team_task
 
-        slots = {"task_id": tasks[0].id, "yêu cầu": payload}
+        slots = {"task_id": tasks[0].id, "request": payload}
         try:
             preview_text = preview_adjust_team_task(slots)
         except ValueError as exc:

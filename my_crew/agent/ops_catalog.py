@@ -553,7 +553,7 @@ OPS_COMMANDS: dict[str, dict] = {
         "slots": {
             "task_id": {"prompt": "Mã việc cần chỉnh kế hoạch?", "required": True,
                         "max_len": 20},
-            "yêu cầu": {"prompt": "Chỉnh kế hoạch như thế nào?", "required": True,
+            "request": {"prompt": "Chỉnh kế hoạch như thế nào?", "required": True,
                         "max_len": 1000},
         },
         "run": run_adjust_team_task,
@@ -563,10 +563,34 @@ OPS_COMMANDS: dict[str, dict] = {
 }
 
 
-def command_listing() -> str:
+#: v61 (CEO 2026-08-04): the ops layer opens to the personal secretary with the
+#: ORCHESTRATION subset only — multi-agent task dispatch and fleet observability, never
+#: fleet ADMINISTRATION. Excluded on purpose: `create_agent`/`set_enabled` (change the
+#: fleet itself — admin-only) and `create_calendar_event` (the secretary already has its
+#: own M12 calendar commands; two surfaces for one intent confuse the classifier).
+ORCHESTRATION_COMMAND_IDS = frozenset({
+    "assign_team_task", "adjust_team_task", "list_tasks", "cancel_task",
+    "watch_pr", "report_task", "qa_task", "send_message",
+    "get_status", "get_cost", "company_activity", "search_history",
+})
+
+
+def catalog_for_domain(domain: str) -> dict[str, dict]:
+    """The ops catalog an agent of `domain` may serve its operator. Admin keeps the
+    FULL catalog (byte-identical pre-v61); any other ops-enabled domain (personal)
+    gets the orchestration subset. Insertion order follows OPS_COMMANDS."""
+    if domain == "admin":
+        return OPS_COMMANDS
+    return {cid: spec for cid, spec in OPS_COMMANDS.items()
+            if cid in ORCHESTRATION_COMMAND_IDS}
+
+
+def command_listing(catalog: dict[str, dict] | None = None) -> str:
     """One-line catalog for the CEO when a request is unsupported."""
-    return "; ".join(f"`{cid}` — {spec['description']}" for cid, spec in OPS_COMMANDS.items())
+    commands = OPS_COMMANDS if catalog is None else catalog
+    return "; ".join(f"`{cid}` — {spec['description']}" for cid, spec in commands.items())
 
 
-def get_command(command_id: str) -> dict | None:
-    return OPS_COMMANDS.get(command_id)
+def get_command(command_id: str, catalog: dict[str, dict] | None = None) -> dict | None:
+    commands = OPS_COMMANDS if catalog is None else catalog
+    return commands.get(command_id)

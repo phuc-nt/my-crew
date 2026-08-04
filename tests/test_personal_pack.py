@@ -37,9 +37,10 @@ def test_personal_pack_discovered_and_assembled():
     assert "briefing-system" in pack.prompts
     assert "weekly-review-system" in pack.prompts
     assert pack.tools is not None
-    # 3b calendar + v58 email + v60 (sửa/xoá lịch + cổng điều phối)
-    assert set(pack.commands) == {"tao_lich", "doi_lich", "xoa_lich", "gui_email",
-                                  "giao_viec", "chuyen_the"}
+    # 3b calendar + v58 email + v60 sửa/xoá lịch; v61: id English, giao việc đi qua
+    # tầng ops orchestration (không còn lệnh M12 riêng)
+    assert set(pack.commands) == {"create_event", "update_event", "delete_event",
+                                  "send_email"}
 
 
 def test_tool_provider_reads_day_context_plus_gws(monkeypatch):
@@ -160,10 +161,10 @@ def test_briefing_live_send_dedups_per_day_but_not_across_kinds(tmp_path, monkey
     assert len(calls) == 2
 
 
-# --- chat-command tao_lich (3b) ---
+# --- chat-command create_event (3b) ---
 
 
-def test_tao_lich_builds_allowlisted_gws_argv():
+def test_create_event_builds_allowlisted_gws_argv():
     """build_args → argv CODE-fixed trong _GWS_ALLOWLIST_PREFIXES; slots chỉ vào --json;
     action qua Lớp A sạch (không phải NHỜ allowlist rộng — mà vì đúng prefix cho phép)."""
     import json as _json
@@ -171,7 +172,7 @@ def test_tao_lich_builds_allowlisted_gws_argv():
     from my_crew.actions.hard_block import _hard_deny_gws
 
     pack = PackRegistry().load("personal")
-    spec = pack.commands["tao_lich"]
+    spec = pack.commands["create_event"]
     payload = spec["build_args"](
         {"title": "Họp thử", "start": "2026-08-05T09:00:00+07:00"}, None
     )
@@ -186,13 +187,13 @@ def test_tao_lich_builds_allowlisted_gws_argv():
     assert _hard_deny_gws(action) is None  # qua Lớp A vì đúng prefix — không phải may
 
 
-def test_tao_lich_destructive_slot_cannot_escape_argv():
+def test_create_event_destructive_slot_cannot_escape_argv():
     """Slot chứa verb phá hoại chỉ nằm TRONG --json body (tiêu đề sự kiện), không bao giờ
     thành subcommand — và một argv chế tay có 'delete' vẫn bị Lớp A marker chặn."""
     from my_crew.actions.hard_block import _hard_deny_gws
 
     pack = PackRegistry().load("personal")
-    payload = pack.commands["tao_lich"]["build_args"](
+    payload = pack.commands["create_event"]["build_args"](
         {"title": "delete share acl", "start": "2026-08-05T09:00:00+07:00"}, None
     )
     assert payload["argv"][:3] == ["calendar", "events", "insert"]  # verb không đổi argv
@@ -202,7 +203,7 @@ def test_tao_lich_destructive_slot_cannot_escape_argv():
     assert verdict is not None and verdict.blocked  # Lớp A giữ nguyên
 
 
-# --- chat-command gui_email (v58) ---
+# --- chat-command send_email (v58) ---
 
 
 def test_vetted_command_types_back_to_original_five():
@@ -215,12 +216,12 @@ def test_vetted_command_types_back_to_original_five():
     )
 
 
-def test_gui_email_builds_gws_send_argv(monkeypatch):
+def test_send_email_builds_gws_send_argv(monkeypatch):
     from my_crew.actions.hard_block import _hard_deny_gws
 
     monkeypatch.setattr("shutil.which", lambda name: "/usr/local/bin/gws")  # CI không cài gws
     pack = PackRegistry().load("personal")
-    spec = pack.commands["gui_email"]
+    spec = pack.commands["send_email"]
     assert spec["type"] == "gws_write"  # OAuth gws, không SMTP
     payload = spec["build_args"](
         {"to": "a@b.com", "subject": "Chào", "body": "Nội dung."}, None
@@ -238,14 +239,14 @@ def test_gui_email_builds_gws_send_argv(monkeypatch):
     assert err is not None and "attachment_path" in err
 
 
-def test_gui_email_accepts_multiple_recipients(monkeypatch):
+def test_send_email_accepts_multiple_recipients(monkeypatch):
     """UAT vòng 2 pattern D: 'gửi cho A và B' bị regex 1-địa-chỉ chặn oan — gws +send
     nhận comma-separated. Schema nới cho danh sách, build_args chuẩn hoá khoảng trắng."""
     from my_crew.agent.chat_command import validate_args
 
     monkeypatch.setattr("shutil.which", lambda name: "/usr/local/bin/gws")  # CI không cài gws
     pack = PackRegistry().load("personal")
-    spec = pack.commands["gui_email"]
+    spec = pack.commands["send_email"]
     clean, err = validate_args(
         spec, {"to": "a@b.com , c@d.org,e@f.vn", "subject": "s", "body": "b"}
     )
@@ -258,11 +259,11 @@ def test_gui_email_accepts_multiple_recipients(monkeypatch):
         assert err is not None, bad
 
 
-def test_gui_email_without_gws_cli_fails_with_user_message(monkeypatch):
+def test_send_email_without_gws_cli_fails_with_user_message(monkeypatch):
     monkeypatch.setattr("shutil.which", lambda name: None)
     pack = PackRegistry().load("personal")
     with pytest.raises(ValueError, match="gws"):
-        pack.commands["gui_email"]["build_args"](
+        pack.commands["send_email"]["build_args"](
             {"to": "a@b.com", "subject": "s", "body": "b"}, None
         )
 
@@ -295,12 +296,12 @@ _EV = {"id": "abc123DEF", "summary": "Họp với anh Minh",
        "end": {"dateTime": "2026-08-05T09:30:00+07:00"}}
 
 
-def test_doi_lich_patch_keeps_old_duration(monkeypatch):
+def test_update_event_patch_keeps_old_duration(monkeypatch):
     import json
 
     _stub_events(monkeypatch, [_EV])
     pack = PackRegistry().load("personal")
-    payload = pack.commands["doi_lich"]["build_args"](
+    payload = pack.commands["update_event"]["build_args"](
         {"title": "anh Minh", "new_start": "2026-08-05T14:00:00+07:00"}, None
     )
     assert payload["argv"][:3] == ["calendar", "events", "patch"]
@@ -315,9 +316,9 @@ def test_doi_lich_patch_keeps_old_duration(monkeypatch):
     assert _hard_deny_gws({**payload, "type": "gws_write"}) is None
 
 
-def test_doi_lich_resolver_zero_and_many_matches_ask_back(monkeypatch):
+def test_update_event_resolver_zero_and_many_matches_ask_back(monkeypatch):
     pack = PackRegistry().load("personal")
-    build = pack.commands["doi_lich"]["build_args"]
+    build = pack.commands["update_event"]["build_args"]
     _stub_events(monkeypatch, [])
     with pytest.raises(ValueError, match="không thấy lịch"):
         build({"title": "hop ma", "new_start": "2026-08-05T14:00:00+07:00"}, None)
@@ -326,8 +327,8 @@ def test_doi_lich_resolver_zero_and_many_matches_ask_back(monkeypatch):
         build({"title": "anh Minh", "new_start": "2026-08-05T14:00:00+07:00"}, None)
 
 
-def test_luc_hint_disambiguates_same_title(monkeypatch):
-    """Trùng tên → arg `luc` (prefix ngày/giờ) chọn đúng một event."""
+def test_at_hint_disambiguates_same_title(monkeypatch):
+    """Trùng tên → arg `at` (prefix ngày/giờ) chọn đúng một event."""
     import json
 
     twin = {**_EV, "id": "zzz999",
@@ -335,18 +336,18 @@ def test_luc_hint_disambiguates_same_title(monkeypatch):
             "end": {"dateTime": "2026-08-06T09:30:00+07:00"}}
     _stub_events(monkeypatch, [_EV, twin])
     pack = PackRegistry().load("personal")
-    payload = pack.commands["xoa_lich"]["build_args"](
-        {"title": "anh Minh", "luc": "2026-08-06"}, None
+    payload = pack.commands["delete_event"]["build_args"](
+        {"title": "anh Minh", "at": "2026-08-06"}, None
     )
     assert json.loads(payload["argv"][4])["eventId"] == "zzz999"
 
 
-def test_xoa_lich_delete_argv_passes_carveout(monkeypatch):
+def test_delete_event_delete_argv_passes_carveout(monkeypatch):
     from my_crew.actions.hard_block import _hard_deny_gws
 
     _stub_events(monkeypatch, [_EV])
     pack = PackRegistry().load("personal")
-    payload = pack.commands["xoa_lich"]["build_args"]({"title": "anh Minh"}, None)
+    payload = pack.commands["delete_event"]["build_args"]({"title": "anh Minh"}, None)
     assert payload["argv"][:3] == ["calendar", "events", "delete"]
     assert payload["dedup_hint"] == "personal-calendar-del:abc123DEF"
     assert _hard_deny_gws({**payload, "type": "gws_write"}) is None
@@ -381,58 +382,6 @@ def test_calendar_delete_carveout_rejects_every_variant():
     verdict = _hard_deny_gws({"type": "gws_write", "dedup_hint": "x",
                               "argv": ["calendar", "acl", "insert", "--params", "{}"]})
     assert verdict is not None and verdict.blocked
-
-
-# --- v60: cổng điều phối — giao việc / chuyển thẻ ---
-
-
-def test_giao_viec_builds_team_task_create_payload():
-    from my_crew.actions.hard_block import classify
-
-    pack = PackRegistry().load("personal")
-    spec = pack.commands["giao_viec"]
-    assert spec["type"] == "team_task_create"
-    payload = spec["build_args"](
-        {"title": "Tìm hiểu thị trường X", "assignee": "nghien-cuu", "detail": "gấp"}, None
-    )
-    assert payload["title"] == "Tìm hiểu thị trường X"
-    assert payload["assignee"] == "nghien-cuu" and payload["detail"] == "gấp"
-    assert payload["dedup_hint"].startswith("create:nghien-cuu:")
-    # Lớp A structural: assignee shape bịa vẫn chết trước handler
-    bad = {"type": "team_task_create", "title": "x", "assignee": "../evil"}
-    assert classify(bad).blocked
-
-
-def test_chuyen_the_builds_team_task_move_payload():
-    pack = PackRegistry().load("personal")
-    spec = pack.commands["chuyen_the"]
-    assert spec["type"] == "team_task_move"
-    payload = spec["build_args"]({"task_id": "abc123def456", "status": "cancelled"}, None)
-    assert payload["task_id"] == "abc123def456" and payload["status"] == "cancelled"
-    assert payload["dedup_hint"].startswith("move:abc123def456:cancelled:")
-
-
-def test_team_task_handler_refuses_assignee_outside_roster(monkeypatch):
-    """Quyền thật nằm ở store-verified roster (handler actor-bound) — thư ký không giao
-    được việc cho id ngoài danh sách nhân sự, dù schema shape hợp lệ."""
-    from my_crew.actions.team_task_write import make_team_task_handler
-
-    monkeypatch.setattr("my_crew.agent.team_task_roster.is_assignable", lambda a: False)
-    handler = make_team_task_handler("thu-ky")
-    with pytest.raises(PermissionError, match="không nằm trong danh sách"):
-        handler({"type": "team_task_create", "title": "x", "assignee": "ai-do"})
-
-
-def test_roster_hint_survives_missing_registry(monkeypatch):
-    """Import-time hint không được nổ khi registry vắng (CI/test) — fallback text tĩnh."""
-    from my_crew.packs.registry import _load_pack_module
-
-    module = _load_pack_module("personal", "commands")
-    monkeypatch.setattr(
-        "my_crew.agent.team_task_roster.assignable_staff",
-        lambda: (_ for _ in ()).throw(FileNotFoundError("no registry")),
-    )
-    assert module._roster_hint() == "xem bảng nhân sự"
 
 
 def test_briefing_gateway_denies_mcp_with_empty_pack_allowlist(tmp_path):

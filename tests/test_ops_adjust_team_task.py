@@ -63,9 +63,9 @@ class _FakeStore:
 
 def test_preview_raises_when_task_id_or_request_missing():
     with pytest.raises(ValueError, match="mã việc"):
-        mod.preview_adjust_team_task({"task_id": "", "yêu cầu": "làm lại"})
+        mod.preview_adjust_team_task({"task_id": "", "request": "làm lại"})
     with pytest.raises(ValueError, match="mã việc"):
-        mod.preview_adjust_team_task({"task_id": "t1", "yêu cầu": ""})
+        mod.preview_adjust_team_task({"task_id": "t1", "request": ""})
 
 
 def test_preview_raises_when_task_not_found(monkeypatch):
@@ -75,7 +75,7 @@ def test_preview_raises_when_task_not_found(monkeypatch):
         "my_crew.runtime.team_task_store.TeamTaskStore", lambda *a, **kw: fake_store
     )
     with pytest.raises(ValueError, match="không tìm thấy việc"):
-        mod.preview_adjust_team_task({"task_id": "t1", "yêu cầu": "làm lại"})
+        mod.preview_adjust_team_task({"task_id": "t1", "request": "làm lại"})
     assert fake_store.closed is True
 
 
@@ -86,7 +86,7 @@ def test_preview_raises_when_no_pending_steps_left(monkeypatch):
         "my_crew.runtime.team_task_store.TeamTaskStore", lambda *a, **kw: fake_store
     )
     with pytest.raises(ValueError, match="không còn bước nào đang chờ"):
-        mod.preview_adjust_team_task({"task_id": "t1", "yêu cầu": "làm lại"})
+        mod.preview_adjust_team_task({"task_id": "t1", "request": "làm lại"})
     assert fake_store.closed is True
 
 
@@ -104,7 +104,7 @@ def test_preview_wraps_decomposition_error_from_amend_as_value_error(monkeypatch
 
     monkeypatch.setattr(mod, "amend_with_retries", _raise)
     with pytest.raises(ValueError, match="không chỉnh được kế hoạch hợp lệ"):
-        mod.preview_adjust_team_task({"task_id": "t1", "yêu cầu": "làm lại"})
+        mod.preview_adjust_team_task({"task_id": "t1", "request": "làm lại"})
     assert fake_store.closed is True
 
 
