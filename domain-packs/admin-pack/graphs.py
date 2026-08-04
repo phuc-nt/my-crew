@@ -66,7 +66,7 @@ def build_fleet_graph(
     gw = ActionGateway(
         settings,
         external_channels=config.slack_external_channels,
-        mcp_allowlist=pack.allowlist or None,
+        mcp_allowlist=pack.allowlist,
     )
     box: dict[str, object] = {}
     llm_box: dict[str, object] = {}

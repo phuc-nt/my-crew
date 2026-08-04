@@ -62,7 +62,9 @@ def run_tasks(loaded: LoadedProfile, settings: Any, *, now: datetime | None = No
     gateway = ActionGateway(
         settings,
         external_channels=loaded.config.slack_external_channels,
-        mcp_allowlist=pack.allowlist or None,
+        # Allowlist rỗng của pack là default-DENY có chủ đích (office/personal) — KHÔNG
+        # `or None`, vì None hồi sinh allowlist mặc định rộng của core.
+        mcp_allowlist=pack.allowlist,
         actor=getattr(loaded, "profile_id", ""),  # v46
     )
     checked, delivered = 0, False
