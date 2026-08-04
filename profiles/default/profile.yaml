@@ -25,7 +25,7 @@ safety:
 
 runtime:                      # M2-P8 infra (opt-in; defaults = self-contained local)
   checkpointer: sqlite        # CHECKPOINTER_TYPE  (sqlite | postgres)
-  store: memory               # STORE_TYPE  (memory | postgres) — cross-thread memory
+  store: sqlite               # STORE_TYPE  (memory | postgres) — cross-thread memory
   postgres_dsn: ""            # POSTGRES_DSN  (required only when checkpointer/store = postgres)
 
 thresholds:                   # all explicit (numeric 0 must win over fallback)
