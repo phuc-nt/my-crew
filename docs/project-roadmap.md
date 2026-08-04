@@ -143,6 +143,12 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
   CONDITIONAL như `needs_shell` — DAG cũ hash y nguyên.
 - [x] **Gỡ-stall một chạm (v63)**: 3 lệnh ops `accept_stalled_result` / `retry_stalled_step`
   / `drop_stalled_step` + escalate kèm evidence pack (tóm tắt verdict trượt, wrapped).
+- [x] **v64 — vá 4 finding UAT vòng 3 (2026-08-04)**: honest-drop (cấm bịa số liệu sau
+  bước bị bỏ — 3 lớp: placeholder/system-prompt/aggregate) · shell guard plan-time
+  (needs_shell không ai chạy được → chết lúc lập kế hoạch; analyst bật sandbox Docker,
+  chuỗi viết-code→chạy-thật→báo-cáo đã sống, engine=deep_agent) · review CHỈ terminal +
+  external_write (hết nổ 23 dòng) · queue ưu tiên task chưa-chạy (hết đói 40').
+  Còn backlog: round-robin đầy đủ · scope read-path `_approval_status` theo agent.
 - [x] **Autopilot toàn quyền (v63, CEO chốt 2026-08-04 "Toàn quyền thật")**: flag
   `company.yaml::autopilot` + lệnh `set_autopilot on|off`; bật → tự xác nhận kế hoạch
   (đường hash-bind của `team_task_auto_confirm`), tự gỡ stall (thang retry→accept/drop,
