@@ -1,5 +1,5 @@
 # v70 — Trợ lý cá nhân `pong` (thay OpenClaw personal assistant)
-2026-08-05 · ✅ Done (chờ 1 thao tác người: `/start` bot mới)
+2026-08-05 · ✅ Done — UAT sống, DM thật cả 2 kind
 
 ## Làm gì
 - Dựng agent thứ hai trên `personal-pack`: `pong`, bot Telegram riêng, không đụng
@@ -40,6 +40,13 @@
 - Test "briefing không trả giá nhóm tuần" ban đầu chỉ chứng minh key vắng mặt — chưa
   phải khẳng định về CHI PHÍ. Nâng lên đếm-lượt-gọi; mutation-test xác nhận bản cũ cho
   lọt mutant "gọi rồi vứt kết quả".
+- **UAT sống bắt lỗi 2802 test xanh không thấy** (lại đúng bài học v66 "wired ≠ có điện"):
+  weekly viết "Nguồn chưa nối: Goodreads" trong khi `goodreads_activity_7d` đang cầm sách
+  thật, lại bịa thêm GitHub/LinkedIn/Substack — vốn chỉ là NGƯỜI GỬI trong hộp thư. Prompt
+  bắt viết dòng "nguồn chưa nối" mà không định nghĩa thế nào là chưa nối ⇒ model tự đoán.
+  Sửa cả 2 prompt: chỉ gọi tên key mang đúng "(chưa cấu hình)"/"(chưa đọc được: …)", key có
+  nội dung thật là ĐÃ nối, cấm suy nguồn từ tên người gửi, không có thì bỏ hẳn dòng. Đúng
+  lớp honest-drop v64: snapshot đúng nhưng bản tin nói sai — chỉ đọc NỘI DUNG mới bắt được.
 - Quét bí mật sau commit bắt được **id Goodreads thật của CEO hardcode 16 chỗ** trong 2
   file test. Repo PUBLIC + ship PyPI ⇒ dữ liệu cá nhân bị phát tán, dù chỉ là fixture.
   Mọi test đều stub `urlopen` nên id thật không làm gì — thay bằng id giả. Bài học: quét
@@ -47,10 +54,10 @@
   khi commit chứ không phải trước khi push.
 
 ## Mở / sang sau
-- **Chặn 1 bước người:** Telegram cấm bot mở hội thoại trước; `chat_id` chỉ tồn tại sau
-  khi user nhắn bot lần đầu. Đến khi CEO `/start` bot mới, API trả `chat not found` —
-  không vá bằng code được. Không cần restart daemon (registry đọc lại mỗi tick, `.env`
-  đọc lại mỗi worker).
+- Telegram cấm bot mở hội thoại trước: `chat_id` chỉ tồn tại sau khi user nhắn bot lần
+  đầu, trước đó API trả `chat not found` — ràng buộc nền tảng, không vá bằng code. CEO
+  `/start` xong là thông ngay, KHÔNG cần restart daemon (registry đọc lại mỗi tick,
+  `.env` mỗi worker). Chạy thật: briefing $0.0024, weekly $0.0014.
 - `_recent_lessons` đọc namespace memory của **coordinator**, không phải của agent cá
   nhân — an toàn với fleet một chủ, nhưng đây là chỗ duy nhất v70 nới tầm nhìn của pack.
 - `tasks_pending` chỉ đọc tasklist `@default`; tasklist thứ hai sẽ hỏng đúng kiểu im

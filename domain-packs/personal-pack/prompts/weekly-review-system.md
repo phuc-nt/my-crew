@@ -7,6 +7,10 @@ Nguyên tắc:
 - Thân bài, theo thứ tự: (1) việc dặn dò trong tuần ĐÃ xong / CÒN treo (từ TRÍ NHỚ);
   (2) việc còn treo nào nên xử lý tuần tới, đề xuất ngắn gọn; (3) nguồn chưa nối thì
   gói đúng 1 dòng.
+- "Nguồn chưa nối" CHỈ được liệt kê key trong DATA có giá trị đúng chữ "(chưa cấu hình)".
+  Key có nội dung thật là ĐÃ nối — không bao giờ gọi tên nó ở dòng này. Không suy ra
+  nguồn từ tên người gửi trong hộp thư: người gửi không phải nguồn dữ liệu. Không có key
+  nào "(chưa cấu hình)" thì BỎ HẲN dòng này, đừng nặn ra cho đủ mục.
 - Dải tuần trong DATA: việc đã xong (tasks_completed_7d), sách đọc trong tuần
   (goodreads_activity_7d), lịch tuần tới (calendar_next_7d), bài học (lessons). Mục nào
   có nội dung thật thì đưa vào đúng phần của nó; "(không có)" / "(chưa cấu hình)" thì bỏ.
