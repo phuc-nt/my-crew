@@ -3,6 +3,58 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.8.0] — 2026-08-05
+
+Disciplined autonomy (v67–v69): 0.7.0 let the AI approve its own work; this release
+makes the human's remaining approvals actually reachable. A Lớp B action used to wait
+in a web banner nobody had open. Now queuing it pushes a Telegram notice, the CEO
+approves or rejects from the same chat, and a standing rule can retire the question —
+while the heartbeat keeps naming anyone still blocked.
+
+### Added
+- **Approval push**: queuing a Lớp B action DMs the operator with the id, the agent,
+  and one identifying line. Content is identity-only — recipients, tool name, argv
+  prefix — never subjects or bodies, with newlines collapsed so a crafted value cannot
+  paint a fake line beside the confirm prompt.
+- **Approve/reject from chat** (admin-only — these reach into other agents' stores, so
+  they are fleet authority, not orchestration): a third surface on the same gateway
+  path, not a second approval road. The `(agent_id, approval_id)` pair binds at preview
+  and is never re-resolved, so a push landing mid-conversation cannot move the target.
+- **Learned approval rules**: an always/deny rule for the action type, described in
+  words translated from the binding actually computed — never as a params hash, since
+  consenting to a blind digest is consenting blind. An action chat cannot summarize
+  refuses a standing rule outright. Deny rules apply only in `guarded` trust mode.
+- **Blocked approvals in the heartbeat digest** (fifth signal): every pending row
+  across every enabled agent, reported regardless of age, and exempt from model
+  suppression — a pending approval means an agent has stopped, and only this human can
+  unblock it.
+- **`list_lessons`**: shows the CEO what the coordinator learned from finished work,
+  which until now was written and never read back.
+- **Task revival count** in `list_team_tasks`: a task the CEO had to retry after a
+  stall reported the same step counts as one that ran straight through.
+
+### Changed
+- `ApprovalStore` moves to WAL with a 30s busy timeout. With three surfaces writing one
+  queue, the default rollback journal raised "database is locked" immediately — worst
+  of all in `approve()`'s revert-to-pending after a handler failure, which could strand
+  a row in `approved` for an action that never ran. Existing databases upgrade in place.
+- The reflection pass tags each lesson at the write site, so lessons can be told apart
+  from the ordinary facts that share their namespace and shape. Lessons written before
+  the tag do not appear in `list_lessons`; the set refills itself as tasks finish.
+
+### Fixed
+- **Reject is now compare-and-set on every surface.** A blind reject could land on a row
+  another surface had already approved and executed, leaving the store claiming
+  "rejected" for an action that really ran — and teaching a standing deny rule from that
+  phantom decision. Each caller now reports the lost race instead of claiming a decision
+  it did not make.
+- An `approvals.db` holding only the learned-rules table (the rule store creates the
+  same file) no longer reads as an error. An agent in that state simply holds no
+  approvals; raising took the whole fleet's approvals signal down permanently, across
+  both the digest and the chat list that share the reader.
+- The reflection cooldown marker is keyed by task generation, so a revived task can be
+  reflected on again instead of being permanently silenced by its first attempt.
+
 ## [0.7.0] — 2026-08-04
 
 The secretary arc (v57–v66): my-crew grows from "a company you watch work" into "a
