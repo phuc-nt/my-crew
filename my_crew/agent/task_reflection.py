@@ -155,6 +155,10 @@ def is_durable_lesson(text: str) -> bool:
 #: Cooldown markers live here, NOT in the `"memory"` namespace — see the module docstring.
 _MARKER_NAMESPACE_KIND = "reflected"
 
+#: Written into every lesson row so a reader can tell lessons apart from the ordinary
+#: facts `memory_node` writes into the same namespace with the same shape.
+SOURCE_REFLECTION = "reflection"
+
 
 def _reflected_key(task_id: str, generation: int = 0) -> str:
     """Cooldown marker key — one per task GENERATION, not one per task forever.
@@ -282,7 +286,12 @@ def _reflect_inner(
     # Same content-hash keying as `memory_node`, so an identical lesson learned from two
     # different tasks collapses into one entry instead of accumulating duplicates.
     key = hashlib.sha256(lesson.encode("utf-8")).hexdigest()[:16]
-    store.put(namespace, key, {"fact": lesson, "ts": ts})
+    # `source` marks this row as a lesson learned from a finished task, not an ordinary
+    # remembered fact — both live in the same namespace with the same `{"fact","ts"}`
+    # shape, so without the tag a reader cannot tell them apart. Additive on purpose:
+    # every existing reader projects an allowlist (`value.get("fact")`), so an unknown
+    # key is ignored rather than breaking them.
+    store.put(namespace, key, {"fact": lesson, "ts": ts, "source": SOURCE_REFLECTION})
     logger.info("team-tick: lesson học được từ task %s: %s", task.id, lesson[:120])
 
 

@@ -349,6 +349,36 @@ def test_list_team_tasks_flags_done_but_undelivered(tmp_path):
     assert "CHƯA BÁO ĐƯỢC" in reply
 
 
+def test_list_team_tasks_says_how_many_times_a_task_came_back_to_life(tmp_path):
+    """A revived task reports the same step counts as one that ran straight through, so
+    without this the CEO cannot tell "went fine" from "I had to retry it twice"."""
+    from my_crew.agent.ops_list_team_tasks import run_list_team_tasks
+
+    store = _open_store(tmp_path)
+    try:
+        store.create_task(task_id="t1", title="Viec phai retry")
+        store.set_task_status("t1", "stalled")
+        assert store.reopen_stalled("t1") is True
+        store.set_task_status("t1", "stalled")
+        assert store.reopen_stalled("t1") is True
+    finally:
+        store.close()
+
+    assert "hồi sinh 2 lần" in run_list_team_tasks({})
+
+
+def test_a_task_that_never_stalled_says_nothing_about_revival(tmp_path):
+    from my_crew.agent.ops_list_team_tasks import run_list_team_tasks
+
+    store = _open_store(tmp_path)
+    try:
+        store.create_task(task_id="t1", title="Viec chay mot mach")
+    finally:
+        store.close()
+
+    assert "hồi sinh" not in run_list_team_tasks({})
+
+
 # --- C1 regression: the tick AFTER a retry must dispatch the rework, not re-stall -----
 
 

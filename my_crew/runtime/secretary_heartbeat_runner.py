@@ -11,7 +11,8 @@ Order of the gates, each one cheaper than the next:
 3. digest non-empty?             (SQL only — the common case exits here, free)
 4. any problem not yet raised?   (per-item — old news stays quiet, a new item speaks)
 5. mid-conversation?             (defer rather than interrupt the CEO mid-sentence)
-6. model says it is worth it?    (ack token / too-short reply ⇒ drop)
+6. model says it is worth it?    (ack token / too-short reply ⇒ drop) — skipped for a
+   fresh scratch item or pending approval, which must always be said
 
 The heartbeat only ever REPORTS. It never assigns work, creates reminders, or moves a
 task — a proactive loop with write authority can amplify its own mistakes, so the
@@ -77,8 +78,11 @@ def _pulse(loaded: Any, settings: Any) -> dict:
         return _quiet("writes_disabled")
 
     digest = build_digest(agent_id)
+    # Every signal counts: this is the run event's only record of how much the pulse
+    # surveyed, so a missing term reads as "checked nothing" on a pulse that did speak.
     checked = (len(digest.stalled) + len(digest.undelivered)
-               + len(digest.reminders) + len(digest.stale_drafts))
+               + len(digest.reminders) + len(digest.stale_drafts)
+               + len(digest.scratch) + len(digest.approvals))
     live = set(digest.item_keys())
     reported = load_reported(agent_id)
     if digest.errors:
@@ -115,11 +119,14 @@ def _pulse(loaded: Any, settings: Any) -> dict:
     # The message covers the whole live picture, but only `fresh` decides whether to
     # speak — the CEO gets full context without being re-pinged for old news.
     text = format_digest(digest)
-    # A scratch item among the FRESH keys means the CEO asked to be reminded now, which
-    # is an instruction rather than something for the model to weigh. System-detected
-    # problems keep the suppression licence exactly as before.
-    scratch_is_fresh = any(k.startswith("scratch:") for k in fresh)
-    message, cost_usd = _compose(settings, text, may_suppress=not scratch_is_fresh)
+    # Two kinds of FRESH key take the suppression licence away, because neither is a
+    # judgment call: a scratch item is the CEO's own standing instruction to remind them,
+    # and a pending approval means an agent has STOPPED and only this specific human can
+    # unblock it. Everything else is system-detected and the model still weighs it.
+    # Both verified against the live model — alone, each was answered with the ack token,
+    # silently swallowing the one message that had to arrive.
+    must_speak = any(k.startswith(("scratch:", "approval:")) for k in fresh)
+    message, cost_usd = _compose(settings, text, may_suppress=not must_speak)
     # Newly-raised problems become "told"; anything that resolved since the last pulse is
     # forgotten so it can speak up again if it returns.
     if message is None:

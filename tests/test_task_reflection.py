@@ -13,6 +13,7 @@ import pytest
 
 from my_crew.agent.task_reflection import (
     NOTHING_TOKEN,
+    SOURCE_REFLECTION,
     is_durable_lesson,
     make_reflect,
 )
@@ -390,3 +391,26 @@ def test_a_budget_cap_breach_never_escapes(monkeypatch):
     monkeypatch.setattr("my_crew.llm.client.LlmClient", _Capped)
     store = FakeStore()
     make_reflect("coordinator", _settings(), store)(_task(), "stalled", "")  # must not raise
+
+
+def test_a_lesson_is_tagged_as_coming_from_reflection(fake_llm):
+    """Lessons share a namespace AND a `{"fact","ts"}` shape with the facts `memory_node`
+    writes, so "has a fact" cannot distinguish them. The tag is the only honest way for a
+    reader to list lessons without also listing ordinary chat memory."""
+    fake_llm.replies.append("Bước viết cần tiêu chí nghiệm thu bằng số.")
+    store = FakeStore()
+    make_reflect("coordinator", _settings(), store)(_task(), "stalled", "")
+
+    rows = [v for v in store.data[("coordinator", "memory")].values() if "fact" in v]
+    assert [r["source"] for r in rows] == [SOURCE_REFLECTION]
+
+
+def test_the_cooldown_marker_is_not_tagged_as_a_lesson(fake_llm):
+    """The marker lives in its own namespace and is not a lesson; tagging it would make
+    a `source == "reflection"` filter surface bookkeeping rows as things we learned."""
+    fake_llm.replies.append("Bước viết cần tiêu chí nghiệm thu bằng số.")
+    store = FakeStore()
+    make_reflect("coordinator", _settings(), store)(_task(), "stalled", "")
+
+    markers = store.data[("coordinator", "reflected")].values()
+    assert markers and all("source" not in v for v in markers)

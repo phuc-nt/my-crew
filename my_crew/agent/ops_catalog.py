@@ -58,6 +58,7 @@ from my_crew.agent.ops_heartbeat_cmds import (
     run_enable_heartbeat,
     run_stop_heartbeat_watch,
 )
+from my_crew.agent.ops_list_lessons import run_list_lessons
 from my_crew.agent.ops_list_team_tasks import run_list_team_tasks
 from my_crew.agent.ops_send_message import preview_send_message, run_send_message
 from my_crew.agent.ops_stalled_task import (
@@ -664,6 +665,15 @@ OPS_COMMANDS: dict[str, dict] = {
     # v69 chat approval surface — the third surface on the Lớp B queue, beside the CLI
     # and the web banner. Admin-only: these reach into OTHER agents' approval stores, so
     # they are fleet authority, not orchestration (deliberately out of the personal subset).
+    # v69 — what the coordinator learned from finished team tasks. Orchestration, not
+    # fleet admin: it reads one namespace of the coordinator's own memory, and the CEO
+    # asking "we keep getting stuck, what have we learned" is a delegation question.
+    "list_lessons": {
+        "description": "Xem các bài học rút ra từ những việc đã giao cho nhóm",
+        "readonly": True,
+        "slots": {},
+        "run": run_list_lessons,
+    },
     "list_approvals": {
         "description": "Xem mọi việc đang chờ CEO duyệt, của tất cả agent",
         "readonly": True,
@@ -784,6 +794,9 @@ ORCHESTRATION_COMMAND_IDS = frozenset({
     # v68 heartbeat — the pulse belongs to the secretary, so its controls do too. These
     # touch only that agent's own heartbeat store, never the fleet.
     "add_heartbeat_watch", "stop_heartbeat_watch", "enable_heartbeat",
+    # v69 lessons — reads the coordinator's own reflection memory; a delegation question,
+    # not fleet authority (unlike the approval commands, which reach into other agents).
+    "list_lessons",
 })
 
 

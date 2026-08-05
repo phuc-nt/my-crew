@@ -531,6 +531,129 @@ def test_an_abandoned_draft_stops_deferring_after_the_ttl(isolated):
     assert _is_mid_conversation("secretary", now=now + DRAFT_TTL_S + 1) is False
 
 
+# --- pending approvals (signal 5) ----------------------------------------------------
+
+
+def _registry(monkeypatch, *agent_ids):
+    monkeypatch.setattr(
+        "my_crew.runtime.registry.load_registry",
+        lambda *a, **k: [SimpleNamespace(id=i, enabled=True) for i in agent_ids],
+    )
+
+
+def _queue(isolated, agent_id, action, *, reason="Lớp B"):
+    """Enqueue through the real ApprovalStore so the digest reads a genuine schema."""
+    from my_crew.actions.approval_store import ApprovalStore
+
+    (isolated / agent_id).mkdir(parents=True, exist_ok=True)
+    store = ApprovalStore(isolated / agent_id / "approvals.db")
+    try:
+        return store.enqueue(action, reason=reason, actor=agent_id)
+    finally:
+        store.close()
+
+
+def test_a_pending_approval_is_reported_with_the_agent_that_is_blocked(isolated, monkeypatch):
+    """Two agents can hold the same approval id, so the agent has to be part of both the
+    rendered line and the dedup key — otherwise one agent's queue mutes the other's."""
+    _registry(monkeypatch, "secretary", "coordinator")
+    _queue(isolated, "secretary", {"type": "email_send", "to": "ceo@acme.com"})
+    _queue(isolated, "coordinator", {"type": "email_send", "to": "ceo@acme.com"})
+
+    digest = build_digest("secretary")
+    assert digest.errors == ()
+    assert {(a["agent_id"], a["id"]) for a in digest.approvals} == {
+        ("secretary", 1), ("coordinator", 1),
+    }
+    assert set(digest.item_keys()) == {"approval:secretary:1", "approval:coordinator:1"}
+
+
+def test_an_empty_queue_leaves_the_digest_silent(isolated, monkeypatch):
+    _registry(monkeypatch, "secretary")
+    assert not build_digest("secretary")
+
+
+def test_a_disabled_agent_queue_is_not_read(isolated, monkeypatch):
+    """A disabled agent is not running, so nothing is waiting on the CEO for it."""
+    monkeypatch.setattr(
+        "my_crew.runtime.registry.load_registry",
+        lambda *a, **k: [SimpleNamespace(id="retired", enabled=False)],
+    )
+    _queue(isolated, "retired", {"type": "email_send", "to": "ceo@acme.com"})
+    assert build_digest("secretary").approvals == ()
+
+
+def test_an_unreadable_approvals_db_becomes_an_error_not_an_empty_queue(isolated, monkeypatch):
+    """The load-bearing case: the reader must RAISE so the pulse records an error. An
+    error keeps the runner's reported set whole; a swallowed `[]` would read as 'the queue
+    emptied', prune every key, and re-announce the entire queue when the db recovers."""
+    _registry(monkeypatch, "secretary")
+    _queue(isolated, "secretary", {"type": "email_send", "to": "ceo@acme.com"})
+    (isolated / "secretary" / "approvals.db").write_bytes(b"not a database at all")
+
+    digest = build_digest("secretary")
+    assert "approvals" in digest.errors
+    assert digest.approvals == ()
+
+
+def test_a_pending_approval_speaks_once_then_stays_quiet(isolated, monkeypatch):
+    _digest_sequence(monkeypatch, [
+        HeartbeatDigest(approvals=({"id": 1, "agent_id": "secretary", "summary": "gửi email"},)),
+        HeartbeatDigest(approvals=({"id": 1, "agent_id": "secretary", "summary": "gửi email"},)),
+    ])
+    calls = _counting_transport(monkeypatch)
+    settings = SimpleNamespace(write_disabled=False)
+
+    assert run_secretary_heartbeat(_loaded(), settings)["status"] == "delivered"
+    assert run_secretary_heartbeat(_loaded(), settings)["status"] == "unchanged"
+    assert calls["dm"] == 1
+
+
+def test_a_broken_approvals_read_does_not_re_announce_the_whole_queue(isolated, monkeypatch):
+    """The storm this signal's strict reader exists to prevent, end to end."""
+    pending = ({"id": 1, "agent_id": "secretary", "summary": "gửi email"},
+               {"id": 2, "agent_id": "secretary", "summary": "gửi email"})
+    _digest_sequence(monkeypatch, [
+        HeartbeatDigest(approvals=pending),
+        # db unreadable: no approval rows, but another signal keeps the pulse truthy
+        HeartbeatDigest(
+            reminders=({"id": "r1", "text": "họp", "due_at": "x", "overdue": False},),
+            errors=("approvals",),
+        ),
+        HeartbeatDigest(approvals=pending),   # db recovered, same two approvals
+    ])
+    calls = _counting_transport(monkeypatch)
+    settings = SimpleNamespace(write_disabled=False)
+
+    run_secretary_heartbeat(_loaded(), settings)   # both approvals announced
+    run_secretary_heartbeat(_loaded(), settings)   # the reminder announced
+    assert load_reported("secretary") >= {"approval:secretary:1", "approval:secretary:2"}
+    assert run_secretary_heartbeat(_loaded(), settings)["status"] == "unchanged"
+    assert calls["dm"] == 2
+
+
+def test_a_newly_queued_approval_is_the_only_thing_that_speaks(isolated, monkeypatch):
+    old = {"id": 1, "agent_id": "secretary", "summary": "gửi email"}
+    new = {"id": 2, "agent_id": "secretary", "summary": "gửi email"}
+    _digest_sequence(monkeypatch, [
+        HeartbeatDigest(approvals=(old,)),
+        HeartbeatDigest(approvals=(old, new)),
+    ])
+    calls = _counting_transport(monkeypatch)
+    settings = SimpleNamespace(write_disabled=False)
+
+    run_secretary_heartbeat(_loaded(), settings)
+    assert run_secretary_heartbeat(_loaded(), settings)["status"] == "delivered"
+    assert calls["dm"] == 2
+
+
+def test_the_rendered_line_names_the_id_and_agent_the_ceo_must_act_on(isolated):
+    text = format_digest(HeartbeatDigest(
+        approvals=({"id": 7, "agent_id": "secretary", "summary": "gửi email tới ceo@acme.com"},),
+    ))
+    assert "#7" in text and "secretary" in text and "gửi email tới ceo@acme.com" in text
+
+
 # --- schedule synthesis --------------------------------------------------------------
 
 
@@ -887,6 +1010,48 @@ def test_the_model_may_not_veto_a_reminder_the_ceo_asked_for(isolated, monkeypat
     assert seen["may_suppress"] is False  # the licence was never offered
     assert result["status"] == "delivered"
     assert "vụ hợp đồng nhà cung cấp" in sent[0]
+
+
+def test_the_model_may_not_veto_an_agent_waiting_on_the_ceo(isolated, monkeypatch):
+    """Found by the live UAT: a single pending approval was answered with the ack token,
+    so the one message that HAD to arrive never did. A pending approval is not a judgment
+    call — an agent has stopped and only this human can unblock it."""
+    _digest_sequence(monkeypatch, [
+        HeartbeatDigest(approvals=({"id": 3, "agent_id": "secretary",
+                                    "summary": "gửi email tới ceo@acme.com"},)),
+    ])
+    seen: dict[str, bool] = {}
+
+    def _turn(settings, prompt):
+        seen["may_suppress"] = HEARTBEAT_ACK in prompt
+        return HEARTBEAT_ACK, 0.0001  # the model votes to stay silent anyway
+
+    monkeypatch.setattr("my_crew.runtime.secretary_heartbeat_runner._model_turn", _turn)
+    sent: list[str] = []
+    monkeypatch.setattr(
+        "my_crew.actions.telegram_write.send_telegram_message",
+        lambda text, **kw: sent.append(text) or SimpleNamespace(status="executed"),
+    )
+    monkeypatch.setattr(
+        "my_crew.actions.action_gateway.ActionGateway",
+        lambda *a, **k: SimpleNamespace(close=lambda: None),
+    )
+
+    result = run_secretary_heartbeat(_loaded(), SimpleNamespace(write_disabled=False))
+    assert seen["may_suppress"] is False   # the licence was never offered
+    assert result["status"] == "delivered"
+    assert "#3" in sent[0]
+
+
+def test_a_pending_approval_counts_toward_what_the_pulse_checked(isolated, monkeypatch):
+    """`checked` feeds the run event. Omitting a signal from it under-reports the work the
+    pulse actually did, which is how a signal becomes invisible in the timeline."""
+    _digest_sequence(monkeypatch, [
+        HeartbeatDigest(approvals=({"id": 3, "agent_id": "secretary", "summary": "gửi email"},)),
+    ])
+    _counting_transport(monkeypatch)
+    result = run_secretary_heartbeat(_loaded(), SimpleNamespace(write_disabled=False))
+    assert result["checked"] == 1
 
 
 def test_a_system_problem_keeps_the_suppression_licence(isolated, monkeypatch):

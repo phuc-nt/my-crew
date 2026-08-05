@@ -5,7 +5,7 @@ CEO". That promise is only affordable because this module answers "is there anyt
 with SQL instead of a model call: an empty digest costs zero tokens, so a quiet system
 is free to check every 30 minutes forever.
 
-Every signal here is read from a column that actually exists. Four signals, chosen
+Every signal here is read from a column that actually exists. Five signals, chosen
 because each one means a human has to do something:
 
 1. `stalled` team tasks — the ticker could not proceed on its own.
@@ -17,6 +17,8 @@ because each one means a human has to do something:
    reminder means the per-minute sweep is failing to deliver, which is worth saying.
 4. The operator's own ops draft left `awaiting_confirm` — a conversation the CEO started
    and never finished.
+5. Lớp B actions sitting `pending` in any agent's approval queue — work an agent has
+   already stopped doing while it waits for a human, across the whole fleet.
 
 Plus one signal that is NOT a query: the scratch checklist. The CEO can say "để ý giùm X"
 about something the system has no column for, so it does not guess a status — it simply
@@ -48,6 +50,11 @@ class HeartbeatDigest:
     undelivered: tuple[dict, ...] = ()
     reminders: tuple[dict, ...] = ()
     stale_drafts: tuple[dict, ...] = ()
+    #: Lớp B actions waiting on a human, across every enabled agent. Every pending row is
+    #: reported regardless of age: unlike a draft (which the CEO abandoned by choice), a
+    #: pending approval is an agent BLOCKED — there is no threshold at which it stops
+    #: mattering, and the queue is normally empty so this costs nothing when quiet.
+    approvals: tuple[dict, ...] = ()
     #: Things the CEO asked to be kept an eye on. Unlike the four signals above these are
     #: NOT derived from any column — the system has no data about them, so it only echoes
     #: the CEO's own words back on a slow cadence rather than inventing a status.
@@ -60,7 +67,7 @@ class HeartbeatDigest:
         """True when there is something worth telling the CEO. Read errors alone do NOT
         make a digest truthy — a transient unreadable store must not wake the CEO."""
         return bool(self.stalled or self.undelivered or self.reminders
-                    or self.stale_drafts or self.scratch)
+                    or self.stale_drafts or self.approvals or self.scratch)
 
     def item_keys(self) -> tuple[str, ...]:
         """One stable id PER PROBLEM — the unit the 'already told them' dedup works on.
@@ -72,6 +79,14 @@ class HeartbeatDigest:
         turns into 48 DMs a day; and (b) a problem that resolves and RECURS reproduces the
         old key, so it is silently swallowed forever. Tracking each problem on its own
         makes "tell the CEO once per problem" mean exactly that.
+
+        An approval keys on `<agent>:<id>` alone. A row that an approve attempt reverts to
+        `pending` (the handler failed after the CAS) therefore reproduces its old key and
+        stays muted. That is a deliberate trade-off, not an oversight: the CEO already got
+        the failure told to them directly in chat at the moment they approved it, so a
+        second nudge from the heartbeat would repeat what they just read. Adding an
+        attempt counter to the key would only matter if approvals could fail somewhere the
+        CEO is not watching.
         """
         return tuple(sorted(
             [
@@ -79,6 +94,7 @@ class HeartbeatDigest:
                 *(f"undelivered:{t['id']}" for t in self.undelivered),
                 *(f"reminder:{r['id']}" for r in self.reminders),
                 *(f"draft:{d['key']}:{d['command_id']}" for d in self.stale_drafts),
+                *(f"approval:{a['agent_id']}:{a['id']}" for a in self.approvals),
                 # Keyed on the ECHO, not the item: a scratch item is meant to come back
                 # every SCRATCH_REMIND_HOURS, so each new echo has to read as new. Keying
                 # on the id alone would announce it once and then mute it forever.
@@ -88,7 +104,7 @@ class HeartbeatDigest:
 
 
 def build_digest(agent_id: str, *, now: datetime | None = None) -> HeartbeatDigest:
-    """Collect the four signals. Each is best-effort: one unreadable store degrades that
+    """Collect the five signals. Each is best-effort: one unreadable store degrades that
     signal to an error string instead of losing the whole pulse."""
     now = now or datetime.now(UTC)
     errors: list[str] = []
@@ -96,11 +112,44 @@ def build_digest(agent_id: str, *, now: datetime | None = None) -> HeartbeatDige
     undelivered = _collect(errors, "undelivered", _undelivered_tasks)
     reminders = _collect(errors, "reminders", lambda: _due_reminders(agent_id, now))
     drafts = _collect(errors, "drafts", lambda: _stale_drafts(agent_id, now))
+    approvals = _collect(errors, "approvals", _pending_approvals)
     scratch = _collect(errors, "scratch", lambda: _due_scratch(agent_id, now))
     return HeartbeatDigest(
         stalled=stalled, undelivered=undelivered, reminders=reminders,
-        stale_drafts=drafts, scratch=scratch, errors=tuple(errors),
+        stale_drafts=drafts, approvals=approvals, scratch=scratch, errors=tuple(errors),
     )
+
+
+def _pending_approvals() -> list[dict]:
+    """Every agent's pending Lớp B queue, read read-only.
+
+    Uses `read_pending_actions`, which RAISES on an unreadable approvals db, rather than
+    the fleet-view reader that degrades to `[]`. The difference is load-bearing here: the
+    runner prunes its reported set to the keys the digest currently reports, so a swallowed
+    error would read as "nothing is pending anymore", drop every key, and re-announce the
+    whole queue on the next pulse. Letting it raise turns it into an `errors` entry, which
+    is precisely what makes the runner keep the old set instead.
+
+    One unreadable agent therefore costs the WHOLE approvals signal for that pulse. That is
+    the safe direction: reporting a partial queue as if it were complete is what causes the
+    storm, and the next clean pulse recovers.
+    """
+    from my_crew.actions.approval_summary import summarize_action
+    from my_crew.runtime.agent_paths import agent_data_dir
+    from my_crew.runtime.agent_state_reader import read_pending_actions
+    from my_crew.runtime.registry import load_registry
+
+    out: list[dict] = []
+    for entry in load_registry():
+        if not getattr(entry, "enabled", True):
+            continue
+        for row in read_pending_actions(agent_data_dir(entry.id)):
+            out.append({
+                "id": row["id"],
+                "agent_id": entry.id,
+                "summary": summarize_action(row.get("action") or {}),
+            })
+    return out
 
 
 def _due_scratch(agent_id: str, now: datetime) -> list[dict]:
@@ -237,6 +286,10 @@ def format_digest(digest: HeartbeatDigest) -> str:
     if digest.stale_drafts:
         lines.append(f"✍️ {len(digest.stale_drafts)} lệnh còn dở chờ CEO xác nhận:")
         lines += [f"  • {d['command_id']}" for d in digest.stale_drafts[:5]]
+    if digest.approvals:
+        lines.append(f"🔐 {len(digest.approvals)} việc chờ CEO duyệt:")
+        lines += [f"  • #{a['id']} · {a['agent_id']} · {a['summary']}"
+                  for a in digest.approvals[:5]]
     if digest.scratch:
         # Phrased as a reminder, never as a status. The system has no signal for these —
         # claiming "X vẫn ổn" would be an invented fact.

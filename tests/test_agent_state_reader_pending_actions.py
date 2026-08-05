@@ -48,12 +48,29 @@ def test_a_missing_db_is_empty_and_stays_missing(tmp_path):
 
 
 def test_reading_never_writes_schema_into_a_sibling_dir(tmp_path):
-    """`mode=ro`: an empty file must stay empty, not gain an approvals table."""
+    """`mode=ro`: an empty file must stay empty, not gain an approvals table.
+
+    Sqlite reads a zero-byte file as a valid database with no tables, so this takes the
+    same "no approvals table means nothing pending" path as the rule-store-only db below.
+    What matters here is the read-only posture, not which of the two answers comes back.
+    """
     db = tmp_path / "approvals.db"
     db.touch()
-    with pytest.raises(sqlite3.Error):
-        read_pending_actions(tmp_path)
+    assert read_pending_actions(tmp_path) == []
     assert db.stat().st_size == 0
+
+
+def test_a_rule_store_only_db_means_nothing_pending_not_an_error(tmp_path):
+    """`ApprovalRuleStore` puts `approval_rules` in the SAME file, so an agent that
+    consulted a learned rule before ever queueing an approval owns an `approvals.db`
+    with no `approvals` table. That is a legitimate permanent state, and it must not
+    raise: the heartbeat collector loops the whole fleet into one list, so one agent
+    raising here would kill the CEO's approvals signal for every agent, every pulse."""
+    from my_crew.actions.approval_rule_store import ApprovalRuleStore
+
+    ApprovalRuleStore(tmp_path / "approvals.db")
+    assert (tmp_path / "approvals.db").exists()
+    assert read_pending_actions(tmp_path) == []
 
 
 def test_sqlite_failure_raises_instead_of_looking_empty(tmp_path):

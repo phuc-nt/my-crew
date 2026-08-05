@@ -53,6 +53,11 @@ def run_list_team_tasks(slots: dict[str, str]) -> str:
         retro = f"{done}/{len(t.steps)} bước"
         if reviews:
             retro += f", {len(reviews)} lượt soát/{len(reworks)} lần sửa"
+        # A task the CEO had to retry after a stall is a different thing from one that ran
+        # straight through, and the step counts alone hide that entirely — a revived task
+        # reports the same "3/5 bước" as a fresh one. Only shown when it happened.
+        if getattr(t, "reopen_count", 0):
+            retro += f", hồi sinh {t.reopen_count} lần"
         cost = costs.get(t.id, 0.0)
         if cost:
             retro += f", ${cost:.3f}"

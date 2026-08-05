@@ -382,12 +382,22 @@ def read_pending_actions(data_dir: Path) -> list[dict]:
     reported set from what the collector returns, so an empty list swallowed from an
     error would look like "nothing pending anymore" and re-announce every approval on
     the next pulse. The digest runner keeps the reported set when a collector raises.
+
+    One state is emphatically NOT an error, though: a db that exists but has no
+    `approvals` table. `ApprovalRuleStore` creates the same file for its own
+    `approval_rules` table, so any agent whose team tick consulted a learned rule before
+    it ever queued an approval has exactly this shape — a permanent, legitimate "nothing
+    pending here". Raising on it would take the whole fleet's signal down for good.
     """
     db = data_dir / "approvals.db"
     if not db.exists():
         return []
     conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     try:
+        if not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'approvals'"
+        ).fetchone():
+            return []
         rows = conn.execute(
             "SELECT id, action_json, reason, created_at, actor FROM approvals "
             "WHERE status = 'pending' ORDER BY id"
