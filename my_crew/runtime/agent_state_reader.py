@@ -368,6 +368,45 @@ def _read_pending(data_dir: Path) -> list[dict]:
     return [{"id": r[0], "reason": r[1], "created_at": r[2]} for r in rows]
 
 
+def read_pending_actions(data_dir: Path) -> list[dict]:
+    """Pending Lớp B approvals WITH their action dict (v69).
+
+    Separate from `_read_pending` on purpose: that one deliberately omits the action
+    (the fleet view wants the queue shape, not payloads) and its contract is relied on
+    by the admin pack. The chat approval list and the heartbeat digest need the action
+    itself, because both render `summarize_action` from it.
+
+    Same read-only posture (`mode=ro`, no DDL — this reads a SIBLING agent's data dir
+    and must never write schema into it). Unlike `_read_pending`, a sqlite failure
+    RAISES rather than degrading to `[]`: the digest's echo-suppression prunes its
+    reported set from what the collector returns, so an empty list swallowed from an
+    error would look like "nothing pending anymore" and re-announce every approval on
+    the next pulse. The digest runner keeps the reported set when a collector raises.
+    """
+    db = data_dir / "approvals.db"
+    if not db.exists():
+        return []
+    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        rows = conn.execute(
+            "SELECT id, action_json, reason, created_at, actor FROM approvals "
+            "WHERE status = 'pending' ORDER BY id"
+        ).fetchall()
+    finally:
+        conn.close()
+    out: list[dict] = []
+    for r in rows:
+        try:
+            action = json.loads(r[1])
+        except (json.JSONDecodeError, TypeError):
+            action = {}
+        out.append({
+            "id": r[0], "action": action if isinstance(action, dict) else {},
+            "reason": r[2], "created_at": r[3], "actor": r[4] or "",
+        })
+    return out
+
+
 def _read_audit_counts(data_dir: Path) -> dict[str, int]:
     """Verdict counts over the audit window from the tail of audit.jsonl."""
     path = data_dir / "audit" / "audit.jsonl"

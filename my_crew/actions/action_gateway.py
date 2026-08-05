@@ -135,6 +135,61 @@ def _label(action: dict[str, Any]) -> str:
     return str(atype)
 
 
+# v69: the CEO reads a queued approval on Telegram, where the raw `interrupt.reason`
+# must NOT be rendered verbatim — for `mcp_tool` and `gh_cli` that string interpolates a
+# tool name / argv composed by an LLM worker (`hard_block.py:127,133,139`), i.e. text an
+# attacker can influence, landing next to a confirm prompt. So the push renders from THIS
+# fixed vocabulary keyed on the action type; anything unrecognized becomes the generic
+# line. The full reason still reaches the audit log and the web view unchanged.
+_REASON_VOCABULARY = {
+    "email_send": "gửi email ra ngoài",
+    "schedule_update": "đổi lịch chạy của chính nó",
+    "team_task_create": "tạo thẻ việc của đội",
+    "team_task_move": "chuyển thẻ việc của đội",
+    "reminder_create": "đặt nhắc hẹn giờ",
+    "reminder_cancel": "huỷ nhắc hẹn giờ",
+    "gws_write": "ghi Google Sheets/Docs",
+    "mcp_tool": "gọi công cụ nhạy cảm",
+    "gh_cli": "chạy lệnh gh nhạy cảm",
+    "telegram_send": "gửi tin nhắn ra ngoài",
+}
+_REASON_FALLBACK = "Lớp B cần người duyệt"
+
+
+def _push_reason(action: dict[str, Any]) -> str:
+    """Fixed-vocabulary reason line for the CEO push (never the raw interrupt text)."""
+    atype = str(action.get("type", "")).lower() if isinstance(action, dict) else ""
+    return _REASON_VOCABULARY.get(atype, _REASON_FALLBACK)
+
+
+def _notify_approval_enqueued(approval_id: int, action: dict[str, Any], actor: str) -> None:
+    """Tell the CEO on Telegram that a Lớp B action is waiting for a signature (v69).
+
+    Routed through `notify_operator_best_effort`, NOT wired per-gateway: ~20 sites
+    construct an `ActionGateway`, so a hand-wired transport would silently miss the
+    agents that enqueue most. That helper sends through the ADMIN agent's own gateway,
+    which also keeps this push out of the enqueueing agent's rate-limit window — a
+    burst of queued approvals must not consume the very budget the agent needs to work.
+
+    Best-effort by contract: every failure is swallowed and logged. A notification is
+    an overlay on the approval queue, never a precondition for queuing.
+    """
+    try:
+        from my_crew.actions.approval_summary import summarize_action
+        from my_crew.runtime.operator_notify import notify_operator_best_effort
+
+        who = actor or "một agent"
+        notify_operator_best_effort(
+            f"⏳ Chờ duyệt #{approval_id} · {who}\n"
+            f"{summarize_action(action)}\n"
+            f"Lý do: {_push_reason(action)}",
+            dedup_hint=f"approval-enqueued:{actor}:{approval_id}",
+            rationale="thông báo CEO có việc chờ duyệt",
+        )
+    except Exception:  # noqa: BLE001 — the queue is the source of truth, the push is not
+        logger.warning("approval push notice failed (id=%s)", approval_id, exc_info=True)
+
+
 class ActionGateway:
     """The one place mutations are authorized, executed, and audited."""
 
@@ -149,6 +204,7 @@ class ActionGateway:
         mcp_allowlist: dict[str, frozenset[str]] | dict[str, tuple[str, ...]] | None = None,
         auto_approve: dict[str, Any] | None = None,
         actor: str = "",
+        notify_enqueued: Any = None,
     ) -> None:
         self._settings = settings
         self._recent_calls: deque[float] = deque()
@@ -156,6 +212,11 @@ class ActionGateway:
         # queued approval so a cross-agent dashboard can attribute actions. "" ⇒ unattributed
         # (byte-identical to pre-v46 rows). Callers pass `actor=loaded.profile_id`.
         self._actor = actor
+        # v69: called after a Lớp B action is queued, to push the CEO a Telegram notice.
+        # Injectable so a test can observe the call without a live transport; the default
+        # is the module-level best-effort helper, so ALL ~20 gateway construction sites
+        # get the push without touching a single caller.
+        self._notify_enqueued = notify_enqueued or _notify_approval_enqueued
         # v8 M23 trust ladder: the agent's auto_approve config (None ⇒ OFF, byte-identical
         # pre-M23). Consulted ONLY at the Lớp B enqueue points; it can never loosen Lớp A /
         # kill-switch / dry-run — an auto-approved action re-enters _execute(approved=True).
@@ -330,6 +391,7 @@ class ActionGateway:
                 self._record(
                     action_type, tool, "pending", interrupt.reason, action, rationale
                 )
+                self._notify_enqueued(approval_id, action, self._actor)
                 return GatewayResult(
                     status="pending_approval",
                     summary=f"{tool} queued for approval (id={approval_id}): {interrupt.reason}",
@@ -488,6 +550,7 @@ class ActionGateway:
             action, reason=reason, rationale=rationale, actor=self._actor
         )
         self._record(action_type, tool, "pending", reason, action, rationale)
+        self._notify_enqueued(approval_id, action, self._actor)
         return GatewayResult(
             status="pending_approval",
             summary=f"{tool} queued for approval (id={approval_id}): {reason}",
