@@ -78,7 +78,14 @@ def reject(agent_id: str, approval_id: int) -> dict:
     loaded = require_agent(agent_id)
     gw = build_gateway(loaded)
     try:
-        gw.reject(approval_id)
+        # False = unknown id, or another surface decided this row first. Same 400 the
+        # approve path gives for an already-consumed id: the banner must refresh rather
+        # than show a rejection that never happened.
+        if not gw.reject(approval_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Approval id={approval_id} is unknown or no longer pending.",
+            )
     finally:
         gw.close()
     return {"agent_id": agent_id, "rejected": approval_id, "pending": _pending_json(loaded)}

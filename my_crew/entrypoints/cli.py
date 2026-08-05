@@ -262,7 +262,10 @@ def _run_reject(args: list[str], settings, config) -> int:
     if not args or not args[0].isdigit():
         print("usage: reject <id>", file=sys.stderr)
         return 2
-    _gateway(settings, config).reject(int(args[0]))
+    if not _gateway(settings, config).reject(int(args[0])):
+        print(f"error: #{args[0]} không còn chờ duyệt (đã được xử lý trước đó)",
+              file=sys.stderr)
+        return 1
     print(f"rejected #{args[0]}")
     return 0
 

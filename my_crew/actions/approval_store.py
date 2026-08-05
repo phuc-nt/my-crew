@@ -30,12 +30,22 @@ class PendingApproval:
 
 
 class ApprovalStore:
-    """SQLite-backed queue of Lớp B actions awaiting human approval."""
+    """SQLite-backed queue of Lớp B actions awaiting human approval.
+
+    WAL + `busy_timeout` (the same posture as `TeamTaskStore`) because this file has
+    real multi-process writers: the owning agent queues rows while the CLI, the web
+    server, and the ops-chat agent all decide them. Under the default rollback journal
+    a concurrent writer raises "database is locked" immediately — and the worst place
+    that can land is `approve()`'s revert-to-pending after a handler failure, which
+    would leave a row stuck in `approved` for an action that never ran.
+    """
 
     def __init__(self, db_path: Path) -> None:
         self._path = db_path
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self._path), check_same_thread=False)
+        self._conn = sqlite3.connect(str(self._path), check_same_thread=False, timeout=30.0)
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=30000")
         self._conn.execute(
             "CREATE TABLE IF NOT EXISTS approvals ("
             "  id INTEGER PRIMARY KEY AUTOINCREMENT,"

@@ -130,7 +130,12 @@ def _reject(loaded, rest: list[str]) -> int:
     always = "--always" in rest
     gw = _gateway(loaded)
     row = gw._approvals.get(approval_id) if always else None
-    gw.reject(approval_id)
+    if not gw.reject(approval_id):
+        # Another surface (web, chat, or a second CLI) already decided this row.
+        # Say so instead of claiming a rejection that did not happen — and do NOT
+        # learn a deny rule from a decision that was not ours to make.
+        print(f"error: #{approval_id} đã được xử lý trước đó", file=sys.stderr)
+        return 1
     print(f"rejected #{approval_id}")
     if always and row is not None:
         agent_id = getattr(loaded, "profile_id", "")

@@ -595,16 +595,29 @@ class ActionGateway:
             self._approvals.set_status(approval_id, "pending")
             raise
 
-    def reject(self, approval_id: int) -> None:
-        """Mark a pending approval as rejected (not executed) and audit the decision."""
+    def reject(self, approval_id: int) -> bool:
+        """Mark a PENDING approval as rejected (not executed) and audit the decision.
+
+        Returns True only when THIS call won the transition. Like `approve`, the
+        status change is a compare-and-set: a blind UPDATE would let a reject land
+        on a row another surface already approved and executed, leaving the store
+        claiming "rejected" for an action that actually ran. With three surfaces on
+        this queue (CLI, web, chat) that race is reachable, not theoretical.
+
+        A caller that loses the race must not treat the row as its own decision —
+        in particular it must not learn a standing deny rule from it.
+        """
         pending = self._approvals.get(approval_id)
-        self._approvals.set_status(approval_id, "rejected")
-        if pending is not None:
-            action_type = str(pending.action.get("type", "")).lower()
-            self._record(
-                action_type, _label(pending.action), "reject",
-                f"rejected approval id={approval_id}", pending.action, "",
-            )
+        if pending is None:
+            return False
+        if not self._approvals.transition_if_pending(approval_id, "rejected"):
+            return False
+        action_type = str(pending.action.get("type", "")).lower()
+        self._record(
+            action_type, _label(pending.action), "reject",
+            f"rejected approval id={approval_id}", pending.action, "",
+        )
+        return True
 
     def _check_rate_limit(
         self, action_type: str, tool: str, action: dict[str, Any], rationale: str
