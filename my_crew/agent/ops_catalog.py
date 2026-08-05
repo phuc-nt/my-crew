@@ -28,6 +28,13 @@ from my_crew.agent.ops_adjust_team_task import (
     preview_adjust_team_task,
     run_adjust_team_task,
 )
+from my_crew.agent.ops_approvals import (
+    preview_approve_pending_action,
+    preview_reject_pending_action,
+    run_approve_pending_action,
+    run_list_approvals,
+    run_reject_pending_action,
+)
 from my_crew.agent.ops_assign_team_task import (
     cancel_assign_team_task,
     preview_assign_team_task,
@@ -653,6 +660,47 @@ OPS_COMMANDS: dict[str, dict] = {
         },
         "run": run_drop_stalled_step,
         "preview": preview_drop_stalled_step,
+    },
+    # v69 chat approval surface — the third surface on the Lớp B queue, beside the CLI
+    # and the web banner. Admin-only: these reach into OTHER agents' approval stores, so
+    # they are fleet authority, not orchestration (deliberately out of the personal subset).
+    "list_approvals": {
+        "description": "Xem mọi việc đang chờ CEO duyệt, của tất cả agent",
+        "readonly": True,
+        "slots": {},
+        "run": run_list_approvals,
+    },
+    "approve_pending_action": {
+        "description": "Duyệt một việc đang chờ (kèm tuỳ chọn từ nay tự duyệt việc "
+                       "cùng loại cùng đích)",
+        "readonly": False,
+        "slots": {
+            "approval_id": {"prompt": "Mã việc chờ duyệt (số) là bao nhiêu?",
+                            "required": True, "max_len": 10},
+            "agent_id": {"prompt": "Việc đó của agent nào?", "required": True,
+                         "max_len": 40},
+            "scope": {"prompt": "Chỉ duyệt lần này, hay từ nay tự duyệt? "
+                                "(trả lời: một lần / luôn)",
+                      "required": False, "max_len": 20},
+        },
+        "run": run_approve_pending_action,
+        "preview": preview_approve_pending_action,
+    },
+    "reject_pending_action": {
+        "description": "Từ chối một việc đang chờ (kèm tuỳ chọn từ nay chặn hẳn việc "
+                       "cùng loại cùng đích)",
+        "readonly": False,
+        "slots": {
+            "approval_id": {"prompt": "Mã việc chờ duyệt (số) là bao nhiêu?",
+                            "required": True, "max_len": 10},
+            "agent_id": {"prompt": "Việc đó của agent nào?", "required": True,
+                         "max_len": 40},
+            "scope": {"prompt": "Chỉ từ chối lần này, hay từ nay chặn hẳn? "
+                                "(trả lời: một lần / chặn)",
+                      "required": False, "max_len": 20},
+        },
+        "run": run_reject_pending_action,
+        "preview": preview_reject_pending_action,
     },
     # v63 autopilot (CEO 2026-08-04): the secretary decides in the CEO's place.
     "set_autopilot": {

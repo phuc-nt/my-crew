@@ -57,9 +57,14 @@ def _hash_params(parts: list[str]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 
-def _email_domains(action: dict[str, Any]) -> list[str]:
+def email_domains(action: dict[str, Any]) -> list[str]:
     """Recipient domains of an email_send (bind on domain, not full address — a rule for
-    `@acme.com` shouldn't leak to a stranger, but shouldn't churn per individual either)."""
+    `@acme.com` shouldn't leak to a stranger, but shouldn't churn per individual either).
+
+    Public because the chat preview must SAY what a standing rule will cover, and the only
+    honest way to say it is to read the same domains this binds. A second implementation
+    there could drift and describe a narrower rule than the one actually stored.
+    """
     args = action.get("args") or {}
     raw = action.get("to") or args.get("to") or ""
     recipients = raw if isinstance(raw, list) else [raw]
@@ -152,7 +157,7 @@ def derive_rule_key(action: dict[str, Any]) -> tuple[str, str | None]:
         return pattern, None
 
     if atype == "email_send":
-        domains = _email_domains(action)
+        domains = email_domains(action)
         return "email", _hash_params(domains) if domains else None
 
     if atype == "telegram_send":
