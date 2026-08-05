@@ -140,6 +140,94 @@ def test_autopilot_off_leaves_pending_gate_alone(tmp_path):
         store.close()
 
 
+# --- ticker learned Lớp B rules (v67) -------------------------------------------------
+
+
+def _rule_deps(store, *, rule, action=None, **overrides):
+    """Wire the three v67 rule deps onto the awaiting-approval fixture. `rule` is the
+    (scope, id) tuple `approval_rule_match` returns, or None to miss."""
+    approved: list[int] = []
+    rejected: list[int] = []
+    statuses = {77: "pending"}
+
+    def _approve(approval_id: int, agent_id: str) -> bool:
+        approved.append(approval_id)
+        statuses[approval_id] = "approved"
+        return True
+
+    def _reject(approval_id: int, agent_id: str) -> bool:
+        rejected.append(approval_id)
+        statuses[approval_id] = "rejected"
+        return True
+
+    deps = _deps(
+        store,
+        approval_status=lambda aid, agent: statuses.get(aid),
+        approval_approve=_approve,
+        approval_reject=_reject,
+        approval_action=lambda aid, agent: action or {"type": "email_send", "to": "x@y.com"},
+        approval_rule_match=lambda act, agent: rule,
+        **overrides,
+    )
+    return deps, approved, rejected
+
+
+def test_deny_rule_rejects_a_pending_gate_even_with_autopilot_on(tmp_path):
+    """A learned DENY decides before the autopilot flag: the step is rejected+escalated,
+    never auto-approved."""
+    store = _awaiting_approval_fixture(tmp_path)
+    try:
+        deps, approved, rejected = _rule_deps(
+            store, rule=("deny", 5), autopilot_enabled=lambda: True,
+        )
+        result = run_one_tick(deps)
+        assert rejected == [77] and approved == []
+        assert result.action == "failed"
+        assert store.get_step("t1", "s1").status == "failed"
+    finally:
+        store.close()
+
+
+def test_approve_rule_auto_approves_and_respawns(tmp_path):
+    """A learned ALWAYS rule approves a pending gate through the same transition autopilot
+    uses — even with the autopilot flag OFF (the rule is its own standing delegation)."""
+    store = _awaiting_approval_fixture(tmp_path)
+    try:
+        deps, approved, rejected = _rule_deps(store, rule=("approve", 9))
+        result = run_one_tick(deps)
+        assert approved == [77] and rejected == []
+        assert result.action == "spawned"
+    finally:
+        store.close()
+
+
+def test_require_ceo_approval_suppresses_approve_rule(tmp_path):
+    """require_ceo_approval mutes an ALWAYS rule (CEO wants to look) — the gate stays
+    pending, not auto-approved."""
+    store = _awaiting_approval_fixture(tmp_path, require_ceo_approval=True)
+    try:
+        deps, approved, _ = _rule_deps(store, rule=("approve", 9), autopilot_enabled=lambda: True)
+        result = run_one_tick(deps)
+        assert approved == []
+        assert result.action == "none"
+        assert store.get_step("t1", "s1").status == "awaiting_approval"
+    finally:
+        store.close()
+
+
+def test_require_ceo_approval_does_not_suppress_deny_rule(tmp_path):
+    """An explicit ban is never re-opened: a DENY rule still rejects even when the task
+    opted into CEO review."""
+    store = _awaiting_approval_fixture(tmp_path, require_ceo_approval=True)
+    try:
+        deps, _, rejected = _rule_deps(store, rule=("deny", 5))
+        result = run_one_tick(deps)
+        assert rejected == [77]
+        assert result.action == "failed"
+    finally:
+        store.close()
+
+
 # --- stall sweep ladder ---------------------------------------------------------------
 
 

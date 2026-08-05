@@ -225,6 +225,35 @@ def poll_awaiting_approval_step(
         deps.approval_status(step.approval_id, step.assigned_to)
         if step.approval_id else None
     )
+    # v67 learned rules (GUARDED path — the ticker only ever queues in guarded; autonomous
+    # runs inline and never reaches a pending row). A standing rule the CEO taught decides
+    # a still-pending row BEFORE the autopilot flag: DENY rejects (same terminal transition
+    # as a CEO reject), ALWAYS approves (same transition autopilot uses, rule id audited).
+    # require_ceo_approval suppresses the ALWAYS rule for this task (CEO wants to look) but
+    # a DENY still applies — a fresh "let me approve" never re-opens something explicitly
+    # banned. Lớp A never reaches here (it blocked in the gateway before a row existed).
+    if decision == "pending" and step.approval_id:
+        action = deps.approval_action(step.approval_id, step.assigned_to)
+        rule = deps.approval_rule_match(action, step.assigned_to) if action else None
+        if rule is not None:
+            rule_scope, rule_id = rule
+            opted_out = bool(getattr(task, "require_ceo_approval", False))
+            if rule_scope == "deny" and deps.approval_reject(step.approval_id, step.assigned_to):
+                deps.approval_rule_record_use(rule_id, step.assigned_to)
+                decision = "rejected"
+            elif (
+                rule_scope == "approve" and not opted_out
+                and deps.approval_approve(step.approval_id, step.assigned_to)
+            ):
+                from my_crew.agent.ops_autopilot import record_autopilot_decision
+
+                deps.approval_rule_record_use(rule_id, step.assigned_to)
+                record_autopilot_decision(
+                    decision="approve_step", task_id=task.id, task_title=task.title,
+                    detail=f"Tự duyệt bước '{step.title}' theo luật đã học (rule #{rule_id}).",
+                )
+                decision = "approved"
+
     # v63 autopilot: a PENDING Lớp B gate on a non-opted-out task gets approved by the
     # secretary's standing delegation (CEO decision 2026-08-04). The approve goes
     # through the SAME store transition `mpm approve` uses (`transition_if_pending`),

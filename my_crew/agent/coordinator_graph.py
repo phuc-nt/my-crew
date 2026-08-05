@@ -198,6 +198,29 @@ class CoordinatorDeps:
     # (review-found v63 H1). Defaults keep non-autopilot callers byte-identical.
     autopilot_enabled: Callable[[], bool] = lambda: False
     approval_approve: Callable[[int, str], bool] = lambda _approval_id, _agent_id: False
+    # v67 learned rules on the QUEUED (guarded) path. A row already waiting for approval
+    # has no action payload on the step, so `approval_action(approval_id, agent_id)` reads
+    # it from the SAME per-agent ApprovalStore (`None` ⇒ unresolved id). `approval_rule_match`
+    # then asks that agent's ApprovalRuleStore for a standing decision on the action:
+    # ("deny"|"approve", rule_id) or None. Deny here is the guarded path (the ticker only
+    # runs guarded — autonomous never queues), so the CEO-decided guarded-only limit holds.
+    # Defaults keep non-wired callers byte-identical (no action, no rule).
+    approval_action: Callable[[int, str], dict | None] = (
+        lambda _approval_id, _agent_id: None
+    )
+    approval_rule_match: Callable[[dict, str], tuple[str, int] | None] = (
+        lambda _action, _agent_id: None
+    )
+    # approval_reject(approval_id, agent_id) -> True iff it flipped a PENDING row to
+    # rejected (a learned DENY rule on the queued path uses it; a concurrent CEO decision
+    # wins the race cleanly). Same per-agent-FILE scoping as approval_approve. Default
+    # False keeps non-wired callers byte-identical.
+    approval_reject: Callable[[int, str], bool] = lambda _approval_id, _agent_id: False
+    # Stamped only AFTER a matched rule actually decided a row — a rule that lost the race
+    # to a concurrent CEO decision must not show a use in the audit trail.
+    approval_rule_record_use: Callable[[int, str], None] = (
+        lambda _rule_id, _agent_id: None
+    )
     now: Callable[[], datetime] = lambda: datetime.now(UTC)
 
 
@@ -271,6 +294,7 @@ def _last_activity_stamp(task: TeamTask) -> str:
         (ts for s in task.steps for ts in (s.spawned_at, s.last_seen) if ts),
         default="",
     )
+
 
 
 def _act_on_task(deps: CoordinatorDeps, task: TeamTask) -> TickResult:

@@ -12,8 +12,27 @@ from __future__ import annotations
 
 import sys
 
+from my_crew.actions.approval_rule_store import SCOPE_ALWAYS, SCOPE_DENY, derive_rule_key
 from my_crew.entrypoints.mpm import _flag_value
 from my_crew.runtime.agent_paths import agent_data_dir
+
+
+def _describe_rule_key(action: dict) -> str:
+    """Human-readable one-liner for the rule the operator is about to teach."""
+    pattern_key, params_hash = derive_rule_key(action)
+    bound = " (đích cố định)" if params_hash else " (mọi tham số)"
+    return f"{pattern_key}{bound}"
+
+
+def _rule_ack(agent_id: str, action: dict, scope: str, rule_id: int) -> str:
+    """The ack shown after a rule is learned. ALWAYS states the guarded-only limit for a
+    deny rule (CEO decision 2026-08-04) so nobody mistakes it for an autonomous block."""
+    verb = "chặn" if scope == SCOPE_DENY else "duyệt"
+    limit = " — CHỈ hiệu lực ở chế độ guarded" if scope == SCOPE_DENY else ""
+    return (
+        f"Từ giờ tự {verb}: {_describe_rule_key(action)}{limit}. "
+        f"Hoàn tác: mpm agent rules {agent_id} --revoke {rule_id}"
+    )
 
 
 def _load_agent(agent_id: str):
@@ -51,6 +70,8 @@ def run_manage(sub: str, args: list[str]) -> int:
         return _approve(loaded, rest)
     if sub == "reject":
         return _reject(loaded, rest)
+    if sub == "rules":
+        return _rules(loaded, rest)
     return _audit(agent_id, rest)  # sub == "audit"
 
 
@@ -67,9 +88,14 @@ def _approvals(loaded) -> int:
 
 def _approve(loaded, rest: list[str]) -> int:
     if not rest or not rest[0].isdigit():
-        print("usage: mpm agent approve <id> <approval-id>", file=sys.stderr)
+        print("usage: mpm agent approve <id> <approval-id> [--always]", file=sys.stderr)
         return 2
+    approval_id = int(rest[0])
+    always = "--always" in rest
     gw = _gateway(loaded)
+    # Read the row's action BEFORE the transition (approve consumes it) so a --always
+    # rule is derived from the exact action the operator just OK'd — no hand-typed pattern.
+    row = gw._approvals.get(approval_id) if always else None
     try:
         # Agent-bound dispatch (v31 P2): native types (schedule_update) close over THIS
         # loaded agent's identity; everything else falls through to the shared dispatch.
@@ -78,7 +104,7 @@ def _approve(loaded, rest: list[str]) -> int:
         # getattr: production `loaded` is a LoadedProfile (always has profile_id);
         # an id-less double simply gets a dispatch that can't run agent-bound types.
         result = gw.approve(
-            int(rest[0]),
+            approval_id,
             handler=make_agent_bound_dispatch(
                 getattr(loaded, "profile_id", ""), loaded.config
             ),
@@ -86,16 +112,71 @@ def _approve(loaded, rest: list[str]) -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    print(f"approved #{rest[0]}: {result.summary}")
+    print(f"approved #{approval_id}: {result.summary}")
+    if always and row is not None:
+        agent_id = getattr(loaded, "profile_id", "")
+        rule = gw.approval_rules.add_rule(
+            row.action, scope=SCOPE_ALWAYS, created_by=agent_id
+        )
+        print(_rule_ack(agent_id, row.action, SCOPE_ALWAYS, rule.id))
     return 0
 
 
 def _reject(loaded, rest: list[str]) -> int:
     if not rest or not rest[0].isdigit():
-        print("usage: mpm agent reject <id> <approval-id>", file=sys.stderr)
+        print("usage: mpm agent reject <id> <approval-id> [--always]", file=sys.stderr)
         return 2
-    _gateway(loaded).reject(int(rest[0]))
-    print(f"rejected #{rest[0]}")
+    approval_id = int(rest[0])
+    always = "--always" in rest
+    gw = _gateway(loaded)
+    row = gw._approvals.get(approval_id) if always else None
+    gw.reject(approval_id)
+    print(f"rejected #{approval_id}")
+    if always and row is not None:
+        agent_id = getattr(loaded, "profile_id", "")
+        rule = gw.approval_rules.add_rule(
+            row.action, scope=SCOPE_DENY, created_by=agent_id
+        )
+        print(_rule_ack(agent_id, row.action, SCOPE_DENY, rule.id))
+    return 0
+
+
+def _rules(loaded, rest: list[str]) -> int:
+    """`mpm agent rules <id>` (list) / `... --revoke <rule-id> [--confirm]`.
+
+    Revoking a DENY rule loosens protection, so it requires `--confirm` (explicit — never
+    silent). Revoking an ALWAYS rule tightens, so it needs no extra confirmation."""
+    gw = _gateway(loaded)
+    store = gw.approval_rules
+    revoke_id = _flag_value(rest, "--revoke")
+    if revoke_id is not None:
+        if not revoke_id.isdigit():
+            print("usage: mpm agent rules <id> --revoke <rule-id> [--confirm]", file=sys.stderr)
+            return 2
+        rule = store.get(int(revoke_id))
+        if rule is None:
+            print(f"error: no rule #{revoke_id}", file=sys.stderr)
+            return 1
+        if rule.scope == SCOPE_DENY and "--confirm" not in rest:
+            print(
+                f"refusing to revoke deny rule #{revoke_id} without --confirm "
+                "(revoking a deny loosens protection).",
+                file=sys.stderr,
+            )
+            return 1
+        if store.revoke(int(revoke_id)):
+            print(f"revoked rule #{revoke_id}")
+            return 0
+        print(f"rule #{revoke_id} was already revoked", file=sys.stderr)
+        return 1
+    rules = store.list_rules()
+    if not rules:
+        print("(no learned rules)")
+        return 0
+    for r in rules:
+        effect = "guarded" if r.scope == SCOPE_DENY else "mọi chế độ"
+        used = f", đã dùng {r.use_count}×" if r.use_count else ""
+        print(f"#{r.id}  {r.scope:6}  {r.pattern_key}  [hiệu lực: {effect}]{used}")
     return 0
 
 

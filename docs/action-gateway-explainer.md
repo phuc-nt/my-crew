@@ -102,6 +102,23 @@ the gateway, where Lớp A + audit still apply, but the Lớp B prompt is skippe
 
 **Chat flatten (autonomous mode only):** Any Slack/Telegram member who can reach the agent (channel member or Telegram chat allowlisted) can trigger Lớp B actions directly — `trusted_senders` no longer gates in this mode. To narrow scope, either: (1) pin the agent to `trust_mode: guarded`, or (2) restrict the channel/chat allowlist.
 
+## Learned Lớp B rules (v67+)
+
+In **guarded mode**, when a human approves or rejects a Lớp B action, they can teach the system to auto-decide the **same action type** in future:
+
+- **Approve + "always"** → next time that action type runs immediately (audit notes the rule id)
+- **Reject + "deny"** → next time that action type is refused without queueing (never runs)
+
+**Key design decisions:**
+
+- **Guarded-mode only:** Learned rules apply **only** in `trust_mode: guarded`. In autonomous mode (where the agent already auto-executes), rules are never consulted. The deny rule's acknowledgement explicitly states "only effective in guarded mode" so the CEO doesn't mistake it for an autonomous block.
+- **Destination binding prevents scope creep:** Each action is identified by its **tool + destination** (e.g. "post to #random", "comment on Linear issue XYZ"). If the destination changes (different channel, different issue), the rule doesn't match and the action re-queues — this blocks the OpenClaw failure mode where a silent parameter drift applies an approval too broadly.
+- **Lớp A + kill-switch never loosen:** A learned "always" rule can only auto-approve a Lớp B action; it can never override Lớp A hard-deny, the kill-switch, or the dedup store. Rules are strictly narrower than the human's veto.
+- **Deny rule revocation needs confirmation:** Revoking a deny rule (lifting protection) requires `--confirm` to prevent accidents. Revoking an always rule (tightening) needs no extra step.
+- **Per-agent store in SQLite:** Rules live in a `approval_rules` table inside each agent's `approvals.db`, so agent A's rules never influence agent B's decisions.
+
+**Via CLI or web:** When you approve or reject an action, add `--always` / `--deny` to teach a rule. Later, `mpm agent rules <id>` lists them; `mpm agent rules <id> --revoke <rule-id>` un-teaches (use `--confirm` for deny rules). Each matched rule is stamped with `last_used_at` and `use_count` for auditing.
+
 ### The subtle ordering, and why it matters
 
 Lớp B is checked **before** the allowlist's default-deny, but only fires when the action isn't a

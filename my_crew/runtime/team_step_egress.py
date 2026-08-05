@@ -36,8 +36,9 @@ def make_external_write(
 
     Returns True when the gateway executed / dry-ran / deduped the post (deliver proceeds to
     write the internal artifact), False when the gateway queued it for approval (deliver
-    reports `awaiting_approval`; the coordinator polls + re-runs once resolved) or hard-denied
-    it (Lớp A) — the step never silently succeeds on a blocked egress.
+    reports `awaiting_approval`; the coordinator polls + re-runs once resolved), hard-denied
+    it (Lớp A), or refused it via a learned deny rule (v67, `rejected_by_rule`) — the step
+    never silently succeeds on a blocked egress (a non-success status is always False).
     """
     from my_crew.actions.slack_write import deliver_report
 

@@ -48,7 +48,7 @@ def _flag_value(args: list[str], flag: str) -> str | None:
 
 _AGENT_ACTIONS = (
     "list", "register", "run", "resume", "replay", "automate",
-    "approvals", "approve", "reject", "audit",
+    "approvals", "approve", "reject", "audit", "rules",
 )
 
 
@@ -134,7 +134,7 @@ def _dispatch_agent(action: str, rest: list[str]) -> int:
         from my_crew.entrypoints.mpm_automate_cmd import run_automate
 
         return run_automate(rest)
-    if action in {"approvals", "approve", "reject", "audit"}:
+    if action in {"approvals", "approve", "reject", "audit", "rules"}:
         from my_crew.entrypoints.mpm_manage_cmds import run_manage
 
         return run_manage(action, rest)

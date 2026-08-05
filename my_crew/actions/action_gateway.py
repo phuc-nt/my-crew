@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from my_crew.actions.approval_rule_store import SCOPE_DENY, ApprovalRuleStore
 from my_crew.actions.approval_store import ApprovalStore
 from my_crew.actions.dedup_store import DedupStore
 from my_crew.actions.hard_block import BlockCategory, classify, needs_interrupt
@@ -91,6 +92,7 @@ class GatewayResult:
     """Outcome of a gateway call."""
 
     # "executed" | "dry_run" | "skipped" | "deduplicated" | "pending_approval"
+    #   | "rejected_by_rule"  (v67: a learned Lớp B deny rule refused it on the guarded path)
     status: str
     summary: str
     audited: bool = True
@@ -142,6 +144,7 @@ class ActionGateway:
         audit_log: AuditLog | None = None,
         dedup_store: DedupStore | None = None,
         approval_store: ApprovalStore | None = None,
+        approval_rule_store: ApprovalRuleStore | None = None,
         external_channels: frozenset[str] | None = None,
         mcp_allowlist: dict[str, frozenset[str]] | dict[str, tuple[str, ...]] | None = None,
         auto_approve: dict[str, Any] | None = None,
@@ -174,6 +177,13 @@ class ActionGateway:
         self._audit = audit_log or AuditLog(data_dir / "audit" / "audit.jsonl")
         self._dedup = dedup_store or DedupStore(data_dir / "dedup.db")
         self._approvals = approval_store or ApprovalStore(data_dir / "approvals.db")
+        # Learned Lớp B rules (v67): standing "always"/"deny" decisions the CEO taught,
+        # in the SAME per-agent approvals.db. Deny rules apply ONLY on the guarded path
+        # (CEO decision 2026-08-04) — autonomous keeps full authority and never consults
+        # this store. A rule can never loosen Lớp A / kill-switch / dry-run (stricter-of-two).
+        self._approval_rules = approval_rule_store or ApprovalRuleStore(
+            data_dir / "approvals.db"
+        )
         # Email attachments are confined to this dir (Lớp A). It is the SAME location
         # the report builder writes .xlsx to (reporting.xlsx_export.artifact_path); an
         # attachment path outside it is a security red line (path-traversal defense).
@@ -183,6 +193,12 @@ class ActionGateway:
     def artifact_root(self) -> Path:
         """Dir an email attachment must live under (same as the report builder writes to)."""
         return self._artifact_root
+
+    @property
+    def approval_rules(self) -> ApprovalRuleStore:
+        """The learned-rule store (v67) — the CLI/web reach it to list/revoke and to learn
+        a standing rule from the action of a row the operator just approved/rejected."""
+        return self._approval_rules
 
     def execute(
         self,
@@ -273,6 +289,29 @@ class ActionGateway:
                 return self._execute(
                     action, handler=handler, rationale=AUTONOMOUS_RATIONALE, approved=True
                 )
+            # v67 learned rules — GUARDED path only (autonomous returned above). A rule
+            # decides a Lớp B action the CEO taught: DENY refuses it here (never runs,
+            # never queues); ALWAYS runs it straight through (re-enter approved=True) with
+            # the rule id audited. Only a gated-but-reversible action is a candidate — a
+            # Lớp A hard-deny already fell through untouched, so a rule can never override it.
+            if gated_but_reversible:
+                rule = self._approval_rules.match(action)
+                if rule is not None and rule.scope == SCOPE_DENY:
+                    self._approval_rules.record_use(rule.id)
+                    self._record(
+                        action_type, tool, "deny",
+                        f"learned deny rule (id={rule.id})", action, rationale,
+                    )
+                    return GatewayResult(
+                        status="rejected_by_rule",
+                        summary=f"{tool} refused by learned deny rule (id={rule.id})",
+                    )
+                if rule is not None and handler is not None:  # SCOPE_ALWAYS
+                    self._approval_rules.record_use(rule.id)
+                    return self._execute(
+                        action, handler=handler,
+                        rationale=f"learned always rule (id={rule.id})", approved=True,
+                    )
             if interrupt.interrupt and not is_hard_deny:
                 # v8 M23: a scheduled-origin Lớp B action the trust ladder permits (and that
                 # has a free daily slot) runs WITHOUT the human queue — by re-entering with
@@ -463,6 +502,7 @@ class ActionGateway:
         Idempotent-friendly: the stores' close() is safe to call once.
         """
         self._approvals.close()
+        self._approval_rules.close()
         self._dedup.close()
 
     def approve(self, approval_id: int, *, handler: Handler) -> GatewayResult:
@@ -589,13 +629,11 @@ def _short_target(action: dict[str, Any]) -> str:
     ids only, NEVER message bodies or free-text payload content (no-content-echo, v34 P5)."""
     atype = str(action.get("type", "")).lower()
     if atype == "mcp_tool":
-        args = action.get("args") or {}
-        if isinstance(args, dict):
-            for key in ("channel", "issue_key", "issueKey", "page_id", "pageId", "id"):
-                value = args.get(key)
-                if value:
-                    return str(value)[:120]
-        return ""
+        # Same destination-key list the learned-rule binder uses — one source of truth so
+        # the audit target and the rule bind can never name different fields.
+        from my_crew.actions.approval_rule_store import mcp_destination
+
+        return mcp_destination(action.get("args"))[:120]
     if atype == "gh_cli":
         argv = action.get("argv") or []
         return " ".join(str(a) for a in argv[:3])[:120]

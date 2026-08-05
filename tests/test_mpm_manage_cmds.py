@@ -143,3 +143,98 @@ def test_dispatch_routes_to_manage(monkeypatch):
     )
     assert mpm.main(["agent", "approvals", "a"]) == 0
     assert seen == {"sub": "approvals", "rest": ["a"]}
+
+
+# --- v67 learned rules: approve/reject --always + rules list/revoke ---
+
+
+def _rule_store(data_root, agent_id):
+    from my_crew.actions.approval_rule_store import ApprovalRuleStore
+
+    return ApprovalRuleStore(_agent_dir(data_root, agent_id) / "approvals.db")
+
+
+def test_approve_always_records_an_always_rule(monkeypatch, tmp_path, capsys):
+    data_root = _patch(monkeypatch, tmp_path)
+    aid = _seed_approval(data_root, "a")
+    monkeypatch.setattr(
+        "my_crew.actions.slack_write.make_slack_post_handler",
+        lambda server: lambda action: "posted ts=1",
+    )
+    assert mpm_manage_cmds.run_manage("approve", ["a", str(aid), "--always"]) == 0
+    out = capsys.readouterr().out
+    assert "Hoàn tác" in out  # the ack was printed
+    rules = _rule_store(data_root, "a").list_rules()
+    assert len(rules) == 1 and rules[0].scope == "always"
+
+
+def test_reject_always_records_a_deny_rule_scoped_guarded(monkeypatch, tmp_path, capsys):
+    data_root = _patch(monkeypatch, tmp_path)
+    aid = _seed_approval(data_root, "a")
+    assert mpm_manage_cmds.run_manage("reject", ["a", str(aid), "--always"]) == 0
+    out = capsys.readouterr().out
+    assert "CHỈ hiệu lực ở chế độ guarded" in out  # deny ack states the guarded-only limit
+    rules = _rule_store(data_root, "a").list_rules()
+    assert len(rules) == 1 and rules[0].scope == "deny"
+
+
+def test_approve_without_always_records_no_rule(monkeypatch, tmp_path):
+    data_root = _patch(monkeypatch, tmp_path)
+    aid = _seed_approval(data_root, "a")
+    monkeypatch.setattr(
+        "my_crew.actions.slack_write.make_slack_post_handler",
+        lambda server: lambda action: "posted ts=1",
+    )
+    assert mpm_manage_cmds.run_manage("approve", ["a", str(aid)]) == 0
+    assert _rule_store(data_root, "a").list_rules() == []
+
+
+def test_rules_lists_learned_rules(monkeypatch, tmp_path, capsys):
+    data_root = _patch(monkeypatch, tmp_path)
+    _agent_dir(data_root, "a").mkdir(parents=True, exist_ok=True)
+    _rule_store(data_root, "a").add_rule(dict(_SLACK_ACTION), scope="deny", created_by="ceo")
+    assert mpm_manage_cmds.run_manage("rules", ["a"]) == 0
+    out = capsys.readouterr().out
+    assert "deny" in out and "guarded" in out
+
+
+def test_rules_empty_prints_placeholder(monkeypatch, tmp_path, capsys):
+    _patch(monkeypatch, tmp_path)
+    assert mpm_manage_cmds.run_manage("rules", ["a"]) == 0
+    assert "no learned rules" in capsys.readouterr().out
+
+
+def test_revoke_deny_rule_needs_confirm(monkeypatch, tmp_path, capsys):
+    data_root = _patch(monkeypatch, tmp_path)
+    _agent_dir(data_root, "a").mkdir(parents=True, exist_ok=True)
+    rule = _rule_store(data_root, "a").add_rule(
+        dict(_SLACK_ACTION), scope="deny", created_by="ceo"
+    )
+    # No --confirm → refused, rule still active.
+    assert mpm_manage_cmds.run_manage("rules", ["a", "--revoke", str(rule.id)]) == 1
+    assert "without --confirm" in capsys.readouterr().err
+    assert _rule_store(data_root, "a").get(rule.id).revoked_at is None
+    # With --confirm → revoked.
+    assert mpm_manage_cmds.run_manage(
+        "rules", ["a", "--revoke", str(rule.id), "--confirm"]
+    ) == 0
+    assert _rule_store(data_root, "a").get(rule.id).revoked_at is not None
+
+
+def test_revoke_always_rule_no_confirm_needed(monkeypatch, tmp_path):
+    data_root = _patch(monkeypatch, tmp_path)
+    _agent_dir(data_root, "a").mkdir(parents=True, exist_ok=True)
+    rule = _rule_store(data_root, "a").add_rule(
+        dict(_SLACK_ACTION), scope="always", created_by="ceo"
+    )
+    assert mpm_manage_cmds.run_manage("rules", ["a", "--revoke", str(rule.id)]) == 0
+    assert _rule_store(data_root, "a").get(rule.id).revoked_at is not None
+
+
+def test_rules_dispatch_routes(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(
+        mpm_manage_cmds, "run_manage", lambda sub, rest: seen.update(sub=sub, rest=rest) or 0
+    )
+    assert mpm.main(["agent", "rules", "a"]) == 0
+    assert seen == {"sub": "rules", "rest": ["a"]}
