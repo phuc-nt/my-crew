@@ -19,30 +19,115 @@ from typing import Any
 _WEEKDAYS_VI = ("Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật")
 
 
-def _gws_sources() -> dict[str, str]:
-    """Lịch 24h tới + email chưa đọc, mỗi nguồn độc lập degrade khi lỗi."""
-    from my_crew.tools.gws_read import GwsReadError, calendar_agenda, gmail_triage
+def _read(fetch) -> str:
+    """Gọi một nguồn; mọi lỗi thành chuỗi nói-thật thay vì ném lên vòng trả lời."""
+    try:
+        return fetch()
+    except Exception as exc:  # noqa: BLE001 — snapshot phải render dù nguồn nào hỏng
+        return f"(chưa đọc được: {exc})"
 
-    out: dict[str, str] = {}
-    for key, fetch in (("calendar_next_24h", calendar_agenda), ("unread_email", gmail_triage)):
-        try:
-            out[key] = fetch()
-        except GwsReadError as exc:
-            out[key] = f"(chưa đọc được: {exc})"
-    return out
+
+def _soft(key: str, fetch) -> tuple[str, str]:
+    """`_read` ở dạng cặp (key, value) để dựng thẳng dict nhiều nguồn."""
+    return key, _read(fetch)
+
+
+def _gws_sources() -> dict[str, str]:
+    """Lịch 24h tới + email chưa đọc + việc còn treo, mỗi nguồn độc lập degrade khi lỗi."""
+    from my_crew.tools.gws_read import calendar_agenda, gmail_triage, tasks_pending
+
+    return dict(
+        _soft(key, fetch) for key, fetch in (
+            ("calendar_next_24h", calendar_agenda),
+            ("unread_email", gmail_triage),
+            ("pending_tasks", tasks_pending),
+        )
+    )
+
+
+def _goodreads_user_id(config: Any) -> str:
+    """`goodreads_user_id` của profile; rỗng nghĩa là agent này không khai kệ sách."""
+    return str(getattr(config, "goodreads_user_id", "") or "").strip()
+
+
+def _reading_now(config: Any) -> str:
+    user_id = _goodreads_user_id(config)
+    if not user_id:
+        return "(chưa cấu hình)"
+    from my_crew.tools.goodreads_read import currently_reading
+
+    return _read(lambda: currently_reading(user_id))
+
+
+def _weekly_sources(config: Any) -> dict[str, str]:
+    """Dải tuần — chỉ weekly-review mới trả giá cho mấy lượt đọc này."""
+    from my_crew.tools.gws_read import calendar_events_window, tasks_completed
+
+    user_id = _goodreads_user_id(config)
+
+    def _books_7d() -> str:
+        if not user_id:
+            return "(chưa cấu hình)"
+        from my_crew.tools.goodreads_read import recent_activity
+
+        return recent_activity(user_id, days=7)
+
+    def _calendar_7d() -> str:
+        lines = []
+        for event in calendar_events_window(days=7)[:15]:
+            start = event.get("start") or {}
+            # Sự kiện cả ngày không có `dateTime`, chỉ có `date` — thiếu nhánh này thì
+            # mọi lịch cả ngày trong tuần hiện ra không kèm ngày nào.
+            when = (start.get("dateTime") or start.get("date") or "")[:16]
+            title = (event.get("summary") or "(không tên)")[:80]
+            lines.append(f"- {title}" + (f" ({when})" if when else ""))
+        return "\n".join(lines) if lines else "(không có)"
+
+    return dict(
+        _soft(key, fetch) for key, fetch in (
+            ("calendar_next_7d", _calendar_7d),
+            ("tasks_completed_7d", lambda: tasks_completed(days=7)),
+            ("goodreads_activity_7d", _books_7d),
+            ("lessons", _recent_lessons),
+        )
+    )
+
+
+def _recent_lessons() -> str:
+    """Bài học phản tư (v69) — weekly nhìn lại tuần dựa trên cái đội đã rút ra."""
+    from my_crew.agent.ops_list_lessons import run_list_lessons
+
+    return run_list_lessons({}).strip() or "(không có)"
 
 
 class PersonalToolProvider:
-    """Snapshot thuần đọc: ngày giờ (thuần code, luôn có) + gws (degrade êm khi lỗi)."""
+    """Snapshot thuần đọc: ngày giờ (thuần code, luôn có) + gws (degrade êm khi lỗi).
+
+    `kind` quyết định dải dữ liệu: mọi kind lấy bối cảnh ngày (chat Q&A cũng ground
+    trên đây), riêng `weekly-review` cộng thêm dải 7 ngày — lịch tuần tới, việc đã
+    xong, sách đọc trong tuần, bài học. Briefing KHÔNG gọi nhóm tuần: mỗi nguồn là một
+    lượt CLI/mạng, bản tin sáng không cần trả giá đó.
+    """
 
     def read(self, kind: str, config: Any, settings: Any) -> dict[str, Any]:
         now = datetime.now().astimezone()
-        return {
+        gws = _gws_sources()
+        # Hộp thư là nguồn DUY NHẤT phình to (đo thật: ~4.2k/5.5k ký tự) và
+        # `render_snapshot` cắt phẳng theo vị trí ở cuối chuỗi JSON. Nguồn nào đứng sau
+        # nó sẽ bị cắt trước — nên email đi CUỐI: một ngày hộp thư dày thì mất phần đuôi
+        # của danh sách email (thừa sẵn), chứ không mất trọn nhóm tuần của weekly.
+        bulky = {"unread_email": gws.pop("unread_email", "(không có)")}
+        snapshot: dict[str, Any] = {
             "current_time": now.isoformat(timespec="minutes"),
             "weekday": _WEEKDAYS_VI[now.weekday()],
             "upcoming_reminders": _upcoming_reminders(settings),
-            **_gws_sources(),
+            "reading_now": _reading_now(config),
+            **gws,
         }
+        if kind == "weekly-review":
+            snapshot.update(_weekly_sources(config))
+        snapshot.update(bulky)
+        return snapshot
 
 
 def _upcoming_reminders(settings: Any) -> str:

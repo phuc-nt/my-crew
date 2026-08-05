@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+from datetime import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ _READ_ALLOWLIST: dict[str, list[str]] = {
     "calendar": ["calendar", "+agenda"],
     "calendar_events": ["calendar", "events", "list"],
     "drive": ["drive", "files", "list"],
+    "tasks_list": ["tasks", "tasks", "list"],
 }
 
 #: Verbs that must never appear in a read argv (defense in depth over the fixed table).
@@ -101,6 +103,60 @@ def calendar_events_window(query: str = "", days: int = 14) -> list[dict]:
     data = _run("calendar_events", params=params)
     items = data.get("items", [])
     return [e for e in items if isinstance(e, dict)]
+
+
+#: Số dòng tối đa mỗi bản kê task — briefing/weekly là bản tin ngắn, không phải dump.
+_TASK_LINES = 15
+#: Trần một trang task. Mặc định của API nhỏ (20) và trang bị cắt TRƯỚC khi lọc phía
+#: mình, nên thiếu trần này thì một danh sách bận sẽ đẩy hết task đã xong ra khỏi trang
+#: đầu và weekly báo "(không có)" — sai một cách im lặng, không phải lỗi.
+_TASK_PAGE = 100
+
+
+def _task_lines(items: list, keep) -> str:
+    """Render task items thành "- tiêu đề (hạn …)". `keep` lọc theo từng nhu cầu.
+
+    Google Tasks cho phép task rỗng tiêu đề mà chỉ có `notes` (data thật của CEO có),
+    nên tiêu đề rơi về notes trước khi bỏ qua — nếu không bản kê sẽ có dòng cụt.
+    """
+    lines: list[str] = []
+    for item in items:
+        if not isinstance(item, dict) or not keep(item):
+            continue
+        title = (item.get("title") or "").strip() or (item.get("notes") or "").strip()
+        if not title:
+            continue
+        due = (item.get("due") or "")[:10]
+        lines.append(f"- {title[:100]}" + (f" (hạn {due})" if due else ""))
+        if len(lines) >= _TASK_LINES:
+            break
+    return "\n".join(lines) if lines else "(không có)"
+
+
+def tasks_pending() -> str:
+    """Google Tasks chưa xong trên danh sách mặc định — bản kê ngắn cho briefing."""
+    data = _run("tasks_list", {"tasklist": "@default", "showCompleted": False,
+                               "maxResults": _TASK_PAGE})
+    return _task_lines(data.get("items", []), lambda t: t.get("status") != "completed")
+
+
+def tasks_completed(days: int = 7) -> str:
+    """Task đã xong trong `days` ngày qua — nguyên liệu cho weekly review.
+
+    `completedMin` chỉ thu hẹp phía server chứ không loại hết task chưa xong khỏi
+    response, nên lọc `status == "completed"` lần nữa ở đây.
+    """
+    from datetime import datetime, timedelta
+
+    since = datetime.now(UTC) - timedelta(days=max(1, min(days, 90)))
+    data = _run("tasks_list", {
+        "tasklist": "@default",
+        "showCompleted": True,
+        "showHidden": True,
+        "maxResults": _TASK_PAGE,
+        "completedMin": since.isoformat(timespec="seconds").replace("+00:00", "Z"),
+    })
+    return _task_lines(data.get("items", []), lambda t: t.get("status") == "completed")
 
 
 def drive_list(query: str = "") -> str:

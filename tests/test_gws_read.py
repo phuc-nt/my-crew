@@ -62,6 +62,77 @@ def test_drive_list_injects_only_query_param(monkeypatch):
     assert all(v not in argv for v in ("insert", "delete", "update", "send"))
 
 
+def _fake_tasks(captured, items):
+    def _run(argv, **kw):
+        captured.append(argv)
+        return _Proc(stdout=json.dumps({"kind": "tasks#tasks", "items": items}))
+    return _run
+
+
+def test_tasks_pending_asks_server_to_hide_completed(monkeypatch):
+    captured = []
+    monkeypatch.setattr(gws_read.subprocess, "run", _fake_tasks(captured, [
+        {"title": "Gọi nha sĩ", "due": "2026-08-06T00:00:00.000Z", "status": "needsAction"},
+        {"title": "Đã xong rồi", "status": "completed"},
+    ]))
+    out = gws_read.tasks_pending()
+    argv = captured[0]
+    assert argv[:4] == ["gws", "tasks", "tasks", "list"]  # code-fixed, `list` là read
+    assert json.loads(argv[argv.index("--params") + 1]) == {
+        "tasklist": "@default", "showCompleted": False, "maxResults": 100
+    }
+    assert out == "- Gọi nha sĩ (hạn 2026-08-06)"  # task đã xong không lọt vào bản kê
+
+
+def test_tasks_pending_falls_back_to_notes_when_title_empty(monkeypatch):
+    """Data thật của CEO có task tiêu đề rỗng, nội dung nằm ở `notes` — nếu chỉ đọc
+    `title` thì bản kê ra dòng cụt "- " (hoặc mất mục). Dòng cuối rỗng cả hai thì bỏ."""
+    monkeypatch.setattr(gws_read.subprocess, "run", _fake_tasks([], [
+        {"title": "", "notes": "Huỷ dịch vụ Strava", "status": "needsAction"},
+        {"title": "   ", "notes": "  ", "status": "needsAction"},
+    ]))
+    assert gws_read.tasks_pending() == "- Huỷ dịch vụ Strava"
+
+
+def test_tasks_completed_filters_client_side_and_bounds_window(monkeypatch):
+    """`completedMin` thu hẹp phía server nhưng response vẫn lẫn task chưa xong, nên
+    lọc lại `status == completed`. Window bị kẹp để một `days` bậy không quét vô hạn."""
+    captured = []
+    monkeypatch.setattr(gws_read.subprocess, "run", _fake_tasks(captured, [
+        {"title": "Nộp báo cáo", "status": "completed"},
+        {"title": "Còn treo", "status": "needsAction"},
+    ]))
+    out = gws_read.tasks_completed(days=9999)
+    params = json.loads(captured[0][captured[0].index("--params") + 1])
+    assert params["showCompleted"] is True and params["showHidden"] is True
+    assert params["completedMin"].endswith("Z")
+    assert out == "- Nộp báo cáo"
+
+
+def test_task_reads_bound_the_page_so_a_busy_list_does_not_hide_completed_work(monkeypatch):
+    """Lọc `completed` chạy SAU khi API cắt trang, nên trang mặc định nhỏ (20) sẽ đẩy
+    hết task đã xong ra ngoài và weekly báo "(không có)" — sai im lặng, không phải lỗi.
+    Cả hai đường đọc task phải tự khai trần trang."""
+    for call in (gws_read.tasks_pending, lambda: gws_read.tasks_completed(days=7)):
+        captured = []
+        monkeypatch.setattr(gws_read.subprocess, "run", _fake_tasks(captured, []))
+        call()
+        params = json.loads(captured[0][captured[0].index("--params") + 1])
+        assert params["maxResults"] == 100
+
+
+def test_tasks_empty_list_says_so_instead_of_blank(monkeypatch):
+    monkeypatch.setattr(gws_read.subprocess, "run", _fake_tasks([], []))
+    assert gws_read.tasks_pending() == "(không có)"
+
+
+def test_tasks_cli_failure_raises_for_caller_to_degrade(monkeypatch):
+    monkeypatch.setattr(gws_read.subprocess, "run",
+                        lambda argv, **kw: _Proc(stderr="oauth expired", returncode=1))
+    with pytest.raises(GwsReadError, match="lỗi"):
+        gws_read.tasks_pending()
+
+
 def test_read_allowlist_has_no_write_verbs():
     for prefix in _READ_ALLOWLIST.values():
         assert not any(v in prefix for v in ("send", "insert", "delete", "update", "+send"))

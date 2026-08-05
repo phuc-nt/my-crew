@@ -1,12 +1,12 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v69 / 0.8.0). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Lộ trình + trạng thái (as-built v70 / 0.8.0+). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
 > Cập nhật: 2026-08-05.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v69, PyPI `my-crew` 0.8.0.**
-2781 BE + 279 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
+**Production-usable, single-user autonomy-first. Đã ship tới v69 (PyPI 0.8.0), v70 in-progress.**
+2802 BE + 279 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
 (live daemon, kill-9 resume, fan-out parallelism, 3 vòng UAT đối kháng + heartbeat live UAT Telegram).
 
 **v69 (bề mặt chat cho approval — 0.8.0):** Lớp B queue → **DM Telegram ngay khi enqueue**
@@ -17,6 +17,8 @@ nổi thì từ chối tạo rule) · reject thành **compare-and-set cả 3 b�
 WAL · heartbeat digest **nêu tên mọi approval treo** (miễn trừ suppression) · `xem bài
 học` đọc lesson reflection (tag `source` phân biệt với fact chat) · số lần hồi sinh trong
 kanban. UAT thật trên fleet 10 agent + Telegram thật.
+
+**v70 (personal assistant pong — 0.8.0+, in-progress):** Tác nhân riêng `pong` bổ sung thư ký `secretary` (2 bot Telegram cùng tồn tại, không đụng). Briefing/weekly nhìn vào Goodreads + Google Tasks (đọc công khai RSS + gws CLI). **PersonalToolProvider kind-aware**: mọi kind lấy bối cảnh ngày (calendar_next_24h, unread_email, pending_tasks, reading_now); riêng `weekly-review` trả thêm dải tuần (calendar_next_7d, tasks_completed_7d, goodreads_activity_7d, lessons). **Profile-only `goodreads_user_id`**, cố ý KHÔNG env fallback: kệ sách thuộc về một người còn env là fleet-wide, đặt biến là `secretary` âm thầm đọc kệ người khác. Goodreads tool: `currently_reading(user_id)` + `recent_activity(days)` lấy RSS công khai, stdlib-only, degrade-soft khi lỗi. Gws thêm `tasks_pending()` (briefing) + `tasks_completed(days=7)` (weekly) qua allowlist argv cố định, cả hai tự khai trần trang vì lọc `completed` chạy sau khi API cắt trang. Pong chạy schedule `0 7 * * *` (briefing) + `0 8 * * 0` (weekly). Phạm vi: mở rộng snapshot source của personal-pack, giữ nguyên 5 đánh đổi v30 autonomy-first + Lớp A + PII firewall.
 
 **v57–v68 (arc thư ký — 0.7.0+):** **v57–v60 thư ký cá nhân** (pack `personal`: chat DM,
 briefing sáng/tuần, Gmail/Calendar, gửi email, sửa/xoá lịch, multi-command) · **v61 chat

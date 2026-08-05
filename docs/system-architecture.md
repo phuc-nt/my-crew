@@ -1,6 +1,6 @@
 # System Architecture — my-crew
 
-> Kiến trúc kỹ thuật (as-built, v68 / 0.7.0+). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
+> Kiến trúc kỹ thuật (as-built, v69 / 0.8.0+ — v70 personal-pack expansion in-progress). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
 > (vì sao) + [action-gateway-explainer](action-gateway-explainer.md) (mô hình an toàn) +
 > [codebase-summary](codebase-summary.md) (cái gì ở file nào).
 > Cập nhật: 2026-08-05.

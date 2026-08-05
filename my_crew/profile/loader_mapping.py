@@ -190,6 +190,12 @@ def build_reporting_dict(yaml_doc: dict[str, Any]) -> dict[str, Any]:
     _put(out, "smtp", _build_smtp_mapping(yaml_doc))
     # --- v6 M13: per-agent Telegram bot from the `telegram:` block (token env-only). ---
     _put(out, "telegram", _build_telegram_mapping(yaml_doc))
+    # --- v70: public Goodreads shelf owner for the personal assistant's reading source. ---
+    # Profile-only, deliberately NO env fallback: a shelf belongs to one person, and an
+    # env var is fleet-wide — setting it would silently make every agent (including the
+    # secretary, whose whole reading path is "(chưa cấu hình)") read this owner's shelf.
+    # Same reason `telegram.chat_ids` takes no fallback while workspace-level keys do.
+    _put(out, "goodreads_user_id", yaml_doc.get("goodreads_user_id"))
     return out
 
 

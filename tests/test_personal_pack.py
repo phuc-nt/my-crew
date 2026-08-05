@@ -70,6 +70,139 @@ def test_tool_provider_degrades_per_source_on_gws_failure(monkeypatch):
     assert snapshot["unread_email"] == '{"unread": 0}'  # nguồn lành không bị vạ lây
 
 
+def _stub_day_sources(monkeypatch):
+    """Nguồn ngày mock — dùng chung cho các test dải dữ liệu theo kind."""
+    monkeypatch.setattr("my_crew.tools.gws_read.calendar_agenda", lambda: '{"events": []}')
+    monkeypatch.setattr("my_crew.tools.gws_read.gmail_triage", lambda: '{"unread": 2}')
+    monkeypatch.setattr("my_crew.tools.gws_read.tasks_pending", lambda: "- Gọi nha sĩ")
+
+
+def test_weekly_snapshot_adds_week_range_briefing_does_not(monkeypatch):
+    """v70: weekly ⊃ briefing + 4 nguồn tuần. Briefing KHÔNG được gọi nhóm tuần —
+    mỗi nguồn là một lượt CLI/mạng, bản tin sáng không trả giá đó."""
+    _stub_day_sources(monkeypatch)
+    # Đếm lượt gọi, không chỉ trả giá trị: "briefing không trả giá" là một khẳng định
+    # về CHI PHÍ (mỗi nguồn tuần là một lượt CLI/mạng), nên phải chứng minh nhóm tuần
+    # KHÔNG được gọi — key vắng mặt chưa đủ, code vẫn có thể gọi rồi vứt kết quả.
+    calls: dict[str, int] = {}
+
+    def _counted(name, value):
+        def _fn(*_args, **_kwargs):
+            calls[name] = calls.get(name, 0) + 1
+            return value
+        return _fn
+
+    monkeypatch.setattr("my_crew.tools.gws_read.tasks_completed",
+                        _counted("tasks_completed", "- Nộp báo cáo"))
+    monkeypatch.setattr("my_crew.tools.gws_read.calendar_events_window",
+                        _counted("calendar_events_window",
+                                 [{"summary": "Họp tuần",
+                                   "start": {"dateTime": "2026-08-10T09:00+07:00"}}]))
+    monkeypatch.setattr("my_crew.tools.goodreads_read.currently_reading",
+                        lambda uid: "- Radical Candor — Kim Scott")
+    monkeypatch.setattr("my_crew.tools.goodreads_read.recent_activity",
+                        _counted("recent_activity", "- Tôi kể (4★)"))
+    monkeypatch.setattr("my_crew.agent.ops_list_lessons.run_list_lessons",
+                        _counted("run_list_lessons", "Bài học: đừng giao việc mơ hồ."))
+
+    pack = PackRegistry().load("personal")
+    config = dataclasses.replace(_config(True), goodreads_user_id="12345678")
+
+    daily = pack.tools.read("briefing", config, None)
+    assert daily["pending_tasks"] == "- Gọi nha sĩ"
+    assert daily["reading_now"] == "- Radical Candor — Kim Scott"
+    week_only = {"calendar_next_7d", "tasks_completed_7d", "goodreads_activity_7d", "lessons"}
+    assert not (week_only & set(daily))  # briefing không đụng nhóm tuần
+    assert calls == {}  # và cũng không GỌI nguồn tuần lần nào
+
+    weekly = pack.tools.read("weekly-review", config, None)
+    assert calls == {"tasks_completed": 1, "calendar_events_window": 1,
+                     "recent_activity": 1, "run_list_lessons": 1}
+    assert set(daily) <= set(weekly)  # tuần bao trọn ngày
+    assert weekly["tasks_completed_7d"] == "- Nộp báo cáo"
+    assert weekly["goodreads_activity_7d"] == "- Tôi kể (4★)"
+    assert "Họp tuần" in weekly["calendar_next_7d"]
+    assert "đừng giao việc mơ hồ" in weekly["lessons"]
+
+
+def test_reading_source_says_unconfigured_without_a_shelf_owner(monkeypatch):
+    """Không khai `goodreads_user_id` ⇒ nói "(chưa cấu hình)" và KHÔNG gọi mạng."""
+    _stub_day_sources(monkeypatch)
+
+    def _never(*a, **kw):  # pragma: no cover — phải không bao giờ chạy
+        raise AssertionError("không được gọi Goodreads khi chưa khai user_id")
+
+    monkeypatch.setattr("my_crew.tools.goodreads_read.currently_reading", _never)
+    pack = PackRegistry().load("personal")
+    snapshot = pack.tools.read("briefing", _config(True), None)
+    assert snapshot["reading_now"] == "(chưa cấu hình)"
+
+
+def test_every_new_source_degrades_independently(monkeypatch):
+    """Nguồn mới hỏng (kể cả lỗi ngoài GwsReadError) không được kéo sập snapshot."""
+    monkeypatch.setattr("my_crew.tools.gws_read.calendar_agenda", lambda: '{"events": []}')
+    monkeypatch.setattr("my_crew.tools.gws_read.gmail_triage", lambda: '{"unread": 0}')
+
+    def _boom(*a, **kw):
+        raise RuntimeError("nguồn hỏng")
+
+    monkeypatch.setattr("my_crew.tools.gws_read.tasks_pending", _boom)
+    monkeypatch.setattr("my_crew.tools.gws_read.tasks_completed", _boom)
+    monkeypatch.setattr("my_crew.tools.gws_read.calendar_events_window", _boom)
+    monkeypatch.setattr("my_crew.tools.goodreads_read.currently_reading", _boom)
+    monkeypatch.setattr("my_crew.tools.goodreads_read.recent_activity", _boom)
+    monkeypatch.setattr("my_crew.agent.ops_list_lessons.run_list_lessons", _boom)
+
+    pack = PackRegistry().load("personal")
+    config = dataclasses.replace(_config(True), goodreads_user_id="12345678")
+    weekly = pack.tools.read("weekly-review", config, None)
+    for key in ("pending_tasks", "reading_now", "tasks_completed_7d",
+                "goodreads_activity_7d", "calendar_next_7d", "lessons"):
+        assert weekly[key].startswith("(chưa đọc được:"), key
+    assert weekly["unread_email"] == '{"unread": 0}'  # nguồn lành không bị vạ lây
+
+
+def test_goodreads_user_id_survives_the_profile_mapping():
+    """Nó phải là field riêng: `integrations:` bị builder ép thành MCP server spec,
+    một entry goodreads đặt ở đó sẽ bị nuốt im lặng."""
+    from my_crew.config.config_builders import build_reporting_config_from_dict
+    from my_crew.profile.loader_mapping import build_reporting_dict
+
+    config = build_reporting_config_from_dict(
+        build_reporting_dict({"goodreads_user_id": "12345678"})
+    )
+    assert config.goodreads_user_id == "12345678"
+    assert build_reporting_config_from_dict({}).goodreads_user_id is None
+
+
+def test_inbox_goes_last_so_truncation_eats_email_not_the_week_range(monkeypatch):
+    """`render_snapshot` cắt phẳng theo vị trí; hộp thư là nguồn duy nhất phình to.
+    Nó phải đứng CUỐI, nếu không một ngày mail dày sẽ cắt mất nhóm tuần của weekly."""
+    _stub_day_sources(monkeypatch)
+    monkeypatch.setattr("my_crew.tools.gws_read.tasks_completed", lambda days=7: "- Xong")
+    monkeypatch.setattr("my_crew.tools.gws_read.calendar_events_window",
+                        lambda q="", days=14: [])
+    monkeypatch.setattr("my_crew.tools.goodreads_read.currently_reading", lambda uid: "- Sách")
+    monkeypatch.setattr("my_crew.tools.goodreads_read.recent_activity",
+                        lambda uid, days=7: "- Sách tuần")
+    monkeypatch.setattr("my_crew.agent.ops_list_lessons.run_list_lessons", lambda slots: "Bài học")
+
+    pack = PackRegistry().load("personal")
+    config = dataclasses.replace(_config(True), goodreads_user_id="12345678")
+    for kind in ("briefing", "weekly-review"):
+        keys = list(pack.tools.read(kind, config, None))
+        assert keys[-1] == "unread_email", f"{kind}: hộp thư phải đứng cuối, thấy {keys}"
+
+
+def test_goodreads_shelf_owner_is_profile_only_never_a_fleet_wide_env(monkeypatch):
+    """Kệ sách thuộc về MỘT người, env thì cả đội dùng chung: có fallback env thì
+    secretary (đường đọc vốn là "(chưa cấu hình)") sẽ âm thầm đọc kệ của người khác."""
+    from my_crew.profile.loader_mapping import build_reporting_dict
+
+    monkeypatch.setenv("GOODREADS_USER_ID", "99999999")
+    assert build_reporting_dict({}).get("goodreads_user_id") is None
+
+
 # --- offline end-to-end graph run ---
 
 

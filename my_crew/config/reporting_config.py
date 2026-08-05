@@ -103,3 +103,10 @@ class ReportingConfig:
     # v6 M13: per-agent Telegram bot identity (inbox + delivery channel). None ⇒ no
     # telegram channel declared ⇒ behavior byte-identical to pre-M13.
     telegram: TelegramConfig | None = None
+
+    # v70: Goodreads shelf owner for the personal assistant's "đang đọc gì" snapshot
+    # source. A bare numeric user id — the shelves it reads are public RSS, so there is
+    # no credential here and nothing to keep out of the yaml. None ⇒ the reading sources
+    # report "(chưa cấu hình)" and no request is ever made. NOT part of `integrations:`,
+    # which the builder coerces into typed MCP server specs and would silently drop it.
+    goodreads_user_id: str | None = None
