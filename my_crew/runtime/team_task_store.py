@@ -94,6 +94,9 @@ class TeamTask:
     # v63 autopilot: stall auto-resolutions already spent on this task (capped in
     # `autopilot_sweep` — auto-recovery must converge, never loop).
     autopilot_attempts: int = 0
+    # Times this task was revived from `stalled`. Keys the reflection cooldown marker so
+    # each stall-after-retry is reflected on once, rather than only the very first stall.
+    reopen_count: int = 0
     # v67 delivery split — execution status (`status`) vs "did the final summary
     # actually reach the room milestone". Only the ticker's aggregate path uses these;
     # CEO-interactive completions (accept_stalled_result, cancel) stay 'not_applicable'.
@@ -166,6 +169,11 @@ class TeamTaskStore:
             "DEFAULT 'not_applicable'",
             "ALTER TABLE team_tasks ADD COLUMN delivery_attempts INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE team_tasks ADD COLUMN final_summary TEXT",
+            # How many times this task came back from `stalled` (`reopen_stalled`). The
+            # reflection cooldown marker is keyed by it, so the stall AFTER a CEO retry
+            # — the most informative one, since the first fix demonstrably did not work
+            # — gets its own reflection instead of being swallowed as "already looked at".
+            "ALTER TABLE team_tasks ADD COLUMN reopen_count INTEGER NOT NULL DEFAULT 0",
         ):
             try:
                 self._conn.execute(ddl)
@@ -280,6 +288,7 @@ class TeamTaskStore:
             room_id=str(data.get("room_id") or ""),
             require_ceo_approval=bool(int(data.get("require_ceo_approval") or 0)),
             autopilot_attempts=int(data.get("autopilot_attempts") or 0),
+            reopen_count=int(data.get("reopen_count") or 0),
             delivery_status=str(data.get("delivery_status") or "not_applicable"),
             delivery_attempts=int(data.get("delivery_attempts") or 0),
             final_summary=data.get("final_summary"),
@@ -386,9 +395,14 @@ class TeamTaskStore:
         """Status-guarded `stalled → open` transition (review M2): the stall handlers
         and the autopilot sweep both act on a read snapshot — the WHERE guard makes a
         raced reopen (task already reopened/cancelled by the other actor) a clean
-        no-op instead of resurrecting a task from an arbitrary state."""
+        no-op instead of resurrecting a task from an arbitrary state.
+
+        `reopen_count` rides the SAME guarded UPDATE, so a raced/no-op reopen never
+        inflates it — the counter means "times this task actually came back to life",
+        which is exactly the generation the reflection cooldown marker keys on."""
         cur = self._conn.execute(
-            "UPDATE team_tasks SET status = 'open' WHERE id = ? AND status = 'stalled'",
+            "UPDATE team_tasks SET status = 'open', reopen_count = reopen_count + 1 "
+            "WHERE id = ? AND status = 'stalled'",
             (task_id,),
         )
         self._conn.commit()

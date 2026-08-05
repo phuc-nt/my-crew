@@ -239,6 +239,43 @@ def test_even_a_nothing_result_stops_the_task_being_re_reflected(fake_llm):
     assert len(fake_llm.calls) == 1
 
 
+def test_a_stall_after_a_ceo_retry_is_reflected_on_again(fake_llm):
+    """Cooldown is per GENERATION, not per task forever. `retry_stalled_step` bumps
+    `reopen_count`, and a task that stalls a second time is the most informative case
+    there is — the first fix demonstrably did not work. Keying the marker by task alone
+    would swallow exactly that signal as "already looked at"."""
+    fake_llm.replies.extend(["Bài học lần stall đầu.", "Bài học lần stall sau khi retry."])
+    store = FakeStore()
+    reflect = make_reflect("coordinator", _settings(), store)
+
+    first = _task()
+    first.reopen_count = 0
+    reflect(first, "stalled", "")
+
+    revived = _task()  # cùng task id, đã qua một lượt reopen_stalled
+    revived.reopen_count = 1
+    reflect(revived, "stalled", "")
+
+    assert len(fake_llm.calls) == 2
+    facts = [v["fact"] for v in store.data[("coordinator", "memory")].values() if "fact" in v]
+    assert len(facts) == 2
+
+
+def test_a_revived_task_still_reflects_at_most_once_per_generation(fake_llm):
+    """The generation key opens the cooldown once per revival, not per tick — otherwise
+    a task stuck at `reopen_count=1` would re-buy the same reflection every sweep."""
+    fake_llm.replies.append("Bài học lần stall sau khi retry.")
+    store = FakeStore()
+    reflect = make_reflect("coordinator", _settings(), store)
+
+    for _ in range(3):
+        revived = _task()
+        revived.reopen_count = 1
+        reflect(revived, "stalled", "")
+
+    assert len(fake_llm.calls) == 1
+
+
 def test_two_different_tasks_each_get_their_own_reflection(fake_llm):
     fake_llm.replies.extend(["Bài học về chia bước cho việc A.", "Bài học về chọn người việc B."])
     store = FakeStore()

@@ -190,6 +190,35 @@ def test_set_task_status_rejects_unknown(tmp_path):
     store.close()
 
 
+def test_reopen_stalled_revives_the_task_and_counts_the_revival(tmp_path):
+    """`reopen_count` is the generation the reflection cooldown marker keys on, so it
+    must advance exactly once per real revival."""
+    store = _store(tmp_path)
+    _plan(store)
+    store.set_task_status("t1", "stalled")
+
+    assert store.reopen_stalled("t1") is True
+    task = store.get("t1")
+    assert (task.status, task.reopen_count) == ("open", 1)
+
+    store.set_task_status("t1", "stalled")
+    store.reopen_stalled("t1")
+    assert store.get("t1").reopen_count == 2
+    store.close()
+
+
+def test_reopen_stalled_on_a_task_that_is_not_stalled_counts_nothing(tmp_path):
+    """The stall handlers and the autopilot sweep both act on a read snapshot; a raced
+    reopen must be a clean no-op, not a phantom generation that voids the cooldown."""
+    store = _store(tmp_path)
+    _plan(store)  # leaves t1 `open`
+
+    assert store.reopen_stalled("t1") is False
+    task = store.get("t1")
+    assert (task.status, task.reopen_count) == ("open", 0)
+    store.close()
+
+
 # --- cost roll-up ------------------------------------------------------------------
 
 

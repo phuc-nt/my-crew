@@ -156,9 +156,16 @@ def is_durable_lesson(text: str) -> bool:
 _MARKER_NAMESPACE_KIND = "reflected"
 
 
-def _reflected_key(task_id: str) -> str:
-    """Cooldown marker key — one per task."""
-    return f"reflected:{task_id}"
+def _reflected_key(task_id: str, generation: int = 0) -> str:
+    """Cooldown marker key — one per task GENERATION, not one per task forever.
+
+    `generation` is the task's `reopen_count`: how many times a CEO `retry_stalled_step`
+    brought it back from `stalled`. A stall that happens AFTER a retry is the most
+    informative one there is — the first fix demonstrably did not work — so it must not
+    be swallowed as "already looked at". Each revival costs one extra reflection call,
+    which is the price of hearing about the second failure at all.
+    """
+    return f"reflected:{task_id}" if not generation else f"reflected:{task_id}:{generation}"
 
 
 def _task_digest(task: Any, outcome: str, detail: str) -> str:
@@ -244,7 +251,7 @@ def _reflect_inner(
     # Cooldown BEFORE the LLM call — the whole point is to not re-spend on a task the
     # ticker re-reads (a stalled task stays in the store, and a later sweep may re-touch
     # it).
-    marker = _reflected_key(task.id)
+    marker = _reflected_key(task.id, int(getattr(task, "reopen_count", 0) or 0))
     if store.get(marker_ns, marker) is not None:
         return
 

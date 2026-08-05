@@ -28,6 +28,7 @@
 | Dùng lại namespace `memory` sẵn có | Sibling đọc được ngay qua `sibling_memory`, CEO thấy trong memory view — 0 lớp chia sẻ mới | Lesson trộn chung với fact thường, không lọc riêng được |
 | Marker cooldown ra namespace RIÊNG `"reflected"` | Marker ghi mỗi lần, lesson thì hiếm → trộn chung sẽ chôn fact thật với 3 chỗ đọc `(agent_id,"memory")`. Và sweep retention 90d sẽ XOÁ marker, mở lại đường trả tiền lần hai cho task stalled lâu | Thêm 1 namespace phải nhớ khi đọc/dọn |
 | Reflection inline + `_reflect_safely` nuốt mọi exception | `run_one_tick` không có except riêng → reflection lỗi sẽ giết tick. Bài học là "có thì tốt", trạng thái task mới là sự thật | Lỗi reflection chỉ vào log warning, dễ trôi |
+| Marker cooldown key theo **generation** (`reopen_count`), không phải "một lần mãi mãi" | Stall SAU một lần retry là stall giàu thông tin nhất — bản vá đầu chứng minh là không ăn thua. Key theo task sẽ nuốt đúng tín hiệu đó | Mỗi lần task hồi sinh tốn thêm 1 lượt LLM; `reopen_count` chỉ tăng trong UPDATE có guard `WHERE status='stalled'` nên reopen đua/no-op không thổi phồng |
 | Cost chỉ tính trần tháng | `BudgetTracker` trong `LlmClient.complete()` đã chặn; thêm cột DB là YAGNI | Không truy được chi phí riêng của reflection |
 
 ## Vấp & học được
@@ -55,6 +56,11 @@
   `MY_CREW_HOME` từ env nên vẫn trỏ `.data` thật. Cộng với `stderr=DEVNULL`, triệu
   chứng là step kẹt `running` không lý do. Cách ly đúng là env var — thứ process con
   thừa hưởng được.
+- **UAT dựng tay bị chính hệ thống vượt mặt — và ra bằng chứng mạnh hơn.** Kịch bản
+  định gọi `retry_stalled_step` bằng tay, nhưng autopilot sweep tự retry trước, task về
+  `done` với `reopen_count=2` nên lệnh tay báo lỗi "không phải stalled". Đọc marker thì
+  thấy đủ 3 generation (`:0` stall, `:1` stall sau reopen, `:2` done) — tức đường tự
+  chủ thật, không phải đường tôi dựng, đã chứng minh cooldown theo generation có điện.
 - **Review đưa 1 finding sai cơ chế nhưng đúng kết luận.** Reviewer bảo marker sẽ đẩy
   lesson ra khỏi `search` (`ORDER BY updated_at DESC LIMIT`); thử thật 60 marker ở
   limit 10/20/40 — lesson vẫn còn, tiền đề sai với store này. Nhưng soi tay thì
@@ -63,8 +69,6 @@
 
 ## Mở / sang sau
 
-- Stall lần hai sau `retry_stalled_step` → `reopen_stalled` hiện KHÔNG reflect được
-  (marker là "một lần mãi mãi"), trong khi đó mới là stall giàu thông tin nhất.
 - Bề mặt chat cho approval (phase 2b): cần đường chat→ApprovalStore + binding
   `(agent_id, approval_id)` chống nhầm row (bài học v64 H1).
 - `_task_digest` cố tình loại `result_text` (injection). Chỗ dựa còn lại là `step.title`
