@@ -43,6 +43,14 @@ from my_crew.agent.ops_calendar_event import (
     run_create_calendar_event,
 )
 from my_crew.agent.ops_company_activity import run_company_activity
+from my_crew.agent.ops_heartbeat_cmds import (
+    preview_add_heartbeat_watch,
+    preview_enable_heartbeat,
+    preview_stop_heartbeat_watch,
+    run_add_heartbeat_watch,
+    run_enable_heartbeat,
+    run_stop_heartbeat_watch,
+)
 from my_crew.agent.ops_list_team_tasks import run_list_team_tasks
 from my_crew.agent.ops_send_message import preview_send_message, run_send_message
 from my_crew.agent.ops_stalled_task import (
@@ -669,6 +677,46 @@ OPS_COMMANDS: dict[str, dict] = {
         "slots": {},
         "run": run_get_autopilot,
     },
+    # v68 heartbeat. Routing is pure LLM classification — there is no keyword table — so
+    # the CEO's real phrasings live IN the description; that field IS the router.
+    "add_heartbeat_watch": {
+        "description": "Dặn thư ký để ý giùm một việc — vd 'để ý giùm vụ hợp đồng nhà "
+                       "cung cấp', 'nhớ nhắc tôi vụ tuyển dụng'. Thư ký sẽ nhắc lại định "
+                       "kỳ (KHÔNG tự dò trạng thái, chỉ nhắc)",
+        "readonly": False,
+        "slots": {
+            "text": {"prompt": "Bạn muốn mình để ý giùm việc gì?", "required": True,
+                     "max_len": 200},
+            "agent_id": {"prompt": "Nhịp của agent nào? (bỏ qua nếu chỉ có một)",
+                         "required": False, "max_len": 40, "lower": True},
+        },
+        "run": run_add_heartbeat_watch,
+        "preview": preview_add_heartbeat_watch,
+    },
+    "stop_heartbeat_watch": {
+        "description": "Bỏ một việc khỏi danh sách để ý — vd 'thôi khỏi để ý vụ hợp đồng', "
+                       "'xong vụ tuyển dụng rồi, đừng nhắc nữa'",
+        "readonly": False,
+        "slots": {
+            "text": {"prompt": "Bỏ việc nào khỏi danh sách để ý?", "required": True,
+                     "max_len": 200},
+            "agent_id": {"prompt": "Nhịp của agent nào? (bỏ qua nếu chỉ có một)",
+                         "required": False, "max_len": 40, "lower": True},
+        },
+        "run": run_stop_heartbeat_watch,
+        "preview": preview_stop_heartbeat_watch,
+    },
+    "enable_heartbeat": {
+        "description": "Bật lại nhịp thư ký chủ động sau khi nó tự tắt vì gửi hụt nhiều "
+                       "lần — vd 'bật lại nhịp thư ký', 'cho thư ký ngó việc lại đi'",
+        "readonly": False,
+        "slots": {
+            "agent_id": {"prompt": "Nhịp của agent nào? (bỏ qua nếu chỉ có một)",
+                         "required": False, "max_len": 40, "lower": True},
+        },
+        "run": run_enable_heartbeat,
+        "preview": preview_enable_heartbeat,
+    },
 }
 
 
@@ -685,6 +733,9 @@ ORCHESTRATION_COMMAND_IDS = frozenset({
     "accept_stalled_result", "retry_stalled_step", "drop_stalled_step",
     # v63 autopilot — the secretary IS the surface this mode exists for.
     "set_autopilot", "get_autopilot",
+    # v68 heartbeat — the pulse belongs to the secretary, so its controls do too. These
+    # touch only that agent's own heartbeat store, never the fleet.
+    "add_heartbeat_watch", "stop_heartbeat_watch", "enable_heartbeat",
 })
 
 

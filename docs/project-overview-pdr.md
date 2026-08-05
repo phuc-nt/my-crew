@@ -1,7 +1,7 @@
 # Project Overview & PDR — my-crew
 
 > Product definition + requirements. Đọc file này TRƯỚC khi plan hay code.
-> Cập nhật: 2026-08-04 (v66). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified — PyPI 0.7.0**.
+> Cập nhật: 2026-08-05 (v68). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified — PyPI 0.7.0+**.
 > Liên quan: [system-architecture](system-architecture.md) · [action-gateway-explainer](action-gateway-explainer.md) · [uat-theo-user-story](uat-theo-user-story.md).
 
 ## 1. Vấn đề
@@ -77,12 +77,12 @@ Xem [action-gateway-explainer.md](action-gateway-explainer.md) cho mô hình đ�
 
 ## 8. Trạng thái & lộ trình
 
-Đã ship tới **v66** (…**v51 productize** (PyPI) · v52–v55 office cockpit · **v56
+Đã ship tới **v68** (…**v51 productize** (PyPI) · v52–v55 office cockpit · **v56
 Playwright e2e** · **v57–v60 thư ký cá nhân** (pack `personal`, briefing, Gmail/Calendar,
 email, sửa lịch) · **v61 chat = cổng điều phối đội** · **v62 English identifiers** ·
 **v63 autopilot + review theo rủi ro + gỡ kẹt 1 chạm** · **v64 UAT hardening (chống bịa
 sau bước bị bỏ)** · **v65 nhắc đúng-giờ + scheduler công bằng** · **v66 cross-agent
-memory SQLite**), **2530 BE + 279 FE + 8 e2e tests**, live E2E verified, PyPI 0.7.0.
+memory SQLite** · **v67 learned Lớp B rules + task lifecycle** (CEO approve/reject + --always/--deny → rule; delivery_status tách execution; escalation contract) · **v68 heartbeat + reflection** (secretary heartbeat opt-in; task reflection chưng cất lesson)), **2692 BE + 279 FE + 8 e2e tests**, live E2E verified, PyPI 0.7.0+.
 Kiến trúc runtime-tier + moat: xem [system-architecture](system-architecture.md) §3.9.
 Lộ trình + việc tiếp: [project-roadmap.md](project-roadmap.md).
 

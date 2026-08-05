@@ -1,22 +1,22 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v66 / 0.7.0). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-08-04.
+> Lộ trình + trạng thái (as-built v68 / 0.7.0+). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Cập nhật: 2026-08-05.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v66, PyPI `my-crew` 0.7.0.**
-2530 BE + 279 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
-(live daemon, kill-9 resume, fan-out parallelism, 3 vòng UAT đối kháng trong ngày 04/08).
+**Production-usable, single-user autonomy-first. Đã ship tới v68, PyPI `my-crew` 0.7.0+.**
+2692 BE + 279 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
+(live daemon, kill-9 resume, fan-out parallelism, 3 vòng UAT đối kháng + heartbeat live UAT Telegram).
 
-**v57–v66 (arc thư ký — 0.7.0):** **v57–v60 thư ký cá nhân** (pack `personal`: chat DM,
+**v57–v68 (arc thư ký — 0.7.0+):** **v57–v60 thư ký cá nhân** (pack `personal`: chat DM,
 briefing sáng/tuần, Gmail/Calendar, gửi email, sửa/xoá lịch, multi-command) · **v61 chat
 = cổng điều phối đội** (giao/chỉnh/huỷ việc + kanban qua Telegram, catalog scope domain) ·
 **v62 English identifiers** · **v63 autopilot** (AI quyết cuối: tự xác nhận / tự gỡ kẹt /
 tự duyệt Lớp B — Lớp A + cost cap bất biến) + review theo rủi ro + gỡ-kẹt 1 chạm ·
 **v64 UAT hardening** (chống bịa sau bước bị bỏ) · **v65 nhắc đúng-giờ + scheduler
 round-robin công bằng** · **v66 cross-agent memory SQLite** (fact sống qua restart, đội
-đọc chéo, thư ký read-only). Retro đầy đủ: `plans/reports/retro-260804-1721-*`.
+đọc chéo, thư ký read-only) · **v67 learned Lớp B rules + task lifecycle** (CEO duyệt/chặn + `--always`/`--deny` → rule, guarded-mode-only; delivery_status tách execution_status; escalation contract P1) · **v68 heartbeat + reflection** (secretary heartbeat opt-in `heartbeat.every` config, im lặng đã yên, defer khi bận; task reflection chưng cất lesson khi terminal; 2692 BE test). Retro đầy đủ: `plans/reports/retro-260804-1721-*`.
 
 **v51–v55 (productize + office cockpit):** **v51 productize** (PyPI package: console script
 `my-crew`, serve supervisor, Docker, CI secret-free + OIDC release, MY_CREW_HOME) ·

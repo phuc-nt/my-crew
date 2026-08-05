@@ -119,3 +119,41 @@ def test_max_round_stall_never_relies_on_dead_end_path(tmp_path, monkeypatch):
     assert _dead_end_result(deps, task) is None
     task = store.get("t1")
     assert task.status != "stalled"  # dead-end path alone never stalls this task
+
+
+def test_review_exhausted_stall_is_reflected_on(tmp_path, monkeypatch):
+    """The richest lesson available: work specified clearly enough to dispatch but not
+    clearly enough to pass review, round after round."""
+    store = _store(tmp_path)
+    _plan_with_final_round_review(store, tmp_path)
+    seen: list[tuple[str, str, str]] = []
+    deps = _deps(store, reflect=lambda task, outcome, detail: seen.append(
+        (task.id, outcome, detail)))
+
+    task = store.get("t1")
+    review_step = next(
+        s for s in task.steps
+        if s.step_type == "review" and s.review_round == MAX_REVIEW_ROUNDS
+    )
+    maybe_handle_review_done(deps, task, review_step)
+
+    assert [(t, o) for t, o, _ in seen] == [("t1", "stalled")]
+    assert "review exhausted" in seen[0][2]
+
+
+def test_a_review_reflection_that_raises_never_loses_the_stall(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    _plan_with_final_round_review(store, tmp_path)
+
+    def _boom(task, outcome, detail):
+        raise RuntimeError("reflection exploded")
+
+    deps = _deps(store, reflect=_boom)
+    task = store.get("t1")
+    review_step = next(
+        s for s in task.steps
+        if s.step_type == "review" and s.review_round == MAX_REVIEW_ROUNDS
+    )
+
+    assert maybe_handle_review_done(deps, task, review_step) is True
+    assert store.get("t1").status == "stalled"

@@ -323,7 +323,7 @@ def aggregate_and_deliver(deps: CoordinatorDeps, task: TeamTask) -> TickResult:
     `deliver_room` returning `None` (every pre-v67 test double — fire-and-forget
     contract) still reads as delivered; only an explicit `False` marks the leg failed.
     """
-    from my_crew.agent.coordinator_graph import TickResult
+    from my_crew.agent.coordinator_graph import TickResult, _reflect_safely
 
     summary, cost = deps.aggregate(task)
     if cost is not None:
@@ -332,4 +332,7 @@ def aggregate_and_deliver(deps: CoordinatorDeps, task: TeamTask) -> TickResult:
     deps.store.set_task_status(task.id, "done")
     delivered = deps.deliver_room(task, summary) is not False
     deps.store.set_delivery(task.id, status="delivered" if delivered else "failed")
+    # After the delivery leg, so a task that finished but never reached the CEO reflects
+    # on that too — "done" and "done, and the CEO actually saw it" are different outcomes.
+    _reflect_safely(deps, task, "done", "" if delivered else "delivery failed")
     return TickResult(task_id=task.id, action="aggregated", detail=summary[:80])

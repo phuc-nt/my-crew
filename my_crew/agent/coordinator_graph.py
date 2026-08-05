@@ -221,6 +221,14 @@ class CoordinatorDeps:
     approval_rule_record_use: Callable[[int, str], None] = (
         lambda _rule_id, _agent_id: None
     )
+    # v68 reflection: reflect(task, outcome, detail) -> None. Called once a task reaches a
+    # terminal state (done or stalled) to distil a lesson about DELEGATING into the
+    # coordinator's own memory. Hygiene, never the tick's fate — the real implementation
+    # (`task_reflection.make_reflect`) swallows everything, and every call site here wraps
+    # it too, because `run_one_tick` has no except of its own and a bookkeeping failure
+    # must not lose a tick that already did real work. Default no-op keeps every
+    # non-wired caller byte-identical.
+    reflect: Callable[[TeamTask, str, str], None] = lambda *_: None
     now: Callable[[], datetime] = lambda: datetime.now(UTC)
 
 
@@ -296,6 +304,19 @@ def _last_activity_stamp(task: TeamTask) -> str:
     )
 
 
+def _reflect_safely(deps: CoordinatorDeps, task: TeamTask, outcome: str, detail: str) -> None:
+    """Call the reflection collaborator without ever letting it affect the tick.
+
+    The real implementation already swallows its own failures, but a test double or a
+    future wiring mistake could still raise — and `run_one_tick` has no except of its
+    own, so an exception here would discard a tick that already stalled/finished a task
+    correctly. The task's state is the truth; the lesson is a nice-to-have.
+    """
+    try:
+        deps.reflect(task, outcome, detail)
+    except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
+        logger.warning("reflection raised for task %s (bỏ qua)", task.id, exc_info=True)
+
 
 def _act_on_task(deps: CoordinatorDeps, task: TeamTask) -> TickResult:
     hash_result = _verify_plan_hash(deps, task)
@@ -310,6 +331,8 @@ def _act_on_task(deps: CoordinatorDeps, task: TeamTask) -> TickResult:
             f"Việc '{task.title}' vượt trần chi phí (${cap.spent_usd:.4f} > "
             f"${cap.cap_usd:.2f}) — đã dừng, cần CEO xem lại.",
         )
+        _reflect_safely(deps, task, "cap_exceeded",
+                        f"${cap.spent_usd:.4f} > ${cap.cap_usd:.2f}")
         return TickResult(task_id=task.id, action="cap_exceeded",
                           detail=f"${cap.spent_usd:.4f} > ${cap.cap_usd:.2f}")
     _maybe_warn_cost_cap(deps, task, cap)
@@ -485,6 +508,7 @@ def _dead_end_result(deps: CoordinatorDeps, task: TeamTask) -> TickResult | None
         f"Việc '{task.title}' bị dừng: (các) bước {names} thất bại/quá hạn và không "
         "còn được thử lại — cần CEO xem lại.",
     )
+    _reflect_safely(deps, task, "stalled", f"dead step(s): {names}")
     return TickResult(task_id=task.id, action="stalled", detail=f"dead step(s): {names}")
 
 
@@ -534,4 +558,5 @@ def _verify_plan_hash(deps: CoordinatorDeps, task: TeamTask) -> TickResult | Non
         f"Việc '{task.title}' bị dừng: kế hoạch trên đĩa không khớp kế hoạch đã được "
         "CEO xác nhận — cần CEO xem lại.",
     )
+    _reflect_safely(deps, task, "stalled", "plan_hash mismatch")
     return TickResult(task_id=task.id, action="stalled", detail="plan_hash mismatch")

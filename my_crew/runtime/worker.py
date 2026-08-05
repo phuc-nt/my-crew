@@ -311,6 +311,28 @@ def main(argv: list[str] | None = None, *, run_report: RunReport = _default_run_
                     result["status"], result.get("checked"))
         return 0  # a tick with zero due reminders is a SUCCESS
 
+    # v68: the secretary's proactive check-in. Unlike the ticks above it MAY spend a
+    # little (one isolated model turn) — but only after a pure-SQL digest proves there is
+    # something to say, so a quiet system stays free.
+    if kind == "secretary-heartbeat":
+        from my_crew.runtime.secretary_heartbeat_runner import run_secretary_heartbeat
+
+        try:
+            result = run_secretary_heartbeat(loaded, settings)
+        except Exception as exc:  # noqa: BLE001 — record the failure, never crash
+            logger.exception("worker %s/secretary-heartbeat failed", agent_id)
+            append_run_event(data_dir, _event(agent_id, kind, "internal", "error", None, False))
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        append_run_event(
+            data_dir,
+            _event(agent_id, kind, "internal", result["status"], result.get("cost_usd"),
+                   bool(result.get("delivered"))),
+        )
+        logger.info("worker %s secretary-heartbeat: %s (checked=%s)", agent_id,
+                    result["status"], result.get("checked"))
+        return 0  # a quiet pulse is a SUCCESS — silence is the design goal
+
     # v31 P5: the wake-gate watcher tick is a generic run kind — a NO-LLM poll over the
     # agent's declared watchers (read source → hash → wake only on diff). cost_usd is
     # always None here: an unchanged source must be measurably free.

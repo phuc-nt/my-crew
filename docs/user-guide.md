@@ -27,6 +27,11 @@ becomes the observation room. In one DM you can:
   never change.
 - **Team memory** (v66): facts persist in a shared store across restarts and agents;
   the secretary is read-only so your private context never leaks into team output.
+- **Secretary heartbeat** (v68, opt-in): secretary checks for stalled tasks, failed deliveries, 
+  due reminders, and stuck drafts on a schedule you set. When there's something to report, 
+  one Telegram DM arrives; when quiet, nothing sends (zero cost when idle). Configure per-agent 
+  via `heartbeat.every: 30m` (or `1h`, `2h`, etc.) in the agent's profile.yaml. Defers if you're 
+  mid-conversation or the secretary is already running (no interruption).
 
 Details (Vietnamese): [huong-dan-su-dung.md — Phần C](huong-dan-su-dung.md).
 
@@ -134,6 +139,29 @@ Click a workroom to enter and:
    ```
 3. Save. Next upgrade cycle, agent becomes guarded.
 
+### Learning Rules from Approvals (v67+)
+
+When you **Approve** or **Reject** a guarded action, you can teach the system to auto-decide the **same action** next time:
+
+**In the Approvals tab:**
+- Click **Approve** → optionally check **"Always approve this type"** (or use CLI `--always` flag)
+- Click **Reject** → optionally check **"Always reject this type"** (or use CLI `--deny` flag)
+
+**What "this type" means:**
+- An action is identified by its tool + destination (e.g. "post to #random channel", "comment on Linear issue ABC-123")
+- If the destination changes (different channel, different issue), the system **re-asks** you (no rule mismatch)
+- Internal actions (team tasks, scheduling) apply to any parameter (**no destination binding**)
+
+**Important:** Rules **only work in guarded mode**. In autonomous mode, actions always run immediately.
+
+**Via CLI** (for automation or scripting):
+```bash
+mpm agent approve <agent-id> <approval-id> --always    # learn to auto-approve
+mpm agent reject <agent-id> <approval-id> --deny       # learn to auto-deny
+mpm agent rules <agent-id>                              # list learned rules (shows rule ID, type, usage count)
+mpm agent rules <agent-id> --revoke <rule-id>          # undo (deny rules need --confirm to prevent accidental loosening)
+```
+
 ---
 
 ## Team Management
@@ -173,6 +201,34 @@ Use the **Assistant** tab → ask "create an agent that…" → answer questions
 1. Agent card shows **"⬆ new vN"** badge.
 2. Click it → see what will change.
 3. **"Upgrade"** applies new config (fields you customized stay yours); **old profile auto-backed up**.
+
+### Secretary Heartbeat (v68+, Optional)
+
+If you use a personal secretary agent, you can enable periodic check-ins to stay informed without constant 
+manual polling. The secretary monitors:
+
+- **Stalled team tasks** (awaiting your input to recover)
+- **Failed deliveries** (external writes that couldn't send)
+- **Reminders coming due** (within 24 hours)
+- **Awaiting-confirmation drafts** (overdue for CEO review)
+
+**To enable:**
+
+Edit your secretary agent's **profile** (in `.data/profiles/<agent-id>/profile.yaml`) and add:
+
+```yaml
+heartbeat:
+  every: 30m
+```
+
+Valid intervals: `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `12h`, `24h`.
+
+**Behavior:**
+
+- When quiet (no issues found) → **0 messages, 0 cost**
+- When there's something → **1 concise Telegram DM** (≤300 characters)
+- When you're mid-conversation with the secretary → **deferred** (no interruption)
+- **3 consecutive heartbeat errors** → auto-stop + one notification to you
 
 ---
 

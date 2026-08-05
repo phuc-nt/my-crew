@@ -42,7 +42,10 @@ def run_agent(args: list[str], *, spawn=None, timeout: int = _DEFAULT_TIMEOUT) -
     # `milestone-mirror` (v12 M29) is the admin agent's room→Telegram digest — none is a
     # pack report kind, so all four are handled by the worker before graph dispatch and
     # are always valid --report values.
-    valid_kinds = all_report_kinds() | {"inbox", "team-step", "team-tick", "milestone-mirror"}
+    # v68 adds `secretary-heartbeat` (the proactive check-in pulse) to the same list.
+    valid_kinds = all_report_kinds() | {
+        "inbox", "team-step", "team-tick", "milestone-mirror", "secretary-heartbeat",
+    }
     if kind not in valid_kinds:
         print(
             f"error: --report must be one of {sorted(valid_kinds)}; got {kind!r}.",

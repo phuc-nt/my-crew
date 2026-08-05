@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from my_crew.agent.coordinator_graph import CoordinatorDeps, RetryTracker, run_one_tick
+from my_crew.agent.task_reflection import make_reflect
 from my_crew.runtime.company import load_company
 from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
 from my_crew.runtime.team_task_store import TeamStep, TeamTask, TeamTaskStore
@@ -60,12 +61,24 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
             kill_pid=_kill_pid,
             approval_status=_approval_status,
             approval_approve=_approval_approve,
+            approval_reject=_approval_reject,
+            approval_action=_approval_action,
+            approval_rule_match=_approval_rule_match,
+            approval_rule_record_use=_approval_rule_record_use,
             autopilot_enabled=_autopilot_enabled,
             clarify_status=_clarify_status,
             roster_ok=_roster_ok,
             aggregate=make_aggregate(loaded, settings),
             deliver_room=make_deliver_room(),
             escalate=make_escalate(loaded, settings),
+            # Lessons live in the COORDINATOR's own namespace — it is the agent that
+            # assigns work, so what it learns is about its own delegating. `loaded` IS
+            # the coordinator here (this kind runs only on that agent), so its profile id
+            # is the right namespace owner even when company.yaml names it differently.
+            reflect=make_reflect(
+                getattr(loaded, "profile_id", "") or (company.coordinator_id or ""),
+                settings,
+            ),
             now=(lambda: now) if now is not None else (lambda: datetime.now(UTC)),
         )
         result = run_one_tick(deps)
@@ -388,6 +401,81 @@ def _approval_approve(approval_id: int, agent_id: str) -> bool:
         if store.get(approval_id) is None:
             return False
         return store.transition_if_pending(approval_id, "approved")
+    finally:
+        store.close()
+
+
+def _approval_reject(approval_id: int, agent_id: str) -> bool:
+    """v67 learned deny rule (queued path): flip ONE pending Lớp B row to rejected, scoped
+    to the step's OWN agent store — same per-file AUTOINCREMENT reasoning + same
+    `transition_if_pending` compare-and-set as `_approval_approve`, so a concurrent CEO
+    decision wins the race and this returns False."""
+    from my_crew.actions.approval_store import ApprovalStore
+    from my_crew.runtime.agent_paths import agent_data_dir
+
+    if not agent_id:
+        return False
+    store = ApprovalStore(agent_data_dir(agent_id) / "approvals.db")
+    try:
+        if store.get(approval_id) is None:
+            return False
+        return store.transition_if_pending(approval_id, "rejected")
+    finally:
+        store.close()
+
+
+def _approval_action(approval_id: int, agent_id: str) -> dict | None:
+    """v67: read the queued action payload of a pending Lớp B row (the step itself carries
+    only the approval_id), scoped to the step's OWN agent store. `None` when the id does
+    not resolve — the ticker then skips the rule check, same as no rule at all."""
+    from my_crew.actions.approval_store import ApprovalStore
+    from my_crew.runtime.agent_paths import agent_data_dir
+
+    if not agent_id:
+        return None
+    store = ApprovalStore(agent_data_dir(agent_id) / "approvals.db")
+    try:
+        approval = store.get(approval_id)
+    finally:
+        store.close()
+    return approval.action if approval is not None else None
+
+
+def _approval_rule_match(action: dict, agent_id: str) -> tuple[str, int] | None:
+    """v67: ask ONE agent's ApprovalRuleStore for a standing decision on `action`.
+    Returns `(scope, rule_id)` where scope is "deny"/"approve" (mapped from the store's
+    "always"), or `None` for no rule.
+
+    Deliberately does NOT record the use: a matched rule only DECIDES if the row is still
+    pending when the ticker transitions it. A concurrent CEO decision can win that race, and
+    a rule that decided nothing must not show a use in the audit trail. The ticker calls
+    `approval_rule_record_use` after a confirmed transition instead."""
+    from my_crew.actions.approval_rule_store import SCOPE_DENY, ApprovalRuleStore
+    from my_crew.runtime.agent_paths import agent_data_dir
+
+    if not agent_id:
+        return None
+    store = ApprovalRuleStore(agent_data_dir(agent_id) / "approvals.db")
+    try:
+        rule = store.match(action)
+        if rule is None:
+            return None
+        scope = "deny" if rule.scope == SCOPE_DENY else "approve"
+        return scope, rule.id
+    finally:
+        store.close()
+
+
+def _approval_rule_record_use(rule_id: int, agent_id: str) -> None:
+    """Stamp a rule's use AFTER it actually decided a row (see `_approval_rule_match`)."""
+    from my_crew.actions.approval_rule_store import ApprovalRuleStore
+    from my_crew.runtime.agent_paths import agent_data_dir
+
+    if not agent_id:
+        return
+    store = ApprovalRuleStore(agent_data_dir(agent_id) / "approvals.db")
+    try:
+        store.record_use(rule_id)
     finally:
         store.close()
 

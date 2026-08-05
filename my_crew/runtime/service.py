@@ -125,9 +125,41 @@ def _effective_schedule(loaded) -> tuple[dict[str, str], tuple[str, ...]]:
             schedule["reminder-sweep"] = "* * * * *"
             reports.append("reminder-sweep")
             changed = True
+    # v68: an agent with `heartbeat: {every: 30m}` in its profile gets a proactive
+    # `secretary-heartbeat` pseudo-kind. OFF unless the key is present, so every existing
+    # agent keeps a byte-identical schedule. Needs a CEO DM to have anywhere to speak.
+    #
+    # A pulse that failed MAX_CONSECUTIVE_FAILURES times in a row turns itself off by
+    # writing the store, not the profile — so the cron simply stops being synthesized on
+    # the very next tick, with no restart and no rewrite of the CEO's yaml. Same cheap
+    # probe shape as the reminder sweep: no file ⇒ False without creating the DB.
+    heartbeat_minutes = getattr(loaded, "heartbeat_every_minutes", None)
+    if heartbeat_minutes and getattr(getattr(loaded, "config", None), "telegram", None):
+        from my_crew.runtime.agent_paths import agent_data_dir
+        from my_crew.runtime.heartbeat_state_store import heartbeat_disabled
+
+        profile_id = getattr(loaded, "profile_id", "")
+        if not (profile_id and heartbeat_disabled(agent_data_dir(profile_id))):
+            schedule["secretary-heartbeat"] = _heartbeat_cron(heartbeat_minutes)
+            reports.append("secretary-heartbeat")
+            changed = True
     if not changed:
         return loaded.schedule, loaded.reports  # byte-identical when nothing synthesized
     return schedule, tuple(reports)
+
+
+def _heartbeat_cron(minutes: int) -> str:
+    """Cadence in minutes → a 5-field cron the scheduler already understands.
+
+    Under an hour this is a minute-step (`*/30 * * * *`). At or above it, a minute-step
+    would be wrong — `*/90` is not a valid minute field — so it becomes an hour-step
+    pinned to minute 0, rounding DOWN to whole hours (a heartbeat that fires slightly
+    more often than asked is harmless; one that skips a window is not).
+    """
+    if minutes < 60:
+        return f"*/{minutes} * * * *"
+    hours = minutes // 60
+    return "0 * * * *" if hours == 1 else f"0 */{hours} * * *"
 
 
 def _worker_argv(agent_id: str, kind: str, audience: str) -> list[str]:

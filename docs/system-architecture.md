@@ -1,9 +1,9 @@
 # System Architecture — my-crew
 
-> Kiến trúc kỹ thuật (as-built, v66 / 0.7.0). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
+> Kiến trúc kỹ thuật (as-built, v68 / 0.7.0+). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
 > (vì sao) + [action-gateway-explainer](action-gateway-explainer.md) (mô hình an toàn) +
 > [codebase-summary](codebase-summary.md) (cái gì ở file nào).
-> Cập nhật: 2026-08-04.
+> Cập nhật: 2026-08-05.
 
 ## 1. Nguyên tắc kiến trúc
 
@@ -74,6 +74,13 @@ SQLite WAL, single source of truth cho state đội. **Reserve-before-spawn + le
 re-reserve khi lease hết hạn AND chưa có outcome artifact. Terminal write mang `attempt_id`
 → một worker cũ (zombie) ghi trễ thành no-op, không corrupt attempt mới.
 
+**v67–v68 Task lifecycle discipline (P1)**: task field `delivery_status` (not_applicable / pending / success / failed)
+tách khỏi `status` (task-level: open/done/stalled) để ghi rõ "chạy xong ≠ ghi ra ngoài được". Escalation
+contract: `delivery_status='failed'` → escalate CEO tại delivery-sweep (không retry, cần CEO chỉnh kế hoạch
+hay accept). Cơ chế `set_delivery_status` và `list_delivery_failed` query riêng. Audit: delivery failure
+được ghi office event + append escalation suggestion từ `team_tick_collaborators` (constant template,
+không field dấu hiệu injection).
+
 ### 3.5 Agent graphs (`my_crew/agent/`)
 - `coordinator_graph.py` + `coordinator_nodes/` — ticker: chọn task, verify hash, dispatch
   bước sẵn sàng (cap song song 2), chèn soát chéo, escalate. v63: review theo cỡ việc —
@@ -104,11 +111,14 @@ re-reserve khi lease hết hạn AND chưa có outcome artifact. Terminal write 
   office event `milestone: autopilot_decision` (audit) → admin mirror DM CEO
   (notify-after, không cần plumbing mới).
 
-### 3.6 Action Gateway (`my_crew/actions/`, v30–v31)
+### 3.6 Action Gateway (`my_crew/actions/`, v30–v31, v67–v68 learned rules)
 `action_gateway.py` = cửa duy nhất. `hard_block.py` = Lớp A (chặn cứng, không duyệt được).
 Lớp B = phụ thuộc `safety.trust_mode` per-agent:
 - **autonomous** (mặc định): tự chạy ngay → audit log rationale "trust_mode=autonomous".
 - **guarded** (opt-in): chờ CEO duyệt (`approval_store.py` + `auto_approve_policy.py` chỉ dùng khi guarded).
+
+**v67–v68 Learned rules (Lớp B pattern memory)**: Khi CEO duyệt/chặn hành động Lớp B, thêm cờ `--always` hoặc `--deny` để ghi rule (pattern + target); lần sau action cùng pattern + target tự quyết (ALWAYS: chạy → audit rule id; DENY: từ chối không queue). Chỉ áp ở guarded mode — autonomous giữ toàn quyền (CEO quyết định 2026-08-04). Store per-agent (`approval_rules` bảng trong `approvals.db`). CLI: `mpm agent approve <id> <approval-id> --always` / `mpm agent reject <id> <approval-id> --always` (tạo rule); `mpm agent rules <id>` (liệt kê); `mpm agent rules <id> --revoke <rule-id> [--confirm]` (hoàn tác, deny rule cần `--confirm`). Đổi tham số bind (recipient, channel, repo) → miss → hỏi lại. Lớp A + kill-switch + dedup vẫn áp trước rule (rule chỉ decide Lớp B, không bao giờ nới Lớp A).
+
 **Native action types (v31)**: `schedule_update` (agent đổi lịch báo cáo chính mình), `team_task_create`/`team_task_move` (kanban), `gws_write` (Google Sheets/Docs append+create), `academic_search` (read-only). Các handler `*_write.py` khác (jira/confluence/slack/email) — đều gọi qua gateway, không lối tắt.
 
 **Agent creation (v32)**: Template-based create-from-template / crew bootstrap (`my_crew/server/template_create.py`) both build spec server-side from `profiles/templates/`, then go through the same `agent_create.create_agent(spec)` door as wizard — no bypass, new agents land DISABLED (CEO sets .env tokens, then enables on Team page).
@@ -227,6 +237,26 @@ Modules: `my_crew/runtime/capture_store.py`, `my_crew/llm/model_pricing.py`, `my
 
 **v48 — MCP session pool wrapping team-step**: team-step call_tool (mcp_tool) giờ chạy TRONG `_run_with_mcp_pool` (như report/inbox/tasks branches) — 1 subprocess MCP/server dùng lại qua step thay vì spawn node mới per-call. Eliminate spawn-per-call overhead cho office cross-synth (92s→faster).
 
+### 3.10b Secretary heartbeat (v68, P3)
+**Proactive digest + optional DM**: thư ký định kỳ (opt-in `heartbeat.every` trong profile.yaml,
+ví dụ `heartbeat.every: 30m`) quét digest: tasks stalled, delivery failed từ P1, reminders sắp reo, drafts
+awaiting_confirm quá hạn. Digest rỗng → 0 LLM call (miễn phí). Có signal → 1 lượt LLM nhỏ cố định, reply
+≤300 ký tự được gửi Telegram; ngược lại drop (kiểm soát spam). Defer khi đang mid-conversation hay secretary
+chạy (ghi `heartbeat_deferred`). Suppression contract: 3 lỗi heartbeat liên tiếp → auto-stop + báo CEO.
+Module: `my_crew/runtime/secretary_heartbeat_runner.py` + `secretary_heartbeat_digest.py`. Service loop mỗi
+phút check trigger (v65 scheduler). Loop-prevention: heartbeat chỉ báo + đề xuất, không tự giao việc.
+
+### 3.10c Task reflection (v68, P4)
+**Memory học từ outcome terminal**: khi task vào done/stalled, enqueue 1 lượt reflection (inline, bọc trong
+`_reflect_safely` nuốt exception — reflection là vệ sinh, không định sẵn thất bại tick). Reflection chạy
+`is_durable_lesson` guardrail: cấm transient claim ("web_search timeout"), infra claim, blanket refusal,
+tool-name + complaint (pattern `\b(dung|de|cho|lam)\b` phân biệt "dùng web_search"). Output ghi vào
+`(coordinator_id, "memory")` namespace — bài học là về cách coordinator giao, không worker riêng; sibling
+agent đọc qua `sibling_memory` sẵn có. Cooldown marker riêng ở `(coordinator_id, "reflected")` để tránh
+bury fact giữa bookkeeping (marker viết mỗi lần, lesson hiếm) — sweep 90d không xoá marker làm re-open
+task stalled cũ. Cost tính vào `BudgetTracker` sẵn (không cột DB mới). Module: `my_crew/agent/task_reflection.py`.
+Consolidation sweep (v35, chạy 03:00 nightly) giữ nguyên, lesson chỉ là memory thường.
+
 ### 3.11 Frontend (`web/src/`)
 React 19 + Vite. Màn chính **Văn phòng** (`views/office-unified/`): 3 cột phòng-việc /
 hoạt-động / kết-quả + panel 3D (`views/office-3d/`, react-three-fiber). Reducer sự kiện
@@ -249,13 +279,13 @@ hoạt-động / kết-quả + panel 3D (`views/office-3d/`, react-three-fiber).
 
 | File (.data/) | Nội dung |
 |---|---|
-| `team_tasks.sqlite3` | Task đội + steps + lease state |
+| `team_tasks.sqlite3` | Task đội + steps + lease state + `delivery_status` (v67) |
 | `office_room.sqlite3` | Office events (feed realtime, projected PII-safe) |
 | `captures.sqlite3` | Team-step telemetry: attempt_id, task_id, step_id, agent_id, engine, cost_usd, tokens (WAL, INTERNAL-only) |
-| `approvals.db` | Hàng đợi Lớp B |
+| `approvals.db` | Hàng đợi Lớp B + `approval_rules` table (v67 learned rules per-agent) |
 | `dedup.db` | Chống gửi trùng |
 | `checkpoints.db` | LangGraph checkpoint (report graphs; team graph KHÔNG checkpoint) |
-| `memory_store.sqlite3` | Trí nhớ bền dùng chung cross-agent (v66; retention 90 ngày) |
+| `memory_store.sqlite3` | Trí nhớ bền dùng chung cross-agent (v66; retention 90 ngày; v68 reflection lesson ở `(coordinator_id, "memory")` + cooldown ở `(coordinator_id, "reflected")`) |
 | `agents/<id>/reminders.db` | Nhắc hẹn giờ per-agent (v65; sweep mỗi phút) |
 | `artifacts/team-tasks/<id>/step-<n>.json` | Kết quả bàn giao từng bước (artifact viewer đọc) |
 

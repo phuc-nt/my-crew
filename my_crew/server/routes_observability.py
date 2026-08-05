@@ -173,7 +173,9 @@ def schedule_upcoming() -> dict:
             # The coordinator's team-tick is an every-minute infra heartbeat (already
             # surfaced as ♥ in the health strip) — listing it would permanently occupy
             # the top slots and bury the watch/daily fires the CEO actually cares about.
-            if kind == "team-tick":
+            # v68: the secretary heartbeat fires on the same order of cadence and is
+            # likewise infra, not a scheduled deliverable — hide it for the same reason.
+            if kind in ("team-tick", "secretary-heartbeat"):
                 continue
             if not croniter.is_valid(cron):
                 continue

@@ -156,6 +156,12 @@ def maybe_handle_review_done(deps: CoordinatorDeps, task: TeamTask, review_step:
             f"Việc '{task.title}' bị dừng: bước '{content_step.title}' soát chéo "
             f"không đạt sau {MAX_REVIEW_ROUNDS + 1} lượt sửa — cần CEO xem lại.",
         )
+        from my_crew.agent.coordinator_graph import _reflect_safely
+
+        # The richest lesson in the system: work that was specified clearly enough to
+        # dispatch but not clearly enough to pass review, repeatedly.
+        _reflect_safely(deps, task, "stalled",
+                        f"review exhausted on '{content_step.title}'")
         return True
 
     # Scoped to THIS review's own round — a prior round's rework row (e.g. round 0's,

@@ -62,8 +62,13 @@ _FAILURE_STATUSES = frozenset({"error", "load_error"})
 #: non-report treatment.
 #: v12 M29: "milestone-mirror" is the admin agent's office-room Telegram mirror poll —
 #: same non-report treatment (a tick with nothing new to push is a success, not overdue).
+#: v68: "secretary-heartbeat" is the secretary's proactive check-in — silence is its
+#: designed outcome, so a pulse with nothing to report must never read as overdue (that
+#: would make the dashboard flag it, ops-alerts DM the CEO, and the quiet loop become
+#: the noise it exists to prevent).
 _NON_REPORT_KINDS = frozenset(
-    {"inbox", "tasks", "ops-alerts", "team-step", "team-tick", "milestone-mirror"}
+    {"inbox", "tasks", "ops-alerts", "team-step", "team-tick", "milestone-mirror",
+     "secretary-heartbeat"}
 )
 
 

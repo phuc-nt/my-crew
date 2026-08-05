@@ -552,3 +552,106 @@ def test_aggregate_with_failed_delivery_marks_failed_but_task_stays_done(tmp_pat
     assert task.status == "done"          # execution finished — that truth stands
     assert task.delivery_status == "failed"  # ...but the CEO was never told
     assert task.final_summary == "tong ket"  # retry material, no re-aggregate needed
+
+
+# --- v68 reflection wiring ----------------------------------------------------------
+# WHICH tick outcomes hand a task to the reflection collaborator. The reflection's own
+# behavior (guardrail, cooldown, namespace) is covered in `test_task_reflection.py`.
+
+
+def _reflect_recorder():
+    seen: list[tuple[str, str, str]] = []
+    return seen, lambda task, outcome, detail: seen.append((task.id, outcome, detail))
+
+
+def test_a_finished_task_is_reflected_on(tmp_path):
+    store = _store(tmp_path)
+    _plan(store, steps=[{"step_id": "s1", "title": "draft", "assigned_to": "agent-a", "deps": []}])
+    store.reserve_step("t1", "s1")
+    store.mark_done("t1", "s1")
+    seen, reflect = _reflect_recorder()
+
+    run_one_tick(_deps(store, aggregate=lambda task: ("tong ket", None), reflect=reflect))
+
+    assert [(t, o) for t, o, _ in seen] == [("t1", "done")]
+
+
+def test_a_finished_but_undelivered_task_reflects_on_that_too(tmp_path):
+    """"done" and "done, and the CEO actually saw it" are different outcomes."""
+    store = _store(tmp_path)
+    _plan(store, steps=[{"step_id": "s1", "title": "draft", "assigned_to": "agent-a", "deps": []}])
+    store.reserve_step("t1", "s1")
+    store.mark_done("t1", "s1")
+    seen, reflect = _reflect_recorder()
+
+    run_one_tick(_deps(
+        store, aggregate=lambda task: ("tong ket", None),
+        deliver_room=lambda task, summary: False, reflect=reflect,
+    ))
+
+    assert seen == [("t1", "done", "delivery failed")]
+
+
+def test_a_dead_step_stall_is_reflected_on(tmp_path):
+    store = _store(tmp_path)
+    _plan(store, steps=[{"step_id": "s1", "title": "draft", "assigned_to": "agent-a", "deps": []}])
+    store.reserve_step("t1", "s1")
+    store.mark_failed("t1", "s1")
+    seen, reflect = _reflect_recorder()
+
+    run_one_tick(_deps(store, reflect=reflect))
+
+    assert [(t, o) for t, o, _ in seen] == [("t1", "stalled")]
+
+
+def test_a_cost_cap_stall_is_reflected_on(tmp_path):
+    """`cap_exceeded` is its own action value, not "stalled" — it must still reflect."""
+    store = _store(tmp_path)
+    _plan(store, steps=[{"step_id": "s1", "title": "draft", "assigned_to": "agent-a", "deps": []}])
+    store.reserve_step("t1", "s1")
+    store.mark_done("t1", "s1", cost_usd=5.0)
+    seen, reflect = _reflect_recorder()
+
+    run_one_tick(_deps(store, cost_cap_usd=2.0, reflect=reflect))
+
+    assert [(t, o) for t, o, _ in seen] == [("t1", "cap_exceeded")]
+
+
+def test_a_plan_hash_stall_is_reflected_on(tmp_path):
+    store = _store(tmp_path)
+    _plan(store)
+    store._conn.execute("UPDATE team_tasks SET plan_hash = 'tampered' WHERE id = 't1'")
+    store._conn.commit()
+    seen, reflect = _reflect_recorder()
+
+    run_one_tick(_deps(store, reflect=reflect))
+
+    assert [(t, o) for t, o, _ in seen] == [("t1", "stalled")]
+
+
+def test_a_task_still_in_flight_is_not_reflected_on(tmp_path):
+    """Reflection is for terminal outcomes only — a mid-flight tick teaches nothing yet."""
+    store = _store(tmp_path)
+    _plan(store)
+    seen, reflect = _reflect_recorder()
+
+    run_one_tick(_deps(store, reflect=reflect))
+
+    assert seen == []
+
+
+def test_a_reflection_that_raises_never_loses_the_tick(tmp_path):
+    """The task's terminal state is the truth; the lesson is a nice-to-have. `run_one_tick`
+    has no except of its own, so the call site must absorb this."""
+    store = _store(tmp_path)
+    _plan(store, steps=[{"step_id": "s1", "title": "draft", "assigned_to": "agent-a", "deps": []}])
+    store.reserve_step("t1", "s1")
+    store.mark_failed("t1", "s1")
+
+    def _boom(task, outcome, detail):
+        raise RuntimeError("reflection exploded")
+
+    result = run_one_tick(_deps(store, reflect=_boom))
+
+    assert result.action == "stalled"
+    assert store.get("t1").status == "stalled"

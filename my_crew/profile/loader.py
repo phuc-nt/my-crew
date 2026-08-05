@@ -109,6 +109,13 @@ class LoadedProfile:
     # synthesized (schedule byte-identical). Each entry: {id, source, target, prompt} —
     # validated at load by `_parse_watchers`.
     watchers: tuple[dict, ...] = ()
+    # v68 secretary heartbeat: the agent's proactive check-in cadence, in MINUTES.
+    # None ⇒ no `secretary-heartbeat` kind is ever synthesized (schedule byte-identical,
+    # ship-off default). Parsed from `heartbeat: {every: "30m"}` by `_parse_heartbeat`.
+    # Lives on the profile, NOT company.yaml: it is per-agent in meaning, and
+    # `company.save_company` rebuilds its document from a fixed dict, which would
+    # silently delete a hand-written key there.
+    heartbeat_every_minutes: int | None = None
     # v36 P2 template live-skills: the role template this agent was created from. None ⇒
     # agent predates live-skills (its skills were COPIED into profiles/<id>/skills/ once at
     # create — byte-identical old behavior). When set, `load_skill_pool` ALSO loads the
@@ -189,6 +196,7 @@ def load_profile(
     memory_config = parse_memory_config(yaml_doc.get("memory"))
     agent_runtime = parse_agent_runtime_config(yaml_doc.get("agent_runtime"))
     watchers = _parse_watchers(yaml_doc.get("watchers"))
+    heartbeat_every_minutes = _parse_heartbeat(yaml_doc.get("heartbeat"))
     return LoadedProfile(
         profile_id=profile_id,
         name=str(yaml_doc.get("name") or profile_id),
@@ -216,8 +224,64 @@ def load_profile(
         agent_runtime=agent_runtime,
         team_step_egress=team_step_egress,
         watchers=watchers,
+        heartbeat_every_minutes=heartbeat_every_minutes,
         template_role=(str(yaml_doc.get("template_role") or "").strip() or None),
     )
+
+
+#: Cadence bounds for `heartbeat.every`. Below 5m a heartbeat competes with the
+#: per-minute sweeps for the concurrency cap for no product gain; above 24h it is not a
+#: heartbeat. Out-of-range fails loud rather than clamping — a typo'd "5" meaning 5h
+#: must not silently become a 5-minute pulse that DMs the CEO all day.
+_HEARTBEAT_MIN_MINUTES = 5
+_HEARTBEAT_MAX_MINUTES = 24 * 60
+
+
+def _parse_heartbeat(raw: object) -> int | None:
+    """Validate the optional `heartbeat:` block (v68) → cadence in minutes, or None (OFF).
+
+    Shape: `heartbeat: {every: "30m"}`. Accepts a plain-minute int too (`every: 30`).
+    Absent ⇒ None, so no `secretary-heartbeat` kind is synthesized and the agent's
+    schedule stays byte-identical. Fail-loud on shape errors, matching the other
+    `_parse_*` helpers here: a heartbeat that silently turned itself off is a
+    feature the CEO believes is running when it is not.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise RuntimeError("heartbeat must be a mapping, e.g. heartbeat: {every: 30m}.")
+    every = raw.get("every")
+    if every is None:
+        return None
+    minutes = _heartbeat_minutes(every)
+    if not _HEARTBEAT_MIN_MINUTES <= minutes <= _HEARTBEAT_MAX_MINUTES:
+        raise RuntimeError(
+            f"heartbeat.every must be between {_HEARTBEAT_MIN_MINUTES}m and 24h; "
+            f"got {every!r} ({minutes}m)."
+        )
+    return minutes
+
+
+def _heartbeat_minutes(every: object) -> int:
+    """`"30m"` / `"2h"` / `30` → minutes. Raises RuntimeError on anything else."""
+    if isinstance(every, bool):  # bool is an int subclass — reject before the int branch
+        raise RuntimeError("heartbeat.every must be a duration like 30m or 2h, not a bool.")
+    if isinstance(every, int):
+        return every
+    text = str(every).strip().lower()
+    unit_minutes = {"m": 1, "h": 60}
+    suffix = text[-1:] if text else ""
+    if suffix in unit_minutes:
+        text, factor = text[:-1].strip(), unit_minutes[suffix]
+    else:
+        factor = 1  # bare number ⇒ minutes
+    try:
+        value = int(text)
+    except ValueError:
+        raise RuntimeError(
+            f"heartbeat.every must be a duration like 30m or 2h; got {every!r}."
+        ) from None
+    return value * factor
 
 
 #: Sources `watchers:` may declare. confluence/linear parse but FAIL-CLOSED at poll
