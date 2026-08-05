@@ -4,7 +4,7 @@
 >
 > Dashboard and team operations for CEO / team leads (no technical knowledge required).
 > All work via browser dashboard or Telegram.
-> **Updated:** 2026-08-04.
+> **Updated:** 2026-08-05 (v69 / 0.8.0).
 
 ---
 
@@ -32,6 +32,12 @@ becomes the observation room. In one DM you can:
   one Telegram DM arrives; when quiet, nothing sends (zero cost when idle). Configure per-agent 
   via `heartbeat.every: 30m` (or `1h`, `2h`, etc.) in the agent's profile.yaml. Defers if you're 
   mid-conversation or the secretary is already running (no interruption).
+- **Approvals in chat** (v69 / 0.8.0): when a guarded action queues, you get a Telegram
+  DM immediately (id + agent + one identifying line — never the message body). Approve or
+  reject right in the chat, optionally as a standing always/deny rule described in plain
+  words. The heartbeat also names every approval still waiting, so a blocked agent can't
+  wait unnoticed. Plus: "xem bài học" shows what the coordinator learned from finished
+  tasks, and the kanban reports how often a task had to be revived.
 
 Details (Vietnamese): [huong-dan-su-dung.md — Phần C](huong-dan-su-dung.md).
 
@@ -162,6 +168,33 @@ mpm agent rules <agent-id>                              # list learned rules (sh
 mpm agent rules <agent-id> --revoke <rule-id>          # undo (deny rules need --confirm to prevent accidental loosening)
 ```
 
+### Approving from Telegram (v69+)
+
+Chat is the third surface on the same approval queue — same gateway path as web and CLI,
+available only in the **admin agent's** chat (deciding for other agents is fleet
+authority, so the personal secretary can't do it).
+
+**You don't have to poll:** the moment a guarded action queues, the operator gets a DM
+with the approval id, the agent, and one identifying line (recipients and tool name —
+never the subject or body). From there, in natural language:
+
+- *"xem việc chờ duyệt"* — list every pending approval across all agents
+- *"duyệt việc #12 của sales-pm"* — preview first, then confirm; answer *"luôn"* to also
+  learn an always-approve rule
+- *"từ chối #12 của sales-pm"* — answer *"chặn"* to learn a standing deny rule
+
+Two safety properties worth knowing:
+
+- The preview pins the exact `(agent, approval id)` pair — if another notification lands
+  mid-conversation, your confirm still targets the row you saw, or tells you it's gone.
+- A standing rule is only offered when the action can be described in plain words
+  ("always allow posting to #general"). If the system can't describe what the rule would
+  cover, it refuses the "always/chặn" option — approving a rule you can't read isn't
+  consent. Rule list/revoke stays on CLI/web.
+
+If a pending approval sits unattended, the secretary heartbeat (below) names it on every
+configured check-in until someone decides — a blocked agent can't wait unnoticed.
+
 ---
 
 ## Team Management
@@ -211,6 +244,9 @@ manual polling. The secretary monitors:
 - **Failed deliveries** (external writes that couldn't send)
 - **Reminders coming due** (within 24 hours)
 - **Awaiting-confirmation drafts** (overdue for CEO review)
+- **Pending approvals** (v69+) — every guarded action still waiting on you, across all
+  agents, with no age threshold: a pending approval means an agent has stopped. This
+  signal is never silently suppressed.
 
 **To enable:**
 

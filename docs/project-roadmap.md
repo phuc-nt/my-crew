@@ -1,13 +1,22 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v68 / 0.7.0+). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Lộ trình + trạng thái (as-built v69 / 0.8.0). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
 > Cập nhật: 2026-08-05.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v68, PyPI `my-crew` 0.7.0+.**
-2692 BE + 279 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
+**Production-usable, single-user autonomy-first. Đã ship tới v69, PyPI `my-crew` 0.8.0.**
+2781 BE + 279 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
 (live daemon, kill-9 resume, fan-out parallelism, 3 vòng UAT đối kháng + heartbeat live UAT Telegram).
+
+**v69 (bề mặt chat cho approval — 0.8.0):** Lớp B queue → **DM Telegram ngay khi enqueue**
+(chỉ trường định danh, không lộ subject/body) · **duyệt/từ chối ngay trong chat** (bề mặt
+thứ ba trên cùng đường gateway, admin-only, binding `(agent_id, approval_id)` chốt ở
+preview) · **rule always/deny từ chat** (mô tả bằng lời từ binding thật, action không tả
+nổi thì từ chối tạo rule) · reject thành **compare-and-set cả 3 bề mặt** + ApprovalStore
+WAL · heartbeat digest **nêu tên mọi approval treo** (miễn trừ suppression) · `xem bài
+học` đọc lesson reflection (tag `source` phân biệt với fact chat) · số lần hồi sinh trong
+kanban. UAT thật trên fleet 10 agent + Telegram thật.
 
 **v57–v68 (arc thư ký — 0.7.0+):** **v57–v60 thư ký cá nhân** (pack `personal`: chat DM,
 briefing sáng/tuần, Gmail/Calendar, gửi email, sửa/xoá lịch, multi-command) · **v61 chat

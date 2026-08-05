@@ -1,4 +1,4 @@
-# Hướng dẫn sử dụng — my-crew (v66)
+# Hướng dẫn sử dụng — my-crew (v69 / 0.8.0)
 
 Trợ lý ảo tự động làm công việc quản lý dự án (PM / Scrum Master): đọc Jira · GitHub · Confluence ·
 Slack, phân tích, rồi *tự hành động* (viết báo cáo, cảnh báo rủi ro, theo dõi OKR) như một PM thật.
@@ -534,6 +534,45 @@ Muốn giữ quyền duyệt cho MỘT việc cụ thể: thêm *"để anh duy�
 Fact rút ra từ việc hôm nay **sống qua ngày mai** và cả đội đọc chéo được (SQLite dùng
 chung, tự dọn sau 90 ngày). Riêng thư ký ở chế độ **chỉ-đọc** — ngữ cảnh riêng tư của
 bạn không bao giờ chảy vào kết quả việc đội.
+
+## C.6. Nhịp thư ký — tự báo khi có chuyện (v68, tùy chọn)
+
+Muốn thư ký **tự rà soát định kỳ** thay vì đợi bạn hỏi, thêm vào profile của thư ký
+(`.data/profiles/<agent-id>/profile.yaml`):
+
+```yaml
+heartbeat:
+  every: 30m    # hoặc 5m / 1h / 2h / ... / 24h
+```
+
+Mỗi nhịp, thư ký rà: việc đội bị kẹt · gửi-ra-ngoài thất bại · nhắc hẹn trong 24h ·
+draft chờ bạn xác nhận quá lâu · **việc chờ duyệt còn treo (v69)**. Yên ắng thì **im
+lặng, không tốn xu nào**; có chuyện thì đúng **1 tin nhắn Telegram ngắn**, mỗi chuyện
+nhắc đúng một lần. Đang dở cuộc trò chuyện thì nhịp tự hoãn, không chen ngang.
+
+## C.7. Duyệt việc ngay trong chat (v69 / 0.8.0)
+
+Trước đây việc Lớp B (agent ở chế độ `guarded`) chờ bạn ở tab **Duyệt** trên web — không
+mở web thì không ai biết. Từ v69:
+
+- **Có việc vào hàng chờ → Telegram báo ngay**: mã việc + agent nào + 1 dòng nhận diện
+  (người nhận, loại hành động — **không bao giờ** lộ tiêu đề hay nội dung thư).
+- Duyệt/từ chối **ngay trong chat admin**, bằng lời tự nhiên:
+  - *"xem việc chờ duyệt"* — liệt kê mọi việc treo của tất cả agent
+  - *"duyệt việc #12 của sales-pm"* — xem trước rồi xác nhận; trả lời *"luôn"* để từ nay
+    tự duyệt việc cùng loại cùng đích
+  - *"từ chối #12 của sales-pm"* — trả lời *"chặn"* để từ nay chặn hẳn loại đó
+- Xem trước **ghim đúng cặp (agent, mã việc)** — thông báo khác chen vào giữa chừng
+  không làm bạn duyệt nhầm việc khác.
+- Rule "luôn/chặn" chỉ được đề nghị khi hệ thống **tả được bằng lời** rule đó phủ những
+  gì; không tả nổi thì từ chối tạo rule — đồng ý với thứ không đọc được không phải là
+  đồng ý. Xem/thu hồi rule vẫn ở CLI/web (`mpm agent rules`).
+- Lệnh duyệt chỉ có ở **chat admin** (quyết thay agent khác là thẩm quyền fleet); thư ký
+  riêng không duyệt được.
+
+Kèm theo: *"xem bài học"* — điều phối rút ra được gì từ những việc đã giao (bài học về
+**cách giao việc**, không lẫn trí nhớ chat thường); bảng thẻ việc giờ ghi rõ việc nào
+phải **hồi sinh N lần** thay vì báo cáo y hệt việc chạy mượt.
 
 ---
 
