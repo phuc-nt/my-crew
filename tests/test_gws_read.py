@@ -173,6 +173,26 @@ def test_toolset_flag_on_adds_three_internal_tools():
     assert {"gws.gmail", "gws.calendar", "gws.drive"} <= set(tools)
 
 
+def test_gws_disabled_closes_the_tool_loop_door_too():
+    """`gws_enabled: false` dominates `gws_context: true`.
+
+    The snapshot gate and this toolset are two INDEPENDENT doors to the same Google
+    data, and this one is wider — it reaches Drive, which the snapshot never exposed.
+    An agent switched off must not get Gmail/Calendar/Drive back through the tool loop
+    just because its `gws_context` was left on from an earlier profile edit.
+    """
+    from my_crew.runtime_backends.read_only_toolset import build_read_toolset
+
+    class _Off:
+        gws_enabled = False
+
+    tools = build_read_toolset(_Off(), audience="internal", gws_context=True)
+    assert not any(n.startswith("gws.") for n in tools)
+    # A config that never mentions the flag keeps the old behaviour (absent ⇒ on).
+    assert {"gws.gmail", "gws.calendar", "gws.drive"} <= set(
+        build_read_toolset(_Cfg(), audience="internal", gws_context=True))
+
+
 def test_toolset_external_audience_drops_gws():
     from my_crew.runtime_backends.read_only_toolset import build_read_toolset
 

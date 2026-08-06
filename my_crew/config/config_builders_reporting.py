@@ -115,6 +115,8 @@ def build_reporting_config_from_dict(d: dict[str, Any]) -> ReportingConfig:
         smtp=build_smtp(d),
         telegram=build_telegram(d),
         goodreads_user_id=_d_str_or_none(d, "goodreads_user_id"),
+        # Absent key ⇒ True: an agent whose profile never mentions gws keeps reading it.
+        gws_enabled=bool(d.get("gws_enabled", True)),
     )
 
 

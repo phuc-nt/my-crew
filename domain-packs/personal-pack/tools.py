@@ -32,8 +32,24 @@ def _soft(key: str, fetch) -> tuple[str, str]:
     return key, _read(fetch)
 
 
-def _gws_sources() -> dict[str, str]:
-    """Lịch 24h tới + email chưa đọc + việc còn treo, mỗi nguồn độc lập degrade khi lỗi."""
+#: Khoá gws trong snapshot ngày — giữ nguyên khi tắt (giá trị "(chưa cấu hình)") để
+#: prompt không đổi hình dạng giữa agent bật và agent tắt.
+_GWS_DAILY_KEYS = ("calendar_next_24h", "unread_email", "pending_tasks")
+
+
+def _gws_enabled(config: Any) -> bool:
+    """Cờ `gws_enabled` của profile; thiếu cờ nghĩa là bật (mặc định cũ)."""
+    return bool(getattr(config, "gws_enabled", True))
+
+
+def _gws_sources(config: Any) -> dict[str, str]:
+    """Lịch 24h tới + email chưa đọc + việc còn treo, mỗi nguồn độc lập degrade khi lỗi.
+
+    `gws_enabled: false` ⇒ đủ khoá nhưng "(chưa cấu hình)", và KHÔNG import/chạy `gws`:
+    agent tắt không được đụng vào hộp thư hay lịch của chủ máy dù CLI vẫn đang auth.
+    """
+    if not _gws_enabled(config):
+        return {key: "(chưa cấu hình)" for key in _GWS_DAILY_KEYS}
     from my_crew.tools.gws_read import calendar_agenda, gmail_triage, tasks_pending
 
     return dict(
@@ -60,8 +76,14 @@ def _reading_now(config: Any) -> str:
 
 
 def _weekly_sources(config: Any) -> dict[str, str]:
-    """Dải tuần — chỉ weekly-review mới trả giá cho mấy lượt đọc này."""
-    from my_crew.tools.gws_read import calendar_events_window, tasks_completed
+    """Dải tuần — chỉ weekly-review mới trả giá cho mấy lượt đọc này.
+
+    Hai nguồn lịch/việc đi qua `gws` nên tắt theo `gws_enabled`; kệ sách và bài học
+    không dính Google nên vẫn đọc bình thường.
+    """
+    gws_on = _gws_enabled(config)
+    if gws_on:
+        from my_crew.tools.gws_read import calendar_events_window, tasks_completed
 
     user_id = _goodreads_user_id(config)
 
@@ -73,6 +95,8 @@ def _weekly_sources(config: Any) -> dict[str, str]:
         return recent_activity(user_id, days=7)
 
     def _calendar_7d() -> str:
+        if not gws_on:
+            return "(chưa cấu hình)"
         lines = []
         for event in calendar_events_window(days=7)[:15]:
             start = event.get("start") or {}
@@ -83,10 +107,15 @@ def _weekly_sources(config: Any) -> dict[str, str]:
             lines.append(f"- {title}" + (f" ({when})" if when else ""))
         return "\n".join(lines) if lines else "(không có)"
 
+    def _tasks_done_7d() -> str:
+        if not gws_on:
+            return "(chưa cấu hình)"
+        return tasks_completed(days=7)
+
     return dict(
         _soft(key, fetch) for key, fetch in (
             ("calendar_next_7d", _calendar_7d),
-            ("tasks_completed_7d", lambda: tasks_completed(days=7)),
+            ("tasks_completed_7d", _tasks_done_7d),
             ("goodreads_activity_7d", _books_7d),
             ("lessons", _recent_lessons),
         )
@@ -111,7 +140,7 @@ class PersonalToolProvider:
 
     def read(self, kind: str, config: Any, settings: Any) -> dict[str, Any]:
         now = datetime.now().astimezone()
-        gws = _gws_sources()
+        gws = _gws_sources(config)
         # Hộp thư là nguồn DUY NHẤT phình to (đo thật: ~4.2k/5.5k ký tự) và
         # `render_snapshot` cắt phẳng theo vị trí ở cuối chuỗi JSON. Nguồn nào đứng sau
         # nó sẽ bị cắt trước — nên email đi CUỐI: một ngày hộp thư dày thì mất phần đuôi

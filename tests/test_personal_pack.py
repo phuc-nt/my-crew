@@ -125,6 +125,52 @@ def test_weekly_snapshot_adds_week_range_briefing_does_not(monkeypatch):
     assert "đừng giao việc mơ hồ" in weekly["lessons"]
 
 
+def test_gws_disabled_reports_unconfigured_without_calling_gws(monkeypatch):
+    """v71 `gws_enabled: false` — agent thử nghiệm KHÔNG được đụng lịch/hộp thư của chủ
+    nhân dù CLI `gws` vẫn đang auth. Đếm lượt gọi chứ không chỉ so giá trị: giá trị đúng
+    vẫn có thể là kết quả của một lượt đọc thật rồi vứt đi."""
+    calls: list[str] = []
+
+    def _counted(name):
+        def _fn(*_args, **_kwargs):
+            calls.append(name)
+            return "KHÔNG ĐƯỢC ĐỌC"
+        return _fn
+
+    for name in ("calendar_agenda", "gmail_triage", "tasks_pending",
+                 "calendar_events_window", "tasks_completed"):
+        monkeypatch.setattr(f"my_crew.tools.gws_read.{name}", _counted(name))
+    monkeypatch.setattr("my_crew.agent.ops_list_lessons.run_list_lessons",
+                        lambda _a: "Bài học: đừng giao việc mơ hồ.")
+
+    pack = PackRegistry().load("personal")
+    config = dataclasses.replace(_config(False), gws_enabled=False)
+    weekly = pack.tools.read("weekly-review", config, None)
+
+    assert calls == []  # không một lượt `gws` nào, cả nhóm ngày lẫn nhóm tuần
+    # Đủ khoá, chỉ đổi giá trị: prompt không được đổi HÌNH DẠNG giữa agent bật và tắt.
+    for key in ("calendar_next_24h", "unread_email", "pending_tasks",
+                "calendar_next_7d", "tasks_completed_7d"):
+        assert weekly[key] == "(chưa cấu hình)"
+    # Nguồn không dính Google vẫn chạy bình thường.
+    assert "đừng giao việc mơ hồ" in weekly["lessons"]
+
+
+def test_gws_disabled_drops_gws_write_commands_from_chat_catalog():
+    """Cùng một cờ cũng rút lệnh GHI qua gws khỏi catalog chat: agent tắt không những
+    không đọc được, mà còn không thể đề nghị gửi mail hay tạo lịch. Nhắc hẹn (kho local)
+    không dính Google nên ở lại."""
+    from my_crew.agent.chat_command import _catalog_for_agent
+
+    commands = PackRegistry().load("personal").commands
+    on = _catalog_for_agent(commands, _config(False))
+    off = _catalog_for_agent(commands, dataclasses.replace(_config(False), gws_enabled=False))
+
+    assert on == commands  # bật ⇒ y nguyên catalog của pack
+    assert set(off) == {"set_reminder", "cancel_reminder"}
+    assert not any(spec.get("type") == "gws_write" for spec in off.values())
+
+
 def test_reading_source_says_unconfigured_without_a_shelf_owner(monkeypatch):
     """Không khai `goodreads_user_id` ⇒ nói "(chưa cấu hình)" và KHÔNG gọi mạng."""
     _stub_day_sources(monkeypatch)
@@ -173,6 +219,22 @@ def test_goodreads_user_id_survives_the_profile_mapping():
     )
     assert config.goodreads_user_id == "12345678"
     assert build_reporting_config_from_dict({}).goodreads_user_id is None
+
+
+def test_gws_enabled_survives_the_profile_mapping():
+    """Cùng cái bẫy phân tầng: cờ phải được khai ở CẢ `build_reporting_dict` lẫn
+    `build_reporting_config_from_dict` — thiếu một tầng thì `gws_enabled: false` trong
+    profile chết im lặng và agent vẫn đọc hộp thư của chủ nhân."""
+    from my_crew.config.config_builders import build_reporting_config_from_dict
+    from my_crew.profile.loader_mapping import build_reporting_dict
+
+    def _round_trip(doc: dict) -> bool:
+        return build_reporting_config_from_dict(build_reporting_dict(doc)).gws_enabled
+
+    assert _round_trip({"gws_enabled": False}) is False
+    assert _round_trip({"gws_enabled": True}) is True
+    # Profile không nhắc tới cờ ⇒ bật, y hệt mọi agent trước v71.
+    assert _round_trip({}) is True
 
 
 def test_inbox_goes_last_so_truncation_eats_email_not_the_week_range(monkeypatch):

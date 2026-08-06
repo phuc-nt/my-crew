@@ -69,6 +69,10 @@ def run_create_calendar_event(slots: dict) -> str:
     from my_crew.actions.action_gateway import ActionGateway
 
     loaded = _sender_profile()
+    # This ops path builds a gws_write directly and never passes the chat catalog, so the
+    # per-agent switch has to be re-checked here or it is simply absent on this route.
+    if not getattr(loaded.config, "gws_enabled", True):
+        return "Agent này không còn quyền ghi lịch (gws_enabled: false)."
     body = _build_event_body(slots)
     argv = calendar_insert_argv(body)
     action = {

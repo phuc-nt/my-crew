@@ -238,6 +238,22 @@ def _run_one_command(
     )
 
 
+def _catalog_for_agent(commands: dict[str, dict], config) -> dict[str, dict]:
+    """The pack catalog narrowed to what THIS agent's config permits.
+
+    v71: `gws_enabled: false` drops every `gws_write` command (send mail, create/update/
+    delete calendar event). The pack catalog is fleet-level — one object shared by every
+    agent of the domain — so the per-agent narrowing has to happen here, where the
+    agent's own config is in scope. Dropping at the catalog is stronger than denying at
+    the gateway: the command never reaches the classifier prompt, so the agent cannot
+    even offer to do it.
+    """
+    if getattr(config, "gws_enabled", True):
+        return commands
+    return {cid: spec for cid, spec in commands.items()
+            if str(spec.get("type", "mcp_tool")) != "gws_write"}
+
+
 def maybe_handle_command(
     *, loaded, config, mention: dict, pack, gateway: ActionGateway, llm: LlmClient,
 ) -> tuple[str, float | None] | None:
@@ -248,8 +264,12 @@ def maybe_handle_command(
     One message may carry up to _MAX_COMMANDS_PER_MESSAGE commands (UAT vòng 2
     pattern A: 'đặt lịch X và gửi mail Y' từng bị bỏ nửa sau trong im lặng);
     each runs the full per-command path independently — one bad command never
-    cancels the others, and the reply reports every outcome line by line."""
-    commands: dict[str, dict] = getattr(pack, "commands", {}) or {}
+    cancels the others, and the reply reports every outcome line by line.
+
+    The catalog is narrowed per-agent first (`_catalog_for_agent`): a command the
+    agent's config forbids is never shown to the classifier NOR listed back to the
+    user, so it cannot be requested at all."""
+    commands = _catalog_for_agent(getattr(pack, "commands", {}) or {}, config)
     if not commands:
         return None
     message = str(mention.get("text") or "")

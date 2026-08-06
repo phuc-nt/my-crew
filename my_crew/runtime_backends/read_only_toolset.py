@@ -296,7 +296,11 @@ def build_read_toolset(
     # company context, flag-gated per agent (default OFF ⇒ toolset byte-identical). Each
     # tool degrades to a "(gws … lỗi)" string on CLI/OAuth failure; the read argv is
     # CODE-fixed (LLM supplies only a query param), never a write.
-    if gws_context:
+    # `gws_enabled: false` dominates: it is the per-agent master switch for Google data,
+    # so it has to close THIS door too. `gws_context` alone would otherwise hand the tool
+    # loop a strictly LARGER surface than the snapshot gate closes — the snapshot never
+    # exposed Drive at all.
+    if gws_context and getattr(config, "gws_enabled", True):
         raw["gws.gmail"] = _gws_tool("gmail")
         raw["gws.calendar"] = _gws_tool("calendar")
         raw["gws.drive"] = _gws_tool("drive")

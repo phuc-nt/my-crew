@@ -110,3 +110,13 @@ class ReportingConfig:
     # report "(chưa cấu hình)" and no request is ever made. NOT part of `integrations:`,
     # which the builder coerces into typed MCP server specs and would silently drop it.
     goodreads_user_id: str | None = None
+
+    # v71: master switch for the Google Workspace snapshot sources (calendar, unread mail,
+    # tasks) and the chat commands that write through `gws`. Default True keeps every
+    # existing personal agent byte-identical. False makes those sources report
+    # "(chưa cấu hình)" WITHOUT spawning the `gws` CLI, and drops the gws-backed write
+    # commands from the agent's chat catalog — the switch for an agent that shares the
+    # fleet's OAuth login but must not read this person's mailbox or calendar.
+    # Profile-only for the same reason as `goodreads_user_id`: an env var is fleet-wide,
+    # so it could not turn one agent off without turning every agent off.
+    gws_enabled: bool = True

@@ -196,6 +196,9 @@ def build_reporting_dict(yaml_doc: dict[str, Any]) -> dict[str, Any]:
     # secretary, whose whole reading path is "(chưa cấu hình)") read this owner's shelf.
     # Same reason `telegram.chat_ids` takes no fallback while workspace-level keys do.
     _put(out, "goodreads_user_id", yaml_doc.get("goodreads_user_id"))
+    # --- v71: gws read/write master switch, profile-only for the same one-person reason. ---
+    gws_enabled = yaml_doc.get("gws_enabled")
+    _put(out, "gws_enabled", None if gws_enabled is None else bool(gws_enabled))
     return out
 
 
