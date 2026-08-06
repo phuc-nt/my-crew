@@ -30,10 +30,12 @@ handed to an external delivery path.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from my_crew.runtime import team_task_amend as _amend
@@ -619,6 +621,26 @@ class TeamTaskStore:
         self._conn.commit()
         return updated
 
+    def mark_needs_decision(self, task_id: str, step_id: str, *,
+                            outcome_ref: str | None = None,
+                            cost_usd: float | None = None,
+                            attempt_id: str | None = None) -> bool:
+        """Mark a step as produced-but-not-acceptable. Same `attempt_id` no-op guard as
+        `mark_done`.
+
+        The step ran to completion and wrote a real artifact — `outcome_ref` is the
+        whole point, since the coordinator has to READ that artifact to decide what
+        happens next. That is what separates this from `mark_failed`, where there is
+        nothing to read. Downstream steps do not treat it as a satisfied dependency, so
+        an unacceptable result never becomes another step's input.
+        """
+        updated = _steps.set_step_status(
+            self._conn, task_id, step_id, "needs_decision", outcome_ref=outcome_ref,
+            cost_usd=cost_usd, attempt_id=attempt_id,
+        )
+        self._conn.commit()
+        return updated
+
     def mark_failed(self, task_id: str, step_id: str, *, outcome_ref: str | None = None,
                      cost_usd: float | None = None, attempt_id: str | None = None) -> bool:
         """Mark a step failed. Same `attempt_id` no-op guard as `mark_done`."""
@@ -658,6 +680,65 @@ class TeamTaskStore:
         )
         self._conn.commit()
         return updated
+
+    def bump_intervention(self, task_id: str, step_id: str) -> int:
+        """Record one coordinator intervention on a stuck step; returns the new total so
+        the caller can enforce the intervention cap against a freshly-committed value."""
+        total = _steps.bump_intervention(self._conn, task_id, step_id)
+        self._conn.commit()
+        return total
+
+    def append_step_guidance(self, task_id: str, step_id: str, guidance: str) -> bool:
+        """Attach coordinator direction to a step, preserving any earlier round's."""
+        updated = _steps.append_step_guidance(self._conn, task_id, step_id, guidance)
+        self._conn.commit()
+        return updated
+
+    def reassign_step(self, task_id: str, step_id: str, assigned_to: str) -> bool:
+        """Hand a not-in-flight step to a different staffer (the coordinator's
+        `reassign` decision). Callers MUST validate `assigned_to` against the roster
+        first — this write trusts the id it is given.
+
+        Re-stamps `plan_hash` in the SAME transaction as the assignee write. `assigned_to`
+        is one of the four fields `decomposition_content_hash` covers, so changing it
+        without re-stamping would make the next tick's `_verify_plan_hash` recompute a
+        different digest, stall the task, and escalate a tampering alarm about a change
+        the coordinator itself made. WHO does a step is the coordinator's operational
+        call; WHAT the steps are is the CEO's confirmed plan and still cannot change
+        here (only `assigned_to` is written). Recomputed over the `system_inserted=0`
+        subset — exactly what `_verify_plan_hash` compares against — so a task carrying
+        auto-inserted review/rework rows re-stamps to the digest that check expects.
+        Both writes share one commit: a tick reading between them would see a mismatch.
+        """
+        updated = _steps.reassign_step(self._conn, task_id, step_id, assigned_to)
+        if updated:
+            self._conn.execute(
+                "UPDATE team_tasks SET plan_hash = ? WHERE id = ?",
+                (self._confirmed_plan_hash(task_id), task_id),
+            )
+        self._conn.commit()
+        return updated
+
+    def _confirmed_plan_hash(self, task_id: str) -> str:
+        """The digest `coordinator_graph._verify_plan_hash` recomputes on every tick:
+        `decomposition_content_hash` over the CEO-confirmed (`system_inserted = 0`) rows
+        in `seq` order, read fresh from the connection so it reflects writes made earlier
+        in the current (uncommitted) transaction."""
+        from my_crew.agent.task_decomposition import decomposition_content_hash
+
+        rows = self._conn.execute(
+            "SELECT step_id, title, assigned_to, deps_json FROM team_steps "
+            "WHERE task_id = ? AND system_inserted = 0 ORDER BY seq",
+            (task_id,),
+        ).fetchall()
+        steps = [
+            SimpleNamespace(
+                step_id=r[0], title=r[1], assigned_to=r[2],
+                deps=tuple(json.loads(r[3] or "[]")),
+            )
+            for r in rows
+        ]
+        return decomposition_content_hash(SimpleNamespace(steps=steps))
 
     def mark_step_dropped(self, task_id: str, step_id: str, *, outcome_ref: str | None = None,
                           attempt_id: str | None = None) -> bool:

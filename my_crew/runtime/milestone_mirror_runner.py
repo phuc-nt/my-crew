@@ -32,7 +32,23 @@ _MILESTONE_LABELS = {
     "received": "Đã nhận việc",
     "done": "Hoàn thành",
     "needs_approval": "Cần duyệt",
+    "stuck": "Đang kẹt, đội đang tự gỡ",
+    "gave_up": "Không làm được",
+    "step_failed": "Một bước hỏng",
+    "step_timeout": "Một bước quá hạn",
 }
+
+#: Milestones raised PER STEP rather than per task. The task-level dedup key
+#: (task, milestone, date) is right for once-per-task events but would collapse three
+#: different stuck steps into a single ping, so these carry `step_id` in the key.
+_PER_STEP_MILESTONES = frozenset({"stuck", "step_failed", "step_timeout"})
+
+#: Per-step milestones that can legitimately RECUR on the SAME step within one day —
+#: the coordinator may intervene on one stuck step more than once (retry with guidance,
+#: then reassign). Keying those on (task, kind, step) alone would tell the CEO about the
+#: first intervention and silently swallow the rest, which is the exact silence the
+#: milestone mirror exists to break. `attempt` distinguishes them.
+_PER_ATTEMPT_MILESTONES = frozenset({"stuck"})
 
 
 def _cursor_db_path(settings: Any) -> Path:
@@ -125,22 +141,13 @@ def run_milestone_mirror(loaded: Any, settings: Any, *, now: datetime | None = N
         try:
             fresh = [
                 m for m in milestones
-                # Keyed by `task_id` (an opaque internal id), NOT `task_title` (CEO/
-                # decompose-LLM free text) — two distinct tasks given the same brief
-                # wording would otherwise collide in this dedup claim and only the
-                # first would ever reach Telegram.
-                if dedup.claim(
-                    f"milestone-mirror:{m.body.get('task_id', '')}:"
-                    f"{m.body.get('milestone', '')}:{local_date}"
-                )
+                if dedup.claim(f"milestone-mirror:{_key(m)}:{local_date}")
             ]
             if not fresh:
                 cursor.set(last_seq)
                 return {"status": "no_new_milestones", "checked": len(milestones),
                         "cost_usd": None, "delivered": False}
-            push_key = "|".join(
-                f"{m.body.get('task_id', '')}:{m.body.get('milestone', '')}" for m in fresh
-            )
+            push_key = "|".join(_key(m) for m in fresh)
             result = send_telegram_message(
                 _format(fresh),
                 gateway=gateway,
@@ -163,6 +170,24 @@ def run_milestone_mirror(loaded: Any, settings: Any, *, now: datetime | None = N
     finally:
         room.close()
         cursor.close()
+
+
+def _key(milestone: Any) -> str:
+    """Identity of one milestone for dedup purposes.
+
+    Keyed by `task_id` (an opaque internal id), NOT `task_title` (CEO/decompose-LLM free
+    text) — two distinct tasks given the same brief wording would otherwise collide and
+    only the first would ever reach Telegram. Per-step milestones append `step_id` so two
+    steps of the same task reaching the same milestone stay distinguishable.
+    """
+    task_id = milestone.body.get("task_id", "")
+    kind = str(milestone.body.get("milestone", ""))
+    if kind in _PER_STEP_MILESTONES:
+        key = f"{task_id}:{kind}:{milestone.body.get('step_id', '')}"
+        if kind in _PER_ATTEMPT_MILESTONES:
+            key = f"{key}:{milestone.body.get('attempt', '')}"
+        return key
+    return f"{task_id}:{kind}"
 
 
 def _format(milestones: list) -> str:

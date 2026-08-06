@@ -449,7 +449,12 @@ def _run_team_step_kind(args: list[str], *, agent_id: str, loaded: LoadedProfile
     one for (mirrors the worker's own --agent-id-missing early exit).
     """
     from my_crew.agent.team_task_artifact import write_step_artifact
-    from my_crew.runtime.team_step_runner import STATUS_DONE, STATUS_PAUSED, run_team_step
+    from my_crew.runtime.team_step_runner import (
+        STATUS_DONE,
+        STATUS_NEEDS_DECISION,
+        STATUS_PAUSED,
+        run_team_step,
+    )
     from my_crew.runtime.team_task_paths import team_tasks_root
     from my_crew.runtime.team_task_store import TeamTaskStore, team_tasks_db_path
 
@@ -521,6 +526,21 @@ def _run_team_step_kind(args: list[str], *, agent_id: str, loaded: LoadedProfile
             "worker %s team-step %s/%s: PAUSED (%s)", agent_id, task_id, step_id, reason
         )
         return 3
+
+    if status == STATUS_NEEDS_DECISION:
+        # The worker did its job — ran the step, wrote the artifact — so this is not a
+        # worker failure (exit 0). What it produced simply did not meet the step's
+        # acceptance criteria, and the coordinator decides what happens next. No
+        # `_write_outcome` for the same reason as the done path below: `deliver` already
+        # wrote the artifact the coordinator must read to judge.
+        append_run_event(
+            data_dir,
+            _event(agent_id, "team-step", "internal", "needs_decision",
+                   result.get("cost_usd"), False),
+        )
+        logger.info("worker %s team-step %s/%s: needs decision (self-check not met)",
+                    agent_id, task_id, step_id)
+        return 0
 
     if status != STATUS_DONE:
         # STATUS_REJECTED (bad/stale attempt_id lease) — a clean no-op, no artifact

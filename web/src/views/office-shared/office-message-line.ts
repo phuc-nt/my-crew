@@ -60,9 +60,14 @@ export function messageLine(m: OfficeMessage, t: Translate = defaultT): string {
       const phaseKey = b.phase ? PHASE_LABEL[b.phase] : undefined
       const phaseLabel = phaseKey ? t(phaseKey) : undefined
       const suffix = phaseLabel ? ` (${phaseLabel})` : ''
-      // v34 P2: the one non-self-explanatory status value gets a human label — the
-      // rest (started/done/failed) read fine as-is and stay byte-identical.
-      const status = b.status === 'waiting_clarify' ? t('officeMessageLine.waitingClarify') : (b.status ?? '')
+      // v34 P2: status values that do not read as plain language get a human label —
+      // the rest (started/done/failed) read fine as-is and stay byte-identical.
+      const STATUS_LABEL: Record<string, string> = {
+        waiting_clarify: 'officeMessageLine.waitingClarify',
+        needs_decision: 'officeMessageLine.needsDecision',
+      }
+      const labelKey = b.status ? STATUS_LABEL[b.status] : undefined
+      const status = labelKey ? t(labelKey) : (b.status ?? '')
       return t('officeMessageLine.stepStatusLine', {
         taskTitle: b.task_title ?? '', stepTitle: b.step_title ?? '', status, suffix,
       })

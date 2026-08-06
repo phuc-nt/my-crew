@@ -195,11 +195,23 @@ def make_escalate(loaded: Any, settings: Any):
         try:
             from my_crew.runtime.office_room_append import append_office_event, room_for_task
 
+            body = {"task_id": task.id, "task_title": task.title, "milestone": event_kind,
+                    "message": message}
+            # Emitted only when this escalation is ABOUT a specific step, which keeps
+            # every task-level escalation's body byte-identical to before. The mirror
+            # dedups per-step milestones (`stuck`, `step_failed`) on this key — without
+            # it, two different stuck steps on one task collapse into a single daily
+            # Telegram push and the CEO only ever hears about the first one.
+            if step is not None:
+                body["step_id"] = step.step_id
+                # How many times the coordinator has already ruled on THIS step. The
+                # mirror folds it into the dedup key for recurring per-step milestones,
+                # so a second intervention on the same step in the same day still
+                # reaches the CEO instead of being swallowed as a duplicate.
+                body["attempt"] = getattr(step, "intervention_count", 0)
             append_office_event(
                 room_for_task(task.id), author="coordinator", kind="milestone",
-                body={"task_id": task.id, "task_title": task.title, "milestone": event_kind,
-                      "message": message},
-                also_office=True,
+                body=body, also_office=True,
             )
         except Exception:  # noqa: BLE001 — escalation must never crash the ticker
             logger.exception("team-tick: escalate(%s) room append failed for task %s",

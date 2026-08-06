@@ -105,6 +105,12 @@ function nextState(prev: AgentState, status: string | undefined): AgentState {
       // v34 P2: paused mid-step on a CEO question — show the "has a task, not
       // actively working" visual (existing state, no new enum) until resume.
       return 'assigned'
+    case 'needs_decision':
+      // The step produced something, but it did not meet its acceptance criteria and
+      // the coordinator has to decide what happens next. Shown with the same error
+      // visual as a failed step: from the office floor both mean "this did not land",
+      // and hiding it would be exactly the silence this status exists to break.
+      return 'error'
     default:
       return prev
   }
@@ -180,10 +186,12 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
         } else if (incomingAttempt) {
           d.attemptId = incomingAttempt
         }
-        if (m.body.status === 'failed') {
+        if (m.body.status === 'failed' || m.body.status === 'needs_decision') {
           // Terminal for one dispatched step — floor at 0 so an out-of-order/replayed
           // failed (no matching outstanding dispatch counted, e.g. mid-stream join)
-          // never goes negative.
+          // never goes negative. `needs_decision` is equally terminal for the DESK (the
+          // agent is done working; the coordinator now decides what happens next), so it
+          // must release the step here or the desk would show as working forever.
           d.concurrentSteps = Math.max(0, d.concurrentSteps - 1)
           d.deepTeamActive = false
         }

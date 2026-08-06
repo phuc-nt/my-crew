@@ -32,8 +32,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+#: `needs_decision` is distinct from `failed`: the step RAN and produced an artifact,
+#: but graded itself as not meeting its acceptance criteria and exhausted its rework
+#: budget. There is something to read and judge, so the coordinator decides what happens
+#: next (reassign with guidance, hand to another agent, or conclude it cannot be done)
+#: instead of the result flowing downstream as if it were good.
 STEP_STATUSES = ("pending", "running", "awaiting_approval", "waiting_clarify", "done",
-                 "failed", "timeout")
+                 "needs_decision", "failed", "timeout")
 
 
 @dataclass(frozen=True)
@@ -105,6 +110,17 @@ class TeamStep:
     # rule reads it, mints the sub/gather rows, and the children's existence is the
     # idempotency guard. None on every step that never proposed a split.
     split_proposal_json: str | None = None
+    # How many times the coordinator has already intervened on this step after it
+    # reached `needs_decision` (re-assigned it, or handed it back with guidance). This
+    # is the hard anti-loop bound: past the cap the coordinator must conclude, it may
+    # not keep spending on another attempt. Never enters `decomposition_content_hash` —
+    # it is a runtime counter, not part of the CEO-confirmed plan.
+    intervention_count: int = 0
+    # Concrete direction the coordinator attached when handing a rejected step back
+    # ("what was missing, do this instead"). Rides into the next attempt's handoff
+    # context. Empty on every step that was never handed back. Like `acceptance`, it is
+    # outside `decomposition_content_hash` — guidance is not part of the confirmed plan.
+    guidance: str = ""
 
 
 def create_schema(conn: sqlite3.Connection) -> None:
@@ -165,6 +181,11 @@ def create_schema(conn: sqlite3.Connection) -> None:
         # v63: same conditional-hash contract as needs_shell — default 0 keeps every
         # pre-v63 row's plan_hash recompute byte-identical (no mismatch stall on migrate).
         "ALTER TABLE team_steps ADD COLUMN external_write INTEGER NOT NULL DEFAULT 0",
+        # Coordinator intervention counter. Default 0 = "never intervened", which is
+        # exactly the state of every row written before this column existed, and it is
+        # outside the plan hash, so migrating cannot stall a task.
+        "ALTER TABLE team_steps ADD COLUMN intervention_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE team_steps ADD COLUMN guidance TEXT NOT NULL DEFAULT ''",
     ):
         try:
             conn.execute(ddl)
@@ -203,6 +224,8 @@ def _row_to_step(data: dict[str, Any]) -> TeamStep:
         review_round=int(data.get("review_round") or 0),
         clarify_id=data.get("clarify_id"),
         split_proposal_json=data.get("split_proposal_json"),
+        intervention_count=int(data.get("intervention_count") or 0),
+        guidance=data.get("guidance") or "",
     )
 
 
@@ -397,8 +420,17 @@ def reset_step_to_pending(
     """v63 stall recovery: put a terminal `failed`/`timeout` row back to `pending`,
     clearing every lease/attempt field so the ticker's `reserve_step` treats it as a
     never-attempted step. The status guard in the WHERE clause makes this a no-op on
-    any row that is not actually dead — a running/done step can never be yanked back."""
-    where = ("WHERE task_id = ? AND step_id = ? AND status IN ('failed', 'timeout')")
+    any row that is not actually dead — a running/done step can never be yanked back.
+
+    `needs_decision` joins that terminal set: it is a step that finished but whose
+    result was not acceptable, and the coordinator's retry/reassign decisions are
+    exactly a re-run of it. Without it here the coordinator's decision would silently
+    no-op and the step would sit unacceptable forever.
+    """
+    where = (
+        "WHERE task_id = ? AND step_id = ? "
+        "AND status IN ('failed', 'timeout', 'needs_decision')"
+    )
     params: tuple[Any, ...] = (task_id, step_id)
     if attempt_id is not None:
         where += " AND attempt_id = ?"
@@ -407,6 +439,60 @@ def reset_step_to_pending(
         "UPDATE team_steps SET status = 'pending', attempt_id = NULL, child_pid = NULL, "
         "spawned_at = NULL, last_seen = NULL, lease_expires_at = NULL " + where,
         params,
+    )
+    return cur.rowcount > 0
+
+
+def bump_intervention(conn: sqlite3.Connection, task_id: str, step_id: str) -> int:
+    """Count one coordinator intervention on this step and return the NEW total.
+
+    Returning the post-increment value (rather than requiring a re-read) is what lets
+    the caller enforce the cap in the same breath as spending the attempt, so two
+    coordinators racing the same step can never both believe they were under it.
+    """
+    conn.execute(
+        "UPDATE team_steps SET intervention_count = intervention_count + 1 "
+        "WHERE task_id = ? AND step_id = ?",
+        (task_id, step_id),
+    )
+    row = conn.execute(
+        "SELECT intervention_count FROM team_steps WHERE task_id = ? AND step_id = ?",
+        (task_id, step_id),
+    ).fetchone()
+    return int(row[0]) if row else 0
+
+
+def append_step_guidance(
+    conn: sqlite3.Connection, task_id: str, step_id: str, guidance: str,
+) -> bool:
+    """Append one round of coordinator direction to a step, keeping what came before.
+
+    Appending rather than replacing matters: on a second intervention the first round's
+    direction is still true, and overwriting it would let the next attempt repeat a
+    mistake the coordinator already called out.
+    """
+    text = guidance.strip()
+    if not text:
+        return False
+    cur = conn.execute(
+        "UPDATE team_steps SET guidance = CASE WHEN guidance = '' THEN ? "
+        "ELSE guidance || char(10) || ? END WHERE task_id = ? AND step_id = ?",
+        (text, text, task_id, step_id),
+    )
+    return cur.rowcount > 0
+
+
+def reassign_step(
+    conn: sqlite3.Connection, task_id: str, step_id: str, assigned_to: str,
+) -> bool:
+    """Point a step at a different staffer. Only legal while the step is NOT in flight
+    — the same terminal set `reset_step_to_pending` accepts, plus `pending` so the two
+    writes compose in either order. Re-pointing a `running` step would orphan the work
+    its current lease-holder is doing."""
+    cur = conn.execute(
+        "UPDATE team_steps SET assigned_to = ? WHERE task_id = ? AND step_id = ? "
+        "AND status IN ('pending', 'failed', 'timeout', 'needs_decision')",
+        (assigned_to, task_id, step_id),
     )
     return cur.rowcount > 0
 

@@ -107,7 +107,7 @@ def summarize_office_event(kind: str, body: dict) -> dict:
             "assigned_to": _short(body.get("assigned_to")),
         }
     if kind == "milestone":
-        return {
+        projected = {
             # `task_id` (not PII — an internal opaque id, same shape as the room_id
             # itself) rides alongside `task_title` so a dedup/identity key built from
             # this projected body never depends on a human-editable title: two tasks
@@ -118,6 +118,22 @@ def summarize_office_event(kind: str, body: dict) -> dict:
             "milestone": _short(body.get("milestone")),
             "message": _short(body.get("message")),
         }
+        # Per-step milestones (a step stuck, a step failed) carry the step's own opaque
+        # id — same non-PII category as `task_id` above — so the mirror's dedup can tell
+        # two stuck steps of one task apart instead of pinging the CEO about only the
+        # first. Emitted only when present, keeping task-level milestone bodies
+        # byte-identical to their pre-v72 shape (same posture as `step_status.deep_team`).
+        step_id = _short(body.get("step_id"))
+        if step_id:
+            projected["step_id"] = step_id
+            # A small integer counter (how many coordinator rulings this step has had),
+            # not content — same non-PII category as the ids above. It only ever rides
+            # alongside `step_id`, and lets the mirror tell a repeat intervention on one
+            # step apart from the first instead of deduping it into silence.
+            attempt = body.get("attempt")
+            if isinstance(attempt, int):
+                projected["attempt"] = attempt
+        return projected
     if kind == "consult":
         # M33 role-play consultation (see `team_task_consult.ask_colleague`'s module
         # docstring): `from`/`to` are internal agent ids (non-PII, same category as

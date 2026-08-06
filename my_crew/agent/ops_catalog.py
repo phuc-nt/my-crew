@@ -599,8 +599,17 @@ OPS_COMMANDS: dict[str, dict] = {
         "preview": preview_create_calendar_event,
     },
     "assign_team_task": {
-        "description": "Giao một việc lớn cho cả đội — hệ thống tự chia thành các bước "
-                       "và phân công",
+        # Đây là lệnh BAO TRÙM mọi việc cần LÀM mà không có lệnh chuyên biệt hơn. Mô tả
+        # phải nói rõ điều đó: bản v61 chỉ ghi "một việc lớn cho cả đội", nên bộ phân
+        # loại đọc "khảo sát công cụ gửi tin Zalo OA" là hành động KHÔNG khớp lệnh nào
+        # (unsupported 3/3 khi đo thật) — yêu cầu của CEO rơi xuống listing M12 và không
+        # đẻ ra thẻ việc nào. Liệt kê thẳng các động từ việc thường tới và nói "không cần
+        # to tát" thì nó mới khớp.
+        "description": "Giao việc cho đội làm — tra cứu, khảo sát, nghiên cứu, thu thập "
+                       "số liệu, so sánh, tổng hợp, lập bảng, viết báo cáo, phân tích. "
+                       "Dùng cho MỌI việc cần làm mà không có lệnh chuyên biệt hơn, "
+                       "không cần phải là việc to tát. Hệ thống tự chia thành các bước "
+                       "và phân công cho từng người",
         "readonly": False,
         "slots": {
             "brief": {"prompt": "Mô tả việc cần giao cho đội (mình sẽ tự chia thành các "
