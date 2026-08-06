@@ -114,12 +114,16 @@ This runs the default agent's daily report in **dry-run mode** (logs intended ac
 To create sample agents and keep the setup:
 
 ```bash
-my-crew crew init           # create 5 template agents
-my-crew serve               # foreground: web dashboard + coordinator
+my-crew crew init [office|personal]    # create starter crew (default: office)
+my-crew serve                          # foreground: web dashboard + coordinator
 # → http://127.0.0.1:8765
 ```
 
-After `crew init`, the **Đội** (Teams) page shows coordinator status and launch instructions.
+Options:
+- `crew init` or `crew init office` — create the default office crew (manager + 4 specialists)
+- `crew init personal` — create a personal assistant crew (personal assistant + 4 specialists)
+
+After `crew init`, the **Teams** page shows coordinator status and launch instructions.
 
 ---
 
@@ -268,6 +272,22 @@ safety:
 ```
 
 > **Hard-deny (Lớp A):** Actions that could lose data permanently (delete records, expose secrets) are **never allowed**, regardless of trust mode. See [action-gateway-explainer.md](action-gateway-explainer.md) for details.
+
+### Google Workspace Access (per agent, v71)
+
+**Disable reading and writing Google Workspace** (Gmail, Calendar, Tasks, Drive) for a specific agent by setting `gws_enabled: false` in its profile. This is **profile-only** (not an environment variable) on purpose: an env var is fleet-wide and could not disable one agent without disabling every agent.
+
+When disabled:
+- All Google Workspace **reads** (calendar events, unread emails, pending tasks) return `"(chưa cấu hình)"` with no API call. The keys stay present, so the prompt keeps the same shape as an enabled agent.
+- All Google Workspace **write** commands (`gws_write`: send email, create/update/delete calendar events) are removed from the agent's command catalog — the agent cannot even offer to do them.
+- The team-step tool loop's `gws.gmail` / `gws.calendar` / `gws.drive` tools are withheld even if that agent's `gws_context: true`. `gws_enabled` dominates.
+
+```yaml
+# profiles/<id>/profile.yaml
+gws_enabled: false     # default true when key is absent; existing agents unaffected
+```
+
+This is useful for the personal assistant agent (to respect user privacy) or any agent that should not interact with personal email/calendar.
 
 ### Autopilot (v63) — the AI as final approver
 

@@ -107,9 +107,13 @@ python -m my_crew.entrypoints.mpm quickstart      # chạy báo cáo dry-run
 Muốn dựng cả đội mẫu THẬT để giàn chứng năng:
 
 ```bash
-python -m my_crew.entrypoints.mpm crew init       # tạo 5 nhân sự ảo mẫu
-uv run python -m my_crew.runtime.service &        # bật bộ điều phối
+python -m my_crew.entrypoints.mpm crew init [office|personal]    # tạo đội mẫu (mặc định: office)
+uv run python -m my_crew.runtime.service &                        # bật bộ điều phối
 ```
+
+Lựa chọn:
+- `crew init` hoặc `crew init office` — tạo đội hành chính mặc định (trưởng phòng + 4 nhân sự)
+- `crew init personal` — tạo đội cá nhân (trợ lý riêng + 4 chuyên gia)
 
 Rồi truy cập web, màn **Đội** sẽ hiện trạng thái bộ điều phối + lệnh khởi động nếu cần.
 
@@ -153,13 +157,16 @@ Trang wizard hiện **bộ template nhân sự có sẵn** (6 vai trò: Trưởn
   file template thì **mọi nhân sự cùng vai nhận ngay**, không cần xoá-tạo lại. (Nhân sự tạo từ
   trước v36 vẫn dùng skill đã copy lúc tạo, không tự đổi theo template.)
 
-### B.2b. Tạo cả đội — tạo crew (v32, ≤3 click)
+### B.2b. Tạo cả đội — tạo crew (v32, ≤3 click; v71 hỗ trợ chọn crew)
 
-Ở trang **Đội**, nút **"+ Tạo cả đội"** tạo nhanh **crew mặc định** (trưởng phòng + 4 nhân sự Nghiên cứu/Nội dung/Phân tích/Kiểm định):
+Ở trang **Đội**, nút **"+ Tạo cả đội"** tạo nhanh một crew — mặc định là **crew hành chính** (trưởng phòng + 4 nhân sự Nghiên cứu/Nội dung/Phân tích/Kiểm định):
 
-1. Bấm nút → hệ thống **xem trước** danh sách đội (banner hiện **thành viên nào đã tồn tại** — skip, không abort).
-2. Bấm **"Xác nhận tạo"** → tạo **độc lập từng người** (nếu 1 người lỗi, những người khác vẫn tạo).
-3. Xong: trưởng phòng tự **set làm coordinator** nếu chưa có trưởng phòng nào; mọi người **TẮT** → tuân tự B.2a.
+1. Bấm nút → hệ thống hiện **chip chọn crew** (nếu có >1 crew). Chọn crew mong muốn:
+   - **Office** — đội hành chính mặc định (trưởng phòng + 4 chuyên gia)
+   - **Personal** — đội cá nhân (trợ lý riêng + 4 chuyên gia)
+2. Hệ thống **xem trước** danh sách đội của crew đó (banner hiện **thành viên nào đã tồn tại** — skip, không abort).
+3. Bấm **"Xác nhận tạo"** → tạo **độc lập từng người** (nếu 1 người lỗi, những người khác vẫn tạo).
+4. Xong: trưởng phòng tự **set làm coordinator** nếu chưa có; mọi người **TẮT** → tuân tự B.2a.
 
 ### B.2c. Qua hội thoại (tuỳ-chỉnh đầy đủ)
 

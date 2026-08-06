@@ -96,11 +96,13 @@ Chạy báo cáo hằng ngày agent mặc định ở chế độ **dry-run** (l
 Để tạo agent mẫu + giữ lại:
 
 ```bash
-my-crew crew init           # tạo 5 agent mẫu
-uv run python -m my_crew.runtime.service &     # khởi động bộ điều phối
-# hoặc:
-my-crew serve               # foreground: web + coordinator
+my-crew crew init [office|personal]    # tạo đội mẫu (mặc định: office)
+my-crew serve                          # foreground: web + coordinator
 ```
+
+Lựa chọn:
+- `crew init` hoặc `crew init office` — tạo đội hành chính mặc định (trưởng phòng + 4 nhân sự)
+- `crew init personal` — tạo đội cá nhân (trợ lý riêng + 4 nhân sự)
 
 Sau `crew init`, trang **Đội** hiện trạng thái bộ điều phối.
 
@@ -250,6 +252,22 @@ safety:
 ```
 
 > **Hard-deny (Lớp A):** Hành động mất dữ liệu vĩnh viễn (xoá, lộ credential) **không bao giờ cho phép**, kể cả guarded. Xem [action-gateway-explainer.md](action-gateway-explainer.md).
+
+### Cấu hình Google Workspace (per agent, v71)
+
+**Tắt đọc VÀ ghi Google Workspace** (Gmail, Calendar, Tasks, Drive) cho agent cụ thể bằng `gws_enabled: false` trong profile. **Profile-only, cố ý không có env var**: env là fleet-wide nên không thể tắt một agent mà không tắt cả đội.
+
+Khi tắt:
+- Mọi **đọc** Google Workspace (sự kiện Calendar, email chưa đọc, task chờ) trả `"(chưa cấu hình)"` — không có lệnh API. Key vẫn còn nguyên nên prompt giữ đúng hình dạng như agent đang bật.
+- Mọi lệnh **ghi** Google Workspace (`gws_write`: gửi email, tạo/sửa/xoá event) bị **loại khỏi catalog** — agent không thể tự đề nghị làm.
+- Tool `gws.gmail` / `gws.calendar` / `gws.drive` trong vòng lặp tool của team-step cũng bị giữ lại, kể cả khi agent đó đang `gws_context: true`. `gws_enabled` là cờ trùm.
+
+```yaml
+# profiles/<id>/profile.yaml
+gws_enabled: false     # mặc định true khi không set; agent cũ không bị ảnh hưởng
+```
+
+Hữu ích cho trợ lý cá nhân (tôn trọng quyền riêng tư) hay agent nào không nên động vào email/lịch cá nhân.
 
 ### Autopilot (v63) — AI là người quyết cuối
 
