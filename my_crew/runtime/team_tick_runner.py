@@ -268,6 +268,18 @@ def _json_retry_tracker(sidecar_path: Path) -> RetryTracker:
     return RetryTracker(get=_get, increment=_increment, clear=_clear)
 
 
+def _step_worker_log_path() -> Path:
+    """Where a spawned step worker's stderr lands: `<data>/logs/team-step-workers.log`.
+
+    One shared append-only file rather than per-step files: steps are many and short, and
+    what an operator actually wants is the interleaved story of a task, not a directory to
+    correlate by hand. Every worker line is already prefixed by its agent/task/step.
+    """
+    path = team_tasks_root() / "logs" / "team-step-workers.log"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def _make_spawn_step():
     """Detached `team-step` worker spawn: `start_new_session=True` so the child is not
     killed if the ticker's own (short-lived) process exits/is signaled — the tick
@@ -280,10 +292,29 @@ def _make_spawn_step():
             "--audience", "internal",
             "--task-id", task.id, "--step-id", step.step_id, "--attempt-id", attempt_id,
         ]
-        proc = subprocess.Popen(  # noqa: S603 — argv is a list, ids come from the store, no shell
-            argv, start_new_session=True,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
+        # The step worker's stderr used to go to DEVNULL, which threw away the ONLY record
+        # of how a step actually ran: which runtime tier it resolved to, whether its tool
+        # loop hit the recursion cap and degraded to an empty result, why a search was
+        # skipped. Debugging a bad step then meant reproducing it by hand, because the
+        # service log legitimately contains nothing — the work happens in this child.
+        # Best-effort: if the log cannot be opened, fall back to DEVNULL rather than let a
+        # logging problem stop real work from being dispatched.
+        try:
+            sink = open(_step_worker_log_path(), "a")  # noqa: SIM115 — owned by the child
+        except OSError:
+            logger.warning("team-tick: step worker log unavailable; stderr discarded",
+                           exc_info=True)
+            sink = subprocess.DEVNULL
+        try:
+            proc = subprocess.Popen(  # noqa: S603 — argv is a list, ids from the store, no shell
+                argv, start_new_session=True,
+                stdout=subprocess.DEVNULL, stderr=sink,
+            )
+        finally:
+            # The child holds its own dup of the fd; the parent's copy is dead weight and
+            # would leak one descriptor per dispatched step in a long-lived ticker.
+            if sink is not subprocess.DEVNULL:
+                sink.close()
         return proc.pid
 
     return _spawn
