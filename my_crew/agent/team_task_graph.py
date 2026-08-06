@@ -365,6 +365,16 @@ def default_team_task_deps(
     def _run_self_check(
         result_text: str, criteria: str, handoff: str = ""
     ) -> tuple[bool, list[str], float]:
+        if not result_text.strip():
+            # An empty result is the ABSENCE of work, not work of poor quality — grade it
+            # before the criteria shortcut below, or a step with no rubric would bank a
+            # blank as `done`. The tools tier degrades to "" when the loop hits its
+            # recursion cap (`invoke_capped`), so this is a real, reachable state and not
+            # a defensive nicety: production step 3e4a8d64ea20/step1 spent $0.0008, wrote
+            # nothing, passed self-check and was marked `done`, handing the next step an
+            # empty handoff. Failing here routes it to rework — and, if the budget is
+            # spent, to the coordinator — instead of laundering silence into success.
+            return False, ["bước không trả về nội dung nào (kết quả rỗng)"], 1.0
         if not criteria.strip():
             # No rubric was ever set for this step (`acceptance` blank) — nothing to
             # grade against, so self-check trivially passes rather than inventing a
