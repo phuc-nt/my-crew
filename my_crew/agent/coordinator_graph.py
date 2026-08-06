@@ -57,6 +57,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from my_crew.agent.coordinator_nodes.fanout_insert import (
     maybe_copy_gather_results,
@@ -67,6 +68,7 @@ from my_crew.agent.coordinator_nodes.review_insert import (
     maybe_insert_review,
     maybe_insert_review_after_rework,
 )
+from my_crew.agent.coordinator_nodes.stuck_decision import decide_stuck_step
 from my_crew.agent.coordinator_nodes.tick_actions import (
     aggregate_and_deliver,
     dispatch_ready_steps,
@@ -177,6 +179,16 @@ class CoordinatorDeps:
     # caller that does not wire this collaborator leaves every agent id dispatchable
     # (matching every existing test's fake "agent-a"/"agent-b" ids).
     roster_ok: Callable[[str], bool] = lambda _agent_id: True
+    # can_do_step(agent_id, step) -> True iff that agent holds the TOOLS the step needs.
+    # `roster_ok` answers "may this agent hold a step at all"; it says nothing about
+    # whether this particular agent can actually DO this particular step. A web
+    # data-collection step handed to an agent without `web_search:` is dispatchable and
+    # doomed: the agent has no way to look anything up, so the best honest outcome is a
+    # step that reports it lacks the tool — and the worst is invented figures. Checked
+    # before a reassign is written, so the coordinator moves work toward capability
+    # instead of just toward a different name. Default: always True, so callers that do
+    # not wire it keep the pre-existing "any roster agent will do" behavior.
+    can_do_step: Callable[[str, TeamStep], bool] = lambda _agent_id, _step: True
     # aggregate(task) -> (summary_text, cost_usd). One LLM call over all step results.
     aggregate: Callable[[TeamTask], tuple[str, float | None]] = lambda _t: ("", None)
     # deliver_room(task, message) -> bool | None. Posts the final summary to the group
@@ -229,6 +241,13 @@ class CoordinatorDeps:
     # must not lose a tick that already did real work. Default no-op keeps every
     # non-wired caller byte-identical.
     reflect: Callable[[TeamTask, str, str], None] = lambda *_: None
+    # v72: judge_stuck_step(brief, step) -> StuckJudgement | dict | None. One LLM call
+    # ruling on a step that finished but failed its own acceptance check
+    # (`needs_decision`): retry it with concrete guidance, hand it to someone else, or
+    # conclude the task cannot be done. Default returns None, which `stuck_decision`
+    # coerces to `give_up` — a caller that does not wire a judge concludes honestly
+    # instead of silently retrying forever, and no existing test gains an LLM call.
+    judge_stuck_step: Callable[[str, TeamStep], Any] = lambda _brief, _step: None
     now: Callable[[], datetime] = lambda: datetime.now(UTC)
 
 
@@ -258,6 +277,11 @@ class TickResult:
     #               itself lives in `RetryTracker`, inspectable separately; a step
     #               only reaches a terminal, test-visible "failed" once retries are
     #               exhausted.
+    #               A step that finished but failed its own acceptance criteria adds
+    #               three more values, all from `decide_stuck_step`: "stuck_retry"
+    #               (same assignee, now carrying guidance), "stuck_reassigned" (handed
+    #               to a different colleague), and "gave_up" (concluded not doable —
+    #               the task is stalled WITH a final_summary stating why).
     detail: str = ""
 
 
@@ -369,6 +393,16 @@ def _act_on_task(deps: CoordinatorDeps, task: TeamTask) -> TickResult:
     clarifying = [s for s in task.steps if s.status == "waiting_clarify" and s.clarify_id]
     for step in clarifying:
         result = poll_waiting_clarify_step(deps, task, step)
+        if result.action != "none":
+            return result
+
+    # v72: a step that delivered an unacceptable result waits here for a ruling. Placed
+    # after the in-flight polls (a step still running may yet resolve itself) and BEFORE
+    # dispatch, because a `retry_with_guidance`/`reassign` ruling puts the step back to
+    # `pending` and the very same tick can then dispatch it — no wasted tick.
+    stuck = [s for s in task.steps if s.status == "needs_decision"]
+    for step in stuck:
+        result = decide_stuck_step(deps, task, step)
         if result.action != "none":
             return result
 
@@ -494,8 +528,11 @@ def _dead_end_result(deps: CoordinatorDeps, task: TeamTask) -> TickResult | None
     # waiting_clarify counts as in-flight (review H1): a step paused on the CEO is
     # legitimately alive — a sibling's terminal failure must not stall the task out
     # of list_dispatchable(), or the pending clarify would never be polled again.
+    # `needs_decision` is in-flight for the same reason `waiting_clarify` is: the step
+    # is waiting on a ruling the ticker itself owes it, and stalling the task out of
+    # `list_dispatchable()` would mean that ruling never comes.
     in_flight = any(
-        s.status in ("running", "awaiting_approval", "waiting_clarify")
+        s.status in ("running", "awaiting_approval", "waiting_clarify", "needs_decision")
         for s in task.steps
     )
     if in_flight:

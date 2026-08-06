@@ -28,6 +28,7 @@ from my_crew.runtime.company import load_company
 from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
 from my_crew.runtime.team_task_store import TeamStep, TeamTask, TeamTaskStore
 from my_crew.runtime.team_tick_collaborators import make_aggregate, make_deliver_room, make_escalate
+from my_crew.runtime.team_tick_stuck_judge import make_judge_stuck_step
 
 logger = logging.getLogger(__name__)
 
@@ -68,9 +69,11 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
             autopilot_enabled=_autopilot_enabled,
             clarify_status=_clarify_status,
             roster_ok=_roster_ok,
+            can_do_step=_can_do_step,
             aggregate=make_aggregate(loaded, settings),
             deliver_room=make_deliver_room(),
             escalate=make_escalate(loaded, settings),
+            judge_stuck_step=make_judge_stuck_step(settings),
             # Lessons live in the COORDINATOR's own namespace — it is the agent that
             # assigns work, so what it learns is about its own delegating. `loaded` IS
             # the coordinator here (this kind runs only on that agent), so its profile id
@@ -487,3 +490,39 @@ def _roster_ok(agent_id: str) -> bool:
     from my_crew.agent.team_task_roster import is_assignable
 
     return is_assignable(agent_id)
+
+
+def _web_search_enabled(agent_id: str) -> bool:
+    """Whether that agent can search the web. Unknown/unloadable profile ⇒ False.
+
+    Read from the profile rather than the registry: `web_search:` is the same per-agent
+    flag that arms both the native pre-work hook and the loop tier's `web.search` tool,
+    so it is the honest answer to "can this agent look anything up".
+    """
+    from my_crew.profile.loader import load_profile
+
+    try:
+        return bool(getattr(load_profile(agent_id), "web_search", False))
+    except Exception:  # noqa: BLE001 — an unreadable profile must not wedge the tick
+        logger.warning("team-tick: cannot read web_search for %s", agent_id, exc_info=True)
+        return False
+
+
+def _can_do_step(agent_id: str, step) -> bool:
+    """Whether `agent_id` holds the tools this step needs.
+
+    There is no "needs web" flag on a step, and inventing one would mean trusting the
+    decomposing model to predict its own future tool needs. What IS knowable is the
+    capability of the agent who already holds the step: if the current assignee can
+    search and the proposed one cannot, the reassign is a capability DOWNGRADE — the
+    step gets handed to someone strictly less able to finish it. That is the shape that
+    bit us in production (a web data-collection step moved from researcher to an agent
+    with no search), and it is decidable without asking a model anything.
+
+    Deliberately one-directional: an upgrade, a lateral move, or a step whose current
+    holder never had search all pass. This gate only refuses to make things worse.
+    """
+    current = getattr(step, "assigned_to", "") or ""
+    if not current or not _web_search_enabled(current):
+        return True
+    return _web_search_enabled(agent_id)
