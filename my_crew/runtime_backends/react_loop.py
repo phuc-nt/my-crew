@@ -91,7 +91,7 @@ def run_react_work(
     # v45: give this tier an in-STATE file scratch (no Docker, no host, no shell) so a no-shell
     # step routed here can do the compose-early report discipline. The clause + read-back mirror
     # the deep_agent path but the files live in graph state, never a container.
-    system = system + _STATE_SCRATCH_CONTRACT
+    system = system + _tool_capability_contract(tools_map) + _STATE_SCRATCH_CONTRACT
     user = next((m["content"] for m in msgs if m["role"] == "user"), title)
 
     # LangChain chat model pointed at OpenRouter (same base URL/model as LlmClient). Only used
@@ -122,10 +122,36 @@ def run_react_work(
     return text, cost
 
 
+def _tool_capability_contract(tools_map: dict[str, Callable[[dict], Any]]) -> str:
+    """Tell the model, in the system prompt, which tools it ACTUALLY holds this run.
+
+    The base system prompt is shared with the native tier, which has no tools — search runs
+    once before the model speaks and its output is pasted in. On this tier the model really
+    does hold `web.search`/`web.scrape`, but nothing in that shared prompt says so, and the
+    only tool-shaped clause it did see (`_STATE_SCRATCH_CONTRACT`) lists file scratch alone.
+    A model reading it concluded it had no way to look anything up and returned a request for
+    permission to search — burning a step, an intervention, and the CEO's patience while
+    holding a working search tool the whole time (task d4679e1fbe14/step1).
+
+    Built from the live `tools_map` rather than hardcoded, so an agent without web egress is
+    never told it can search, and a tool added later needs no second edit here.
+    """
+    if not tools_map:
+        return ""
+    names = ", ".join(sorted(n.replace(".", "_") for n in tools_map))
+    return (
+        "\n\nCÔNG CỤ BẠN ĐANG CÓ (gọi trực tiếp, KHÔNG cần xin phép ai): " + names + ". "
+        "Bạn làm việc theo VÒNG LẶP: gọi công cụ → đọc kết quả → gọi tiếp nếu chưa đủ, "
+        "cho đến khi đủ dữ liệu rồi mới trả lời. TUYỆT ĐỐI không hỏi xin phép tra cứu và "
+        "không đề nghị người khác tra hộ — cứ gọi công cụ. Nếu đã thử nhiều từ khoá mà vẫn "
+        "không có dữ liệu, hãy nói rõ đã thử gì và thiếu gì, KHÔNG bịa số liệu."
+    )
+
+
 #: v45: appended to the create_agent system prompt — the in-state scratch equivalent of the
 #: deep_agent compose-early contract, but writing to state files (no /work, no container).
 _STATE_SCRATCH_CONTRACT = (
-    "\n\nGHI CHÚ CÔNG CỤ: bạn có công cụ ghi/đọc file tạm (write_file/read_file/ls/glob/grep) — "
+    "\n\nNGOÀI RA bạn có công cụ ghi/đọc file tạm (write_file/read_file/ls/glob/grep) — "
     "file chỉ nằm trong bộ nhớ phiên làm việc, KHÔNG có shell/thực thi. Với việc viết báo cáo, "
     "hãy ghi bản nháp ra một file .md SỚM rồi tinh chỉnh; kết quả cuối vẫn trả về dưới dạng text."
 )
