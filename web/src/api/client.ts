@@ -39,6 +39,7 @@ import type {
   CreateFromTemplateResult,
   CrewCreateResult,
   CrewPreview,
+  CrewsPayload,
   DeleteAgentResult,
   EnabledResult,
   AgentCompanyDocsPayload,
@@ -289,8 +290,12 @@ export const api = {
       role_id: roleId,
       ...(agentId ? { agent_id: agentId } : {}),
     }),
-  getCrewPreview: () => request<CrewPreview>('/api/crew/preview'),
-  createCrew: () => post<CrewCreateResult>('/api/crew/create'),
+  // v71: crewId omitted ⇒ the server's default crew (office), same as pre-v71 clients.
+  getCrews: () => request<CrewsPayload>('/api/crews'),
+  getCrewPreview: (crewId?: string) =>
+    request<CrewPreview>(`/api/crew/preview${crewId ? `?crew_id=${encodeURIComponent(crewId)}` : ''}`),
+  createCrew: (crewId?: string) =>
+    post<CrewCreateResult>(`/api/crew/create${crewId ? `?crew_id=${encodeURIComponent(crewId)}` : ''}`),
   // v6 M14b: CEO chat-ops — same engine + shared conversation as the Telegram DM path.
   opsChatAvailable: () => request<OpsChatAvailable>('/api/ops/chat/available'),
   opsChat: (message: string) => post<OpsChatReply>('/api/ops/chat', { message }),

@@ -158,6 +158,43 @@ def test_crew_preview_matches_manifest(tmp_world):
     assert preview["coordinator_already_set"] is False
 
 
+# --- v71: more than one crew ---
+
+
+def test_list_crews_offers_office_first_then_personal(tmp_world):
+    crews = template_create.list_crews()
+    ids = [c["id"] for c in crews]
+    assert ids[0] == template_create.DEFAULT_CREW_ID == "office"
+    assert "personal" in ids
+    assert all(c["name"] and c["member_count"] > 0 for c in crews)
+
+
+def test_personal_crew_adopts_pong_under_its_own_id(tmp_world):
+    """The `{role, id}` member form creates the personal-assistant template AS `pong`,
+    so the official assistant is adopted rather than duplicated under the role name."""
+    _, profiles, _ = tmp_world
+    out = template_create.create_crew("personal")
+    assert out["crew_id"] == "personal"
+    assert "pong" in out["created"] and "personal-assistant" not in out["created"]
+    doc = _profile_doc(profiles, "pong")
+    assert doc["domain"] == "personal" and doc["template_role"] == "personal-assistant"
+
+
+def test_personal_crew_skips_an_already_adopted_pong(tmp_world):
+    """Skip is keyed on the AGENT id: `pong` exists, so it is skipped even though the
+    role template `personal-assistant` was never instantiated under its own name."""
+    template_create.create_from_template("personal-assistant", agent_id="pong")
+    out = template_create.create_crew("personal")
+    assert "pong" in out["skipped"] and out["failed"] == []
+    assert "researcher" in out["created"]
+
+
+def test_unknown_or_traversal_crew_id_rejected(tmp_world):
+    for bad in ("ghost", "../office", "a/b"):
+        with pytest.raises(template_create.TemplateError):
+            template_create.create_crew(bad)
+
+
 # --- routes (thin wrappers) ---
 
 
@@ -177,6 +214,26 @@ def test_routes_create_and_crew(tmp_world):
     assert r.status_code == 200
     body = r.json()
     assert "content" in body["skipped"] and body["failed"] == []
+
+
+def test_routes_crew_id_selects_the_crew_and_defaults_to_office(tmp_world):
+    """v71: a pre-v71 client sends no crew_id and must still get the office crew."""
+    client = TestClient(create_app())
+    assert client.get("/api/crew/preview").json()["crew_id"] == "office"
+
+    listed = client.get("/api/crews").json()
+    assert listed["default"] == "office"
+    assert {"office", "personal"} <= {c["id"] for c in listed["crews"]}
+
+    personal = client.get("/api/crew/preview?crew_id=personal").json()
+    assert personal["crew_id"] == "personal"
+    assert "pong" in {m["role_id"] for m in personal["members"]}
+
+    assert client.get("/api/crew/preview?crew_id=ghost").status_code == 400
+    assert client.post("/api/crew/create?crew_id=ghost").status_code == 400
+
+    created = client.post("/api/crew/create?crew_id=personal").json()
+    assert created["crew_id"] == "personal" and "pong" in created["created"]
 
 
 def test_staff_templates_expose_v32_fields(tmp_world):

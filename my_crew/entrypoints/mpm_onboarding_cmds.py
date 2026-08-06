@@ -45,25 +45,34 @@ def run_quickstart(args: list[str]) -> int:
 
 
 def run_crew(sub: str, args: list[str]) -> int:
-    """`mpm crew init` — scaffold the shipped starter crew as REAL keepable profiles.
+    """`mpm crew init [crew]` — scaffold a shipped starter crew as REAL keepable profiles.
 
-    Reuses the v32 `create_crew()` (idempotent, skip-existing, wires the coordinator only when
-    unset) — the same single door the web one-click crew uses. Unlike `demo-mode.sh`, this writes
-    real user-data the user keeps and customizes; there is no backup/restore swap.
+    Reuses `create_crew()` (idempotent, skip-existing, wires the coordinator only when unset) —
+    the same single door the web one-click crew uses. Unlike `demo-mode.sh`, this writes real
+    user-data the user keeps and customizes; there is no backup/restore swap.
+
+    No crew argument means the office crew, so the pre-v71 `mpm crew init` keeps its behavior.
     """
     if sub != "init":
-        print(f"error: unknown crew subcommand {sub!r}. Dùng: mpm crew init", file=sys.stderr)
+        print(f"error: unknown crew subcommand {sub!r}. Dùng: mpm crew init [crew]",
+              file=sys.stderr)
         return 2
 
-    from my_crew.server.template_create import create_crew
+    from my_crew.server.template_create import DEFAULT_CREW_ID, TemplateError, create_crew
 
-    result = create_crew()
+    crew_id = args[0].strip().lower() if args and not args[0].startswith("-") else DEFAULT_CREW_ID
+    try:
+        result = create_crew(crew_id)
+    except TemplateError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     created = result.get("created", [])
     skipped = result.get("skipped", [])
     failed = result.get("failed", [])
     coordinator_id = result.get("coordinator_id") or "(chưa đặt)"
 
-    print(f"Đội mẫu: tạo mới {len(created)} · bỏ qua (đã có) {len(skipped)} · lỗi {len(failed)}")
+    print(f"{result.get('crew') or 'Đội mẫu'}: tạo mới {len(created)} · "
+          f"bỏ qua (đã có) {len(skipped)} · lỗi {len(failed)}")
     if created:
         print(f"  + tạo: {', '.join(created)}")
     if skipped:

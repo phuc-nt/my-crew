@@ -1,0 +1,30 @@
+# Staff template v1 — prefill source ONLY for the CreateAgent wizard.
+#
+# Contract v1 = {role, domain, reports, bindings_hint} (xem
+# profiles/templates/pm-coordinator/template.yaml cho ghi chú contract đầy đủ).
+#
+# Vai trợ lý cá nhân: cửa giao tiếp duy nhất giữa chủ nhân và cả đội. `bindings_hint`
+# rỗng vì trợ lý không nối Jira/Slack/Confluence — kênh ra duy nhất là Telegram DM, và
+# token bot đi qua .env (`{AGENT_ID}_TELEGRAM_BOT_TOKEN`), không bao giờ nằm trong file
+# tracked này.
+role: "Trợ lý cá nhân"
+domain: personal
+reports:
+  - briefing
+  - weekly-review
+bindings_hint: []
+
+# runtime backend gợi ý (wizard prefill; user override được).
+recommended_runtime: native
+
+# KHÔNG đặt schedule mặc định: agent tạo xong là TẮT và chưa có token Telegram, một lịch
+# 7:00 sẵn có sẽ đẩy bản tin vào hư không ngay khi user bật agent. Chủ nhân tự bật lịch ở
+# trang Đội sau khi điền token (bản tin sáng + nhìn lại tuần là hai kind có sẵn).
+
+# Nguồn dữ liệu cá nhân (lịch/mail/việc Google qua `gws_enabled`, kệ sách qua
+# `goodreads_user_id`) CỐ Ý không có ở đây: chúng trỏ vào tài khoản của MỘT người, nên
+# chỉ được đặt trong profile của từng agent, không phải template dùng chung.
+
+# v36 P2: config version — bump when template CONFIG (reports/schedule/tools) changes
+# so agents of this role show an upgrade badge. Skills load live (no bump needed).
+version: 1

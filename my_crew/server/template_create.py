@@ -10,16 +10,23 @@ template skill edit reaches every agent of that role with no re-scaffold. It als
 `template_version` + a config baseline (v36 P3) so a later template bump surfaces a
 config-upgrade with review (see `template_upgrade.py`).
 
-Crew bootstrap reads `profiles/templates/crew.yaml` (ONE default crew — CEO decision
-v32) and creates each member independently: an existing member is SKIPPED (reported,
-never an abort) so re-running is idempotent and a partial failure leaves the created
-members standing. The crew's coordinator is wired into `company.yaml::coordinator_id`
-only when no coordinator is configured yet — an explicit CEO choice is never clobbered.
+Crew bootstrap reads `profiles/templates/crews/<crew_id>.yaml` and creates each member
+independently: an existing member is SKIPPED (reported, never an abort) so re-running is
+idempotent and a partial failure leaves the created members standing. The crew's
+coordinator is wired into `company.yaml::coordinator_id` only when no coordinator is
+configured yet — an explicit CEO choice is never clobbered.
+
+v32 shipped ONE crew (`crew.yaml`); the personal crew is the second real use case, so the
+manifest moved into `crews/` with `office` as the default (callers that pass no crew id —
+`mpm crew init`, pre-v71 web clients — still get the office crew, byte-identically). A
+member may be a bare role id or `{role, id}`; the latter lets a crew ADOPT an existing
+agent under its own id instead of creating a second one for the same job.
 """
 
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import yaml
 
@@ -28,7 +35,11 @@ from my_crew.server.routes_company import _TEMPLATES_DIR, _load_one_template
 
 logger = logging.getLogger(__name__)
 
-_CREW_MANIFEST = _TEMPLATES_DIR / "crew.yaml"
+_CREWS_DIR = _TEMPLATES_DIR / "crews"
+#: Pre-v71 single-manifest location. Read only when `crews/<id>.yaml` is absent, so an
+#: install that customized the old file in place keeps working until it migrates.
+_LEGACY_CREW_MANIFEST = _TEMPLATES_DIR / "crew.yaml"
+DEFAULT_CREW_ID = "office"
 
 
 class TemplateError(ValueError):
@@ -52,66 +63,107 @@ def create_from_template(role_id: str, agent_id: str | None = None) -> dict:
     }
 
 
-def create_crew() -> dict:
+def create_crew(crew_id: str = DEFAULT_CREW_ID) -> dict:
     """Create every crew member (independent, skip-existing) + wire the coordinator.
 
     Returns {crew, created, skipped, failed, coordinator_id} — `skipped` are members
     whose agent id already exists (idempotent re-run), `failed` carry the per-member
     error message (one broken member never aborts the rest).
     """
-    manifest = _load_crew_manifest()
+    manifest = _load_crew_manifest(crew_id)
     from my_crew.runtime.registry import load_registry
 
     existing = {e.id for e in load_registry()}
     created: list[str] = []
     skipped: list[str] = []
     failed: list[dict] = []
-    for role_id in manifest["members"]:
-        if role_id in existing:
-            skipped.append(role_id)
+    for member in manifest["members"]:
+        role_id, agent_id = member["role"], member["id"]
+        # Skip on the AGENT id, not the role: an adopting member (`{role, id}`) exists
+        # under its own id, and its role template may never have been instantiated.
+        #
+        # A skipped agent keeps whatever `template_role` its own profile already has —
+        # we do NOT stamp the manifest's role onto a profile someone wrote by hand. That
+        # would silently rewrite user data to claim a template link the operator never
+        # made, and template_upgrade would then start offering to overwrite a hand-tuned
+        # agent. The cost of not stamping: an adopted agent loads no skills from
+        # `profiles/templates/<role>/skills/` and stays out of upgrade scope.
+        if agent_id in existing:
+            skipped.append(agent_id)
             continue
         try:
-            create_from_template(role_id)
-            created.append(role_id)
+            create_from_template(role_id, agent_id)
+            created.append(agent_id)
         except (TemplateError, agent_create.ValidationError,
                 agent_create.ConflictError) as exc:
-            failed.append({"role_id": role_id, "error": str(exc)})
+            failed.append({"role_id": agent_id, "error": str(exc)})
         except Exception as exc:  # noqa: BLE001 — one member must not abort the crew
-            logger.exception("crew create: member %r failed", role_id)
-            failed.append({"role_id": role_id, "error": f"lỗi không mong đợi: {exc}"})
+            logger.exception("crew create: member %r failed", agent_id)
+            failed.append({"role_id": agent_id, "error": f"lỗi không mong đợi: {exc}"})
 
     coordinator_id = _wire_coordinator(manifest.get("coordinator") or "",
                                        created + skipped)
     return {
         "crew": manifest.get("name") or "crew",
+        "crew_id": crew_id,
         "created": created, "skipped": skipped, "failed": failed,
         "coordinator_id": coordinator_id,
     }
 
 
-def crew_preview() -> dict:
+def list_crews() -> list[dict]:
+    """Available crew manifests for the UI picker — [{id, name, member_count}].
+
+    Sorted with the default crew first, then alphabetically, so the picker's first
+    option is the one a caller who sends no crew id would get.
+    """
+    crews: list[dict] = []
+    for path in sorted(_CREWS_DIR.glob("*.yaml")) if _CREWS_DIR.is_dir() else []:
+        try:
+            manifest = _load_crew_manifest(path.stem)
+        except TemplateError:
+            logger.warning("crew list: manifest %s unreadable — skipped", path.name)
+            continue
+        crews.append({
+            "id": path.stem,
+            "name": manifest["name"],
+            "member_count": len(manifest["members"]),
+        })
+    if not crews and _LEGACY_CREW_MANIFEST.is_file():
+        manifest = _load_crew_manifest(DEFAULT_CREW_ID)
+        crews.append({"id": DEFAULT_CREW_ID, "name": manifest["name"],
+                      "member_count": len(manifest["members"])})
+    crews.sort(key=lambda c: (c["id"] != DEFAULT_CREW_ID, c["id"]))
+    return crews
+
+
+def crew_preview(crew_id: str = DEFAULT_CREW_ID) -> dict:
     """The confirm-dialog payload: members + which already exist + coordinator plan.
 
     Read-only; the SAME manifest/registry reads `create_crew` uses, so the preview and
     the create can never disagree on membership.
     """
-    manifest = _load_crew_manifest()
+    manifest = _load_crew_manifest(crew_id)
     from my_crew.runtime.company import load_company
     from my_crew.runtime.registry import load_registry
 
     existing = {e.id for e in load_registry()}
     members = []
-    for role_id in manifest["members"]:
+    for member in manifest["members"]:
+        role_id, agent_id = member["role"], member["id"]
         template = _load_one_template(_TEMPLATES_DIR / role_id) or {}
         members.append({
-            "role_id": role_id,
+            # `role_id` stays the agent id the create will use — the key the existing
+            # dialog renders and matches against `created`/`skipped`.
+            "role_id": agent_id,
             "role": template.get("role") or role_id,
             "domain": template.get("domain") or "",
-            "exists": role_id in existing,
+            "exists": agent_id in existing,
         })
     current = load_company().coordinator_id
     return {
         "crew": manifest.get("name") or "crew",
+        "crew_id": crew_id,
         "members": members,
         "coordinator": manifest.get("coordinator") or "",
         "coordinator_already_set": bool(current),
@@ -221,18 +273,47 @@ def _wire_coordinator(coordinator_role: str, available: list[str]) -> str | None
     return coordinator_role
 
 
-def _load_crew_manifest() -> dict:
-    if not _CREW_MANIFEST.is_file():
-        raise TemplateError("chưa có profiles/templates/crew.yaml — không có crew mẫu")
+def _crew_manifest_path(crew_id: str) -> Path:
+    """Resolve `crews/<crew_id>.yaml`, falling back to the pre-v71 `crew.yaml` for the
+    default crew only. The id is validated as ONE path segment before it touches the
+    filesystem, so a crafted id can never read outside the crews dir."""
+    if not crew_id or not crew_id.replace("-", "").replace("_", "").isalnum():
+        raise TemplateError(f"tên crew không hợp lệ: {crew_id!r}")
+    path = _CREWS_DIR / f"{crew_id}.yaml"
+    if path.is_file():
+        return path
+    if crew_id == DEFAULT_CREW_ID and _LEGACY_CREW_MANIFEST.is_file():
+        return _LEGACY_CREW_MANIFEST
+    available = ", ".join(c["id"] for c in list_crews()) or "(không có crew nào)"
+    raise TemplateError(f"không có crew {crew_id!r} — có: {available}")
+
+
+def _load_crew_manifest(crew_id: str = DEFAULT_CREW_ID) -> dict:
+    path = _crew_manifest_path(crew_id)
     try:
-        doc = yaml.safe_load(_CREW_MANIFEST.read_text(encoding="utf-8")) or {}
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except (OSError, yaml.YAMLError) as exc:
-        raise TemplateError(f"crew.yaml không đọc được: {exc}") from None
+        raise TemplateError(f"{path.name} không đọc được: {exc}") from None
     members = doc.get("members")
     if not isinstance(doc, dict) or not isinstance(members, list) or not members:
-        raise TemplateError("crew.yaml phải có danh sách members")
+        raise TemplateError(f"{path.name} phải có danh sách members")
     return {
         "name": str(doc.get("name") or "crew"),
         "coordinator": str(doc.get("coordinator") or ""),
-        "members": [str(m) for m in members],
+        "members": [_parse_member(m, path.name) for m in members],
     }
+
+
+def _parse_member(member: object, manifest_name: str) -> dict:
+    """One manifest member → {role, id}. A bare string is a role instantiated under its
+    own name; `{role, id}` names the agent id explicitly, which is how a crew adopts an
+    already-existing agent instead of creating a duplicate for the same job."""
+    if isinstance(member, str):
+        return {"role": member, "id": member}
+    if isinstance(member, dict):
+        role = str(member.get("role") or "").strip()
+        agent_id = str(member.get("id") or role).strip()
+        if role:
+            return {"role": role, "id": agent_id}
+    raise TemplateError(
+        f"{manifest_name}: member phải là role id hoặc {{role, id}} — gặp {member!r}")

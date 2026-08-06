@@ -1,7 +1,7 @@
 """my-crew CLI front door — `my-crew <group> ...` (also `python -m my_crew.entrypoints.mpm`).
 
     my-crew quickstart
-    my-crew crew init
+    my-crew crew init [office|personal]
     my-crew serve [--web-only | --scheduler-only]
     my-crew doctor
     my-crew upgrade [--check]
@@ -62,7 +62,7 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=(
             "examples:\n"
             "  my-crew quickstart          # first dry-run report, only needs an OpenRouter key\n"
-            "  my-crew crew init                  # scaffold the starter crew as real profiles\n"
+            "  my-crew crew init personal         # scaffold a starter crew as real profiles\n"
             "  my-crew agent run pm --report daily --dry-run\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -80,7 +80,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--web-only", action="store_true", help="only the web dashboard")
     p.add_argument("--scheduler-only", action="store_true", help="only the coordinator")
 
-    p = sub.add_parser("crew", help="crew-level onboarding (init: scaffold the starter crew)")
+    p = sub.add_parser("crew", help="crew-level onboarding (init [office|personal])")
     p.add_argument("action", metavar="init")
     p.add_argument("rest", nargs=argparse.REMAINDER)
 

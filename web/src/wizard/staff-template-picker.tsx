@@ -11,7 +11,7 @@ import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
 import type { UiKey } from '../i18n/dictionary'
 import { useLanguage } from '../i18n/language-context'
-import type { CrewCreateResult, CrewPreview, Pack, StaffTemplate } from '../types'
+import type { CrewCreateResult, CrewOption, CrewPreview, Pack, StaffTemplate } from '../types'
 
 const RUNTIME_LABEL_KEY: Record<string, UiKey> = {
   native: 'staffTemplatePicker.runtimeNative',
@@ -47,8 +47,10 @@ export function StaffTemplatePicker({
   const [confirming, setConfirming] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [createdMsg, setCreatedMsg] = useState<Record<string, string>>({})
-  // crew state
+  // crew state — v71: `crews` may hold more than one manifest (office / personal), so the
+  // banner previews whichever is selected and creates exactly that one.
   const [crew, setCrew] = useState<CrewPreview | null>(null)
+  const [crews, setCrews] = useState<CrewOption[]>([])
   const [crewOpen, setCrewOpen] = useState(false)
   const [crewBusy, setCrewBusy] = useState(false)
   const [crewResult, setCrewResult] = useState<CrewCreateResult | null>(null)
@@ -64,7 +66,9 @@ export function StaffTemplatePicker({
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : t('staffTemplatePicker.loadFailed')))
       .finally(() => setLoading(false))
-    api.getCrewPreview().then(setCrew).catch(() => setCrew(null)) // no crew.yaml ⇒ no banner
+    api.getCrewPreview().then(setCrew).catch(() => setCrew(null)) // no manifest ⇒ no banner
+    // A single crew needs no picker; the list only earns its row when there are ≥2.
+    api.getCrews().then((r) => setCrews(r.crews)).catch(() => setCrews([]))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -121,7 +125,24 @@ export function StaffTemplatePicker({
     setCrewBusy(true)
     setError(null)
     try {
-      setCrewResult(await api.createCrew())
+      setCrewResult(await api.createCrew(crew?.crew_id))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('staffTemplatePicker.crewCreateFailed'))
+    } finally {
+      setCrewBusy(false)
+    }
+  }
+
+  /** Switch the previewed crew. Preview first, then swap — a failed fetch keeps the
+   *  banner on the crew the user can still create instead of blanking it. */
+  async function selectCrew(crewId: string) {
+    setCrewBusy(true)
+    setError(null)
+    // Collapse the confirm panel: it describes the OLD crew's member list and count,
+    // and leaving it open lets it narrate a crew the user is no longer looking at.
+    setCrewOpen(false)
+    try {
+      setCrew(await api.getCrewPreview(crewId))
     } catch (e) {
       setError(e instanceof Error ? e.message : t('staffTemplatePicker.crewCreateFailed'))
     } finally {
@@ -136,10 +157,26 @@ export function StaffTemplatePicker({
       <h3>{t('staffTemplatePicker.title')}</h3>
       {error && <p className="error">{t('staffTemplatePicker.errorPrefix', { message: error })}</p>}
 
-      {crew && missingCount > 0 && !crewResult && (
+      {crew && (missingCount > 0 || crews.length > 1) && !crewResult && (
         <div className="crew-banner">
           <strong>{crew.crew}</strong>{' '}
-          {!crewOpen ? (
+          {crews.length > 1 && (
+            <span className="crew-switch">
+              {crews.map((c) => (
+                <Button
+                  key={c.id}
+                  variant="chip"
+                  disabled={crewBusy || c.id === crew.crew_id}
+                  onClick={() => void selectCrew(c.id)}
+                >
+                  {c.name}
+                </Button>
+              ))}
+            </span>
+          )}{' '}
+          {missingCount === 0 ? (
+            <span className="muted">{t('staffTemplatePicker.crewAllExist')}</span>
+          ) : !crewOpen ? (
             <Button variant="ghost" onClick={() => setCrewOpen(true)}>
               {t('staffTemplatePicker.crewCreateAll', { n: missingCount })}
             </Button>

@@ -200,24 +200,36 @@ def create_agent_from_template(
         raise HTTPException(status_code=409, detail=str(exc)) from None
 
 
+@router.get("/crews")
+def get_crews() -> dict:
+    """v71: the crews the fleet can be started from (office, personal, …) for the picker."""
+    from my_crew.server import template_create
+
+    return {"crews": template_create.list_crews(), "default": template_create.DEFAULT_CREW_ID}
+
+
 @router.get("/crew/preview")
-def get_crew_preview() -> dict:
-    """Confirm-dialog payload for "Tạo cả đội": members + exists flags + coordinator plan."""
+def get_crew_preview(crew_id: str = "") -> dict:
+    """Confirm-dialog payload for "Tạo cả đội": members + exists flags + coordinator plan.
+
+    `crew_id` omitted ⇒ the office crew, so a pre-v71 client that never learned to send
+    one keeps getting exactly the crew it used to get.
+    """
     from my_crew.server import template_create
 
     try:
-        return template_create.crew_preview()
+        return template_create.crew_preview(crew_id or template_create.DEFAULT_CREW_ID)
     except template_create.TemplateError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 @router.post("/crew/create")
-def post_crew_create() -> dict:
-    """Create the default crew (per-member independent; existing members skipped)."""
+def post_crew_create(crew_id: str = "") -> dict:
+    """Create one crew (per-member independent; existing members skipped). Default: office."""
     from my_crew.server import template_create
 
     try:
-        return template_create.create_crew()
+        return template_create.create_crew(crew_id or template_create.DEFAULT_CREW_ID)
     except template_create.TemplateError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
 

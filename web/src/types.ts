@@ -344,6 +344,7 @@ export interface CrewMemberPreview {
 }
 
 export interface CrewPreview {
+  crew_id: string
   crew: string
   members: CrewMemberPreview[]
   coordinator: string
@@ -352,11 +353,24 @@ export interface CrewPreview {
 }
 
 export interface CrewCreateResult {
+  crew_id: string
   crew: string
   created: string[]
   skipped: string[]
   failed: { role_id: string; error: string }[]
   coordinator_id: string | null
+}
+
+// v71: one entry per manifest in profiles/templates/crews/ — the 1-click crew choice.
+export interface CrewOption {
+  id: string
+  name: string
+  member_count: number
+}
+
+export interface CrewsPayload {
+  crews: CrewOption[]
+  default: string
 }
 
 export interface StaffTemplatesPayload {

@@ -1,0 +1,18 @@
+# Đội cá nhân — trợ lý riêng làm CỬA GIAO TIẾP DUY NHẤT với chủ nhân.
+#
+# Khác đội văn phòng ở vai trò của người dùng: chủ nhân chỉ nhắn trợ lý (Telegram DM).
+# Việc trong tầm trợ lý tự xử (lịch, mail, nhắc hẹn, hỏi đáp); việc cần chuyên môn thì
+# trợ lý giao xuống đội qua `assign_team_task` — decompose thành DAG, chủ nhân xác nhận,
+# coordinator dispatch. Bề mặt orchestration này mở cho domain personal từ v61.
+#
+# Member dạng `{role, id}` cho phép ĐẶT agent id khác role id — dùng để "nhận nuôi"
+# một trợ lý đã có sẵn (id `pong`) thay vì đẻ thêm agent + bot Telegram thứ hai.
+# Member đã tồn tại được bỏ qua, nên chạy lệnh này trên fleet đang chạy là an toàn.
+name: "Đội cá nhân"
+coordinator: coordinator
+members:
+  - coordinator
+  - { role: personal-assistant, id: pong }
+  - researcher
+  - analyst
+  - content

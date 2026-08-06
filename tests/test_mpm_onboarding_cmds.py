@@ -64,22 +64,51 @@ def test_quickstart_runs_default_daily_dry_run(monkeypatch, tmp_path):
 
 
 def test_crew_init_calls_create_crew_and_prints_summary(monkeypatch, capsys):
-    monkeypatch.setattr(
-        "my_crew.server.template_create.create_crew",
-        lambda: {"crew": "starter", "created": ["a", "b"], "skipped": [],
-                 "failed": [], "coordinator_id": "coordinator"},
-    )
+    seen: dict = {}
+
+    def _fake(crew_id):
+        seen["crew_id"] = crew_id
+        return {"crew": "starter", "created": ["a", "b"], "skipped": [],
+                "failed": [], "coordinator_id": "coordinator"}
+
+    monkeypatch.setattr("my_crew.server.template_create.create_crew", _fake)
     rc = onb.run_crew("init", [])
     assert rc == 0
+    assert seen["crew_id"] == "office"  # no argument ⇒ the office crew, as pre-v71
     out = capsys.readouterr().out
     assert "tạo mới 2" in out and "coordinator" in out
+
+
+def test_crew_init_passes_named_crew_through(monkeypatch, capsys):
+    seen: dict = {}
+
+    def _fake(crew_id):
+        seen["crew_id"] = crew_id
+        return {"crew": "Đội cá nhân", "created": ["pong"], "skipped": [],
+                "failed": [], "coordinator_id": "coordinator"}
+
+    monkeypatch.setattr("my_crew.server.template_create.create_crew", _fake)
+    assert onb.run_crew("init", ["Personal"]) == 0
+    assert seen["crew_id"] == "personal"  # case-folded before the manifest lookup
+    assert "Đội cá nhân" in capsys.readouterr().out
+
+
+def test_crew_init_unknown_crew_exits_nonzero(monkeypatch, capsys):
+    from my_crew.server.template_create import TemplateError
+
+    def _fake(crew_id):
+        raise TemplateError("không có đội 'ghost' — hiện có: office, personal")
+
+    monkeypatch.setattr("my_crew.server.template_create.create_crew", _fake)
+    assert onb.run_crew("init", ["ghost"]) == 2
+    assert "ghost" in capsys.readouterr().err  # actionable, not a traceback
 
 
 def test_crew_init_idempotent_all_skipped(monkeypatch, capsys):
     monkeypatch.setattr(
         "my_crew.server.template_create.create_crew",
-        lambda: {"crew": "starter", "created": [], "skipped": ["a", "b"],
-                 "failed": [], "coordinator_id": "coordinator"},
+        lambda crew_id: {"crew": "starter", "created": [], "skipped": ["a", "b"],
+                         "failed": [], "coordinator_id": "coordinator"},
     )
     rc = onb.run_crew("init", [])
     assert rc == 0
@@ -89,8 +118,8 @@ def test_crew_init_idempotent_all_skipped(monkeypatch, capsys):
 def test_crew_init_reports_failure_nonzero(monkeypatch, capsys):
     monkeypatch.setattr(
         "my_crew.server.template_create.create_crew",
-        lambda: {"crew": "starter", "created": [], "skipped": [],
-                 "failed": [{"role_id": "x", "error": "boom"}], "coordinator_id": ""},
+        lambda crew_id: {"crew": "starter", "created": [], "skipped": [],
+                         "failed": [{"role_id": "x", "error": "boom"}], "coordinator_id": ""},
     )
     rc = onb.run_crew("init", [])
     assert rc == 1  # a failed member surfaces a non-zero exit
