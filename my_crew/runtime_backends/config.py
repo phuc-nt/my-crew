@@ -31,9 +31,14 @@ _KNOWN_KINDS = {"native", "create_agent", "deep_agent"}
 # that read the CEO's .env/SSH keys.
 _ALLOWED_SANDBOX_PROVIDERS = {"fake", "docker"}
 
-# The tool-calling react loop's historical cap (v20). Kept as the create_agent default so an
-# `import MAX_LOOP_STEPS` still resolves and behavior is byte-identical when no cap is set.
-MAX_LOOP_STEPS = 8
+# The tool-calling react loop's cap: how many tool ROUNDS one step may take before
+# `invoke_capped` gives up. Raised from the v20 value of 8 after measuring real research steps:
+# a sourced answer costs 9-15 rounds (search → read → search again for the gaps), and 8 was hit
+# often enough to matter. Hitting it is not a graceful stop — the loop degrades to an EMPTY
+# result, so the step throws away every search it already paid for. 16 covers the measured
+# spread; a step that cannot finish in 16 rounds is stuck on something a bigger budget will not
+# fix. Per-agent `runtime_loop_limit:` still overrides this.
+MAX_LOOP_STEPS = 16
 
 
 @dataclass(frozen=True)

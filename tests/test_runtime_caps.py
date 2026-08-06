@@ -17,6 +17,14 @@ def test_default_loop_limit_per_kind():
     assert parse_agent_runtime_config("deep_agent").caps().runtime_loop_limit == 16
 
 
+def test_the_tools_tier_cap_covers_a_real_research_step():
+    """Hitting the cap is NOT a graceful stop: `invoke_capped` degrades to an empty result, so
+    the step discards every search it already paid for and self-check sees nothing. Measured
+    research steps (search → read → search again for the gaps) run 9-15 tool rounds, so a cap
+    below that spread throws away good work at random. Pins the floor, not the exact number."""
+    assert MAX_LOOP_STEPS >= 16
+
+
 def test_override_loop_limit():
     c = parse_agent_runtime_config({"kind": "create_agent", "runtime_loop_limit": 3})
     assert c.caps().runtime_loop_limit == 3
