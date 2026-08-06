@@ -29,6 +29,10 @@ logger = logging.getLogger(__name__)
 STATUS_DONE = "done"
 STATUS_REJECTED = "rejected"  # bad/absent/mismatched attempt_id — clean no-op
 STATUS_PAUSED = "paused"  # a Lớp B interrupt inside the step's graph (exit 3)
+#: The step ran cleanly and wrote its artifact, but graded itself as not meeting its
+#: acceptance criteria with no rework budget left. Not a worker failure — the process did
+#: its job — so it exits 0; the coordinator reads the artifact and decides what's next.
+STATUS_NEEDS_DECISION = "needs_decision"
 
 
 def run_team_step(
@@ -139,6 +143,30 @@ def run_team_step(
         import json as _json
 
         cost = result.get("cost_usd")
+        outcome_ref = f"team-tasks/{task_id}/step-{step.seq}.json"
+        if result.get("status") == "needs_decision":
+            # The step produced a real artifact but graded it as not meeting acceptance
+            # and had no rework budget left. `outcome_ref` is recorded precisely so the
+            # coordinator can read that artifact and judge; the capture row records the
+            # honest status rather than "done", the same posture every other non-done
+            # terminal state takes here.
+            store.mark_needs_decision(
+                task_id, step_id, outcome_ref=outcome_ref, cost_usd=cost, attempt_id=attempt_id,
+            )
+            _record_capture(
+                attempt_id=attempt_id, task_id=task_id, step=step, engine=engine,
+                status="needs_decision", telemetry=telemetry, cost_usd=cost,
+                started_at=started_at, t0=t0, error=None,
+            )
+            _append_step_event(
+                task_id, author=step.assigned_to, task_title=task.title, step_title=step.title,
+                kind="step_status", status="needs_decision",
+                message=result.get("room_message", ""), attempt_id=attempt_id,
+            )
+            return {
+                "status": STATUS_NEEDS_DECISION, "cost_usd": cost, "delivered": False,
+                "room_message": result.get("room_message", ""),
+            }
         split = result.get("split_proposal") or None
         store.mark_done(
             task_id, step_id,
@@ -451,6 +479,11 @@ def _run_graph(
         _extra["academic_search"] = bool(getattr(loaded, "academic_search", False))
         # v39 #1: per-agent Google-Workspace-read opt-in (gws CLI OAuth is the credential).
         _extra["gws_context"] = bool(getattr(loaded, "gws_context", False))
+        # v73: web-search opt-in for the loop tier — the SAME `web_search:` profile flag
+        # that arms the native pre-work hook, so the agent searches on whichever tier
+        # runs its step. Keys are re-checked inside the toolset builder (flag alone is
+        # not enough), mirroring `_resolve_search_hook`'s two-gate rule.
+        _extra["web_search"] = bool(getattr(loaded, "web_search", False))
         # v43: per-agent in-sandbox subagent delegation opt-in (deep_agent tier reads it; other
         # non-native runtimes ignore the kwarg — see DeepAgentRuntime.build_task pop).
         _extra["deep_team"] = bool(getattr(loaded, "deep_team", False))
@@ -494,7 +527,8 @@ def _run_graph(
         settings=settings, context=context, step_title=step.title,
         data_dir=team_tasks_root(), task_id=task_id, step_seq=step.seq,
         step_deps=step.deps, search_hook=_resolve_search_hook(loaded, settings),
-        self_id=step.assigned_to, telemetry=telemetry, remember_node=remember_node, **_extra,
+        self_id=step.assigned_to, telemetry=telemetry, remember_node=remember_node,
+        guidance=getattr(step, "guidance", "") or "", **_extra,
     )
     initial_state: dict[str, Any] = {
         "step_title": step.title, "acceptance": step.acceptance,

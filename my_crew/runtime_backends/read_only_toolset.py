@@ -165,6 +165,55 @@ def _firecrawl_tool(settings: Any) -> Callable[[dict], Any] | None:
     return _scrape
 
 
+def _web_search_tool(settings: Any) -> Callable[[dict], Any] | None:
+    """A `web.search` callable over Tavily/Brave, or None when no provider key is set.
+
+    This is the loop-side twin of the native graph's pre-work search hook — same
+    `web_search` engine (redact → fail-closed gate → provider → audit), same shared
+    team-tasks audit trail, same spotlight formatting of the snippets. The difference
+    is WHO issues the query: here the model asks mid-loop and can follow up (search →
+    `web.scrape` a result URL → search again), where the native hook fires exactly once
+    before the model ever speaks. Until this existed the loop could read a page it
+    already knew about but had no way to FIND one — a researcher step on the loop tier
+    could not answer "giá thuê văn phòng quận 1 là bao nhiêu" any better than native.
+
+    Results are snippets-only from the provider (never a follow-up GET — that larger
+    egress is `web.scrape`'s job, visibly and separately). Failures degrade to a short
+    message string so the loop continues.
+    """
+    if settings is None:
+        return None
+    from my_crew.tools.web_search_tool import WebSearchConfig
+
+    config = WebSearchConfig(
+        tavily_api_key=getattr(settings, "tavily_api_key", None),
+        brave_api_key=getattr(settings, "brave_api_key", None),
+    )
+    if not config.available():
+        return None
+
+    def _search(args: dict) -> str:
+        query = str((args or {}).get("query") or "")
+        if not query.strip():
+            return "(web.search cần tham số query)"
+        from my_crew.audit.audit_log import AuditLog
+        from my_crew.runtime.team_task_paths import team_tasks_root
+        from my_crew.tools.search_result_formatter import format_search_results
+        from my_crew.tools.web_search_tool import web_search
+
+        try:
+            audit_log = AuditLog(team_tasks_root() / "audit" / "audit.jsonl")
+            results = web_search(query, config=config, audit_log=audit_log)
+        except Exception as exc:  # noqa: BLE001 — search best-effort, never crash the loop
+            return f"(tra cứu web lỗi: {exc})"
+        if not results:
+            return "(không có kết quả — thử từ khoá khác, ngắn và cụ thể hơn)"
+        text, _count, _quarantined = format_search_results(results)
+        return text
+
+    return _search
+
+
 def _openalex_tool() -> Callable[[dict], Any]:
     """An `academic.search` callable over OpenAlex (public data, no key, fixed host).
 
@@ -259,7 +308,7 @@ def _history_search_tool() -> Callable[[dict], Any]:
 
 def build_read_toolset(
     config: ReportingConfig, audience: str = "internal", settings: Any = None,
-    academic_search: bool = False, gws_context: bool = False,
+    academic_search: bool = False, gws_context: bool = False, web_search: bool = False,
 ) -> dict[str, Callable[[dict], Any]]:
     """The positive read-allowlist for a tool-calling runtime, policy-shimmed + audience-aware.
 
@@ -270,6 +319,9 @@ def build_read_toolset(
     flag is its only gate and the default keeps every existing toolset byte-identical.
     `gws_context` (v39 #1) enables the Google Workspace READ tools (Gmail/Calendar/Drive) —
     INTERNAL company data, so internal-audience only, and OFF by default (byte-identical).
+    `web_search` (v73) enables the in-loop Tavily/Brave search — the same per-agent profile
+    flag that gates the native pre-work hook, so one opt-in covers both tiers; OFF by
+    default and additionally requires a provider key (byte-identical when absent).
     """
     raw: dict[str, Callable[[dict], Any]] = {}
     if config is not None:
@@ -289,6 +341,13 @@ def build_read_toolset(
     fc = _firecrawl_tool(settings)
     if fc is not None:
         raw["web.scrape"] = fc
+    # v73: Tavily/Brave web search INSIDE the loop — gated on the same per-agent
+    # `web_search:` profile flag the native pre-work hook uses (one opt-in, both tiers)
+    # plus a provider key. Public snippets, both audiences, like web.scrape.
+    if web_search:
+        ws = _web_search_tool(settings)
+        if ws is not None:
+            raw["web.search"] = ws
     # v31 P6: OpenAlex paper search — public academic data, both audiences, flag-gated.
     if academic_search:
         raw["academic.search"] = _openalex_tool()

@@ -23,6 +23,11 @@ _TOOL_DESCRIPTIONS = {
     "web.scrape": "Đọc TOÀN BỘ nội dung của MỘT URL web công khai (http/https) và trả về "
                   "markdown. Tham số `query` PHẢI là URL đầy đủ (vd https://example.com), "
                   "KHÔNG phải câu hỏi. Read-only, không ghi.",
+    "web.search": "Tìm kiếm web, trả về danh sách kết quả (tiêu đề + URL + snippet ngắn). "
+                  "Tham số `query` là TỪ KHOÁ ngắn gọn cụ thể (vd 'giá thuê văn phòng "
+                  "quận 1 2026'), không phải cả câu hỏi dài. Snippet thường CHƯA đủ số "
+                  "liệu — muốn con số cụ thể, lấy URL kết quả tốt nhất rồi gọi web_scrape "
+                  "để đọc trang. Read-only, không ghi.",
 }
 
 

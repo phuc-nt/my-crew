@@ -155,6 +155,23 @@ def _safe_hostname(source: str) -> str:
     return hostname
 
 
+#: Characters allowed in a body-rendered result URL. Deliberately strict: a URL is
+#: machine-shaped, so anything outside this set (whitespace, `[`/`]`, quotes, control
+#: chars) is more likely forgery than encoding — omit the line rather than render it.
+_URL_RE = re.compile(r"^https?://[A-Za-z0-9.\-_~:/?#@!$&'()*+,;=%]+$")
+
+
+def _safe_url(source: str) -> str:
+    """A `(url: ...)` body line for a provider-supplied result URL, or "" when the
+    string is not a clean absolute http(s) URL. Unlike `_safe_hostname` this keeps the
+    full path — that is the point (scrape needs it) — but only under the strict charset
+    above, so it can never carry a spliced line or a tag-closing bracket."""
+    candidate = (source or "").strip()
+    if not candidate or len(candidate) > 500 or not _URL_RE.match(candidate):
+        return ""
+    return f"(url: {candidate})"
+
+
 def _format_one(result: SearchResult, rank: int) -> FormattedSearchResult:
     quarantined = (
         scan_for_injection_markers(result.title)
@@ -165,6 +182,16 @@ def _format_one(result: SearchResult, rank: int) -> FormattedSearchResult:
     title = _QUARANTINE_PLACEHOLDER if quarantined else result.title.strip()
     safe_source = _safe_hostname(result.source)
     tag = f"[EXTERNAL_DATA source={safe_source} rank={rank}]"
+    # v73: the RESULT URL rides in the body (never the tag) so a tool-loop agent can
+    # chain search → scrape — hostname-only made every hit a dead end the model could
+    # cite but not open. Threat-wise this adds nothing the snippet doesn't already
+    # have: the body between the delimiters is attacker text by definition, `source`
+    # is in the quarantine scan above, and `_safe_url` refuses the structural
+    # characters (whitespace/brackets/control chars) a forged URL would need to
+    # splice a fake line or break the tag. Native one-shot readers just gain a
+    # verifiable citation.
+    url_line = "" if quarantined else _safe_url(result.source)
+    body = f"{url_line}\n{body}" if url_line else body
     text = f"{_DELIM_START}\n{tag}\n{title}\n{body}\n{_DELIM_END}"
     return FormattedSearchResult(
         rank=rank, source=result.source, quarantined=quarantined, text=text

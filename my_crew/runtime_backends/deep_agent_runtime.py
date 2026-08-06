@@ -63,6 +63,7 @@ class DeepAgentRuntime:
         kwargs.pop("reporting_config", None)  # deep agent uses its own sandbox tools, not read seam
         kwargs.pop("academic_search", None)  # read-toolset flag — the sandbox loop has no read seam
         kwargs.pop("gws_context", None)  # read-toolset flag — the sandbox loop has no read seam
+        kwargs.pop("web_search", None)  # read-toolset flag — the sandbox loop has no read seam
         # v43: in-sandbox subagent delegation opt-in. When True, run_deep_agent_work wires a
         # compose-early subagent spec + a hard delegation cap; when False (default), the call is
         # byte-identical to pre-v43.
