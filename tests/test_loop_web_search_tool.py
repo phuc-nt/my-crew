@@ -88,6 +88,20 @@ def test_a_blank_query_is_answered_not_crashed():
     assert "cần tham số" in tools["web.search"]({"query": ""})
 
 
+def test_profile_loading_carries_the_firecrawl_env_into_settings(monkeypatch):
+    """Search without scrape is a dead end again. The per-agent profile loader only ever
+    mapped the SEARCH provider keys; Firecrawl was mapped on the env-settings path alone,
+    so every loop agent silently ran with firecrawl_base_url=None and never got
+    `web.scrape` — unnoticed while no loop agent could search in the first place."""
+    monkeypatch.setenv("FIRECRAWL_BASE_URL", "https://fc.local")
+    monkeypatch.setenv("FIRECRAWL_API_KEY", "fk")
+    from my_crew.profile.loader_mapping import build_settings_dict
+
+    out = build_settings_dict({}, "/tmp/x")
+    assert out.get("firecrawl_base_url") == "https://fc.local"
+    assert out.get("firecrawl_api_key") == "fk"
+
+
 def test_the_step_runner_threads_the_same_profile_flag():
     """One opt-in covers both tiers: the runner must forward the agent's existing
     `web_search:` flag (the one arming the native hook) to the loop toolset."""

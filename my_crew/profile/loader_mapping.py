@@ -111,6 +111,13 @@ def build_settings_dict(yaml_doc: dict[str, Any], data_dir: Any) -> dict[str, An
     # same posture as the OpenRouter key) — fixed env names only.
     _put(out, "tavily_api_key", os.environ.get("TAVILY_API_KEY"))
     _put(out, "brave_api_key", os.environ.get("BRAVE_API_KEY"))
+    # Firecrawl, same posture — and load-bearing for the loop tier (v73): these were
+    # only ever mapped on the env-settings path, so per-agent profile loads carried
+    # firecrawl_base_url=None and `web.scrape` was silently never offered to any
+    # tool-loop agent. With in-loop search landing, a missing scrape would turn every
+    # search hit into a dead end again — the exact gap the search tool closes.
+    _put(out, "firecrawl_base_url", os.environ.get("FIRECRAWL_BASE_URL"))
+    _put(out, "firecrawl_api_key", os.environ.get("FIRECRAWL_API_KEY"))
     return out
 
 
