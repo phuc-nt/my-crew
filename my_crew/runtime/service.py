@@ -10,6 +10,9 @@ loop, the worker spawn, supervision (600s timeout + a concurrency cap), and outc
 collection. `spawn` is injectable so tests assert the exact worker argv with no real
 process and a fixed clock — `run_forever` (the only timing-dependent part) is a thin
 untested wrapper over the unit-tested `run_tick`.
+
+A tick spawns every due worker first and only then waits on them (v72), so its cost is
+one worker's runtime rather than the sum. The cap still bounds how many run at once.
 """
 
 from __future__ import annotations
@@ -48,7 +51,11 @@ def _real_spawn(argv: list[str]) -> subprocess.Popen:
 #: Kinds exempt from the per-tick spawn cap (see `run_tick`): instant, no-LLM bodies
 #: whose whole point is punctuality. Keep this set tiny — everything here bypasses the
 #: load bound.
-_CAP_EXEMPT_KINDS = frozenset({"reminder-sweep"})
+#:
+#: `milestone-mirror` qualifies on the same grounds as `reminder-sweep`: it reads the
+#: office room and DMs the CEO — one SQLite query plus one HTTP call, no LLM. Deferring
+#: it defeats its only purpose (the CEO learning a task's state while it still matters).
+_CAP_EXEMPT_KINDS = frozenset({"reminder-sweep", "milestone-mirror"})
 
 
 def _effective_schedule(loaded) -> tuple[dict[str, str], tuple[str, ...]]:
@@ -82,12 +89,14 @@ def _effective_schedule(loaded) -> tuple[dict[str, str], tuple[str, ...]]:
         schedule["ops-alerts"] = "0 */6 * * *"
         reports.append("ops-alerts")
         changed = True
-    # v12 M29: the same admin agent runs a `milestone-mirror` tick every 15min — DMs the
-    # CEO only `kind == "milestone"` office-room events (nhận việc / hoàn thành / cần
-    # duyệt). Tighter cadence than ops-alerts (health issues can wait 6h; a CEO watching
-    # a task's progress on Telegram wants it sooner).
+    # v12 M29: the same admin agent runs a `milestone-mirror` tick — DMs the CEO only
+    # `kind == "milestone"` office-room events (nhận việc / hoàn thành / cần duyệt /
+    # kẹt / bỏ cuộc). Runs EVERY minute: a milestone is by definition the moment the CEO
+    # needs to know, and a 15-minute floor meant a 22-minute task reported twice with a
+    # blind stretch between. No LLM in the body — it exits immediately when the room has
+    # no new milestone — and it is cap-exempt so the tick cap cannot defer it.
     if getattr(loaded, "domain", "") == "admin" and getattr(loaded.config, "telegram", None):
-        schedule["milestone-mirror"] = "*/15 * * * *"
+        schedule["milestone-mirror"] = "* * * * *"
         reports.append("milestone-mirror")
         changed = True
     # v12 M28b: the coordinator agent (company.yaml::coordinator_id) runs a `team-tick`
@@ -169,13 +178,16 @@ def _worker_argv(agent_id: str, kind: str, audience: str) -> list[str]:
     ]
 
 
-def _supervise(spawn: Spawn, argv: list[str], *, timeout: int) -> dict:
-    """Spawn one worker, wait up to `timeout`, return its outcome.
+def _collect(proc, argv: list[str], *, timeout: int) -> dict:
+    """Wait up to `timeout` on an ALREADY-SPAWNED worker; return its outcome.
 
     On timeout: kill + `status="timeout"`. Else collect the exit code + the agent's
     last `runs.jsonl` line (so the caller has both the coarse signal and the detail).
+
+    Split out of `_supervise` so a caller with several due workers can start them all
+    BEFORE waiting on any (see `run_tick`) — waiting is the part that must not be
+    serialized, spawning is cheap.
     """
-    proc = spawn(argv)
     try:
         exit_code = proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -183,6 +195,12 @@ def _supervise(spawn: Spawn, argv: list[str], *, timeout: int) -> dict:
         return {"status": "timeout", "exit_code": None}
     agent_id = argv[argv.index("--agent-id") + 1]
     return {"status": "ran", "exit_code": exit_code, "detail": _last_run_event(agent_id)}
+
+
+def _supervise(spawn: Spawn, argv: list[str], *, timeout: int) -> dict:
+    """Spawn ONE worker and wait for it. The one-shot path (`mpm agent run`, `mpm
+    resume`, the telegram listener thread) where there is nothing to overlap with."""
+    return _collect(spawn(argv), argv, timeout=timeout)
 
 
 def _last_run_event(agent_id: str) -> dict | None:
@@ -251,6 +269,10 @@ class Service:
         self._seeded = False
         self._timeout = timeout
         self._cap = cap
+        #: Rotating start offset into the registry (see `run_tick`). Without it the cap
+        #: is refilled by the SAME first agents every tick and anyone ordered after them
+        #: starves deterministically, not occasionally.
+        self._rotate = 0
 
     def _seed(self, now: datetime) -> None:
         """Seed last_fire for every scheduled (agent, kind) to `now` so a fresh daemon
@@ -279,9 +301,20 @@ class Service:
             self._seed(now)
         outcomes: list[dict] = []
         spawned = 0
-        for entry in load_registry():
-            if not entry.enabled:
-                continue
+        # Workers started this tick, in spawn order: (proc, argv, agent_id, kind). They
+        # are collected AFTER the traversal — see the drain below.
+        running: list[tuple] = []
+        # Rotate the traversal start each tick. The cap bounds how many workers spawn,
+        # not WHO gets to spawn — a fixed start order silently converts the bound into
+        # "the first N registry entries always win" (UAT: one agent's inbox deferred 488
+        # times in a row). Rotating by one per tick keeps the cap intact while
+        # guaranteeing every agent reaches the front within len(registry) ticks.
+        entries = [e for e in load_registry() if e.enabled]
+        if entries:
+            offset = self._rotate % len(entries)
+            entries = entries[offset:] + entries[:offset]
+            self._rotate += 1
+        for entry in entries:
             try:
                 loaded = load_profile(entry.id)
             except FileNotFoundError as exc:
@@ -310,12 +343,26 @@ class Service:
                     logger.info("tick cap %d reached; deferring %s/%s", self._cap, entry.id, kind)
                     continue
                 argv = _worker_argv(entry.id, kind, audience)
-                outcome = _supervise(spawn, argv, timeout=self._timeout)
-                outcome.update(agent_id=entry.id, kind=kind)
-                outcomes.append(outcome)
+                # Start it and move on. Waiting here (the pre-v72 shape) made the tick
+                # cost the SUM of its workers' runtimes instead of the max: measured
+                # 65s median / 108s max against a 60s interval, so the loop was always
+                # behind. Since the rotation offset advances only once per tick, a tick
+                # that overruns also slows fairness — pong's inbox, scheduled every
+                # minute, was reaching the front of the queue once every 28-144 minutes
+                # (6 runs against the coordinator's 338). Spawn-then-drain keeps the cap
+                # and the order identical while making a tick cost one worker's wait.
+                running.append((spawn(argv), argv, entry.id, kind))
                 self._last_fire[(entry.id, kind)] = now  # advance: no re-fire this period
                 if not exempt:
                     spawned += 1
+        # Drain in spawn order. `_collect`'s timeout is per-worker and they run
+        # concurrently, so a hung first worker cannot mask a later one: by the time we
+        # reach worker N it has already had the whole drain so far to finish, and its
+        # own full timeout on top. Outcome order stays spawn order.
+        for proc, argv, agent_id, kind in running:
+            outcome = _collect(proc, argv, timeout=self._timeout)
+            outcome.update(agent_id=agent_id, kind=kind)
+            outcomes.append(outcome)
         _reap_sandboxes_best_effort()
         _consolidate_memories_best_effort(now)
         _archive_stale_skills_best_effort(now)
@@ -328,6 +375,7 @@ class Service:
         subprocess như tick lịch vẫn spawn — cách ly tiến trình + pipeline giữ nguyên.
         Best-effort: hỏng ở đây không được giết daemon (tick lịch vẫn là fallback)."""
         from my_crew.runtime.agent_paths import agent_data_dir
+        from my_crew.runtime.inbox_dispatch import telegram_reader
         from my_crew.runtime.telegram_listener import start_telegram_listeners
 
         agents = []
@@ -339,7 +387,11 @@ class Service:
             except FileNotFoundError as exc:
                 logger.warning("listener: skipping agent %r: %s", entry.id, exc)
                 continue
-            if not loaded.enabled or loaded.config.telegram is None:
+            # Cửa thứ hai của cùng một token: một binding send-only (`poll_minutes: 0`)
+            # KHÔNG được có listener, y như nó không có tick `inbox`. Bỏ sót chỗ này thì
+            # agent vẫn treo getUpdates trên token của agent khác — đúng cái 409 mà
+            # send-only sinh ra để tránh (xem inbox_dispatch.telegram_reader).
+            if not loaded.enabled or telegram_reader(loaded) is None:
                 continue
             agents.append((entry.id, loaded.config.telegram, agent_data_dir(entry.id)))
 

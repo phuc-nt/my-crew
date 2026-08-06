@@ -166,7 +166,11 @@ def run_telegram_inbox(loaded: LoadedProfile, settings: Any) -> dict:
                 "telegram inbox %s: reply to %s → %s (%s)",
                 loaded.profile_id, message["ts"], outcome.status, outcome.summary,
             )
-            replied += 1
+            # A message already handled by the other reader (listener vs scheduled tick)
+            # sent nothing, so it must not consume a slot of the per-poll reply budget —
+            # otherwise a burst of duplicates would push real messages to the next poll.
+            if outcome.status != "deduplicated":
+                replied += 1
             last_acked = message["update_id"]
             if cost is not None:
                 total_cost += cost

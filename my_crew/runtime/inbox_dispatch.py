@@ -25,9 +25,28 @@ def _telegram_config(loaded: LoadedProfile):
     return getattr(getattr(loaded, "config", None), "telegram", None)
 
 
+def telegram_reader(loaded: LoadedProfile):
+    """The agent's TelegramConfig only when it POLLS; None when send-only or absent.
+
+    `poll_minutes: 0` declares a send-only binding — the agent speaks on that bot but
+    never reads it. The coordinator uses this to report through the same bot the CEO
+    delegated to, without becoming a second getUpdates caller on a token another agent
+    already owns (one hanging getUpdates per token: the two would 409, and the loser
+    could still consume-and-ack a message the owner never handled).
+    """
+    telegram = _telegram_config(loaded)
+    if telegram is None or int(getattr(telegram, "poll_minutes", 0)) < 1:
+        return None
+    return telegram
+
+
 def has_any_inbox(loaded: LoadedProfile) -> bool:
-    """True when at least one inbox transport is configured for this agent."""
-    return bool(getattr(loaded, "inbox", None)) or _telegram_config(loaded) is not None
+    """True when at least one inbox transport POLLS for this agent.
+
+    Send-only telegram does not count: it must not synthesize the `inbox` pseudo-kind,
+    or the scheduler would tick an agent that has nothing to read.
+    """
+    return bool(getattr(loaded, "inbox", None)) or telegram_reader(loaded) is not None
 
 
 def inbox_poll_minutes(loaded: LoadedProfile) -> int:
@@ -37,7 +56,7 @@ def inbox_poll_minutes(loaded: LoadedProfile) -> int:
     candidates = []
     if getattr(loaded, "inbox", None):
         candidates.append(int(loaded.inbox["poll_minutes"]))
-    telegram = _telegram_config(loaded)
+    telegram = telegram_reader(loaded)
     if telegram is not None:
         candidates.append(int(telegram.poll_minutes))
     if not candidates:
@@ -63,7 +82,7 @@ def run_all_inboxes(loaded: LoadedProfile, settings: Any) -> dict:
             logger.exception("inbox %s: slack transport failed", loaded.profile_id)
             results["slack"] = {"status": "error", "replied": 0, "cost_usd": None,
                                 "delivered": False}
-    if _telegram_config(loaded) is not None:
+    if telegram_reader(loaded) is not None:
         from my_crew.runtime.telegram_inbox import run_telegram_inbox
 
         try:

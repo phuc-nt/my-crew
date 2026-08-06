@@ -557,6 +557,28 @@ class ActionGateway:
             approval_id=approval_id,
         )
 
+    def claim_intake(self, key: str, *, rationale: str = "") -> bool:
+        """Reserve an INBOUND message so it is processed exactly once. True ⇒ go ahead.
+
+        Step 5's dedup guards the outbound send, which is too late for a message whose
+        handling has SIDE EFFECTS BEFORE the reply — a chat-ops turn creates the team task
+        first and only then posts "đã giao". Two readers of the same Telegram update
+        (the long-poll listener thread and the scheduled inbox tick, which deliberately
+        coexist) therefore both created a task, and only the second REPLY was suppressed:
+        the CEO got one confirmation and two identical tasks.
+
+        Claiming on the message's own immutable id closes that window at the front door,
+        for every downstream branch at once. Shares the per-agent `dedup.db`, so the guard
+        survives a restart and is atomic across processes (INSERT-OR-IGNORE).
+
+        Never released: a message is consumed once even if handling then failed. A retry
+        would re-run those same side effects, which is the exact thing being prevented.
+        """
+        if self._dedup.claim(key):
+            return True
+        self._record("message_intake", key, "skipped", "duplicate message", {}, rationale)
+        return False
+
     def close(self) -> None:
         """Close the gateway's SQLite stores (approvals + dedup).
 

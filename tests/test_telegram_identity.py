@@ -68,8 +68,14 @@ def test_telegram_block_parses_and_validates():
     assert cfg.telegram.poll_minutes == 3
     with pytest.raises(RuntimeError, match="chat_ids is empty"):
         _config({"bot_token_env": _TOKEN_ENV, "chat_ids": []})
+    # 0 is no longer a bad cadence — it declares a send-only binding (the agent speaks on
+    # a bot another agent owns and polls). Below 0 is still a typo. See
+    # tests/test_telegram_send_only_binding.py for what that declaration guarantees.
+    assert _config(
+        {"bot_token_env": _TOKEN_ENV, "chat_ids": ["1"], "poll_minutes": 0}
+    ).telegram.poll_minutes == 0
     with pytest.raises(RuntimeError, match="poll_minutes"):
-        _config({"bot_token_env": _TOKEN_ENV, "chat_ids": ["1"], "poll_minutes": 0})
+        _config({"bot_token_env": _TOKEN_ENV, "chat_ids": ["1"], "poll_minutes": -1})
 
 
 # --- gateway classification (S2) ---

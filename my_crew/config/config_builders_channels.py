@@ -108,9 +108,13 @@ def build_telegram(d: dict[str, Any]) -> TelegramConfig | None:
             "telegram.bot_token_env is set but telegram.chat_ids is empty; the bot needs at "
             "least one allowlisted chat id (DM or group), else remove the telegram block."
         )
+    # `0` is send-only: the agent may SPEAK on this bot but never polls it. That is the
+    # only safe way to let two agents share one bot token — Telegram serves a single
+    # hanging getUpdates per token, so a second poller would 409 with the first and could
+    # consume-and-ack a message the real owner never sees. Sending has no such contention.
     poll = _d_int(tg, "poll_minutes", 5)
-    if poll < 1:
-        raise RuntimeError("telegram.poll_minutes must be an integer >= 1.")
+    if poll < 0:
+        raise RuntimeError("telegram.poll_minutes must be an integer >= 0 (0 = send-only).")
     return TelegramConfig(
         bot_token_env=str(tg.get("bot_token_env")).strip(),
         chat_ids=chat_ids,

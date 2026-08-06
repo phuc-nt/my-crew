@@ -138,6 +138,17 @@ def answer_mention(
     )
     client = llm or LlmClient(settings)
     try:
+        # One handling per inbound message, claimed BEFORE any branch runs. Two readers
+        # see the same Telegram update by design (the long-poll listener thread and the
+        # scheduled inbox tick coexist as mutual fallback), and the ops branch below
+        # CREATES A TEAM TASK before its reply is posted — so the gateway's send-time
+        # dedup arrived too late and the CEO got one confirmation but two tasks.
+        # `mention['ts']` is immutable and unique per message (`tg:<chat>:<message_id>`).
+        if not _claim_mention(gw, loaded, mention):
+            return GatewayResult(
+                status="deduplicated", summary=f"duplicate message {mention['ts']} skipped"
+            ), None
+
         # v6 M14: on an admin agent, an OPERATOR's message is CEO chat-ops (manage the
         # fleet by dialogue) — checked before the M12 command path and the QA path. A
         # non-operator, or any non-admin agent, skips this entirely (unchanged behavior).
@@ -168,6 +179,26 @@ def answer_mention(
     finally:
         if gateway is None:
             gw.close()
+
+
+def _claim_mention(gw, loaded, mention: dict) -> bool:
+    """Reserve this message for THIS agent. False ⇒ someone already handled it.
+
+    Namespaced by the agent's own profile_id because the claim lives in a per-agent
+    `dedup.db` and two agents may legitimately watch the same chat — the guard must stop
+    one agent answering twice, never stop a second agent answering at all.
+
+    A mention with no `ts` (a caller that built one by hand) is let through unclaimed:
+    without a stable identity there is nothing to dedup on, and refusing would silently
+    drop the message.
+    """
+    ts = str(mention.get("ts") or "")
+    if not ts:
+        return True
+    return gw.claim_intake(
+        f"mention-intake:{getattr(loaded, 'profile_id', '')}:{ts}",
+        rationale=f"intake claim for {ts}",
+    )
 
 
 def _is_ops_operator(loaded, mention: dict) -> bool:
