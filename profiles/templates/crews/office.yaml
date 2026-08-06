@@ -1,9 +1,13 @@
-# Crew mặc định (v32) — "Tạo cả đội" 1-click trên trang Đội / trang Tạo nhân sự.
+# Đội văn phòng — "Tạo cả đội" 1-click trên trang Đội / trang Tạo nhân sự.
 #
-# MỘT crew duy nhất (quyết định CEO v32 — nhiều crew là YAGNI). Mỗi member là một
-# role_id trong profiles/templates/; member đã tồn tại (trùng agent id) được BỎ QUA
-# khi tạo lại — chạy lại an toàn. `coordinator` được ghi vào company.yaml::coordinator_id
-# CHỈ KHI công ty chưa cấu hình coordinator (không ghi đè lựa chọn tay của CEO).
+# Mỗi member là một role_id trong profiles/templates/; member đã tồn tại (trùng agent
+# id) được BỎ QUA khi tạo lại — chạy lại an toàn. `coordinator` được ghi vào
+# company.yaml::coordinator_id CHỈ KHI công ty chưa cấu hình coordinator (không ghi đè
+# lựa chọn tay của CEO).
+#
+# v32 chốt MỘT crew duy nhất ("nhiều crew là YAGNI"); v71 mở thành nhiều manifest vì
+# đội cá nhân là ca dùng thứ hai có thật (xem personal.yaml). Đây vẫn là crew mặc định:
+# `mpm crew init` không đối số và client web cũ (không gửi crew_id) đều rơi vào đây.
 name: "Đội văn phòng mẫu"
 coordinator: coordinator
 members:
