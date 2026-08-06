@@ -89,6 +89,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from typing_extensions import TypedDict
 
+from my_crew.agent.team_step_search_query import build_search_query
 from my_crew.company_docs.inject import company_docs_text
 from my_crew.profile.context import EMPTY, ProfileContext
 from my_crew.skills.skill_selector import select_skill_text
@@ -193,11 +194,15 @@ class TeamTaskDeps:
     # caller) and returns (result_text, cost_usd). Receives the resolved search hook.
     run_work: Callable[[str, str, SearchHook | None], tuple[str, float | None]]
     # self_check: grades result_text against acceptance criteria. Returns
-    # (passed, failures, confidence).
-    run_self_check: Callable[[str, str], tuple[bool, list[str], float]]
+    # (passed, failures, confidence). `handoff` is what the step was GIVEN to work
+    # from — a grader that sees only the output cannot tell a sourced figure from an
+    # invented one, which is how a step whose input said "KHÔNG CÓ KẾT QUẢ" still
+    # passed a table of fabricated prices with named sources (v72 UAT).
+    run_self_check: Callable[..., tuple[bool, list[str], float]]
     # rework: re-runs the work call with the original brief + prior output + the
-    # self-check's structured failures. Returns (new_result_text, cost_usd).
-    run_rework: Callable[[str, str, list[str]], tuple[str, float | None]]
+    # self-check's structured failures + the step's input. Returns
+    # (new_result_text, cost_usd).
+    run_rework: Callable[..., tuple[str, float | None]]
     # deliver: writes the internal artifact + builds the room message; returns
     # (delivered, room_message).
     deliver_step: Callable[[str, str, bool], tuple[bool, str]]
@@ -255,6 +260,7 @@ def default_team_task_deps(
     work_override: Callable[[str, str, SearchHook | None], tuple[str, float | None]] | None = None,
     telemetry=None,
     allow_split: bool = False,
+    guidance: str = "",
 ) -> TeamTaskDeps:
     """Wire the real collaborators. Lazy imports keep graph-build network-free.
 
@@ -304,6 +310,12 @@ def default_team_task_deps(
             extra = ""
         if extra:
             handoff = f"{handoff}\n\n{extra}" if handoff else extra
+        # Coordinator direction from a previous rejected attempt. Last in the block so
+        # it reads as the most recent instruction, and labelled, because an unlabelled
+        # paste would be indistinguishable from the upstream steps' content.
+        if guidance:
+            note = f"CHỈ DẪN CỦA ĐIỀU PHỐI (lần trước chưa đạt):\n{guidance}"
+            handoff = f"{handoff}\n\n{note}" if handoff else note
         return handoff
 
     def _run_work(
@@ -311,8 +323,13 @@ def default_team_task_deps(
     ) -> tuple[str, float | None]:
         search_text = ""
         if hook is not None:
+            # The step TITLE alone is a plan-reader's label ("Tra cứu thông tin thị
+            # trường") and makes a near-useless query; the specifics that decide whether
+            # the search returns anything usable live in the handoff brief. Build the
+            # query from both — deterministically, no extra model call.
+            query = build_search_query(title, handoff)
             try:
-                search_text = hook(title)
+                search_text = hook(query) if query else ""
             except Exception as exc:  # noqa: BLE001 — search is best-effort, never fatal
                 logger.warning("team-step search hook failed, continuing without it: %s", exc)
                 search_text = ""
@@ -345,7 +362,9 @@ def default_team_task_deps(
             logger.warning("team-step work failed: %s", exc)
             raise
 
-    def _run_self_check(result_text: str, criteria: str) -> tuple[bool, list[str], float]:
+    def _run_self_check(
+        result_text: str, criteria: str, handoff: str = ""
+    ) -> tuple[bool, list[str], float]:
         if not criteria.strip():
             # No rubric was ever set for this step (`acceptance` blank) — nothing to
             # grade against, so self-check trivially passes rather than inventing a
@@ -355,6 +374,7 @@ def default_team_task_deps(
             result = _llm().complete(
                 build_self_check_messages(
                     result_text=result_text, acceptance=criteria, persona=context.persona,
+                    handoff=handoff,
                 )
             )
             verdict = parse_check_verdict(result.content)
@@ -365,13 +385,13 @@ def default_team_task_deps(
             return True, [], 0.0
 
     def _run_rework(
-        brief: str, prior_output: str, failures: list[str]
+        brief: str, prior_output: str, failures: list[str], handoff: str = ""
     ) -> tuple[str, float | None]:
         try:
             result = _llm().complete(
                 build_rework_messages(
                     brief=brief, prior_output=prior_output, failures=failures,
-                    persona=context.persona,
+                    persona=context.persona, handoff=handoff,
                 )
             )
             return result.content, result.cost_usd
@@ -385,7 +405,12 @@ def default_team_task_deps(
         write_step_artifact(
             data_dir, task_id, step_seq,
             {
-                "status": "done", "result_text": result_text, "step_title": step_title,
+                # Mirrors the status the runner is about to persist for this step: a
+                # result that never passed its own acceptance check is not "done", it is
+                # waiting on a coordinator decision. The artifact is the record the CEO
+                # and the coordinator both read, so it must not claim more than the DB.
+                "status": "needs_decision" if self_check_failed else "done",
+                "result_text": result_text, "step_title": step_title,
                 "attempt": version, "version": version, "self_check_failed": self_check_failed,
             },
         )
@@ -702,7 +727,15 @@ def _make_team_task_nodes(deps: TeamTaskDeps, *, interrupt_on_clarify: bool = Fa
         writer({"phase": PHASE_SELF_CHECK})
         result_text = state.get("result_text", "")
         acceptance = state.get("acceptance", "")
-        passed, failures, confidence = deps.run_self_check(result_text, acceptance)
+        # The grader is shown the step's INPUT too, so "where did this number come
+        # from" is answerable. Older fakes (and any caller still on the 2-arg shape)
+        # keep working — they simply grade output-only, as they always did.
+        try:
+            passed, failures, confidence = deps.run_self_check(
+                result_text, acceptance, state.get("handoff_context", "")
+            )
+        except TypeError:
+            passed, failures, confidence = deps.run_self_check(result_text, acceptance)
         reasons = list(state.get("check_reasons", ()))
         if failures:
             reasons.extend(failures)
@@ -727,7 +760,15 @@ def _make_team_task_nodes(deps: TeamTaskDeps, *, interrupt_on_clarify: bool = Fa
         title = state.get("step_title", "")
         prior_output = state.get("result_text", "")
         failures = state.get("check_failures", [])
-        result_text, cost = deps.run_rework(title, prior_output, failures)
+        # The fix needs the same input the grader judged against. Told only "you made
+        # these numbers up" without being shown that its source was empty, a rework
+        # call just invents a fresh set — the failure repeats with new figures.
+        try:
+            result_text, cost = deps.run_rework(
+                title, prior_output, failures, state.get("handoff_context", "")
+            )
+        except TypeError:
+            result_text, cost = deps.run_rework(title, prior_output, failures)
         prior_cost = state.get("cost_usd")
         total_cost = (prior_cost or 0.0) + (cost or 0.0) if (prior_cost or cost) else None
         return {"result_text": result_text, "cost_usd": total_cost, "rework_count": new_count}
@@ -791,7 +832,14 @@ def _make_team_task_nodes(deps: TeamTaskDeps, *, interrupt_on_clarify: bool = Fa
             if not proceed:
                 return {"status": "awaiting_approval", "delivered": False, "room_message": ""}
         delivered, room_message = deps.deliver_step(result_text, version, self_check_failed)
-        return {"status": "done", "delivered": delivered, "room_message": room_message}
+        # The artifact is written either way — the coordinator has to read this result to
+        # judge it. But a step that graded itself as not meeting its acceptance criteria
+        # and ran out of rework budget is NOT done: reporting it as done let an "I would
+        # need to look this up first" placeholder flow downstream as though it were the
+        # research it was supposed to be. `needs_decision` stops the DAG here and hands
+        # the call to the coordinator.
+        status = "needs_decision" if self_check_failed else "done"
+        return {"status": status, "delivered": delivered, "room_message": room_message}
 
     return perceive, work, await_clarify, self_check, rework, recover, deliver
 
@@ -851,6 +899,7 @@ def build_team_task_graph(
     remember_node=None,
     memory_store=None,
     allow_split: bool = False,
+    guidance: str = "",
 ) -> CompiledStateGraph:
     """Build + compile the team-task step graph. `deps` defaults to real wiring.
 
@@ -878,7 +927,7 @@ def build_team_task_graph(
             settings=settings, context=context, step_title=step_title, data_dir=data_dir,
             task_id=task_id, step_seq=step_seq, step_deps=step_deps, search_hook=search_hook,
             self_id=self_id, work_override=work_override, telemetry=telemetry,
-            allow_split=allow_split,
+            allow_split=allow_split, guidance=guidance,
         )
     perceive, work, await_clarify, self_check, rework, recover, deliver = \
         _make_team_task_nodes(deps, interrupt_on_clarify=checkpointer is not None)
