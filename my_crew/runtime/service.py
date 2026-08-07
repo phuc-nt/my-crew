@@ -48,14 +48,21 @@ def _real_spawn(argv: list[str]) -> subprocess.Popen:
     return subprocess.Popen(argv)  # noqa: S603
 
 
-#: Kinds exempt from the per-tick spawn cap (see `run_tick`): instant, no-LLM bodies
+#: Kinds exempt from the per-tick spawn cap (see `run_tick`): time-critical bodies
 #: whose whole point is punctuality. Keep this set tiny — everything here bypasses the
 #: load bound.
 #:
 #: `milestone-mirror` qualifies on the same grounds as `reminder-sweep`: it reads the
 #: office room and DMs the CEO — one SQLite query plus one HTTP call, no LLM. Deferring
 #: it defeats its only purpose (the CEO learning a task's state while it still matters).
-_CAP_EXEMPT_KINDS = frozenset({"reminder-sweep", "milestone-mirror"})
+#:
+#: `team-tick` is the coordinator's control loop: it is what notices a finished/failed
+#: step and decides the next one. Unlike the other two it CAN call an LLM (stuck
+#: judgement, aggregation), but there is exactly one coordinator, so the extra load is
+#: bounded at one worker per tick. Holding it behind the cap starves the whole team
+#: pipeline deterministically — measured: with 11 enabled agents and 5 inbox pollers at
+#: cap 4, a failed step waited >3h for its ruling because team-tick deferred every tick.
+_CAP_EXEMPT_KINDS = frozenset({"reminder-sweep", "milestone-mirror", "team-tick"})
 
 
 def _effective_schedule(loaded) -> tuple[dict[str, str], tuple[str, ...]]:

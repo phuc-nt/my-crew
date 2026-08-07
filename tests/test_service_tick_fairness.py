@@ -77,3 +77,26 @@ def test_milestone_mirror_is_cap_exempt(monkeypatch):
     fired = [(o["agent_id"], o["kind"]) for o in out]
     assert ("admin", "milestone-mirror") in fired
     assert len([k for k in fired if k[1] == "daily"]) == 4  # cap still bounds the rest
+
+
+def test_team_tick_is_cap_exempt(monkeypatch):
+    """team-tick is the coordinator's control loop — the thing that notices a finished
+    or failed step and issues the next decision. There is exactly one coordinator, so
+    exempting it adds at most one worker per tick; holding it behind a full cap starves
+    the whole team pipeline (observed: a failed step waited >3h for its ruling)."""
+    entries = [RegistryEntry(f"ag{i}", True) for i in range(4)] + [
+        RegistryEntry("coordinator", True)
+    ]
+    profiles = {f"ag{i}": _profile() for i in range(4)}
+    profiles["coordinator"] = _profile(schedule={"team-tick": "* * * * *"},
+                                       reports=("team-tick",))
+    _patch(monkeypatch, entries, profiles)
+    svc = service.Service(cap=4)
+    svc._last_fire = {(f"ag{i}", "daily"): _YESTERDAY for i in range(4)}
+    svc._last_fire[("coordinator", "team-tick")] = _YESTERDAY
+    svc._seeded = True
+    record: list = []
+    out = svc.run_tick(_8AM, spawn=_fake_spawn(record))
+    fired = [(o["agent_id"], o["kind"]) for o in out]
+    assert ("coordinator", "team-tick") in fired
+    assert len([k for k in fired if k[1] == "daily"]) == 4  # cap still bounds the rest
