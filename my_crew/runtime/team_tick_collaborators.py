@@ -157,13 +157,21 @@ def make_aggregate(loaded: Any, settings: Any):
     return _aggregate
 
 
-def make_deliver_room():
+def make_deliver_room(loaded: Any = None, settings: Any = None):
     """Posts the aggregate summary to the group room as a "task done" milestone (also
     mirrored into the shared office room — `also_office=True`). Never raises, but since
     v67 REPORTS whether the milestone actually landed: this event is what the admin
     milestone mirror DMs the CEO from, so a swallowed failure here used to mean "task
     done, CEO never told, nothing retries". The bool feeds `delivery_status` +
-    the delivery-retry sweep."""
+    the delivery-retry sweep.
+
+    `loaded`/`settings` (optional): enables the same coordinator-Telegram FAST PATH
+    `make_escalate` has. Without it, "done" reached the CEO only via the admin mirror
+    bot while stall/stuck escalations arrived in the ASSIGNING bot's chat — the CEO
+    watched the conversation they gave the task in and concluded no completion notice
+    ever came (observed live, task 03a49412fd12). The mirror stays the guaranteed
+    path; this send is best-effort low-latency and its failure never affects the
+    returned delivery bool."""
 
     def _deliver(task: TeamTask, summary: str) -> bool:
         from my_crew.runtime.office_room_append import (
@@ -172,12 +180,38 @@ def make_deliver_room():
         )
 
         logger.info("team-tick: task %s aggregate ready: %s", task.id, summary[:200])
-        return append_office_event_checked(
+        landed = append_office_event_checked(
             room_for_task(task.id), author="coordinator", kind="milestone",
             body={"task_id": task.id, "task_title": task.title, "milestone": "done",
                   "message": summary},
             also_office=True,
         )
+        if loaded is not None and settings is not None:
+            try:
+                from my_crew.actions.action_gateway import ActionGateway
+                from my_crew.actions.telegram_write import send_telegram_message
+
+                telegram = getattr(loaded.config, "telegram", None)
+                operator = getattr(telegram, "ops_operator_id", "") if telegram else ""
+                if telegram and operator:
+                    gateway = ActionGateway(
+                        settings,
+                        external_channels=loaded.config.slack_external_channels,
+                        actor=getattr(loaded, "profile_id", ""),
+                    )
+                    try:
+                        send_telegram_message(
+                            f"✅ Việc '{task.title[:120]}' — HOÀN THÀNH:\n\n{summary}",
+                            gateway=gateway, telegram=telegram, chat_id=operator,
+                            dedup_hint=f"team-tick:{task.id}:done",
+                            rationale="task-done fast path to the assigning chat",
+                        )
+                    finally:
+                        gateway.close()
+            except Exception:  # noqa: BLE001 — fast path only; the mirror still delivers
+                logger.exception("team-tick: done fast-path send failed for task %s",
+                                 task.id)
+        return landed
 
     return _deliver
 

@@ -71,7 +71,7 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
             roster_ok=_roster_ok,
             can_do_step=_can_do_step,
             aggregate=make_aggregate(loaded, settings),
-            deliver_room=make_deliver_room(),
+            deliver_room=make_deliver_room(loaded, settings),
             escalate=make_escalate(loaded, settings),
             judge_stuck_step=make_judge_stuck_step(settings),
             # Lessons live in the COORDINATOR's own namespace — it is the agent that
