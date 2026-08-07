@@ -33,18 +33,15 @@ def notify_operator_best_effort(
         from my_crew.runtime.agent_paths import agent_data_dir
         from my_crew.runtime.registry import load_registry
 
-        for entry in load_registry():
-            try:
-                admin = load_profile(entry.id, data_dir=agent_data_dir(entry.id))
-            except Exception:  # noqa: BLE001 — a broken profile must not kill the scan
-                continue
-            telegram = getattr(admin.config, "telegram", None)
+        def _try_send(loaded) -> bool | None:
+            """Send via one agent's binding; None = agent has no usable binding."""
+            telegram = getattr(loaded.config, "telegram", None)
             operator = getattr(telegram, "ops_operator_id", "") if telegram else ""
-            if getattr(admin, "domain", "") != "admin" or not operator:
-                continue
+            if not telegram or not operator:
+                return None
             gw = ActionGateway(
-                admin.settings, external_channels=admin.config.slack_external_channels,
-                actor=getattr(admin, "profile_id", ""),  # v46
+                loaded.settings, external_channels=loaded.config.slack_external_channels,
+                actor=getattr(loaded, "profile_id", ""),  # v46
             )
             try:
                 result = send_telegram_message(
@@ -54,6 +51,36 @@ def notify_operator_best_effort(
             finally:
                 gw.close()
             return result.status in ("executed", "pending_approval", "dry_run")
+
+        # CEO rule: "giao việc cho bot nào thì bot đó nhận mọi thông tin" — the
+        # COORDINATOR's binding is the assigning chat, so it goes first. Observed live:
+        # a clarify question landed in the admin ops chat while the CEO watched the
+        # conversation they gave the task in. Admin stays the fallback.
+        try:
+            from my_crew.runtime.company import load_company
+
+            coordinator_id = getattr(load_company(), "coordinator_id", "") or ""
+        except Exception:  # noqa: BLE001 — no company config ⇒ straight to admin scan
+            coordinator_id = ""
+        if coordinator_id:
+            try:
+                coord = load_profile(coordinator_id, data_dir=agent_data_dir(coordinator_id))
+                sent = _try_send(coord)
+                if sent is not None:
+                    return sent
+            except Exception:  # noqa: BLE001 — coordinator problems must not kill the notice
+                logger.warning("operator notice: coordinator path failed", exc_info=True)
+
+        for entry in load_registry():
+            try:
+                admin = load_profile(entry.id, data_dir=agent_data_dir(entry.id))
+            except Exception:  # noqa: BLE001 — a broken profile must not kill the scan
+                continue
+            if getattr(admin, "domain", "") != "admin":
+                continue
+            sent = _try_send(admin)
+            if sent is not None:
+                return sent
         logger.info("operator notice skipped — no admin ops agent configured")
         return False
     except Exception:  # noqa: BLE001 — a notice is an overlay, never the caller's fate
