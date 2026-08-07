@@ -37,7 +37,11 @@ _CHECK_SYSTEM = (
     "đầu vào ghi 'KHÔNG CÓ KẾT QUẢ' / bước trước bị bỏ qua, thì mọi bảng số, khoảng giá "
     "hay tên nguồn trong kết quả đều là bịa — chấm `passed=false` và nêu rõ ở `failures`. "
     "Kết quả trung thực khi thiếu dữ liệu phải NÓI RÕ là thiếu, không lấp bằng ước lượng "
-    "nghe hợp lý."
+    "nghe hợp lý. "
+    "QUY TẮC ĐẾM ĐƯỢC: tiêu chí nêu yêu cầu đếm được (kèm link/URL, đủ N mục, có bảng, "
+    "có mục nguồn) thì phải KIỂM THẬT trong kết quả — tiêu chí đòi link/URL mà kết quả "
+    "không có chuỗi 'http' nào là KHÔNG ĐẠT, dù phần chữ có ghi 'nguồn: X'; đòi N mục "
+    "thì đếm đủ N. Không chấm đạt theo cảm giác."
 )
 
 _REWORK_SYSTEM = (
