@@ -275,3 +275,25 @@ def test_opt_out_phrase_pins_the_task_to_manual_gates(monkeypatch):
         assert task.require_ceo_approval is True  # persisted for the task's whole life
     finally:
         store.close()
+
+
+def test_widen_terminal_deps_gives_the_sink_every_other_step():
+    """A step reads ONLY its direct deps' artifacts — data does not flow transitively.
+    Models keep emitting linear chains (finalize deps=[qa]) that blind the synthesis
+    step to the research it must cite, so the fan-in is enforced in code post-validate."""
+    from my_crew.agent.ops_assign_team_task import _widen_terminal_deps
+    from my_crew.agent.task_decomposition import DecomposedTask, TeamStepPlan
+
+    linear = DecomposedTask(pic_id="a", steps=(
+        TeamStepPlan(step_id="research", title="t", assigned_to="a"),
+        TeamStepPlan(step_id="draft", title="t", assigned_to="b", deps=("research",)),
+        TeamStepPlan(step_id="qa", title="t", assigned_to="c", deps=("draft",)),
+        TeamStepPlan(step_id="finalize", title="t", assigned_to="a", deps=("qa",)),
+    ))
+    widened = _widen_terminal_deps(linear)
+    fin = next(s for s in widened.steps if s.step_id == "finalize")
+    assert set(fin.deps) == {"research", "draft", "qa"}
+    # Non-terminal steps untouched; single-step plans pass through unchanged.
+    assert next(s for s in widened.steps if s.step_id == "draft").deps == ("research",)
+    one = DecomposedTask(steps=(TeamStepPlan(step_id="s", title="t", assigned_to="a"),))
+    assert _widen_terminal_deps(one) is one

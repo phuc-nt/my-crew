@@ -194,12 +194,39 @@ def _decompose_with_retries(
             from my_crew.agent.team_task_roster import validate_shell_steps
 
             validate_shell_steps(task.steps)
-            return task, total_cost
+            return _widen_terminal_deps(task), total_cost
         except DecompositionError as exc:
             last_error = str(exc)
             logger.warning("assign_team_task decompose attempt failed: %s", exc)
     raise DecompositionError(f"không phân rã được kế hoạch hợp lệ sau {_MAX_DECOMPOSE_ATTEMPTS} "
                              f"lần thử: {last_error}")
+
+
+def _widen_terminal_deps(task):
+    """The terminal (PIC synthesis) step depends DIRECTLY on every other step.
+
+    A step's handoff is its direct deps' artifacts only — data does not flow
+    transitively. The decompose prompt asks for this fan-in but models keep emitting
+    linear chains (observed twice live: finalize deps=[qa] ⇒ the synthesis step could
+    never see the research sources it must cite, no matter how many retries). Enforced
+    in code, on the fresh-decompose path only: adding deps to the sink never changes
+    scheduling order (everything already precedes it transitively), it only widens what
+    the terminal step gets to read. Runs AFTER `validate_decomposition` (single
+    terminal is proven) and BEFORE hashing/persist, so the CEO previews and confirms
+    the widened DAG.
+    """
+    from my_crew.agent.task_decomposition import DecomposedTask
+
+    dep_targets = {d for s in task.steps for d in s.deps}
+    terminals = [s for s in task.steps if s.step_id not in dep_targets]
+    if len(terminals) != 1 or len(task.steps) < 2:
+        return task  # no/ambiguous terminal (validate already rejected) — leave as-is
+    terminal = terminals[0]
+    others = [s.step_id for s in task.steps if s.step_id != terminal.step_id]
+    widened = terminal.model_copy(update={"deps": tuple(others)})
+    steps = tuple(widened if s.step_id == terminal.step_id else s for s in task.steps)
+    return DecomposedTask(steps=steps, pic_id=task.pic_id,
+                          requires_approval=task.requires_approval)
 
 
 def _render_plan(task) -> str:

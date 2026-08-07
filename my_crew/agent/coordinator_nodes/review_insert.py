@@ -256,8 +256,16 @@ def _insert_rework_step(
     review_step = _review_child(task, content_step.step_id, "review")
     dep_id = review_step.step_id if review_step is not None else content_step.step_id
     step_id = f"{content_step.step_id}-rework-{review_round}"
+    # The rework ALSO inherits the content step's own deps: the review artifact carries
+    # the failed output + failures, but fixing "điền số liệu thật vào chỗ placeholder"
+    # needs the same SOURCE data the original author had. With deps=[review] only, an
+    # honest reworker sees the defect list but not the data — observed live (task
+    # fde05a52f0ee): it reported "thiếu dữ liệu từ các bước trước" and degraded the
+    # artifact instead of fixing it, twice, straight into the review-round cap.
+    rework_deps = [dep_id] + [d for d in content_step.deps if d != dep_id]
     deps.store.insert_step(task.id, {
         "step_id": step_id, "title": content_step.title,
-        "assigned_to": content_step.assigned_to, "deps": [dep_id], "step_type": "rework",
+        "assigned_to": content_step.assigned_to, "deps": rework_deps,
+        "step_type": "rework",
         "parent_step_id": content_step.step_id, "review_round": review_round,
     })

@@ -279,3 +279,36 @@ def test_rework_done_next_round_no_reviewer_skips_without_stalling(tmp_path, mon
     task = store.get("t1")
     assert not [s for s in task.steps if s.step_type == "review" and s.review_round == 1]
     assert task.status != "stalled"
+
+
+def test_rework_step_inherits_content_step_source_deps(tmp_path, monkeypatch):
+    """The review artifact carries the failed output + failures, but FIXING a data
+    defect needs the same source inputs the original author had. deps=[review] alone
+    starved the reworker (observed live: it reported thiếu dữ liệu and degraded the
+    artifact into the review-round cap)."""
+    store = _store(tmp_path)
+    steps = [
+        {"step_id": "src", "title": "thu thập dữ liệu", "assigned_to": "agent-a",
+         "deps": [], "needs_review": False},
+        {"step_id": "s1", "title": "draft báo cáo", "assigned_to": "agent-a",
+         "deps": ["src"], "needs_review": True},
+    ]
+    store.create_task(task_id="t1", title="demo task", original_request="lam demo")
+    store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    store.mark_done("t1", "src", outcome_ref="x", cost_usd=0.0)
+    store.mark_done("t1", "s1", outcome_ref="x", cost_usd=0.0)
+    _mint_review(store)
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    write_review_verdict_artifact(
+        team_tasks_root(), "t1", 2, 0,
+        {"passed": False, "failures": ["thieu so lieu"], "result_text": "brief"},
+    )
+    task = store.get("t1")
+    review_step = next(s for s in task.steps if s.step_type == "review")
+
+    assert maybe_handle_review_done(_deps(store), task, review_step) is True
+    task = store.get("t1")
+    rework = next(s for s in task.steps if s.step_type == "rework")
+    # Failure brief first (review artifact), then the author's own source inputs.
+    assert rework.deps == (review_step.step_id, "src")
