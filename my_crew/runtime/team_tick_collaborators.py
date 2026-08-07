@@ -134,11 +134,18 @@ def make_aggregate(loaded: Any, settings: Any):
                 for i, p in enumerate(parts)
             ]
             client = LlmClient(settings)
+            # "Bắt đầu NGAY bằng bản tóm tắt": some models (observed: qwen3.7-plus)
+            # write an English chain-of-thought preamble into content; Telegram then
+            # truncates at 4096 chars and the CEO receives ONLY the preamble — the
+            # actual Vietnamese summary is cut off entirely.
             prompt = (
                 f"Tóm tắt ngắn gọn (tiếng Việt) kết quả của việc '{task.title}' cho "
                 "CEO, dựa trên các bước sau. QUY TẮC TRUNG THỰC: bước nào ghi 'KHÔNG "
                 "CÓ KẾT QUẢ'/bị bỏ qua thì phải nêu rõ là thiếu dữ liệu — tuyệt đối "
-                "không suy diễn hay bịa số liệu thay cho bước đó.\n\n"
+                "không suy diễn hay bịa số liệu thay cho bước đó. ĐỊNH DẠNG: bắt đầu "
+                "câu trả lời NGAY bằng bản tóm tắt tiếng Việt hoàn chỉnh, dưới 3000 "
+                "ký tự; KHÔNG viết quá trình suy nghĩ, không lời dẫn, không phân tích "
+                "meta, không tiếng Anh.\n\n"
                 + "\n\n".join(wrapped_parts)
             )
             result = client.complete([{"role": "user", "content": prompt}])
