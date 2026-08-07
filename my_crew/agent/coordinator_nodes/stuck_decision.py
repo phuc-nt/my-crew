@@ -148,18 +148,26 @@ def decide_stuck_step(
     # deep_agent that could not even run the web search the step needed). A reassign is
     # allowed from the second ruling, when guidance demonstrably did not help.
     if judgement.decision == "reassign" and count <= 1:
-        if judgement.guidance.strip() or judgement.reason.strip():
-            coerced = StuckJudgement(
-                decision="retry_with_guidance",
-                guidance=(judgement.guidance.strip()
-                          or f"Làm lại theo đúng tiêu chí; lý do trượt: {judgement.reason}"),
-                reason=judgement.reason,
-            )
-            logger.info(
-                "team-tick: first-ruling reassign for %s/%s coerced to retry_with_guidance",
-                task.id, step.step_id,
-            )
-            return _retry(deps, task, step, coerced)
+        # Unconditional: a judge that proposed reassign with NO guidance and NO reason
+        # (observed live — the first coercion attempt had a both-empty escape hatch and
+        # the very next ruling slipped through it) still coerces; the fallback guidance
+        # tells the author to re-grade its own output against the acceptance list,
+        # which is exactly the information the failed self-check already produced.
+        coerced = StuckJudgement(
+            decision="retry_with_guidance",
+            guidance=(judgement.guidance.strip()
+                      or (f"Làm lại theo đúng tiêu chí; lý do trượt: {judgement.reason}"
+                          if judgement.reason.strip()
+                          else "Làm lại bước theo ĐÚNG các tiêu chí nghiệm thu của bước: "
+                               "đọc kỹ từng dòng tiêu chí, tự kiểm tra kết quả đạt từng "
+                               "mục (đủ số lượng, có link nguồn thật) rồi mới nộp.")),
+            reason=judgement.reason,
+        )
+        logger.info(
+            "team-tick: first-ruling reassign for %s/%s coerced to retry_with_guidance",
+            task.id, step.step_id,
+        )
+        return _retry(deps, task, step, coerced)
     if judgement.decision == "reassign":
         return _reassign(deps, task, step, judgement)
     if judgement.decision == "retry_with_guidance":
