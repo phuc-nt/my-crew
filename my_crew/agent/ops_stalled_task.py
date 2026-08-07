@@ -177,9 +177,13 @@ def run_retry_stalled_step(slots: dict[str, str]) -> str:
                      "result_text": f"{verdict.get('result_text') or ''}"
                                     f"\n\nGhi chú của CEO cho lần sửa này:\n{note}"},
                 )
+            # Same deps shape as `review_insert._insert_rework_step`: the review brief
+            # first, then the content step's own source deps — a reworker that can see
+            # the defect list but not the data cannot fix a data defect.
+            retry_deps = [review.step_id] + [d for d in content.deps if d != review.step_id]
             ctx.store.insert_step(task.id, {
                 "step_id": rework_id, "title": content.title,
-                "assigned_to": content.assigned_to, "deps": [review.step_id],
+                "assigned_to": content.assigned_to, "deps": retry_deps,
                 "step_type": "rework", "parent_step_id": content.step_id,
                 "review_round": review.review_round,
             })
