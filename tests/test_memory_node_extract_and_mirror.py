@@ -198,3 +198,19 @@ def test_parse_facts_caps_count_and_length():
     flood = "\n".join(f"Sự kiện dự án số {i}" for i in range(20))
     assert len(_parse_facts(flood)) == _MAX_FACTS
     assert _parse_facts("dài " * 100) == []  # >300 chars — a replayed paragraph, not a fact
+
+
+def test_parse_facts_drops_permission_request_framings():
+    """Relapse vector (task 8301d626e800): 'Đề xuất cấp quyền tra cứu web' is declarative
+    and passed the first filter, but re-reading it taught the agent web access needs
+    approval — the next fresh task opened with 'Xin phép được duyệt cho phép tra cứu'."""
+    out = _parse_facts(
+        "Đề xuất cấp quyền tra cứu web để cập nhật số liệu và đường link chính thức.\n"
+        "Đề xuất duyệt tra cứu web để gỡ nghẽn và khắc phục triệt để lỗi thiếu nguồn.\n"
+        "Đã kiến nghị Cấp quản lý can thiệp để yêu cầu cung cấp lại nguồn.\n"
+        "Xin phép tra cứu web trước khi thu thập.\n"
+        "Dòng trống\n"
+        "(empty line)\n"
+        "Phát hiện báo cáo CBRE bản đầy đủ yêu cầu trả phí — dùng snippet thay thế\n"
+    )
+    assert out == ["Phát hiện báo cáo CBRE bản đầy đủ yêu cầu trả phí — dùng snippet thay thế"]

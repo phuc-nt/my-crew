@@ -37,8 +37,11 @@ CostedMemoryExtractor = Callable[[str], "tuple[list[str], float | None]"]
 _SYSTEM = (
     "Bạn trích các SỰ KIỆN dự án đáng nhớ xuyên các báo cáo (sprint trượt, quyết định, "
     "rủi ro lặp lại). Trả về TỐI ĐA 5 gạch đầu dòng NGẮN, mỗi dòng một sự kiện, tiếng Việt. "
-    "TUYỆT ĐỐI không kèm token/khóa/bí mật, không số liệu nhạy cảm. Nếu không có gì đáng nhớ, "
-    "trả về dòng trống."
+    "TUYỆT ĐỐI không kèm token/khóa/bí mật, không số liệu nhạy cảm. KHÔNG ghi diễn biến "
+    "quy trình nội bộ (trễ tiến độ, tắc nghẽn thẩm định, đề xuất xin quyền/phê duyệt, "
+    "kiến nghị can thiệp) — chúng không phải fact về dự án và đọc lại sẽ làm agent tưởng "
+    "mình bị nghẽn/thiếu quyền ở việc sau. Nếu không có gì đáng nhớ, trả về CHUỖI RỖNG "
+    "(không viết chữ 'dòng trống')."
 )
 
 
@@ -95,12 +98,20 @@ _MAX_FACTS = 5
 #: run to refuse — a self-reinforcing loop. These are filtered in code because the
 #: extraction prompt alone demonstrably does not hold across models.
 _JUNK_PREFIXES = ("#", "|", "```", ">", "*")
+#: Capability denials AND permission-request framings. The second family is the subtler
+#: relapse vector (observed live, task 8301d626e800): "Đề xuất cấp quyền tra cứu web" is
+#: a perfectly declarative sentence, but re-reading it taught the agent that web access
+#: needs approval — and the next fresh task opened with "Xin phép được duyệt cho phép
+#: tra cứu web" while holding a working search tool.
 _DENIAL_RE = re.compile(
     r"(không\s+có\s+khả\s+năng|không\s+thể\s+(truy\s+cập|duyệt\s+web|tra\s+cứu)"
-    r"|xin\s+lỗi)",
+    r"|xin\s+lỗi|xin\s+phép"
+    r"|đề\s+xuất\s+(cấp\s+quyền|duyệt|phê\s+duyệt)|kiến\s+nghị)",
     re.IGNORECASE,
 )
 _NUMBERED_RE = re.compile(r"^\d+[.)]\s")
+#: Literal placeholder junk some models emit instead of an empty reply.
+_PLACEHOLDER_RE = re.compile(r"^\(?\s*(dòng\s+trống|empty\s+line)\s*\)?\.?$", re.IGNORECASE)
 
 
 def _is_fact_line(line: str) -> bool:
@@ -110,6 +121,8 @@ def _is_fact_line(line: str) -> bool:
     if line.startswith(_JUNK_PREFIXES) or _NUMBERED_RE.match(line):
         return False
     if line.endswith(("?", ":")):  # questions/offers addressed to a person
+        return False
+    if _PLACEHOLDER_RE.match(line):
         return False
     return not _DENIAL_RE.search(line)
 
