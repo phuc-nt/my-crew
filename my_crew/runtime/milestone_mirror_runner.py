@@ -192,11 +192,21 @@ def _key(milestone: Any) -> str:
 
 def _format(milestones: list) -> str:
     """One combined Vietnamese message body for the CEO — mirrors `ops_alert_runner._format`."""
+    from my_crew.runtime.dashboard_links import workroom_url
+
     lines = ["🏁 Cập nhật tiến độ đội:"]
     for m in milestones:
         label = _MILESTONE_LABELS.get(str(m.body.get("milestone", "")), "Cập nhật")
         title = m.body.get("task_title", "")
         message = m.body.get("message", "")
         lines.append(f"• {title} — {label}: {message}" if message else f"• {title} — {label}")
-    lines.append("\nXem chi tiết ở mục Văn phòng trên dashboard.")
+    # One deep-link per distinct task so the CEO can jump straight to the workroom
+    # (artifacts + timeline) instead of hunting the dashboard by hand.
+    seen: list[str] = []
+    for m in milestones:
+        tid = str(m.body.get("task_id", ""))
+        if tid and tid not in seen:
+            seen.append(tid)
+    for tid in seen:
+        lines.append(f"🔎 {tid}: {workroom_url(tid)}")
     return "\n".join(lines)

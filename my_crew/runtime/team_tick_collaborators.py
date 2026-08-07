@@ -199,9 +199,12 @@ def make_deliver_room(loaded: Any = None, settings: Any = None):
                         external_channels=loaded.config.slack_external_channels,
                         actor=getattr(loaded, "profile_id", ""),
                     )
+                    from my_crew.runtime.dashboard_links import workroom_url
+
                     try:
                         send_telegram_message(
-                            f"✅ Việc '{task.title[:120]}' — HOÀN THÀNH:\n\n{summary}",
+                            f"✅ Việc '{task.title[:120]}' — HOÀN THÀNH:\n\n{summary}"
+                            f"\n\n🔎 Chi tiết đầy đủ: {workroom_url(task.id)}",
                             gateway=gateway, telegram=telegram, chat_id=operator,
                             dedup_hint=f"team-tick:{task.id}:done",
                             rationale="task-done fast path to the assigning chat",
