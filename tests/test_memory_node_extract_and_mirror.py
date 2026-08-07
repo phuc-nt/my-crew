@@ -149,3 +149,52 @@ def test_node_does_not_import_action_gateway(tmp_path, monkeypatch):
     store = InMemoryStore()
     _node(tmp_path)({"delivered": True, "report_text": "x"}, store=store)
     assert calls == []  # zero gateway calls
+
+
+# --- fact-line filter (the anti-poisoning gate in _parse_facts) ---
+# Reproduces a real incident: the researcher's MEMORY.md accumulated its own refusal
+# text ("tôi không có khả năng tra cứu web"), markdown tables, and offers addressed to
+# the user — and that memory then CAUSED the next run to refuse while holding a working
+# search tool. The filter must drop conversation debris and keep declarative facts.
+
+from my_crew.agent.memory_extractor import _MAX_FACTS, _parse_facts  # noqa: E402
+
+
+def test_parse_facts_keeps_declarative_lines():
+    out = _parse_facts(
+        "- Xác nhận thành công 3 nguồn dữ liệu uy tín: CBRE, C&W, Savills\n"
+        "- Phát hiện gap dữ liệu: thiếu báo cáo Q3-Q4/2025\n"
+    )
+    assert out == [
+        "Xác nhận thành công 3 nguồn dữ liệu uy tín: CBRE, C&W, Savills",
+        "Phát hiện gap dữ liệu: thiếu báo cáo Q3-Q4/2025",
+    ]
+
+
+def test_parse_facts_drops_capability_denials():
+    out = _parse_facts(
+        "Xin lỗi, tôi **không có khả năng tra cứu web** hay truy cập internet.\n"
+        "Tôi không thể truy cập dữ liệu thời gian thực.\n"
+        "GDP TP.HCM dự kiến tăng 6,5–7,0% YoY trong Q1/2026\n"
+    )
+    assert out == ["GDP TP.HCM dự kiến tăng 6,5–7,0% YoY trong Q1/2026"]
+
+
+def test_parse_facts_drops_markdown_structure_and_offers():
+    out = _parse_facts(
+        "# ⚠️ Không thể truy cập web\n"
+        "| Nguồn | Loại dữ liệu |\n"
+        "|-------|-------------|\n"
+        "```\n"
+        "1. Thiết kế CSDL để lưu trữ thông tin giá thuê\n"
+        "Bạn muốn tôi hỗ trợ phần nào?\n"
+        "Bạn có thể làm:\n"
+        "Nguồn cung văn phòng chất lượng cao dự kiến hạn chế trong ngắn hạn\n"
+    )
+    assert out == ["Nguồn cung văn phòng chất lượng cao dự kiến hạn chế trong ngắn hạn"]
+
+
+def test_parse_facts_caps_count_and_length():
+    flood = "\n".join(f"Sự kiện dự án số {i}" for i in range(20))
+    assert len(_parse_facts(flood)) == _MAX_FACTS
+    assert _parse_facts("dài " * 100) == []  # >300 chars — a replayed paragraph, not a fact

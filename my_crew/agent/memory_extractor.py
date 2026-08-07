@@ -20,6 +20,7 @@ token residual-risk posture (pattern-undetectable secrets in free text).
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -83,11 +84,41 @@ def make_llm_extractor(client: LlmClient, *, system: str = _SYSTEM) -> MemoryExt
     return _extract
 
 
+#: Hard cap on facts per extraction — the prompt asks for ≤5 but nothing enforced it, so
+#: a model that replayed the whole report flooded MEMORY.md in one write.
+_MAX_FACTS = 5
+
+#: A memory fact is one short declarative line. Everything else observed in a real
+#: poisoning incident (researcher, 2026-08): markdown headers/tables/fences, numbered
+#: "here is what I can do" offers, questions addressed to the user, and first-person
+#: capability denials ("tôi không có khả năng tra cứu web") that then CAUSED the next
+#: run to refuse — a self-reinforcing loop. These are filtered in code because the
+#: extraction prompt alone demonstrably does not hold across models.
+_JUNK_PREFIXES = ("#", "|", "```", ">", "*")
+_DENIAL_RE = re.compile(
+    r"(không\s+có\s+khả\s+năng|không\s+thể\s+(truy\s+cập|duyệt\s+web|tra\s+cứu)"
+    r"|xin\s+lỗi)",
+    re.IGNORECASE,
+)
+_NUMBERED_RE = re.compile(r"^\d+[.)]\s")
+
+
+def _is_fact_line(line: str) -> bool:
+    """One declarative, self-standing statement — not conversation debris."""
+    if len(line) > 300:  # poison blocks were whole paragraphs; real facts are short
+        return False
+    if line.startswith(_JUNK_PREFIXES) or _NUMBERED_RE.match(line):
+        return False
+    if line.endswith(("?", ":")):  # questions/offers addressed to a person
+        return False
+    return not _DENIAL_RE.search(line)
+
+
 def _parse_facts(content: str) -> list[str]:
-    """Split the LLM reply into clean fact lines (strip bullets / blanks)."""
+    """Split the LLM reply into clean fact lines (strip bullets, drop junk, cap count)."""
     facts: list[str] = []
     for line in content.splitlines():
         cleaned = line.strip().lstrip("-•* ").strip()
-        if cleaned:
+        if cleaned and _is_fact_line(cleaned):
             facts.append(cleaned)
-    return facts
+    return facts[:_MAX_FACTS]
