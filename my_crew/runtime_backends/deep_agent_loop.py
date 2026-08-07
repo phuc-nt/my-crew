@@ -135,24 +135,36 @@ def run_deep_agent_work(
     from my_crew.runtime_backends.sandbox_backend import build_sandbox_backend
     from my_crew.runtime_backends.sandbox_teardown import teardown_sandbox
 
-    # Sanitize the internal input channels (context fields + handoff) BEFORE deciding on network:
-    # the network flag is ANDed with sanitize success, so an opt-in only takes effect on a clean
-    # bundle. Persona (SOUL.md) is sanitized too — it can name real people. company_docs withheld.
-    if sanitize is None:
-        from my_crew.llm.client import LlmClient
-        sanitize = make_llm_sanitizer(LlmClient(settings))
-    bundle, sanitize_ok = sanitize_bundle(
-        sanitize,
-        persona=getattr(context, "persona", "") or "",
-        project=getattr(context, "project", "") or "",
-        memory=getattr(context, "memory", "") or "",
-        capability=getattr(context, "capability", "") or "",
-        handoff=handoff or "",
-    )
+    # The sanitizer's ONLY job is stopping internal data from being POSTed out of a
+    # network-capable sandbox. With no network opt-in there is no egress path, so the
+    # pass bought nothing and cost real fidelity: the LLM rewrite stripped every URL
+    # and compressed upstream step results, so a network-off deep_agent step received
+    # a mangled handoff and honestly reported "thiếu URL nguồn gốc từ Đầu vào"
+    # (observed live, task 00e8785c5d75/finalize). Network-off ⇒ raw bundle.
+    from my_crew.runtime_backends.deep_agent_sanitizer import SanitizedBundle
+
+    net_opt_in = bool((sandbox_cfg or {}).get("network"))
+    raw = {
+        "persona": getattr(context, "persona", "") or "",
+        "project": getattr(context, "project", "") or "",
+        "memory": getattr(context, "memory", "") or "",
+        "capability": getattr(context, "capability", "") or "",
+        "handoff": handoff or "",
+    }
+    if net_opt_in:
+        # Sanitize the internal input channels (context fields + handoff) BEFORE deciding
+        # on network: the flag is ANDed with sanitize success, so the opt-in only takes
+        # effect on a clean bundle. Persona (SOUL.md) is sanitized too — it can name real
+        # people. company_docs withheld.
+        if sanitize is None:
+            from my_crew.llm.client import LlmClient
+            sanitize = make_llm_sanitizer(LlmClient(settings))
+        bundle, sanitize_ok = sanitize_bundle(sanitize, **raw)
+    else:
+        bundle, sanitize_ok = SanitizedBundle(**raw), True
 
     # Network AND-gate: opt-in ONLY takes effect when the input was sanitized. On failure, force
     # network off via an adjusted per-run cfg (reuses Phase 2's cfg.get("network") seam).
-    net_opt_in = bool((sandbox_cfg or {}).get("network"))
     effective_network = net_opt_in and sanitize_ok
     run_cfg = {**(sandbox_cfg or {}), "network": effective_network}
 

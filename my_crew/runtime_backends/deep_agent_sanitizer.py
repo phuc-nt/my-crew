@@ -37,8 +37,12 @@ _SYSTEM = (
     "Bạn làm SẠCH văn bản để đưa cho một tác nhân chạy trong hộp cát CÓ THỂ có mạng. "
     "GIỮ nội dung/ý nghĩa công việc, nhưng LOẠI mọi thông tin nội bộ nhạy cảm: mã ticket/issue "
     "(vd SCRUM-123), tên người thật, tên nội bộ dự án/khách hàng, mốc/milestone nội bộ, "
-    "URL nội bộ, và TUYỆT ĐỐI mọi token/khóa/bí mật. Thay bằng mô tả chung (vd 'một ticket', "
-    "'một thành viên'). Trả về DUY NHẤT văn bản đã làm sạch, không thêm lời giải thích."
+    "URL nội bộ (domain công ty, localhost, IP nội bộ), và TUYỆT ĐỐI mọi token/khóa/bí mật. "
+    "Thay bằng mô tả chung (vd 'một ticket', 'một thành viên'). QUAN TRỌNG: URL CÔNG KHAI "
+    "(https:// đến trang web công cộng — báo chí, tài liệu vendor, nguồn trích dẫn) KHÔNG "
+    "phải thông tin nội bộ — PHẢI GIỮ NGUYÊN VẸN từng ký tự, vì bước sau cần chúng làm "
+    "trích dẫn nguồn. Số liệu, bảng, và chi tiết kết quả các bước trước cũng GIỮ NGUYÊN. "
+    "Trả về DUY NHẤT văn bản đã làm sạch, không thêm lời giải thích."
 )
 
 

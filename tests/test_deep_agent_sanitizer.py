@@ -202,3 +202,63 @@ def test_deep_agent_recursion_limit_is_double_loop_limit(monkeypatch):
         sandbox_cfg={"provider": "fake"}, loop_limit=8, sanitize=_identity,
     )
     assert seen["recursion_limit"] == 16  # loop_limit(8) * 2
+
+
+@pytest.mark.skipif(not _HAS_DEEPAGENTS, reason="deepagents optional dep not installed")
+def test_run_deep_agent_work_skips_sanitize_when_network_off(monkeypatch):
+    # The sanitizer exists to stop egress from a NETWORK-capable sandbox. With no network
+    # opt-in there is no egress path — and the LLM rewrite was observed stripping every
+    # public URL from the handoff, so downstream steps lost their citations. Network-off
+    # runs must feed the RAW bundle and never call the sanitizer.
+    import my_crew.runtime_backends.deep_agent_loop as loop
+
+    captured = {}
+    calls = {"sanitize": 0}
+
+    class _FakeBackend:
+        def teardown(self):
+            pass
+
+    def _fake_build(cfg):
+        captured["cfg"] = cfg
+        return _FakeBackend()
+
+    class _FakeAgent:
+        def invoke(self, state, config=None):
+            captured["state"] = state
+            return {"messages": [type("M", (), {"content": "done", "usage_metadata": None})()]}
+
+    def _spy_sanitize(text):
+        calls["sanitize"] += 1
+        return "REWRITTEN", True
+
+    monkeypatch.setattr(
+        "my_crew.runtime_backends.sandbox_backend.build_sandbox_backend", _fake_build
+    )
+    monkeypatch.setattr("deepagents.create_deep_agent", lambda *a, **k: _FakeAgent())
+    monkeypatch.setattr("langchain_openai.ChatOpenAI", lambda *a, **k: object())
+    monkeypatch.setattr(
+        "my_crew.runtime_backends.sandbox_teardown.teardown_sandbox", lambda b: None
+    )
+
+    class _Settings:
+        openrouter_model = "x/y"
+        openrouter_api_key = "k"
+
+    class _Ctx:
+        persona = "p"
+        project = "proj"
+        memory = "mem"
+        capability = "cap"
+
+    handoff = "kết quả bước trước: xu hướng A (nguồn: https://example.com/bai-viet)"
+    loop.run_deep_agent_work(
+        title="t", handoff=handoff, context=_Ctx(), settings=_Settings(),
+        sandbox_cfg={"provider": "fake"}, loop_limit=4,  # NO network opt-in
+        sanitize=_spy_sanitize,
+    )
+    assert calls["sanitize"] == 0  # raw bundle — sanitizer never ran
+    assert captured["cfg"]["network"] is False
+    # The untouched handoff (URL intact) reached the agent's input messages.
+    joined = " ".join(str(getattr(m, "content", m)) for m in captured["state"]["messages"])
+    assert "https://example.com/bai-viet" in joined
