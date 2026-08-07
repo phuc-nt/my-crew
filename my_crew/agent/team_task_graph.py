@@ -298,6 +298,27 @@ def default_team_task_deps(
 
     def _read_handoff() -> str:
         handoff = _read_deps_handoff(data_dir, task_id, step_deps)
+        # The ORIGINAL CEO brief rides into EVERY step, first in the block. A step used
+        # to see only its own title/acceptance + deps' artifacts — and a decompose that
+        # wrote a generic title ("Nghiên cứu giá 3 công cụ quản lý dự án", no names) left
+        # the worker GUESSING the subject: observed live (task 8301d626e800), the
+        # researcher picked Jira/Asana/Monday across attempts when the CEO asked for
+        # Notion/Linear/Trello, and self-check passed it because the acceptance was
+        # equally generic. Best-effort: a broken store read must never fail perceive.
+        try:
+            from my_crew.runtime.team_task_store import TeamTaskStore
+
+            _store = TeamTaskStore(_team_task_db_path(data_dir))
+            try:
+                _task = _store.get(task_id)
+                brief = (_task.original_request or "").strip() if _task else ""
+            finally:
+                _store.close()
+        except Exception:  # noqa: BLE001 — enrichment only
+            brief = ""
+        if brief:
+            head = f"YÊU CẦU GỐC CỦA CEO (toàn việc — bám sát chủ thể nêu ở đây):\n{brief[:2000]}"
+            handoff = f"{head}\n\n{handoff}" if handoff else head
         # v33 P4: answered CEO clarifications for THIS task ride into every later
         # step's context — that is the whole delivery contract of the standalone
         # clarify flow ("câu trả lời sẽ được đưa vào bước sau"). Best-effort: a broken

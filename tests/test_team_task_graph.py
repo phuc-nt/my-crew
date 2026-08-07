@@ -189,7 +189,10 @@ def test_default_deps_step2_reads_step1_handoff(tmp_path, monkeypatch):
     graph = build_team_task_graph(deps=deps)
     result = graph.invoke({"step_title": "review"})
 
-    assert result["handoff_context"] == "step 1 output"
+    # The CEO's original brief now PREFIXES every step's handoff (subject grounding —
+    # a generic step title left workers guessing which entities the task was about);
+    # the dep artifact itself must still ride in full after it.
+    assert result["handoff_context"].endswith("step 1 output")
     assert result["result_text"] == "step 2 output"
 
 
