@@ -100,7 +100,7 @@ def test_a_downgrade_is_refused_and_the_task_concludes_honestly():
 def test_the_refusal_names_the_missing_capability_not_a_vague_failure():
     """A CEO reading "không đổi được người" learns nothing actionable. Saying the
     proposed agent lacks the tool points at the fix (grant it, or accept the gap)."""
-    store = _Store()
+    store = _Store(interventions=1)  # 2nd ruling — past the retry-first coercion
     captured = []
     deps = _deps(store, judgement_target="analyst", can_do=lambda a, _s: a != "analyst")
     deps.escalate = lambda _t, _s, _k, msg: captured.append(msg)
@@ -111,7 +111,7 @@ def test_the_refusal_names_the_missing_capability_not_a_vague_failure():
 def test_a_capable_reassign_still_goes_through():
     """The gate must not freeze reassignment in general — that is the coordinator's
     main lever for an agent that is stuck for any non-tooling reason."""
-    store = _Store()
+    store = _Store(interventions=1)  # 2nd ruling — past the retry-first coercion
     result = decide_stuck_step(
         _deps(store, judgement_target="analyst", can_do=lambda _a, _s: True),
         _Task(), _Step(),
@@ -123,7 +123,7 @@ def test_a_capable_reassign_still_goes_through():
 def test_the_default_collaborator_allows_every_reassign():
     """Unwired `can_do_step` keeps pre-existing behavior — every existing fake roster
     ("agent-a"/"agent-b") must stay dispatchable without knowing about this gate."""
-    store = _Store()
+    store = _Store(interventions=1)  # 2nd ruling — past the retry-first coercion
     deps = CoordinatorDeps(
         store=store, retry_tracker=in_memory_retry_tracker(), cost_cap_usd=2.0,
         roster_ok=lambda _a: True,
@@ -145,3 +145,18 @@ def test_only_downgrades_are_blocked_not_lateral_moves():
         assigned_to = ""
 
     assert _can_do_step("anyone", _S()) is True
+
+
+def test_first_ruling_reassign_is_coerced_to_retry_with_guidance():
+    """Retry-first policy: measured live, the judge chose reassign on the FIRST failure
+    5/6 times and it was wrong every time (the original assignee fixed it on retry once
+    given the failure list; the new assignee started from zero — twice a deep_agent that
+    could not run the web search the step needed). First ruling retries; reassign is
+    earned from the second ruling."""
+    store = _Store()  # interventions=0 → this ruling is the first
+    result = decide_stuck_step(
+        _deps(store, judgement_target="analyst", can_do=lambda _a, _s: True),
+        _Task(), _Step(),
+    )
+    assert store.reassigned == []  # no reassign written on ruling #1
+    assert result.action == "stuck_retry"

@@ -141,6 +141,25 @@ def decide_stuck_step(
         )
 
     judgement = _judge(deps, task, step)
+    # Retry-first policy: the FIRST ruling on a step never reassigns. Measured across a
+    # day of live tasks the judge chose reassign on the first failure 5 of 6 times, and
+    # it was the wrong call every time — the original assignee fixed it on retry once
+    # given the failure list, while the new assignee started from zero (and twice was a
+    # deep_agent that could not even run the web search the step needed). A reassign is
+    # allowed from the second ruling, when guidance demonstrably did not help.
+    if judgement.decision == "reassign" and count <= 1:
+        if judgement.guidance.strip() or judgement.reason.strip():
+            coerced = StuckJudgement(
+                decision="retry_with_guidance",
+                guidance=(judgement.guidance.strip()
+                          or f"Làm lại theo đúng tiêu chí; lý do trượt: {judgement.reason}"),
+                reason=judgement.reason,
+            )
+            logger.info(
+                "team-tick: first-ruling reassign for %s/%s coerced to retry_with_guidance",
+                task.id, step.step_id,
+            )
+            return _retry(deps, task, step, coerced)
     if judgement.decision == "reassign":
         return _reassign(deps, task, step, judgement)
     if judgement.decision == "retry_with_guidance":
