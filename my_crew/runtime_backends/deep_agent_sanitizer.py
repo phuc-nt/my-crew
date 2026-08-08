@@ -20,6 +20,7 @@ un-sanitized data can never reach a networked sandbox. `ok=False` is the fail-cl
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -42,6 +43,9 @@ _SYSTEM = (
     "(https:// đến trang web công cộng — báo chí, tài liệu vendor, nguồn trích dẫn) KHÔNG "
     "phải thông tin nội bộ — PHẢI GIỮ NGUYÊN VẸN từng ký tự, vì bước sau cần chúng làm "
     "trích dẫn nguồn. Số liệu, bảng, và chi tiết kết quả các bước trước cũng GIỮ NGUYÊN. "
+    "Văn bản gồm nhiều PHẦN, mỗi phần mở đầu bằng một dòng đánh dấu dạng "
+    "===KENH:tên=== — GIỮ NGUYÊN VẸN từng dòng đánh dấu đó (không thêm, không bớt, "
+    "không đổi tên) để hệ thống tách lại đúng phần. "
     "Trả về DUY NHẤT văn bản đã làm sạch, không thêm lời giải thích."
 )
 
@@ -82,32 +86,68 @@ def make_llm_sanitizer(client: LlmClient) -> Sanitizer:
     return _sanitize
 
 
+#: Section marker for the batched sanitize call. Charset deliberately outside anything
+#: the sanitizer is asked to rewrite; the LLM is instructed to keep these lines verbatim.
+_SECTION = "===KENH:{name}==="
+_SECTION_RE = re.compile(r"^===KENH:([a-z]+)===$", re.MULTILINE)
+
+
 def sanitize_bundle(
     sanitize: Sanitizer, *, persona: str, project: str, memory: str, capability: str, handoff: str
 ) -> tuple[SanitizedBundle, bool]:
-    """Sanitize every internal channel; overall ok is the AND of each field's ok (conservative).
+    """Sanitize the internal channels in ONE pass; conservative ok semantics unchanged.
 
-    Persona (SOUL.md) is sanitized too: it can name real people, so on a network-capable sandbox
-    it is not exempt. An empty field is skipped (its ok stays True). If ANY field's sanitize
-    returns ok=False the whole bundle is ok=False, so the caller forces network off — one dirty
-    channel taints the run.
+    Persona (SOUL.md) is sanitized too: it can name real people, so on a network-capable
+    sandbox it is not exempt. Empty fields are skipped. The five per-field LLM calls
+    (measured: the dominant fixed cost of every network-on deep step) are batched into a
+    single call over a section-delimited payload; the cleaned text is split back on the
+    same markers. ANY integrity failure — sanitizer ok=False, a marker lost or renamed by
+    the model — fails CLOSED exactly like a per-field failure did: empty bundle, ok=False,
+    caller forces network off.
     """
-    ok = True
-    cleaned: dict[str, str] = {}
-    for name, value in (
-        ("persona", persona), ("project", project), ("memory", memory),
-        ("capability", capability), ("handoff", handoff),
-    ):
-        if not value or not value.strip():
-            cleaned[name] = ""  # nothing to sanitize — skip the call, ok unaffected
-            continue
-        text, field_ok = sanitize(value)
-        cleaned[name] = text
-        ok = ok and field_ok
+    fields = {
+        "persona": persona or "", "project": project or "", "memory": memory or "",
+        "capability": capability or "", "handoff": handoff or "",
+    }
+    non_empty = {k: v for k, v in fields.items() if v.strip()}
+    empty_bundle = SanitizedBundle(persona="", project="", memory="", capability="", handoff="")
+    if not non_empty:
+        return empty_bundle, True  # nothing to sanitize — not a failure
+
+    # A field's own content must never be able to FORGE a marker: a hostile handoff
+    # embedding "===KENH:persona===" would otherwise smuggle attacker text into the
+    # persona slot (which `prepend_persona` renders into the SYSTEM prompt). Defused
+    # by breaking the marker charset inside values before the payload is built.
+    def _defuse(value: str) -> str:
+        return value.replace("===KENH:", "=== KENH:")
+
+    payload = "\n".join(
+        f"{_SECTION.format(name=name)}\n{_defuse(value)}" for name, value in non_empty.items()
+    )
+    cleaned_text, call_ok = sanitize(payload)
+    if not call_ok:
+        return empty_bundle, False
+
+    # Split the cleaned text back on the markers; any mismatch with what was sent in
+    # (missing/extra/renamed/DUPLICATED section) means the structure was damaged —
+    # treat it exactly like a failed pass rather than guessing which text belongs where.
+    parts: dict[str, str] = {}
+    matches = list(_SECTION_RE.finditer(cleaned_text))
+    for i, m in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(cleaned_text)
+        parts[m.group(1)] = cleaned_text[m.end():end].strip("\n")
+    if set(parts) != set(non_empty) or len(matches) != len(non_empty):
+        logger.warning(
+            "deep_agent sanitize: section markers damaged (%s vs %s) — failing closed",
+            sorted(parts), sorted(non_empty),
+        )
+        return empty_bundle, False
+
+    cleaned = {name: parts.get(name, "") for name in fields}
     return (
         SanitizedBundle(
             persona=cleaned["persona"], project=cleaned["project"], memory=cleaned["memory"],
             capability=cleaned["capability"], handoff=cleaned["handoff"],
         ),
-        ok,
+        True,
     )
