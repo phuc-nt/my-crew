@@ -32,7 +32,21 @@
 - `cd` sang plan dir làm lệnh `.venv/bin/python` sau đó fail — dùng đường dẫn tuyệt
   đối trong session dài.
 
+## Vòng dọn tồn đọng (cùng ngày, tối)
+- **Poke sau action** (`poke_worthy`): tick kết thúc bằng spawned/aggregated/
+  stuck_retry/stuck_reassigned → poke tick kế (~5s thay vì 65s giữa ruling và spawn
+  rework); "none" và dead-end không poke nên chuỗi luôn tự dừng.
+- **Salvage transcript khi cạn loop** (`invoke_capped` → stream + 1 lượt tổng hợp
+  bounded): loop 28 vòng đã fetch dữ liệu thật không còn trả kết quả rỗng — tổng hợp
+  từ phần đã có, thiếu ghi THIẾU, hỏng nữa mới degrade rỗng như cũ.
+- **Dead-step reset đổi người**: bước `needs_web` chết mà assignee không search được →
+  reset chuyển cho đồng nghiệp web-capable đầu tiên (registry order); không ai đủ →
+  giữ nguyên. `_can_do_step` giờ dùng thẳng cờ `needs_web` (docstring cũ "không có cờ
+  needs-web" đã hết đúng từ v74).
+
 ## Mở / sang sau
-- Rework row spawn còn chờ ~65s (ruling tạo row xong đợi tick kế) — có thể poke ngay
-  sau ruling nếu muốn ép tiếp.
+- `MPM_WEB_BASE_URL` (link bấm được trên điện thoại): chốt phương án `tailscale serve`
+  (giữ bind localhost, không cần password web-auth) nhưng BLOCKED — cần bật HTTPS
+  certificates trong Tailscale admin console + bật lại app Tailscale trên iPhone
+  (offline 44 ngày). Lệnh sau khi bật: `tailscale serve --bg 8765`.
 - Theo dõi tỷ lệ decompose chịu fan-out; <50% đề đủ điều kiện thì cân nhắc ép code.
