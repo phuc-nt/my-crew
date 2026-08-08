@@ -333,3 +333,23 @@ def test_shell_step_passes_on_sandbox_capable_assignee_and_no_shell_never_checks
     validate_shell_steps(task.steps, capable_ids={"agent-b"})  # no raise
     plain = parse_decomposed_task(_raw([_step("s1")]))
     validate_shell_steps(plain.steps, capable_ids=set())  # no shell step -> no raise
+
+
+def test_hash_changes_when_needs_web_set_and_flagless_stays_migration_identical():
+    """v74: needs_web selects the step's runtime tier → binds the confirm, but is
+    emitted only when True so every flagless DAG (all pre-v74 tasks) hashes
+    byte-identical — no plan-hash-mismatch stall on migration."""
+    task_a = parse_decomposed_task(_raw([_step("s1")]))
+    task_b = parse_decomposed_task(_raw([{**_step("s1"), "needs_web": True}]))
+    assert decomposition_content_hash(task_a) != decomposition_content_hash(task_b)
+
+    import hashlib
+    import json as _json
+
+    flagless = parse_decomposed_task(_raw([_step("s1"), _step("s2", deps=["s1"])]))
+    pre_v74 = _json.dumps(
+        {"steps": [{"step_id": s.step_id, "title": s.title, "assigned_to": s.assigned_to,
+                    "deps": list(s.deps)} for s in flagless.steps]},
+        sort_keys=True, ensure_ascii=True, separators=(",", ":"),
+    )
+    assert decomposition_content_hash(flagless) == hashlib.sha256(pre_v74.encode()).hexdigest()

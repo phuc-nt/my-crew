@@ -105,6 +105,12 @@ class TeamStep:
     # conditionally (only when True) exactly like `needs_shell` — all-internal rows,
     # i.e. every pre-v63 row, hash byte-identical to before.
     external_write: bool = False
+    # v74 speed routing: True iff the step must look things up on the live web. False
+    # forces the cheap native one-shot tier regardless of the agent's default runtime
+    # (measured: a grading step on the deep tier cost 548s vs ~60s native). Routing
+    # hint only, never permissions; binds into `decomposition_content_hash`
+    # conditionally (only when True) exactly like `needs_shell`.
+    needs_web: bool = False
     # v34 P4: JSON list [{"title","assigned_to"}] the step proposed instead of doing
     # the work itself ("Đã chia bước"). Set at mark_done; the ticker's fanout-insert
     # rule reads it, mints the sub/gather rows, and the children's existence is the
@@ -181,6 +187,9 @@ def create_schema(conn: sqlite3.Connection) -> None:
         # v63: same conditional-hash contract as needs_shell — default 0 keeps every
         # pre-v63 row's plan_hash recompute byte-identical (no mismatch stall on migrate).
         "ALTER TABLE team_steps ADD COLUMN external_write INTEGER NOT NULL DEFAULT 0",
+        # v74: same conditional-hash contract — default 0 keeps every pre-v74 row's
+        # plan_hash recompute byte-identical (no mismatch stall on migrate).
+        "ALTER TABLE team_steps ADD COLUMN needs_web INTEGER NOT NULL DEFAULT 0",
         # Coordinator intervention counter. Default 0 = "never intervened", which is
         # exactly the state of every row written before this column existed, and it is
         # outside the plan hash, so migrating cannot stall a task.
@@ -219,6 +228,7 @@ def _row_to_step(data: dict[str, Any]) -> TeamStep:
         needs_review=bool(int(data.get("needs_review") or 0)),
         needs_shell=bool(int(data.get("needs_shell") or 0)),
         external_write=bool(int(data.get("external_write") or 0)),
+        needs_web=bool(int(data.get("needs_web") or 0)),
         system_inserted=bool(int(data.get("system_inserted") or 0)),
         parent_step_id=data.get("parent_step_id"),
         review_round=int(data.get("review_round") or 0),
@@ -250,8 +260,9 @@ def replace_steps(conn: sqlite3.Connection, task_id: str, steps: list[dict[str, 
         conn.execute(
             "INSERT INTO team_steps "
             "(task_id, step_id, title, assigned_to, deps_json, status, acceptance, "
-            " step_type, needs_review, needs_shell, external_write, system_inserted) "
-            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, 0)",
+            " step_type, needs_review, needs_shell, external_write, needs_web, "
+            " system_inserted) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, 0)",
             (
                 task_id, step["step_id"], step.get("title", ""), step.get("assigned_to", ""),
                 json.dumps(list(step.get("deps", ())), ensure_ascii=False),
@@ -260,6 +271,7 @@ def replace_steps(conn: sqlite3.Connection, task_id: str, steps: list[dict[str, 
                 1 if step.get("needs_review") else 0,
                 1 if step.get("needs_shell") else 0,  # v45: default 0 (no-shell → create_agent)
                 1 if step.get("external_write") else 0,  # v63: hash-bound conditionally
+                1 if step.get("needs_web") else 0,  # v74: hash-bound conditionally
             ),
         )
 
@@ -645,8 +657,9 @@ def swap_pending_steps(
         conn.execute(
             "INSERT INTO team_steps "
             "(task_id, step_id, title, assigned_to, deps_json, status, acceptance, "
-            " step_type, needs_review, needs_shell, external_write, system_inserted) "
-            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, 0)",
+            " step_type, needs_review, needs_shell, external_write, needs_web, "
+            " system_inserted) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, 0)",
             (
                 task_id, step["step_id"], step.get("title", ""), step.get("assigned_to", ""),
                 json.dumps(list(step.get("deps", ())), ensure_ascii=False),
@@ -655,6 +668,7 @@ def swap_pending_steps(
                 1 if step.get("needs_review") else 0,
                 1 if step.get("needs_shell") else 0,  # v45 tier-0 routing
                 1 if step.get("external_write") else 0,  # v63: hash-bound conditionally
+                1 if step.get("needs_web") else 0,  # v74: hash-bound conditionally
             ),
         )
     return []

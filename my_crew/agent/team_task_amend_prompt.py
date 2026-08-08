@@ -108,6 +108,7 @@ def _amend_frozen_prefix(task) -> tuple[TeamStepPlan, ...]:
             step_id=s.step_id, title=s.title, assigned_to=s.assigned_to, deps=s.deps,
             needs_shell=bool(getattr(s, "needs_shell", False)),
             external_write=bool(getattr(s, "external_write", False)),
+            needs_web=bool(getattr(s, "needs_web", False)),  # v74 — hash material like the two above
         )
         for s in task.steps
         if s.status != "pending" and not getattr(s, "system_inserted", 0)
@@ -223,7 +224,8 @@ def amend_with_retries(task, request: str, staff: list[tuple[str, str]]) -> tupl
                  "deps": list(s.deps), "acceptance": s.acceptance,
                  "step_type": s.step_type, "needs_review": s.needs_review,
                  "needs_shell": s.needs_shell,  # v45 tier-0 routing
-                 "external_write": s.external_write}  # v63 — hash-bound conditionally
+                 "external_write": s.external_write,  # v63 — hash-bound conditionally
+                 "needs_web": s.needs_web}  # v74 — hash-bound conditionally
                 for s in amended_tail
             ]
             return new_pending, validated, total_cost

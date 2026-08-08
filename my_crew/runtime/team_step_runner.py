@@ -525,10 +525,20 @@ def _run_graph(
         and not getattr(step, "system_inserted", False)
         and getattr(step, "step_type", "work") == "work"
     )
+    # v74: a step routed tool-less (needs_web=False work step / review row, before any
+    # coordinator ruling) skips the native pre-work search hook too — grading and
+    # synthesis read their handoff, and the hook's one search per run was pure cost.
+    # After a ruling (intervention_count > 0) the hook returns with the agent's tier.
+    _step_type = str(getattr(step, "step_type", "work") or "work")
+    _toolless = (_step_type == "review"
+                 or (_step_type == "work"
+                     and not bool(getattr(step, "needs_web", False))
+                     and int(getattr(step, "intervention_count", 0) or 0) == 0))
     graph = runtime.build_task(
         settings=settings, context=context, step_title=step.title,
         data_dir=team_tasks_root(), task_id=task_id, step_seq=step.seq,
-        step_deps=step.deps, search_hook=_resolve_search_hook(loaded, settings),
+        step_deps=step.deps,
+        search_hook=None if _toolless else _resolve_search_hook(loaded, settings),
         self_id=step.assigned_to, telemetry=telemetry, remember_node=remember_node,
         guidance=getattr(step, "guidance", "") or "", **_extra,
     )

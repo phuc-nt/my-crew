@@ -86,6 +86,16 @@ class TeamStepPlan(BaseModel):
     # external write mislabeled internal still hits the per-agent Lớp B approval gate at
     # action time, so this flag can never grant an unsafe write by itself.
     external_write: bool = False
+    # v74 speed routing: LLM-settable HINT — True when the step must LOOK THINGS UP on
+    # the live web; False for steps that grade/synthesize from inputs already in their
+    # handoff. Routing only, never permissions: a False step is forced onto the cheap
+    # native one-shot tier (measured: a grading step on the deep tier cost 548s vs
+    # ~60s native), a wrong False self-heals on the first coordinator retry (the
+    # runner drops the native forcing once intervention_count >= 1). Binds into
+    # `decomposition_content_hash` CONDITIONALLY like needs_shell — it selects the
+    # runtime the step runs on, so the CEO's confirm covers it, while every flagless
+    # DAG (all pre-v74 tasks) hashes byte-identical.
+    needs_web: bool = False
 
     @field_validator("step_id", "assigned_to")
     @classmethod
@@ -365,6 +375,11 @@ def decomposition_content_hash(task: DecomposedTask) -> str:
             # review-waiver policy the CEO's confirm should bind, and all-internal DAGs
             # — every pre-v63 task — keep their stored plan_hash byte-identical.
             d["external_write"] = True
+        if bool(getattr(s, "needs_web", False)):
+            # v74: same conditional-emit contract — the flag selects the step's runtime
+            # tier (native vs the agent's tool loop), so confirm binds it; flagless
+            # DAGs keep their stored plan_hash byte-identical.
+            d["needs_web"] = True
         return d
 
     canonical = json.dumps(

@@ -24,8 +24,15 @@ class _LP:
 
 
 class _Step:
-    def __init__(self, needs_shell=False):
+    def __init__(self, needs_shell=False, needs_web=True, step_type="work",
+                 intervention_count=0):
+        # needs_web defaults TRUE here so the pre-v74 assertions below keep testing
+        # the tier-drop rules on their original terms (a web-needing step); the v74
+        # native-forcing rules get their own tests at the bottom.
         self.needs_shell = needs_shell
+        self.needs_web = needs_web
+        self.step_type = step_type
+        self.intervention_count = intervention_count
 
 
 def _kind(rt) -> str:
@@ -78,3 +85,40 @@ def test_force_native_killswitch(monkeypatch):
     # even a needs_shell step goes native under the fleet kill-switch (no runtime escalation)
     rt = resolve_step_runtime(_LP("deep_agent", sandbox={"provider": "docker"}), _Step(True))
     assert isinstance(rt, NativeGraphRuntime)
+
+
+# --- v74: tool-less steps run native one-shot -----------------------------------------
+
+
+def test_no_web_work_step_forces_native_regardless_of_tier():
+    """Measured (task b4c227ec37ba): grading on deep = 548s, synthesis on the loop =
+    780s, vs ~60-120s native with identical inputs. A work step declaring no web need
+    runs native even on a loop/deep-pinned agent."""
+    for kind in ("create_agent", "deep_agent"):
+        lp = _LP(kind, sandbox={"provider": "docker"} if kind == "deep_agent" else None)
+        rt = resolve_step_runtime(lp, _Step(needs_web=False))
+        assert _kind(rt) == "NativeGraphRuntime"
+
+
+def test_review_row_is_always_native():
+    rt = resolve_step_runtime(
+        _LP("deep_agent", sandbox={"provider": "docker"}),
+        _Step(needs_web=True, step_type="review"),
+    )
+    assert _kind(rt) == "NativeGraphRuntime"
+
+
+def test_wrong_no_web_hint_self_heals_after_first_ruling():
+    """A wrong needs_web=False costs ONE attempt: once the coordinator has ruled
+    (intervention_count >= 1) the native forcing drops and the agent's own tier runs."""
+    lp = _LP("create_agent")
+    assert _kind(resolve_step_runtime(lp, _Step(needs_web=False))) == "NativeGraphRuntime"
+    rt = resolve_step_runtime(lp, _Step(needs_web=False, intervention_count=1))
+    assert _kind(rt) == "ToolCallingRuntime"
+
+
+def test_rework_row_keeps_the_agent_tier():
+    """Fixing a DATA defect may need the tools the original work had (round-7 lesson:
+    a toolless fixer degrades honestly but uselessly)."""
+    rt = resolve_step_runtime(_LP("create_agent"), _Step(needs_web=False, step_type="rework"))
+    assert _kind(rt) == "ToolCallingRuntime"

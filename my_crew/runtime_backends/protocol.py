@@ -131,6 +131,22 @@ def resolve_step_runtime(loaded: LoadedProfile | None, step: Any) -> AgentRuntim
             )
         return _runtime_for_kind("deep_agent")
 
+    # v74 speed routing: a step that needs NO live-web lookup runs native one-shot —
+    # measured (task b4c227ec37ba): a grading step on the deep tier cost 548s and a
+    # synthesis step on the tool loop 780s, vs ~60-120s native, with identical inputs.
+    #   - review rows are pure grading over inputs already in hand → always native;
+    #   - rework rows keep the agent's tier: fixing a DATA defect may need the tools
+    #     the original work had (round-7 lesson — a toolless fixer degrades honestly
+    #     but uselessly);
+    #   - a WRONG needs_web=False self-heals: after the first coordinator ruling
+    #     (intervention_count >= 1) the forcing is dropped and the step runs the
+    #     agent's own tier. Hint-only, never permissions.
+    step_type = str(getattr(step, "step_type", "work") or "work")
+    needs_web = bool(getattr(step, "needs_web", False))
+    intervened = int(getattr(step, "intervention_count", 0) or 0) > 0
+    if step_type == "review" or (step_type == "work" and not needs_web and not intervened):
+        return NativeGraphRuntime()
+
     # no-shell: a deep_agent-pinned agent drops to the fast, Docker-free create_agent tier.
     if profile_kind == "deep_agent":
         return _runtime_for_kind("create_agent")

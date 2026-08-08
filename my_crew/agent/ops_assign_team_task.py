@@ -277,6 +277,7 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
          "deps": list(s.deps), "acceptance": s.acceptance,
          "step_type": s.step_type, "needs_review": s.needs_review,
          "needs_shell": s.needs_shell,  # v45 tier-0 routing
+         "needs_web": s.needs_web,  # v74 — hash-bound conditionally
          "external_write": s.external_write}  # v63 review-waiver + conditional hash
         for s in task.steps
     ]
