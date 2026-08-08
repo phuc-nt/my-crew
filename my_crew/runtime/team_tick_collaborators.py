@@ -180,12 +180,11 @@ def make_deliver_room(loaded: Any = None, settings: Any = None):
         )
 
         logger.info("team-tick: task %s aggregate ready: %s", task.id, summary[:200])
-        landed = append_office_event_checked(
-            room_for_task(task.id), author="coordinator", kind="milestone",
-            body={"task_id": task.id, "task_title": task.title, "milestone": "done",
-                  "message": summary},
-            also_office=True,
-        )
+        # Whether the direct (fast-path) send below succeeded — stamped into the room
+        # milestone body so the mirror can SKIP re-pushing a notice the CEO already
+        # has: with both channels now landing in the SAME chat, the digest was an
+        # immediate duplicate of the ✅ message (observed on the CEO's phone).
+        sent_direct = False
         if loaded is not None and settings is not None:
             try:
                 from my_crew.actions.action_gateway import ActionGateway
@@ -201,19 +200,30 @@ def make_deliver_room(loaded: Any = None, settings: Any = None):
                     )
                     from my_crew.runtime.dashboard_links import workroom_url
 
+                    # No title prefix when the summary already opens with the task name
+                    # — the CEO was reading the full title three times per message.
+                    head = ("✅ HOÀN THÀNH — " if summary.lstrip().startswith("Việc")
+                            else f"✅ Việc '{task.title[:120]}' — HOÀN THÀNH:\n\n")
                     try:
-                        send_telegram_message(
-                            f"✅ Việc '{task.title[:120]}' — HOÀN THÀNH:\n\n{summary}"
+                        result = send_telegram_message(
+                            f"{head}{summary}"
                             f"\n\n🔎 Chi tiết đầy đủ: {workroom_url(task.id)}",
                             gateway=gateway, telegram=telegram, chat_id=operator,
                             dedup_hint=f"team-tick:{task.id}:done",
                             rationale="task-done fast path to the assigning chat",
                         )
+                        sent_direct = result.status in ("executed", "pending_approval")
                     finally:
                         gateway.close()
             except Exception:  # noqa: BLE001 — fast path only; the mirror still delivers
                 logger.exception("team-tick: done fast-path send failed for task %s",
                                  task.id)
+        landed = append_office_event_checked(
+            room_for_task(task.id), author="coordinator", kind="milestone",
+            body={"task_id": task.id, "task_title": task.title, "milestone": "done",
+                  "message": summary, "delivered_direct": sent_direct},
+            also_office=True,
+        )
         return landed
 
     return _deliver

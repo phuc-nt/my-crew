@@ -111,7 +111,12 @@ def run_milestone_mirror(loaded: Any, settings: Any, *, now: datetime | None = N
     try:
         since_seq = cursor.get()
         rows = room.list(OFFICE_ROOM_ID, since_seq)
-        milestones = [r for r in rows if r.kind == "milestone"]
+        # `delivered_direct`: the coordinator's fast path already put this exact
+        # notice in the SAME chat — re-pushing it made an instant duplicate.
+        milestones = [
+            r for r in rows
+            if r.kind == "milestone" and not r.body.get("delivered_direct")
+        ]
         # Cursor advances ONLY after this tick's outcome is settled below (write-disabled
         # short-circuit or a successful send) — never here, up front. Advancing
         # unconditionally would let a `write_disabled` tick or a failed send silently
