@@ -20,11 +20,10 @@ it binds only what `build_read_toolset` returns.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import logging
 import re
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:

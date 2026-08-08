@@ -108,7 +108,8 @@ def _amend_frozen_prefix(task) -> tuple[TeamStepPlan, ...]:
             step_id=s.step_id, title=s.title, assigned_to=s.assigned_to, deps=s.deps,
             needs_shell=bool(getattr(s, "needs_shell", False)),
             external_write=bool(getattr(s, "external_write", False)),
-            needs_web=bool(getattr(s, "needs_web", False)),  # v74 — hash material like the two above
+            # v74 — hash material like the two flags above
+            needs_web=bool(getattr(s, "needs_web", False)),
         )
         for s in task.steps
         if s.status != "pending" and not getattr(s, "system_inserted", 0)

@@ -131,9 +131,6 @@ def run_deep_agent_work(
     from my_crew.config.settings import OPENROUTER_BASE_URL
     from my_crew.llm.team_task_prompt import build_team_step_messages
     from my_crew.runtime_backends.community_loop_core import invoke_capped, record_loop_result
-    from my_crew.runtime_backends.deep_agent_sanitizer import make_llm_sanitizer, sanitize_bundle
-    from my_crew.runtime_backends.sandbox_backend import build_sandbox_backend
-    from my_crew.runtime_backends.sandbox_teardown import teardown_sandbox
 
     # The sanitizer's ONLY job is stopping internal data from being POSTed out of a
     # network-capable sandbox. With no network opt-in there is no egress path, so the
@@ -141,7 +138,13 @@ def run_deep_agent_work(
     # and compressed upstream step results, so a network-off deep_agent step received
     # a mangled handoff and honestly reported "thiếu URL nguồn gốc từ Đầu vào"
     # (observed live, task 00e8785c5d75/finalize). Network-off ⇒ raw bundle.
-    from my_crew.runtime_backends.deep_agent_sanitizer import SanitizedBundle
+    from my_crew.runtime_backends.deep_agent_sanitizer import (
+        SanitizedBundle,
+        make_llm_sanitizer,
+        sanitize_bundle,
+    )
+    from my_crew.runtime_backends.sandbox_backend import build_sandbox_backend
+    from my_crew.runtime_backends.sandbox_teardown import teardown_sandbox
 
     net_opt_in = bool((sandbox_cfg or {}).get("network"))
     raw = {
