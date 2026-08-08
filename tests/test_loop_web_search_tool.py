@@ -55,7 +55,7 @@ def test_results_arrive_spotlight_wrapped(monkeypatch):
     not as bare strings the loop would read as instructions."""
     monkeypatch.setattr(
         "my_crew.tools.web_search_tool.web_search",
-        lambda query, *, config, audit_log=None: [
+        lambda query, *, config, audit_log=None, actor="": [
             SearchResult(title="Giá thuê Q1", snippet="Hạng A ~55 USD/m²/tháng",
                          source="https://example.com/bao-cao/q1-2026"),
         ],
@@ -75,7 +75,7 @@ def test_empty_results_tell_the_model_to_retry_differently(monkeypatch):
     again — but only if emptiness comes back as guidance, not as silence."""
     monkeypatch.setattr(
         "my_crew.tools.web_search_tool.web_search",
-        lambda query, *, config, audit_log=None: [],
+        lambda query, *, config, audit_log=None, actor="": [],
     )
     tools = build_read_toolset(_FakeConfig(), settings=_Settings(), web_search=True)
     out = tools["web.search"]({"query": "abc"})

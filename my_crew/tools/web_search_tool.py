@@ -117,6 +117,7 @@ def web_search(
     *,
     config: WebSearchConfig,
     audit_log: AuditLog | None = None,
+    actor: str = "",
     tavily_fn: ProviderFn = _tavily_search,
     brave_fn: ProviderFn = _brave_search,
 ) -> list[SearchResult]:
@@ -133,7 +134,8 @@ def web_search(
     if query_still_sensitive(redacted):
         logger.info("web_search: query still sensitive after redaction, egress skipped")
         _audit(audit_log, redacted="", counts=counts, provider="none", result_count=0,
-               verdict="skipped", reason="query still sensitive after redaction")
+               verdict="skipped", reason="query still sensitive after redaction",
+               actor=actor)
         return []
 
     if not config.available():
@@ -158,13 +160,13 @@ def web_search(
 
     _audit(audit_log, redacted=redacted, counts=counts, provider=provider,
            result_count=len(results), verdict="allow" if results else "skipped",
-           reason="" if results else "no results / provider unavailable")
+           reason="" if results else "no results / provider unavailable", actor=actor)
     return results
 
 
 def _audit(
     audit_log: AuditLog | None, *, redacted: str, counts: dict[str, int], provider: str,
-    result_count: int, verdict: str, reason: str,
+    result_count: int, verdict: str, reason: str, actor: str = "",
 ) -> None:
     """Record the search via the existing audit path. `redacted` is the ONLY query
     form ever passed here — the raw query never reaches this function's caller-visible
@@ -173,7 +175,7 @@ def _audit(
         return
     audit_log.record(AuditEntry(
         action_type="web_search", tool=f"web_search:{provider}", verdict=verdict,
-        reason=reason,
+        reason=reason, actor=actor,
         params={"redacted_query": redacted, "redaction_counts": counts,
                 "result_count": result_count},
     ))

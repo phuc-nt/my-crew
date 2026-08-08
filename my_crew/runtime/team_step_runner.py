@@ -19,6 +19,8 @@ path" requirement.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -769,7 +771,8 @@ def _resolve_search_hook(loaded: Any, settings: Any) -> Callable[[str], str] | N
     audit_log = AuditLog(team_tasks_root() / "audit" / "audit.jsonl")
 
     def _hook(query: str) -> str:
-        results = web_search(query, config=config, audit_log=audit_log)
+        actor = Path(str(getattr(settings, "data_dir", ""))).name
+        results = web_search(query, config=config, audit_log=audit_log, actor=actor)
         text, _count, _quarantined = format_search_results(results)
         return text
 

@@ -72,7 +72,8 @@ def build_chat_search_hook(loaded, settings) -> Callable[[str], str] | None:
     def _hook(query: str) -> str:
         from my_crew.tools.search_result_formatter import format_search_results
 
-        results = web_search(query, config=config, audit_log=audit_log)
+        actor = Path(str(getattr(settings, "data_dir", ""))).name
+        results = web_search(query, config=config, audit_log=audit_log, actor=actor)
         text, count, quarantined = format_search_results(results)
         if quarantined:
             logger.info("chat web lookup: %d/%d kết quả bị cách ly", quarantined, count)

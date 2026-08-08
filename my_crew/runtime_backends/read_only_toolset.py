@@ -20,6 +20,8 @@ it binds only what `build_read_toolset` returns.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import logging
 import re
 from collections.abc import Callable
@@ -203,7 +205,10 @@ def _web_search_tool(settings: Any) -> Callable[[dict], Any] | None:
 
         try:
             audit_log = AuditLog(team_tasks_root() / "audit" / "audit.jsonl")
-            results = web_search(query, config=config, audit_log=audit_log)
+            # Actor = the per-agent data_dir basename (agent_data_dir(<id>) layout) — the
+            # audit row was previously actor-less, making searches unattributable.
+            actor = Path(str(getattr(settings, "data_dir", ""))).name
+            results = web_search(query, config=config, audit_log=audit_log, actor=actor)
         except Exception as exc:  # noqa: BLE001 — search best-effort, never crash the loop
             return f"(tra cứu web lỗi: {exc})"
         if not results:
