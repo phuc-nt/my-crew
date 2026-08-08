@@ -359,8 +359,16 @@ def main(argv: list[str] | None = None, *, run_report: RunReport = _default_run_
     # coordinator (P3) reserves a step (issuing a lease `attempt_id`) then spawns this
     # exact invocation. Branches before graph dispatch like inbox/tasks/ops-alerts above.
     if kind == "team-step":
-        return _run_team_step_kind(args, agent_id=agent_id, loaded=loaded, settings=settings,
-                                    data_dir=data_dir)
+        from my_crew.runtime.tick_poke import touch_poke
+
+        try:
+            return _run_team_step_kind(args, agent_id=agent_id, loaded=loaded, settings=settings,
+                                        data_dir=data_dir)
+        finally:
+            # v74 phase 2: every team-step exit (done/needs_decision/paused/failed/
+            # rejected) is something the coordinator must act on — poke the service so
+            # the next team-tick runs in seconds instead of waiting the 60s cadence.
+            touch_poke()
 
     # v12 M28b: the coordinator ticker is a generic run kind — one SHORT tick (read
     # store, take ONE action, exit) on the coordinator agent only. Branches before

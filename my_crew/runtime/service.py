@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 _WORKER_TIMEOUT_S = 600  # kill a worker that runs longer than this (then status=timeout)
 _CONCURRENCY_CAP = 4  # max worker subprocesses spawned per tick (excess defers to next tick)
 _TICK_INTERVAL_S = 60  # how often run_forever evaluates the schedule
+_POKE_SLICE_S = 5  # sleep-slice width: worst-case latency from team-step exit to team-tick
 
 Spawn = Callable[[list[str]], "subprocess.Popen"]
 
@@ -280,6 +281,10 @@ class Service:
         #: is refilled by the SAME first agents every tick and anyone ordered after them
         #: starves deterministically, not occasionally.
         self._rotate = 0
+        #: v74 phase 2: mtime of the last HANDLED tick poke. None until the first look,
+        #: which adopts whatever is on disk as already-handled — a poke left over from
+        #: before this daemon started must not fire a spurious team-tick at startup.
+        self._poke_watermark: float | None = None
 
     def _seed(self, now: datetime) -> None:
         """Seed last_fire for every scheduled (agent, kind) to `now` so a fresh daemon
@@ -410,6 +415,63 @@ class Service:
 
         return start_telegram_listeners(agents, run_inbox_worker=run_inbox_worker)
 
+    def poke_pending(self) -> bool:
+        """One sleep-slice check: has a team-step worker poked since the last handled
+        poke? Advances the watermark when it answers True, so a burst of pokes inside
+        one slice (three workers finishing together) collapses to a single early
+        team-tick — the tick itself reads the store and handles all of them.
+
+        The first look after daemon start adopts the on-disk mtime as already-handled
+        (a stale poke from a previous daemon run is not a fresh signal; the step it
+        announced was picked up by the minute cadence long ago).
+        """
+        from my_crew.runtime.tick_poke import poke_mtime
+
+        mtime = poke_mtime()
+        if self._poke_watermark is None:
+            self._poke_watermark = mtime if mtime is not None else 0.0
+            return False
+        if mtime is None or mtime <= self._poke_watermark:
+            return False
+        self._poke_watermark = mtime
+        return True
+
+    def run_poked_team_tick(self, *, spawn: Spawn = _real_spawn) -> dict | None:
+        """Spawn + supervise ONE early team-tick for the configured coordinator.
+
+        Mirrors the listener-triggered inbox shape: same worker argv the minute cadence
+        would use, just sooner. Does NOT advance `_last_fire` — the minute tick keeps
+        firing as the fallback, and an overlap costs one idempotent no-op worker (the
+        step lease/DB already serialize real actions). No coordinator configured → the
+        poke has no addressee, clean no-op.
+        """
+        from my_crew.runtime.company import load_company
+
+        coordinator_id = load_company().coordinator_id
+        if not coordinator_id:
+            return None
+        outcome = _supervise(
+            spawn, _worker_argv(coordinator_id, "team-tick", "internal"),
+            timeout=self._timeout,
+        )
+        logger.info("poke-triggered team-tick %s: %s", coordinator_id,
+                    outcome.get("status"))
+        return outcome
+
+    def _sleep_watching_pokes(self, interval: int) -> None:  # pragma: no cover
+        """Sleep `interval` seconds in ~5s slices, launching an early team-tick (on a
+        daemon thread, so a slow ruling never delays the minute cadence) whenever a
+        fresh poke shows up. Thin timing wrapper — the decision (`poke_pending`) and
+        the action (`run_poked_team_tick`) are the unit-tested parts, mirroring how
+        `run_forever` wraps `run_tick`."""
+        import threading
+
+        deadline = time.monotonic() + interval
+        while (remaining := deadline - time.monotonic()) > 0:
+            time.sleep(min(_POKE_SLICE_S, remaining))
+            if self.poke_pending():
+                threading.Thread(target=self.run_poked_team_tick, daemon=True).start()
+
     def run_forever(self, *, interval: int = _TICK_INTERVAL_S) -> None:  # pragma: no cover
         """The daemon loop: tick, sleep, repeat. Thin wrapper over run_tick.
 
@@ -427,7 +489,7 @@ class Service:
         while True:
             _write_coordinator_heartbeat()
             self.run_tick(datetime.now())  # noqa: DTZ005 — local time, matches cron intent
-            time.sleep(interval)
+            self._sleep_watching_pokes(interval)
 
 
 def _write_coordinator_heartbeat() -> None:
