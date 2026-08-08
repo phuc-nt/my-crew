@@ -197,17 +197,44 @@ def run_retry_stalled_step(slots: dict[str, str]) -> str:
                 f"việc `{task.id}` không có bước chết hay verdict trượt để thử lại — "
                 "xem `report_task` hoặc chỉnh kế hoạch"
             )
-        reset = [
-            s.title for s in dead
-            if ctx.store.reset_step_to_pending(task.id, s.step_id, attempt_id=s.attempt_id)
-        ]
+        reset, moved = [], []
+        for s in dead:
+            replacement = _dead_step_replacement(s)
+            if replacement:
+                ctx.store.reassign_step(task.id, s.step_id, replacement)
+                moved.append(f"'{s.title}' → {replacement}")
+            if ctx.store.reset_step_to_pending(task.id, s.step_id, attempt_id=s.attempt_id):
+                reset.append(s.title)
         if not reset:
             raise ValueError(f"không đặt lại được bước nào của việc `{task.id}` — thử lại sau")
         ctx.store.reopen_stalled(task.id)
         names = ", ".join(f"'{t}'" for t in reset)
-        return f"Đã đặt lại {len(reset)} bước ({names}) của việc `{task.id}` để chạy lại từ đầu."
+        moved_note = f" (đổi người: {', '.join(moved)})" if moved else ""
+        return (f"Đã đặt lại {len(reset)} bước ({names}) của việc `{task.id}` để chạy lại "
+                f"từ đầu{moved_note}.")
     finally:
         ctx.close()
+
+
+def _dead_step_replacement(step: TeamStep) -> str:
+    """A different assignee who holds the tools a dead `needs_web` step requires.
+
+    A dead-step reset that keeps an assignee who CANNOT search dies the same way on
+    the next attempt — the deterministic loop that burned the autopilot ladder in
+    round 7. Only fires when the step declares `needs_web` and its current holder
+    fails the live capability probe; picks the first assignable web-capable colleague
+    (registry order — deterministic), and returns "" (keep the current assignee)
+    when nobody qualifies — an honest same-agent retry beats an equally-doomed swap.
+    """
+    from my_crew.agent.team_task_roster import assignable_staff
+    from my_crew.runtime.team_tick_runner import agent_web_capable
+
+    if not step.needs_web or agent_web_capable(step.assigned_to):
+        return ""
+    for agent_id, _domain in assignable_staff():
+        if agent_id != step.assigned_to and agent_web_capable(agent_id):
+            return agent_id
+    return ""
 
 
 def run_drop_stalled_step(slots: dict[str, str]) -> str:

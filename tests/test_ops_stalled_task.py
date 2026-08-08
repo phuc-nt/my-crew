@@ -488,3 +488,65 @@ def test_dropped_placeholder_forbids_downstream_fabrication(tmp_path):
     assert "không được suy diễn" in _DROPPED_RESULT_TEXT.lower() \
         or "không được" in _DROPPED_RESULT_TEXT
     assert "bịa" in _SYSTEM  # work-step system prompt carries the honesty rule
+
+
+# --- v74.1: a dead needs_web step leaves a searchless assignee on reset ----------------
+
+
+def _mk_dead_web_step_stalled_task(tmp_path, task_id="t8") -> None:
+    store = _open_store(tmp_path)
+    try:
+        store.create_task(task_id=task_id, title="Demo dead web", original_request="x",
+                          assigned_by="ceo")
+        steps = [
+            {"step_id": "s1", "title": "khảo giá", "assigned_to": "agent-a", "deps": [],
+             "needs_web": True},
+            {"step_id": "s2", "title": "tổng hợp", "assigned_to": "agent-b", "deps": ["s1"]},
+        ]
+        store.set_plan(task_id, steps, _content_hash(steps))
+        attempt = store.reserve_step(task_id, "s1")
+        store.mark_failed(task_id, "s1", attempt_id=attempt)
+        store.set_task_status(task_id, "stalled")
+    finally:
+        store.close()
+
+
+def test_retry_reassigns_dead_web_step_away_from_searchless_agent(tmp_path, monkeypatch):
+    """Resetting a needs_web step to an assignee who cannot search dies identically on
+    the next attempt — the reset must move it to a web-capable colleague."""
+    import my_crew.agent.team_task_roster as roster
+    import my_crew.runtime.team_tick_runner as ttr
+
+    _mk_dead_web_step_stalled_task(tmp_path)
+    monkeypatch.setattr(roster, "assignable_staff",
+                        lambda: [("agent-b", "office"), ("researcher-x", "office")])
+    monkeypatch.setattr(ttr, "agent_web_capable", lambda a: a == "researcher-x")
+    reply = run_retry_stalled_step({"task_id": "t8"})
+    assert "researcher-x" in reply
+    store = _open_store(tmp_path)
+    try:
+        s1 = store.get_step("t8", "s1")
+        assert s1.assigned_to == "researcher-x"
+        assert s1.status == "pending"
+    finally:
+        store.close()
+
+
+def test_retry_keeps_assignee_when_no_capable_replacement(tmp_path, monkeypatch):
+    """No web-capable colleague ⇒ keep the current assignee (an honest same-agent
+    retry beats an equally-doomed swap) — the reset itself still happens."""
+    import my_crew.agent.team_task_roster as roster
+    import my_crew.runtime.team_tick_runner as ttr
+
+    _mk_dead_web_step_stalled_task(tmp_path)
+    monkeypatch.setattr(roster, "assignable_staff", lambda: [("agent-b", "office")])
+    monkeypatch.setattr(ttr, "agent_web_capable", lambda a: False)
+    reply = run_retry_stalled_step({"task_id": "t8"})
+    assert "đổi người" not in reply
+    store = _open_store(tmp_path)
+    try:
+        s1 = store.get_step("t8", "s1")
+        assert s1.assigned_to == "agent-a"
+        assert s1.status == "pending"
+    finally:
+        store.close()

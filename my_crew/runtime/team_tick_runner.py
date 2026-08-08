@@ -568,20 +568,28 @@ def _web_search_enabled(agent_id: str) -> bool:
         return False
 
 
+def agent_web_capable(agent_id: str) -> bool:
+    """Public web-capability probe: the `web_search:` flag AND, on the deep tier, a
+    network-enabled sandbox (the flag alone arms nothing usable there). Shared by the
+    stuck-reassign gate here and the dead-step re-assignee pick in `ops_stalled_task`."""
+    return _web_search_enabled(agent_id)
+
+
 def _can_do_step(agent_id: str, step) -> bool:
-    """Whether `agent_id` holds the tools this step needs.
+    """Whether `agent_id` holds the tools this step needs. Two decidable checks, no
+    model judgment:
 
-    There is no "needs web" flag on a step, and inventing one would mean trusting the
-    decomposing model to predict its own future tool needs. What IS knowable is the
-    capability of the agent who already holds the step: if the current assignee can
-    search and the proposed one cannot, the reassign is a capability DOWNGRADE — the
-    step gets handed to someone strictly less able to finish it. That is the shape that
-    bit us in production (a web data-collection step moved from researcher to an agent
-    with no search), and it is decidable without asking a model anything.
-
-    Deliberately one-directional: an upgrade, a lateral move, or a step whose current
-    holder never had search all pass. This gate only refuses to make things worse.
+    - v74 `needs_web`: a step declared to require live web lookup needs an assignee
+      who can ACTUALLY search — regardless of who holds it now.
+    - Downgrade guard (pre-v74, kept for unflagged steps): if the current assignee can
+      search and the proposed one cannot, the reassign hands the step to someone
+      strictly less able to finish it. That is the shape that bit us in production (a
+      web data-collection step moved from researcher to an agent with no search).
+      One-directional by design: upgrades, lateral moves, and steps whose current
+      holder never had search all pass — this gate only refuses to make things worse.
     """
+    if bool(getattr(step, "needs_web", False)) and not _web_search_enabled(agent_id):
+        return False
     current = getattr(step, "assigned_to", "") or ""
     if not current or not _web_search_enabled(current):
         return True

@@ -160,3 +160,17 @@ def test_first_ruling_reassign_is_coerced_to_retry_with_guidance():
     )
     assert store.reassigned == []  # no reassign written on ruling #1
     assert result.action == "stuck_retry"
+
+
+def test_needs_web_step_requires_a_searching_assignee(monkeypatch):
+    """v74: a step DECLARED to need live web lookup refuses any searchless candidate,
+    regardless of what its current holder can do (the pre-v74 gate only refused
+    downgrades relative to the current assignee)."""
+    from types import SimpleNamespace
+
+    import my_crew.runtime.team_tick_runner as ttr
+
+    step = SimpleNamespace(needs_web=True, assigned_to="searchless-holder")
+    monkeypatch.setattr(ttr, "_web_search_enabled", lambda a: a == "capable")
+    assert ttr._can_do_step("capable", step) is True
+    assert ttr._can_do_step("also-searchless", step) is False
