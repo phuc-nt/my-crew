@@ -59,6 +59,12 @@ này). Là process TÁCH BIỆT web app — web không tự dispatch việc.
 được MIỄN trần spawn — đúng-giờ không xếp hàng sau việc thường. **08-07**: `team-tick`
 cũng miễn trần — chỉ có MỘT coordinator nên chi phí thêm bị chặn ở 1 worker/tick, còn
 giữ nó sau trần thì phán quyết cho step hỏng chờ >3h (đo thật).
+**v74 — dispatch hướng sự kiện (`tick_poke.py`)**: worker team-step thoát (mọi kết cục)
+→ finally-touch `.data/tick.poke`; service ngủ lát 5s, thấy mtime poke vượt watermark →
+spawn 1 team-tick sớm trên thread riêng (debounce theo lát, poke cũ trước khi daemon
+start được coi đã xử lý). Nhịp 60s giữ nguyên làm fallback — mất poke chỉ trả về độ
+trễ cũ, không mất việc. Đo thật: gap dispatch bước sẵn-deps từ ~253s/task (11%
+wall-clock) xuống 1–17s/bước.
 
 ### 3.2a Integration health (`my_crew/server/integration_health.py`, v47)
 **Health check Docker chủ động** (`_docker_check`): probe `docker info` giới hạn 5s, báo ✓/✗ sạch khi daemon tắt/offline — panel Sức khỏe noti lỗi TRƯỚC khi giao việc deep_agent (no-shell step chạy 0-Docker qua `create_agent`, chỉ needs_shell→deep_agent thì dùng Docker).
@@ -204,6 +210,17 @@ tự do NHƯNG chỉ trong Docker sandbox cách ly + SANITIZE). Role template c�
   `needs_shell` được bind vào `decomposition_content_hash` (có điều kiện — chỉ emit khi True → DAG
   all-no-shell hash byte-identical pre-v45) nên CEO-confirm phủ luôn tư thế shell của kế hoạch.
   **v50 UI**: board card `steps_needs_shell` (count bước cần sandbox) trả từ GET `/api/team-tasks/board`, kanban hiện badge "🔒 N sandbox".
+
+**v74 — tier theo bước (`needs_web`) + fan-out**: đo thật (task b4c227ec37ba) 64% wall-clock là bước
+KHÔNG-tool chạy tier nặng (qa 548s deep, finalize 780s loop). Decompose gán `needs_web` per-step (true
+CHỈ KHI bước tra cứu web lấy dữ liệu mới; flag PHẢI nằm trong schema ví dụ của prompt — chỉ mô tả bằng
+văn không đủ, model mirror ví dụ); `resolve_step_runtime` ép **native one-shot** cho bước work
+`needs_web=false` chưa can thiệp + mọi review row (tool-less grading); rework row GIỮ tier agent (sửa
+lỗi dữ liệu cần tool — bài học vòng 7); hint sai tự hồi phục sau ruling đầu (`intervention_count≥1` bỏ
+ép). Bind hash có điều kiện như `needs_shell`. Hint-only, không phải quyền — tier native không vì thế
+có thêm tool nào. Decompose thêm QUY TẮC TÁCH SONG SONG: đề ≥4 thực thể độc lập cùng dạng → 2-3 bước
+collect deps rỗng, tên thực thể đích danh trong title + acceptance. Đo e2e v74 (5 trợ lý AI): wall
+25,8' (vs 40' vòng 8), $0.083, collect song song thật, qa/finalize/rework chạy native.
 
 **Triết lý moat (chốt qua research v45)**: **shell thật CHỈ chạy trong Docker sandbox**; việc no-shell
 (đại đa số: suy luận + đọc + viết báo cáo) chạy **Docker-free** trên create_agent. **Bác host-exec +

@@ -101,7 +101,8 @@ def test_reset_and_reassign_clear_the_step_checkpoint(tmp_path, monkeypatch):
     for t in ("checkpoints", "writes"):
         ckpt.execute(f"insert into {t} values ('team:t1:s1', 'x')")
         ckpt.execute(f"insert into {t} values ('team:t1:other', 'x')")
-    ckpt.commit(); ckpt.close()
+    ckpt.commit()
+    ckpt.close()
 
     store = TeamTaskStore(tmp_path / "team_tasks.sqlite3")
     steps = [{"step_id": "s1", "title": "t", "assigned_to": "agent-a", "deps": []}]
