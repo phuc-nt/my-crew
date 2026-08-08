@@ -41,7 +41,12 @@ _CHECK_SYSTEM = (
     "QUY TẮC ĐẾM ĐƯỢC: tiêu chí nêu yêu cầu đếm được (kèm link/URL, đủ N mục, có bảng, "
     "có mục nguồn) thì phải KIỂM THẬT trong kết quả — tiêu chí đòi link/URL mà kết quả "
     "không có chuỗi 'http' nào là KHÔNG ĐẠT, dù phần chữ có ghi 'nguồn: X'; đòi N mục "
-    "thì đếm đủ N. Không chấm đạt theo cảm giác."
+    "thì đếm đủ N. Không chấm đạt theo cảm giác. "
+    "QUY TẮC TRẦN YÊU CẦU: nếu ĐẦU VÀO có khối 'YÊU CẦU GỐC CỦA CEO' thì yêu cầu đó là "
+    "TRẦN — tiêu chí nào đòi CAO HƠN đề gốc (vd đề chỉ đòi 'link nguồn' mà tiêu chí đòi "
+    "'nguồn chính thức của hãng'; đề cho phép ghi THIẾU mà tiêu chí bắt phải có đủ số) "
+    "thì chấm theo ĐỀ GỐC, không theo phần thổi phồng. Kết quả trung thực dùng nguồn "
+    "gần kề + ghi rõ THIẾU cho phần không tìm được là ĐẠT với đề như vậy."
 )
 
 _REWORK_SYSTEM = (
