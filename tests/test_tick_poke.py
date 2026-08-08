@@ -20,3 +20,16 @@ def test_touch_failure_is_swallowed(monkeypatch):
 
     monkeypatch.setattr(tick_poke, "poke_path", _boom)
     tick_poke.touch_poke()  # must not raise — degrade to the 60s cadence
+
+
+def test_poke_worthy_actions_chain_terminates():
+    """v74: a productive tick action pokes the next tick; "none" and dead ends never
+    do — that asymmetry is what guarantees every poke chain stops at the first idle
+    tick instead of self-sustaining a 5s tick loop."""
+    from my_crew.runtime.team_tick_runner import poke_worthy
+
+    for action in ("spawned", "aggregated", "stuck_retry", "stuck_reassigned"):
+        assert poke_worthy(action) is True
+    for action in ("none", "failed", "stalled", "cap_exceeded", "timeout_escalated",
+                   "gave_up"):
+        assert poke_worthy(action) is False

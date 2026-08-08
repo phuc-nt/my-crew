@@ -38,6 +38,20 @@ logger = logging.getLogger(__name__)
 #: "task_id/step_id".
 _RETRY_SIDECAR_NAME = "team_tick_retries.json"
 
+#: v74: tick actions that OPEN THE DOOR for the next action ("take ONE action, exit"
+#: means a ruling and the rework spawn it enables are two separate ticks — measured
+#: ~65s apart on the minute cadence). A tick ending in one of these pokes the service
+#: so the next tick runs within a sleep slice (~5s). "none" NEVER pokes, so every
+#: poke chain terminates the first tick that finds nothing to do; failure-ish ends
+#: (failed/stalled/timeout_escalated/gave_up/cap_exceeded) don't poke either — their
+#: next move is either impossible or arrives via a worker-exit poke anyway.
+_POKE_WORTHY_ACTIONS = frozenset({"spawned", "aggregated", "stuck_retry", "stuck_reassigned"})
+
+
+def poke_worthy(action: str) -> bool:
+    """Should a tick that ended with `action` request an immediate follow-up tick?"""
+    return action in _POKE_WORTHY_ACTIONS
+
 
 def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) -> dict:
     """One `team-tick`: advance ONE open team task by ONE action, return a run-event dict.
@@ -165,6 +179,10 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
     delivered = result.action == "aggregated"
     logger.info("team-tick: task=%s action=%s detail=%s",
                 result.task_id, result.action, result.detail)
+    if poke_worthy(result.action):
+        from my_crew.runtime.tick_poke import touch_poke
+
+        touch_poke()
     return {"status": result.action, "checked": checked, "cost_usd": None,
             "delivered": delivered}
 
