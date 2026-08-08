@@ -133,6 +133,13 @@ def summarize_office_event(kind: str, body: dict) -> dict:
             attempt = body.get("attempt")
             if isinstance(attempt, int):
                 projected["attempt"] = attempt
+        # Routing flag, not content: the coordinator's fast path already DM'd this
+        # milestone to the CEO's chat, so the mirror must not re-push it (this
+        # projection silently dropping the flag was exactly how the duplicate ✅ +
+        # digest pair reached the CEO's phone — the writer set it, the firewall ate
+        # it). Emitted only when true, keeping other milestone bodies byte-identical.
+        if body.get("delivered_direct"):
+            projected["delivered_direct"] = True
         return projected
     if kind == "consult":
         # M33 role-play consultation (see `team_task_consult.ask_colleague`'s module

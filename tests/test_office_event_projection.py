@@ -147,3 +147,17 @@ def test_valid_kinds_matches_projection_switch():
     for kind in VALID_KINDS:
         # every VALID_KINDS member must be handled (non-{} output for a body with content)
         assert summarize_office_event(kind, {"task_title": "t", "text": "t"}) != {}
+
+
+def test_milestone_projection_keeps_the_delivered_direct_routing_flag():
+    """The write-time firewall silently ate this flag, so the mirror could never see
+    that the fast path had already DM'd the milestone — the CEO got the ✅ message and
+    an identical digest one minute later (observed on the phone, task b4c227ec37ba).
+    A routing boolean is not PII; it survives, and only when true."""
+    from my_crew.server.office_event_projection import summarize_office_event
+
+    body = {"task_id": "t", "task_title": "x", "milestone": "done",
+            "message": "m", "delivered_direct": True}
+    assert summarize_office_event("milestone", body)["delivered_direct"] is True
+    body["delivered_direct"] = False
+    assert "delivered_direct" not in summarize_office_event("milestone", body)
