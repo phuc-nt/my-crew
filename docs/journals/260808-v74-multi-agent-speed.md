@@ -44,9 +44,21 @@
   giữ nguyên. `_can_do_step` giờ dùng thẳng cờ `needs_web` (docstring cũ "không có cờ
   needs-web" đã hết đúng từ v74).
 
+## Benchmark (cùng ngày, khuya — báo cáo đầy đủ ở plans/reports/benchmark-260808-2234)
+- 2 vòng e2e thêm: bench-1 (5 cloud storage) **11,0' / $0.0235 / 0 can thiệp**, review
+  pass lần đầu, gap dispatch 0–3s; bench-2 (5 dịch vụ nhạc, không fan-out) 24,8' trong
+  đó 7,5' chờ CEO trả lời clarify — máy ≈17', gap dispatch đầu **5s**.
+- Bench-1 lộ 2 gap chót → vá luôn (e3eeedf): poke khi mint row (`review_inserted`/
+  `fanout_inserted` — trước chờ 44–190s) + poke ngay khi confirm giao việc (trước 30s).
+- Chốt số: cùng dạng đề 40' (vòng 8) → 11' khi fan-out ăn (3,6×), → ~17' máy khi
+  không (2,4×); cost giảm 2–3×. Biến động còn lại = decompose có tách không (~60%)
+  + vòng chất lượng (hành vi đúng).
+
 ## Mở / sang sau
 - `MPM_WEB_BASE_URL` (link bấm được trên điện thoại): chốt phương án `tailscale serve`
   (giữ bind localhost, không cần password web-auth) nhưng BLOCKED — cần bật HTTPS
   certificates trong Tailscale admin console + bật lại app Tailscale trên iPhone
   (offline 44 ngày). Lệnh sau khi bật: `tailscale serve --bg 8765`.
-- Theo dõi tỷ lệ decompose chịu fan-out; <50% đề đủ điều kiện thì cân nhắc ép code.
+- Theo dõi tỷ lệ decompose chịu fan-out (hiện 3/5); <50% thì cân nhắc ép code.
+- Clarify answer→resume còn ≤60s (có thể poke tại `apply_answer` — YAGNI vì phần chờ
+  chính là người); salvage-transcript mới có unit test, chưa bắn live.
