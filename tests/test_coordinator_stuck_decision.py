@@ -97,6 +97,7 @@ def test_retry_without_concrete_guidance_is_refused_and_becomes_give_up(tmp_path
 
 def test_reassign_to_a_roster_member_repoints_the_step_and_requeues_it(tmp_path):
     store = _stuck_store(tmp_path)
+    store.bump_intervention("t1", "s1")  # 2nd ruling — past the retry-first coercion
     result = run_one_tick(_deps(store, judge_stuck_step=lambda brief, step: {
         "decision": "reassign", "assign_to": "agent-b",
     }))
@@ -113,6 +114,7 @@ def test_reassign_restamps_the_plan_hash_so_the_next_tick_does_not_stall(tmp_pat
     tampering alarm about a change the coordinator itself made — so reassign would break
     every task it touched."""
     store = _stuck_store(tmp_path)
+    store.bump_intervention("t1", "s1")  # 2nd ruling — past the retry-first coercion
     run_one_tick(_deps(store, judge_stuck_step=lambda brief, step: {
         "decision": "reassign", "assign_to": "agent-b",
     }))
@@ -158,6 +160,7 @@ def test_a_refused_reassign_leaves_the_plan_hash_untouched(tmp_path):
 
 def test_reassign_to_an_unknown_agent_is_refused_and_leaves_the_assignee_alone(tmp_path):
     store = _stuck_store(tmp_path)
+    store.bump_intervention("t1", "s1")  # 2nd ruling — past the retry-first coercion
     result = run_one_tick(_deps(store, judge_stuck_step=lambda brief, step: {
         "decision": "reassign", "assign_to": "agent-ma",
     }))
