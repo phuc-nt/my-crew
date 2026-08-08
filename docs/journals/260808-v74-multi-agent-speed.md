@@ -54,6 +54,17 @@
   không (2,4×); cost giảm 2–3×. Biến động còn lại = decompose có tách không (~60%)
   + vòng chất lượng (hành vi đúng).
 
+## Bench-3 (09/08 khuya): 2 task đồng thời — lộ + vá bug split-sub
+- VPN (không fan-out) **12,3' / $0.0232 / 0 can thiệp** dù chia researcher với task
+  kia — tổng gap dispatch 16s; fairness + poke chain giữ nguyên hiệu quả dưới tải.
+- TMĐT lộ bug thật: **split-sub mint không thừa kế `needs_web`** → 3 sub ép native
+  searchless, mỗi sub đốt 1 ruling tự hồi phục, dữ liệu mỏng → gather trượt 2 lần →
+  gave_up trung thực → stalled. Vá fbaedd4: sub thừa kế cờ cha qua keyword-only
+  (đúng pattern guard-rail của needs_review), gather giữ False.
+- Học: guard-rail "row ticker-mint là việc text-only" viết cho review/rework/gather
+  không còn đúng khi split-sub mang chính việc collect của cha — flag mới phải rà
+  MỌI đường mint row, không chỉ decompose.
+
 ## Mở / sang sau
 - `MPM_WEB_BASE_URL` (link bấm được trên điện thoại): chốt phương án `tailscale serve`
   (giữ bind localhost, không cần password web-auth) nhưng BLOCKED — cần bật HTTPS
