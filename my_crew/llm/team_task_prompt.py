@@ -235,9 +235,16 @@ def build_review_messages(
     the ticker rule (code, not this prompt) is the sole place a review/rework row is
     ever inserted.
     """
+    from datetime import datetime
+
     wrapped_result = format_internal_content(result_text, label="kết quả cần soát")
     wrapped_acceptance = format_internal_content(acceptance, label="tiêu chí chấp nhận")
-    user = f"{wrapped_acceptance}\n\n{wrapped_result}" if wrapped_acceptance else wrapped_result
+    # Same temporal anchor as `build_self_check_messages`: an un-anchored grader fails
+    # genuinely fresh dates as "future/fabricated" against its training cutoff.
+    today = f"HÔM NAY là {datetime.now().strftime('%d/%m/%Y')} — ngày trong kết quả " \
+            "mới hơn kiến thức của bạn KHÔNG phải bằng chứng bịa đặt."
+    user = f"{today}\n\n{wrapped_acceptance}\n\n{wrapped_result}" if wrapped_acceptance \
+        else f"{today}\n\n{wrapped_result}"
     return [
         {"role": "system", "content": prepend_persona(_REVIEW_SYSTEM, persona)},
         {"role": "user", "content": user},
