@@ -12,7 +12,6 @@ from my_crew.agent.task_decomposition import (
     DecomposedTask,
     DecompositionError,
     TeamStepPlan,
-    parse_decomposed_task,
     validate_decomposition,
     validate_pic_terminal,
 )
@@ -33,8 +32,10 @@ _AMEND_SYSTEM = (
     '"requires_approval":true} — CHỈ liệt kê các bước MỚI cho phần còn chờ (không lặp '
     "lại các bước đã xong/đang chạy/thất bại — những bước đó giữ nguyên, không thuộc "
     "phạm vi chỉnh). Tối đa 7 bước MỚI. `assigned_to` PHẢI là một mã trong danh sách "
-    "nhân sự được cung cấp. `deps` chỉ được tham chiếu step_id trong CHÍNH danh sách "
-    "bước mới này (không tham chiếu step_id của các bước đã xong/đang chạy/thất bại). "
+    "nhân sự được cung cấp. `deps` được tham chiếu step_id trong danh sách bước mới "
+    "NÀY và cả step_id của các bước ĐÃ XONG/ĐANG CHẠY trong DAG (một bước chỉ đọc được "
+    "kết quả của deps trực tiếp — bước mới cần dữ liệu của bước đã xong thì PHẢI deps "
+    "vào nó); KHÔNG tham chiếu bước thất bại. "
     "Nếu đề bài nêu 'PIC: <mã>' thì trong danh sách bước MỚI phải có ĐÚNG MỘT bước chốt "
     "cuối không bước mới nào phụ thuộc vào — bước TỔNG HỢP/chốt kết quả — và bước đó "
     "PHẢI giao cho PIC (các bước mới khác đổ về nó qua deps). "
@@ -113,6 +114,40 @@ def _amend_frozen_prefix(task) -> tuple[TeamStepPlan, ...]:
     )
 
 
+def _parse_amend_steps(raw_json: str) -> DecomposedTask:
+    """Parse the amendment's steps WITHOUT the whole-DAG cross-deps validation.
+
+    An amendment's new pending steps legitimately depend on FROZEN step ids (a step
+    only reads its direct deps' artifacts — data does not flow transitively), so
+    `parse_decomposed_task`'s deps-must-be-known check would reject every valid
+    data-flow amend when run on the new slice alone (observed live: draft deps on a
+    running `outline` was 'unknown'). Each step still gets full per-step validation
+    (`TeamStepPlan`); every cross-step rule runs later on the COMBINED frozen+new DAG.
+    """
+    import json as _json
+
+    from my_crew.llm.team_task_check_prompt import strip_json_fences
+
+    try:
+        doc = _json.loads(strip_json_fences(raw_json))
+    except _json.JSONDecodeError as exc:
+        raise DecompositionError(f"phân rã không phải JSON hợp lệ: {exc}") from None
+    if not isinstance(doc, dict) or not isinstance(doc.get("steps"), list):
+        raise DecompositionError("phân rã phải là object JSON có danh sách `steps`")
+    try:
+        steps = tuple(TeamStepPlan.model_validate(s) for s in doc["steps"])
+    except Exception as exc:  # noqa: BLE001 — pydantic ValidationError, wrapped uniformly
+        raise DecompositionError(f"bước không hợp lệ: {exc}") from None
+    if not steps:
+        raise DecompositionError("amendment phải có ít nhất một bước mới")
+    # model_construct skips the cross-deps validator on purpose — the combined DAG
+    # construction in the caller runs it with the frozen ids in scope.
+    return DecomposedTask.model_construct(
+        steps=steps, requires_approval=True,
+        pic_id=str(doc.get("pic_id") or ""),
+    )
+
+
 def amend_with_retries(task, request: str, staff: list[tuple[str, str]]) -> tuple:
     """Bounded amend loop. Returns `(new_pending_step_dicts, combined_task, total_cost_usd)`
     — `combined_task` is the validated frozen-prefix + new-pending-tail `DecomposedTask`,
@@ -132,6 +167,13 @@ def amend_with_retries(task, request: str, staff: list[tuple[str, str]]) -> tupl
         raise DecompositionError("chưa có nhân sự nào để giao việc — hãy tạo agent trước")
 
     frozen_plan_steps = _amend_frozen_prefix(task)
+    # Frozen steps a NEW pending step may legitimately read data from. A dep on a
+    # FAILED step would deadlock dispatch (its artifact never comes), so those ids are
+    # excluded and surface as a clean retryable error instead.
+    dependable_frozen = {
+        s.step_id for s in task.steps
+        if s.status in ("done", "running") and not getattr(s, "system_inserted", 0)
+    }
     llm, _settings = _build_llm()
     total_cost = 0.0
     last_error = ""
@@ -143,8 +185,21 @@ def amend_with_retries(task, request: str, staff: list[tuple[str, str]]) -> tupl
         if result.cost_usd:
             total_cost += result.cost_usd
         try:
-            amendment = parse_decomposed_task(result.content)
-            combined = DecomposedTask(steps=frozen_plan_steps + amendment.steps)
+            amendment = _parse_amend_steps(result.content)
+            bad_refs = sorted({
+                d for s in amendment.steps for d in s.deps
+                if d not in dependable_frozen
+                and d not in {n.step_id for n in amendment.steps}
+            })
+            if bad_refs:
+                raise DecompositionError(
+                    f"deps tham chiếu bước không hợp lệ {bad_refs} — chỉ được deps vào "
+                    "bước MỚI hoặc bước đã xong/đang chạy (không phải bước thất bại)"
+                )
+            try:
+                combined = DecomposedTask(steps=frozen_plan_steps + amendment.steps)
+            except Exception as exc:  # noqa: BLE001 — pydantic error on the combined DAG
+                raise DecompositionError(f"DAG ghép không hợp lệ: {exc}") from None
             # v64: CAPTURE the validated result (it was previously discarded) — the
             # review policy normalizes `needs_review` inside validate, and new_pending
             # must persist the NORMALIZED flags, not the model's raw proposal.
@@ -152,9 +207,9 @@ def amend_with_retries(task, request: str, staff: list[tuple[str, str]]) -> tupl
             amended_tail = validated.steps[len(frozen_plan_steps):]
             # v15 PIC (red-team F2): a PIC task's amend must keep/re-establish the
             # "one terminal owned by the PIC" invariant. Scoped to the NEW pending
-            # slice, not `combined`: frozen (done/running) steps have no new
-            # dependents by construction (`_AMEND_SYSTEM` forbids referencing them),
-            # so they always LOOK terminal — including them would fail every amend.
+            # slice, not `combined`: frozen steps are outside the amend's remit and a
+            # frozen row with no dependents would always LOOK terminal — including
+            # them would fail every amend.
             pic_id = getattr(task, "pic_id", "") or ""
             if pic_id:
                 validate_pic_terminal(amendment.steps, pic_id)
