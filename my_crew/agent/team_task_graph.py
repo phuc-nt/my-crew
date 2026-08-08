@@ -430,21 +430,29 @@ def default_team_task_deps(
             logger.warning("team-step rework failed: %s", exc)
             raise
 
-    def _deliver(result_text: str, version: str, self_check_failed: bool) -> tuple[bool, str]:
+    def _deliver(
+        result_text: str, version: str, self_check_failed: bool,
+        check_reasons: tuple[str, ...] = (),
+    ) -> tuple[bool, str]:
         from my_crew.agent.team_task_artifact import write_step_artifact
 
-        write_step_artifact(
-            data_dir, task_id, step_seq,
-            {
-                # Mirrors the status the runner is about to persist for this step: a
-                # result that never passed its own acceptance check is not "done", it is
-                # waiting on a coordinator decision. The artifact is the record the CEO
-                # and the coordinator both read, so it must not claim more than the DB.
-                "status": "needs_decision" if self_check_failed else "done",
-                "result_text": result_text, "step_title": step_title,
-                "attempt": version, "version": version, "self_check_failed": self_check_failed,
-            },
-        )
+        payload = {
+            # Mirrors the status the runner is about to persist for this step: a
+            # result that never passed its own acceptance check is not "done", it is
+            # waiting on a coordinator decision. The artifact is the record the CEO
+            # and the coordinator both read, so it must not claim more than the DB.
+            "status": "needs_decision" if self_check_failed else "done",
+            "result_text": result_text, "step_title": step_title,
+            "attempt": version, "version": version, "self_check_failed": self_check_failed,
+        }
+        # WHY the check failed used to live only in the worker's memory — the artifact
+        # said `self_check_failed: true` and nothing else, so diagnosing a failed step
+        # meant replaying the grader by hand (done live, task 5eea1ae1c969). The
+        # accumulated failure reasons now ride in the record both the coordinator and
+        # the CEO read.
+        if self_check_failed and check_reasons:
+            payload["self_check_failures"] = [str(r)[:300] for r in check_reasons][:10]
+        write_step_artifact(data_dir, task_id, step_seq, payload)
         room_message = _room_message(step_title, result_text)
         return True, room_message
 
@@ -862,7 +870,15 @@ def _make_team_task_nodes(deps: TeamTaskDeps, *, interrupt_on_clarify: bool = Fa
             proceed = deps.external_write(result_text)
             if not proceed:
                 return {"status": "awaiting_approval", "delivered": False, "room_message": ""}
-        delivered, room_message = deps.deliver_step(result_text, version, self_check_failed)
+        # 4-arg shape carries the failure reasons into the artifact; older fakes/callers
+        # on the 3-arg shape keep working (they simply persist no reasons, as before).
+        reasons = tuple(state.get("check_reasons", ()))
+        try:
+            delivered, room_message = deps.deliver_step(
+                result_text, version, self_check_failed, reasons
+            )
+        except TypeError:
+            delivered, room_message = deps.deliver_step(result_text, version, self_check_failed)
         # The artifact is written either way — the coordinator has to read this result to
         # judge it. But a step that graded itself as not meeting its acceptance criteria
         # and ran out of rework budget is NOT done: reporting it as done let an "I would

@@ -13,6 +13,8 @@ Load-bearing:
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from my_crew.agent.team_task_artifact import read_step_artifact
 from my_crew.agent.team_task_graph import (
     TeamTaskDeps,
@@ -222,3 +224,44 @@ def test_default_deps_missing_prior_artifact_yields_empty_handoff(tmp_path, monk
     result = graph.invoke({"step_title": "orphan step"})
 
     assert result["handoff_context"] == ""  # tolerant of the missing prior artifact
+
+
+def test_failed_self_check_persists_its_reasons_in_the_artifact(tmp_path, monkeypatch):
+    """`self_check_failed: true` with no WHY forced replaying the grader by hand to
+    diagnose a failed step (done live, task 5eea1ae1c969). The accumulated failure
+    reasons must ride in the artifact the coordinator and CEO read."""
+    settings = build_settings_from_dict({"data_dir": tmp_path})
+
+    class _FakeResult:
+        content = "kết quả thiếu link"
+        cost_usd = 0.01
+
+    class _FakeLlm:
+        def __init__(self, _settings):
+            pass
+
+        def complete(self, _messages):
+            return _FakeResult()
+
+    import my_crew.llm.client as llm_client_mod
+
+    monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)
+
+    deps = default_team_task_deps(
+        settings=settings, step_title="draft", data_dir=tmp_path,
+        task_id="task-9", step_seq=1,
+    )
+    # Deterministic failing grader + no-op rework: the graph exhausts rework and
+    # delivers with self_check_failed=True.
+    deps = replace(
+        deps,
+        run_self_check=lambda _t, _a, _h="": (False, ["thiếu link nguồn (0 chuỗi http)"], 0.9),
+        run_rework=lambda *_a, **_k: ("kết quả thiếu link", None),
+    )
+    graph = build_team_task_graph(deps=deps)
+    result = graph.invoke({"step_title": "draft", "acceptance": "- có link nguồn"})
+
+    assert result["status"] == "needs_decision"
+    artifact = read_step_artifact(tmp_path, "task-9", 1)
+    assert artifact["self_check_failed"] is True
+    assert any("thiếu link" in r for r in artifact["self_check_failures"])
