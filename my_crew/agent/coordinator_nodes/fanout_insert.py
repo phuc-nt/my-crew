@@ -105,13 +105,17 @@ def maybe_insert_fanout(deps: CoordinatorDeps, task: TeamTask) -> TickResult | N
         # commits would strand subs without their gather forever (the children-exist
         # guard would refuse a re-mint), and downstream would then read the parent's
         # notice as content once the subs finished.
-        rows: list[tuple[dict, bool]] = [
+        # v74: subs INHERIT the parent's needs_web — they carry the parent's actual
+        # collection work, and a flagless research sub gets forced onto the searchless
+        # native tier, burning one coordinator ruling each to self-heal (measured:
+        # 8da80658e53d). The gather stays False: merging sub results is tool-less.
+        rows: list[tuple[dict, bool, bool]] = [
             ({
                 "step_id": f"{step.step_id}-sub{i}", "title": sub["title"],
                 "assigned_to": sub["assigned_to"], "deps": [],
                 "step_type": "work", "parent_step_id": step.step_id,
                 "acceptance": f"- Hoàn thành trọn vẹn phần: {sub['title']}",
-            }, False)
+            }, False, step.needs_web)
             for i, sub in enumerate(subs, start=1)
         ]
         rows.append((
@@ -124,6 +128,7 @@ def maybe_insert_fanout(deps: CoordinatorDeps, task: TeamTask) -> TickResult | N
                 "acceptance": step.acceptance,
             },
             step.needs_review,
+            False,
         ))
         deps.store.insert_steps_atomic(task.id, rows)
         append_office_event(

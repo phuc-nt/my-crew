@@ -790,23 +790,29 @@ class TeamTaskStore:
         return updated
 
     def insert_step(self, task_id: str, step: dict[str, Any], *,
-                    needs_review: bool = False) -> None:
+                    needs_review: bool = False, needs_web: bool = False) -> None:
         """Append one ticker-minted row (review/rework/sub/gather) — see
         `team_task_steps.insert_step`'s docstring for the `system_inserted` forcing
-        and the explicit `needs_review` opt-in (gather rows only)."""
-        _steps.insert_step(self._conn, task_id, step, needs_review=needs_review)
+        and the explicit `needs_review`/`needs_web` opt-ins (gather / split-sub rows)."""
+        _steps.insert_step(self._conn, task_id, step, needs_review=needs_review,
+                           needs_web=needs_web)
         self._conn.commit()
 
     def insert_steps_atomic(self, task_id: str,
-                            rows: list[tuple[dict[str, Any], bool]]) -> None:
+                            rows: list[tuple[dict[str, Any], bool] |
+                                       tuple[dict[str, Any], bool, bool]]) -> None:
         """Append SEVERAL ticker-minted rows in ONE transaction (v34 P4 fan-out mints
         N subs + 1 gather together — a crash between per-row commits would strand
         subs without their gather forever, since the children-exist idempotency guard
-        then refuses a re-mint). `rows` = [(step_dict, needs_review)]. All-or-nothing:
+        then refuses a re-mint). `rows` = [(step_dict, needs_review)] or
+        [(step_dict, needs_review, needs_web)] (v74 split subs). All-or-nothing:
         any failure rolls the whole mint back."""
         try:
-            for step, needs_review in rows:
-                _steps.insert_step(self._conn, task_id, step, needs_review=needs_review)
+            for row in rows:
+                step, needs_review = row[0], row[1]
+                needs_web = bool(row[2]) if len(row) > 2 else False
+                _steps.insert_step(self._conn, task_id, step, needs_review=needs_review,
+                                   needs_web=needs_web)
         except Exception:
             self._conn.rollback()
             raise

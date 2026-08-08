@@ -346,3 +346,23 @@ def test_id_collision_with_plan_step_reads_as_invalid(store):
     task = store.get("t9")
     assert len(task.steps) == 2  # nothing minted
     assert next(s for s in task.steps if s.step_id == "s1").split_proposal_json is None
+
+
+def test_fanout_subs_inherit_parent_needs_web(store):
+    """v74: split subs carry the parent's actual collection work — minted flagless
+    they run the searchless native tier and burn one ruling each to self-heal
+    (measured live, task 8da80658e53d). The gather merges results: tool-less, False."""
+    plan = [
+        {"step_id": "s1", "title": "Khảo sát 5 nguồn", "assigned_to": "agent-a",
+         "deps": [], "needs_web": True},
+        {"step_id": "s2", "title": "Chốt", "assigned_to": "agent-b", "deps": ["s1"]},
+    ]
+    store.create_task(task_id="t1", title="demo", original_request="x")
+    store.set_plan("t1", plan, plan_hash=_hash(plan))
+    _finish_s1_with_split(store)
+
+    assert maybe_insert_fanout(_deps(store), store.get("t1")) is not None
+    by_id = {s.step_id: s for s in store.get("t1").steps}
+    assert by_id["s1-sub1"].needs_web is True
+    assert by_id["s1-sub2"].needs_web is True
+    assert by_id["s1-gather"].needs_web is False

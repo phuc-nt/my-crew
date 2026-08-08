@@ -277,7 +277,7 @@ def replace_steps(conn: sqlite3.Connection, task_id: str, steps: list[dict[str, 
 
 
 def insert_step(conn: sqlite3.Connection, task_id: str, step: dict[str, Any], *,
-                needs_review: bool = False) -> None:
+                needs_review: bool = False, needs_web: bool = False) -> None:
     """Append ONE dynamically-minted row (review/rework) AFTER the task's confirmed DAG
     is already open — the AUTOINCREMENT `seq` continues from wherever it left off, so
     this row always sorts after every existing step in `steps_for_task`/`next_pending_step`.
@@ -295,18 +295,26 @@ def insert_step(conn: sqlite3.Connection, task_id: str, step: dict[str, Any], *,
     ticker-minted rows (review/rework/gather) are system_inserted, excluded from the confirm
     hash, and their text-only work never needs a shell — they take the schema DEFAULT 0 →
     create_agent tier, matching the `needs_review`-not-copied guard-rail above.
+
+    v74 `needs_web` follows the `needs_review` pattern (keyword-only, never read off the
+    caller's dict): review/rework/gather rows keep the default False, but a runtime-SPLIT
+    sub carries the parent's actual collection work — minting it flagless forced research
+    subs onto the searchless native tier, and every one burned a coordinator ruling to
+    self-heal (measured: task 8da80658e53d, 3 subs, iv=1 each, 13-23min gaps).
     """
     conn.execute(
         "INSERT INTO team_steps "
         "(task_id, step_id, title, assigned_to, deps_json, status, acceptance, "
-        " step_type, needs_review, system_inserted, parent_step_id, review_round) "
-        "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, 1, ?, ?)",
+        " step_type, needs_review, needs_web, system_inserted, parent_step_id, "
+        " review_round) "
+        "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, 1, ?, ?)",
         (
             task_id, step["step_id"], step.get("title", ""), step.get("assigned_to", ""),
             json.dumps(list(step.get("deps", ())), ensure_ascii=False),
             step.get("acceptance", ""),
             step.get("step_type") or "review",
             int(bool(needs_review)),
+            int(bool(needs_web)),
             step.get("parent_step_id"),
             int(step.get("review_round") or 0),
         ),
