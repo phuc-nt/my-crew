@@ -56,7 +56,9 @@ này). Là process TÁCH BIỆT web app — web không tự dispatch việc.
 **v65 — scheduler công bằng 2 tầng**: chọn agent theo round-robin STATELESS mỗi tick
 (không agent nào đói định mệnh khi hàng đợi vượt trần spawn); pseudo-kind đúng-giờ
 (`reminder-sweep`, mỗi phút quét `reminders.db` per-agent, DM Telegram đúng phút hẹn)
-được MIỄN trần spawn — đúng-giờ không xếp hàng sau việc thường.
+được MIỄN trần spawn — đúng-giờ không xếp hàng sau việc thường. **08-07**: `team-tick`
+cũng miễn trần — chỉ có MỘT coordinator nên chi phí thêm bị chặn ở 1 worker/tick, còn
+giữ nó sau trần thì phán quyết cho step hỏng chờ >3h (đo thật).
 
 ### 3.2a Integration health (`my_crew/server/integration_health.py`, v47)
 **Health check Docker chủ động** (`_docker_check`): probe `docker info` giới hạn 5s, báo ✓/✗ sạch khi daemon tắt/offline — panel Sức khỏe noti lỗi TRƯỚC khi giao việc deep_agent (no-shell step chạy 0-Docker qua `create_agent`, chỉ needs_shell→deep_agent thì dùng Docker).
@@ -274,6 +276,40 @@ hoạt-động / kết-quả + panel 3D (`views/office-3d/`, react-three-fiber).
 5. SSE đẩy event → SPA cập nhật feed/3D realtime. Bước done `needs_review` → ticker chèn
    soát chéo. Bước cuối (PIC) xong → task done.
 6. Bước "ghi ra ngoài" (nếu có) → Action Gateway → Lớp B chờ CEO duyệt ở tab Duyệt.
+
+### 4a. Vòng phán đoán khi step hỏng (cứng hoá 08-07/08-08)
+
+- **Mọi step thấy đề gốc**: `original_request` của CEO mở đầu khối handoff của TỪNG
+  step — worker không bao giờ phải đoán chủ thể từ title chung chung, và grader có căn
+  cứ đối chiếu (`team_task_graph._read_handoff`).
+- **Grader neo thực tại**: self-check + peer-review mở đầu bằng "HÔM NAY là <ngày>"
+  (dữ liệu mới hơn kiến thức model ≠ bịa) và **luật TRẦN**: tiêu chí do decompose sinh
+  ra đòi CAO HƠN đề gốc thì chấm theo đề gốc (`team_task_check_prompt`). Tiêu chí đếm
+  được (link, N mục) phải kiểm thật. Lý do trượt lưu vào artifact
+  (`self_check_failures`).
+- **Retry-first**: phán quyết ĐẦU TIÊN cho một step kẹt luôn là retry-with-guidance
+  (đo 5/6 reassign-lần-đầu là sai); reassign chỉ từ phán quyết thứ hai, và gate năng
+  lực xét cả TIER runtime (deep_agent sandbox không mạng ≠ biết search, dù cờ
+  `web_search` bật) (`stuck_decision`, `team_tick_runner._web_search_enabled`).
+- **Redo xoá checkpoint**: retry/reassign/CEO-retry là LÀM LẠI — thread checkpoint của
+  attempt chết giữa chừng bị xoá, không adopt (adopt nhảy qua perceive nên guidance
+  không bao giờ được đọc; resume crash cùng-attempt giữ nguyên)
+  (`team_task_store.reset_step_to_pending/reassign_step`).
+- **Nút bấm hành động thật**: câu hỏi nhắc-việc-kẹt rung 2 ("Đợi thêm"/"Huỷ việc này")
+  được follow-up sweep tiêu thụ — huỷ là huỷ thật + mốc ❌ vào feed, mỗi câu trả lời
+  chỉ hành động một lần (`follow_up_sweep._consume_ceo_answers`).
+
+### 4b. Định tuyến Telegram (một chat duy nhất, 08-08)
+
+Nguyên tắc CEO: *"giao việc cho bot nào thì bot đó nhận mọi thông tin"*. Mọi tin
+CEO-facing đi **coordinator-first** (bot của chat giao việc), admin chỉ là fallback:
+`operator_notify` (clarify, watcher, thông báo chung), digest 🏁 của milestone-mirror,
+và tin "✅ HOÀN THÀNH" fast-path kèm link workroom
+(`{MPM_WEB_BASE_URL|http://localhost:8765}/office?room=<task>` —
+`dashboard_links.py`). Chống đúp cùng-chat: fast-path gửi trước rồi đóng dấu
+`delivered_direct` vào mốc done (key này phải nằm trong whitelist của
+`office_event_projection` — tường lửa PII từng nuốt cờ lặng lẽ), mirror bỏ qua mốc đã
+đóng dấu. Tiêu đề task không lặp trong một tin.
 
 ## 5. Lưu trữ
 

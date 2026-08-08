@@ -19,6 +19,12 @@
 - Test đọc DB production là bom hẹn giờ: 4 test heartbeat đỏ đúng sáng có task stalled thật; mirror test lệ thuộc registry thật sẽ đỏ trên CI — cả hai vá bằng cách ly/fallback seam.
 - "Xin phép tra cứu" có 2 nguồn khác nhau: memory poisoning (đã vá 08-07) VÀ rework-node không tool bị resume lặp (vá hôm nay) — cùng triệu chứng, khác bệnh; đọc kỹ artifact mới phân biệt được.
 
+## Chiều 08-08 — capstone
+- **Vòng 8 (lãi suất, đề nhắn lại): PASS SẠCH TUYỆT ĐỐI** — 5/5 bước lần 1, 0 can thiệp, $0.05 (vòng 7 cùng đề: $0.11, chết bước đầu sau 6 attempt). Số thật kèm nguồn + thời điểm (VPBank 6,4/6,6%, VCB 4,7% CafeF 12/2025), 3 ngân hàng khai THIẾU trung thực. Toàn bộ 2 ngày fix được kiểm chứng trong một vòng.
+- Nút "Huỷ việc này" hoá ra chỉ ghi nhận (v1 by-design "does NOT auto-act") — CEO bấm mà task đứng im; vá: follow-up sweep tiêu thụ câu trả lời rung-2, huỷ thật + mốc ❌, hành động đúng 1 lần qua `resume_token` (`8e2a5c5`); câu bấm cũ được tiêu thụ hồi tố.
+- Tin ✅ vẫn đúp sau fix sáng: tường lửa PII (`office_event_projection` whitelist) nuốt lặng lẽ cờ `delivered_direct` lúc GHI — người viết đặt cờ, firewall ăn cờ, mirror không bao giờ thấy. Vá whitelist cho cờ routing đi qua (`9794c32`). Bài học: cờ mới đi qua tầng chiếu phải kiểm cả BÊN ĐỌC lẫn BÊN GHI.
+
 ## Mở / sang sau
-- Vụ lãi suất ngân hàng chưa có bản dữ liệu thật — nhắn lại đề là vòng chạy sạch đầu tiên với trọn bộ fix (quỹ 28 vòng + trần chấm + redo sạch).
+- Đặt `MPM_WEB_BASE_URL` (Tailscale/LAN) để link 🔎 bấm được từ điện thoại — chờ CEO cho địa chỉ.
 - Cân nhắc: khi loop cạn quỹ, thay degrade-về-rỗng bằng một call chốt "tổng hợp từ những gì đã tra được".
+- Autopilot dead-step reset giữ nguyên assignee cũ (kể cả người thiếu năng lực) — gate tier mới chặn đường vào, nhưng reset chưa biết chọn lại người.

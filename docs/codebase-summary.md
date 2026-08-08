@@ -1,8 +1,16 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-08-05 — as-built v70 (v69 live, v70 in progress).** 2802 backend + 279 frontend + 8 e2e
-> tests, ruff/tsc clean. PyPI `my-crew` 0.8.0+. Sau v50: v51 productize PyPI · v52 dual-lens ·
+> Status: **2026-08-08 — as-built sau arc "cứng hoá tự chủ" 08-07→08-08** (~30 commit,
+> chi tiết ở `journals/260807-autonomy-e2e-hardening.md` + `260808-grader-judgment-hardening.md`):
+> model mặc định fleet → `qwen/qwen3.7-plus`; team-tick miễn tick-cap; memory-extractor
+> lọc poison bằng code; deep_agent sanitizer batch 1-call (skip khi network-off);
+> retry-first + gate năng lực theo tier; redo xoá checkpoint; grader neo ngày + trần
+> đề gốc + lưu lý do trượt vào artifact; đề gốc CEO vào handoff mọi step; bước chốt
+> fan-in ép bằng code; amend cho deps vào bước frozen done/running; Telegram
+> coordinator-first một chat (✅ fast-path kèm link `dashboard_links.py`, chống đúp qua
+> cờ `delivered_direct` sống sót projection); nút nhắc-việc-kẹt hành động thật.
+> 2930 backend + 279 frontend + 8 e2e tests, ruff/tsc clean. PyPI `my-crew` 0.8.0+. Sau v50: v51 productize PyPI · v52 dual-lens ·
 > v53 UI kỷ luật VN/EN · v54 cockpit action rail · v55 viewport shell · v56 Playwright e2e ·
 > **v57 personal-pack** (thư ký riêng Telegram: listener tức thì, briefing, gws, tao_lich,
 > daily-notes memory, chat web 2-pass) · v58 roster + gui_email + queue transparency ·
