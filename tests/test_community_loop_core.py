@@ -189,3 +189,92 @@ def test_shell_tier_binds_system_prompt_and_one_system_message(monkeypatch):
     )
     assert _system_count(seen["messages"]) == 1
     assert seen["system_prompt"] is not None  # shell tier keeps system_prompt= binding
+
+
+# --- v74.1: cap overflow salvages the partial transcript --------------------------------------
+
+
+def _overflow_agent(states, synthesized):
+    """A fake compiled graph: stream yields `states` then overflows; invoke returns the
+    synthesis result (recording what transcript it was given)."""
+    from langgraph.errors import GraphRecursionError
+
+    class _Agent:
+        def __init__(self):
+            self.invoke_input = None
+            self.invoke_config = None
+
+        def stream(self, _state, config=None, stream_mode=None):
+            yield from states
+            raise GraphRecursionError("cap")
+
+        def invoke(self, state, config=None):
+            self.invoke_input = state["messages"]
+            self.invoke_config = config
+            return {"messages": [*state["messages"], _Msg(synthesized)]}
+
+    return _Agent()
+
+
+def test_overflow_synthesizes_from_partial_and_trims_dangling_tool_call():
+    from langchain_core.messages import HumanMessage
+
+    from my_crew.runtime_backends.community_loop_core import invoke_capped
+
+    class _ToolCallMsg(_Msg):
+        def __init__(self):
+            super().__init__("")
+            self.tool_calls = [{"name": "web_search"}]
+
+    fetched = _Msg("gia ChatGPT Plus: 20 USD")
+    dangling = _ToolCallMsg()
+    agent = _overflow_agent(
+        states=[{"messages": [fetched]}, {"messages": [fetched, dangling]}],
+        synthesized="tong hop tu du lieu da co",
+    )
+    result = invoke_capped(agent, [_Msg("de bai")], recursion_limit=4)
+    assert result["messages"][-1].content == "tong hop tu du lieu da co"
+    # the dangling tool-call turn was trimmed; the fetched data + instruction remain
+    assert dangling not in agent.invoke_input
+    assert fetched in agent.invoke_input
+    assert isinstance(agent.invoke_input[-1], HumanMessage)
+    assert "THIẾU" in agent.invoke_input[-1].content
+    assert agent.invoke_config["recursion_limit"] == 6  # bounded synthesis turn
+
+
+def test_overflow_with_no_partial_degrades_to_empty():
+    from my_crew.runtime_backends.community_loop_core import invoke_capped
+
+    agent = _overflow_agent(states=[], synthesized="never used")
+    result = invoke_capped(agent, [_Msg("de bai")], recursion_limit=4)
+    assert result["messages"][-1].content == ""
+    assert agent.invoke_input is None  # no synthesis attempted on an empty transcript
+
+
+def test_overflow_synthesis_failure_degrades_to_empty():
+    from langgraph.errors import GraphRecursionError
+
+    from my_crew.runtime_backends.community_loop_core import invoke_capped
+
+    agent = _overflow_agent(states=[{"messages": [_Msg("mot it du lieu")]}],
+                            synthesized="unused")
+
+    def _boom(state, config=None):
+        raise GraphRecursionError("cap again")
+
+    agent.invoke = _boom
+    result = invoke_capped(agent, [_Msg("de bai")], recursion_limit=4)
+    assert result["messages"][-1].content == ""
+
+
+def test_agent_without_stream_keeps_invoke_path():
+    from my_crew.runtime_backends.community_loop_core import invoke_capped
+
+    class _InvokeOnly:
+        stream = None
+
+        def invoke(self, state, config=None):
+            return {"messages": [*state["messages"], _Msg("qua invoke")]}
+
+    result = invoke_capped(_InvokeOnly(), [_Msg("x")], recursion_limit=4)
+    assert result["messages"][-1].content == "qua invoke"

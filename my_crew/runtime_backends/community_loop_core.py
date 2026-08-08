@@ -62,9 +62,12 @@ def invoke_capped(
     """Invoke a langchain-family agent with a hard recursion cap, degrading on overflow.
 
     A loop that exhausts its cap raises `GraphRecursionError`; left uncaught it propagates to the
-    team-step runner and marks the whole step FAILED, discarding any work done. Instead we catch
-    it and return an empty result so the step's self_check/deliver still run. The invoke runs with
-    LangSmith tracing forced off (see `_tracing_off`) so no turn egresses outside the gateway.
+    team-step runner and marks the whole step FAILED, discarding any work done. Instead the run
+    goes through `.stream(values)` (keeping the latest state), and on overflow the partial
+    transcript gets one bounded synthesis turn (`_synthesize_from_partial`) — falling back to an
+    empty result only when even that fails — so self_check/deliver still run. The invoke runs
+    with LangSmith tracing forced off (see `_tracing_off`) so no turn egresses outside the
+    gateway.
 
     `usage_handler` (v43, optional `UsageMetadataCallbackHandler`): attached to
     `config["callbacks"]` so it accumulates `usage_metadata` from EVERY LLM call in the run tree —
@@ -81,17 +84,77 @@ def invoke_capped(
     config: dict = {"recursion_limit": recursion_limit}
     if usage_handler is not None:
         config["callbacks"] = [usage_handler]
+    empty = {"messages": [*messages, AIMessage(content="")]}
+    # `.stream(values)` instead of `.invoke` so the transcript survives a cap overflow —
+    # `invoke` raising GraphRecursionError discards every tool result already fetched.
+    # An agent double without `.stream` (tests, minimal fakes) keeps the invoke path.
+    if getattr(agent, "stream", None) is None:
+        try:
+            with _tracing_off():
+                return agent.invoke({"messages": messages}, config=config)
+        except GraphRecursionError:
+            logger.warning("community loop hit recursion_limit=%d; no stream support — "
+                           "degrading to an empty result", recursion_limit)
+            return empty
+    last_state: dict | None = None
     try:
         with _tracing_off():
-            return agent.invoke({"messages": messages}, config=config)
+            for state in agent.stream({"messages": messages}, config=config,
+                                      stream_mode="values"):
+                last_state = state
+        return last_state if last_state is not None else empty
     except GraphRecursionError:
-        logger.warning(
-            "community loop hit recursion_limit=%d; degrading to an empty result so the step "
-            "runs self_check/deliver instead of failing outright", recursion_limit,
+        return _synthesize_from_partial(
+            agent, messages, last_state, config=config, recursion_limit=recursion_limit,
+            empty=empty,
         )
-        # No usable output — return an empty assistant turn (not the echoed prompt) so
-        # record_loop_result yields text="" and the step delivers nothing rather than FAILED.
-        return {"messages": [*messages, AIMessage(content="")]}
+
+
+def _synthesize_from_partial(
+    agent: Any, messages: list, last_state: dict | None, *, config: dict,
+    recursion_limit: int, empty: dict,
+) -> dict:
+    """Cap overflow: one short follow-up invoke that turns the PARTIAL transcript into an
+    honest final answer instead of discarding it.
+
+    Pre-v74.1 the step degraded to an empty result — a loop that spent 28 rounds
+    gathering real data delivered nothing, self_check failed, and the coordinator spent
+    rulings recovering what the transcript already contained. Now the partial transcript
+    (minus a dangling tool-call turn the stream may have stopped on) gets ONE bounded
+    synthesis turn: no more tools, use what was fetched, mark gaps THIẾU — the same
+    honesty contract as a drop-step placeholder. If even that overflows/fails, the old
+    empty degrade stands. The synthesis invoke reuses `config` (same usage_handler), so
+    its tokens fold into the step's cost like every other turn.
+    """
+    from langchain_core.messages import HumanMessage
+
+    partial = list((last_state or {}).get("messages") or [])
+    # A values-stream can end on a model turn that REQUESTED tools which never ran —
+    # a transcript ending in dangling tool_calls is rejected by chat APIs, so trim it.
+    while partial and getattr(partial[-1], "tool_calls", None):
+        partial.pop()
+    if not partial:
+        logger.warning("community loop hit recursion_limit=%d with no partial transcript; "
+                       "degrading to an empty result", recursion_limit)
+        return empty
+    instruction = HumanMessage(content=(
+        "Bạn đã hết ngân sách vòng tool cho bước này. DỪNG gọi tool. Từ toàn bộ dữ liệu "
+        "đã thu thập ở trên, tổng hợp NGAY câu trả lời cuối tốt nhất có thể: chỉ dùng số "
+        "liệu/nguồn đã có trong hội thoại, phần chưa kịp thu thập ghi rõ 'THIẾU: ...' — "
+        "tuyệt đối không bịa."
+    ))
+    logger.warning(
+        "community loop hit recursion_limit=%d; synthesizing a final answer from the "
+        "%d-message partial transcript", recursion_limit, len(partial),
+    )
+    try:
+        with _tracing_off():
+            return agent.invoke({"messages": [*partial, instruction]},
+                                config={**config, "recursion_limit": 6})
+    except Exception:  # noqa: BLE001 — salvage is best-effort, incl. a second overflow
+        logger.warning("partial-transcript synthesis failed; degrading to an empty result",
+                       exc_info=True)
+        return empty
 
 
 def _flatten_usage_handler(handler: Any) -> tuple[int, int]:
