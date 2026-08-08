@@ -23,6 +23,7 @@
 - Model đổi (minimax→qwen) đổi cả dạng lỗi: CoT-leak vào content là lỗi mới, không có ở model cũ — swap model cần soát lại các call lấy `content` thô.
 
 ## Mở / sang sau
-- Coordinator chuộng `reassign` ngay lần trượt đầu (3/4 phán quyết) — cân nhắc thiên về retry-with-guidance trước; reassign bước chốt còn phá quy ước PIC-giữ-bước-chốt.
-- Audit `web_search` không ghi `actor` — khó quy trách nhiệm lượt search.
-- Deep_agent network-on: sanitize 5 call/step khá đắt, cân nhắc chỉ sanitize handoff + memory.
+- ~~Coordinator chuộng `reassign` ngay lần trượt đầu~~ → đã vá 08-07/08-08: retry-first (`6c34353` + `1d10b8a`), reassign chỉ từ ruling 2.
+- ~~Audit `web_search` không ghi `actor`~~ → đã vá 08-08 (`db6fae3`): actor = basename data_dir per-agent, cả 3 call site.
+- Đã vá thêm 08-08: artifact lưu lý do self-check trượt (`51f8e4e`); amend cho new step deps vào bước frozen done/running, cấm failed (`5bd3ad9`); `DEFAULT_MODEL` theo fleet qwen + test heartbeat cách ly team-task store — 4 test đọc nhầm DB production, đỏ đúng sáng có task stalled thật (`dd00a53`). Suite 2.923 pass.
+- Còn lại: deep_agent network-on sanitize 5 call/step khá đắt, cân nhắc chỉ sanitize handoff + memory; mirror admin có thể thu về fallback-only nếu CEO muốn.
