@@ -142,3 +142,54 @@ def test_failed_rung_does_not_advance_level(store, fired, monkeypatch):
     level = store._conn.execute(
         "SELECT follow_up_level FROM team_tasks WHERE id='t6'").fetchone()[0]
     assert level == 0  # nothing recorded — next sweep retries rung 1
+
+
+def test_cancel_button_answer_actually_cancels_the_task(store, fired):
+    """v1 only RECORDED the rung-2 answer — the CEO pressed 'Huỷ việc này' and the task
+    stayed stalled forever (observed live, task 5eea1ae1c969). The sweep must act."""
+    from my_crew.runtime.clarify_store import ClarifyStore
+    from my_crew.runtime.team_task_paths import clarify_db_path
+
+    _mk_task(store, "t1", "stalled", created_at="2026-07-10T00:00:00+00:00")
+    cstore = ClarifyStore(clarify_db_path())
+    cid = cstore.create_question(
+        agent_id="coordinator", task_id="t1",
+        question="Việc kẹt — xử lý thế nào?", options=["Đợi thêm", "Huỷ việc này"],
+    )
+    cstore.apply_answer(cid, "Huỷ việc này")
+    cstore.close()
+
+    fus.run_follow_up_sweep(store, now=_NOW)
+
+    assert store.get("t1").status == "cancelled"
+    assert any(b.get("milestone") == "cancelled" for b in fired["event"])
+    # Acting is one-shot: a second sweep must not re-cancel or re-note.
+    fired["event"].clear()
+    fus.run_follow_up_sweep(store, now=_NOW)
+    assert fired["event"] == [] or all(
+        b.get("milestone") != "cancelled" for b in fired["event"]
+    )
+
+
+def test_wait_button_answer_extends_the_cooldown(store, fired):
+    from my_crew.runtime.clarify_store import ClarifyStore
+    from my_crew.runtime.team_task_paths import clarify_db_path
+
+    _mk_task(store, "t2", "stalled", created_at="2026-07-10T00:00:00+00:00")
+    cstore = ClarifyStore(clarify_db_path())
+    cid = cstore.create_question(
+        agent_id="coordinator", task_id="t2",
+        question="Việc kẹt — xử lý thế nào?", options=["Đợi thêm", "Huỷ việc này"],
+    )
+    cstore.apply_answer(cid, "Đợi thêm")
+    cstore.close()
+
+    fus.run_follow_up_sweep(store, now=_NOW)
+
+    task = store.get("t2")
+    assert task.status == "stalled"  # not cancelled
+    row = store._conn.execute(
+        "SELECT last_follow_up_at FROM team_tasks WHERE id='t2'"
+    ).fetchone()
+    assert row[0] == _NOW.isoformat()  # cooldown restarted
+    assert fired["clarify"] == [] and fired["notify"] == []  # no rung fired this sweep

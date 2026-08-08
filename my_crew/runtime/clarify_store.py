@@ -135,6 +135,19 @@ class ClarifyStore:
         self._conn.commit()
         return cur.rowcount
 
+    def mark_consumed(self, clarify_id: int, token: str = "consumed") -> bool:
+        """Stamp an ANSWERED clarify as acted-upon (follow-up sweep) via the otherwise
+        idle `resume_token` column — worker interrupt-resume clarifies carry their own
+        tokens and are never routed through this method. Idempotent: only stamps rows
+        whose token is still NULL, so an answer is acted on exactly once."""
+        cur = self._conn.execute(
+            "UPDATE clarifications SET resume_token = ? "
+            "WHERE id = ? AND status = 'answered' AND resume_token IS NULL",
+            (token, clarify_id),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
     def get(self, clarify_id: int) -> Clarification | None:
         row = self._conn.execute(
             "SELECT id, agent_id, task_id, question, options, status, answer, asked_at,"

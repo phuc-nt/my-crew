@@ -68,7 +68,15 @@ def run_follow_up_sweep(store, *, now: _dt.datetime | None = None) -> int:
     stuck_ids = {t["task_id"] for t in stuck}
     _reset_recovered(store, stuck_ids)
 
+    # The rung-2 buttons must DO what they say: v1 only recorded the answer, so the
+    # CEO pressed "Huỷ việc này" and the task stayed stalled forever (observed live,
+    # task 5eea1ae1c969). Consume answered rung-2 clarifies BEFORE escalating —
+    # a cancelled task leaves this sweep's set entirely.
+    acted = _consume_ceo_answers(store, stuck, now)
+
     for item in stuck:
+        if item["task_id"] in acted:
+            continue
         cooldown_ok = _cooldown_elapsed(item["last_follow_up_at"], now)
         if not cooldown_ok:
             continue
@@ -101,6 +109,69 @@ def _cooldown_elapsed(last: str | None, now: _dt.datetime) -> bool:
     except ValueError:
         return True
     return (now - prev) >= _dt.timedelta(hours=COOLDOWN_H)
+
+
+def _consume_ceo_answers(store, stuck: list[dict], now: _dt.datetime) -> set[str]:
+    """Act on answered follow-up questions; returns task_ids handled this sweep.
+
+    "Huỷ việc này" → the task is cancelled (status write + room milestone, so the feed
+    and the CEO's chat both record WHY it disappeared). "Đợi thêm" → the ladder's
+    cooldown restarts from now at the same level. Each answer is acted on exactly once
+    (`ClarifyStore.mark_consumed` claims it); every failure is best-effort logged —
+    the sweep's escalation contract is untouched for unanswered tasks."""
+    from my_crew.runtime.clarify_store import ClarifyStore
+    from my_crew.runtime.team_task_paths import clarify_db_path
+
+    acted: set[str] = set()
+    try:
+        cstore = ClarifyStore(clarify_db_path())
+    except Exception:  # noqa: BLE001 — no clarify store, nothing to consume
+        return acted
+    try:
+        for item in stuck:
+            task_id = item["task_id"]
+            try:
+                for row in cstore.answered_for_task(task_id):
+                    answer = (row.answer or "").strip()
+                    if answer not in ("Huỷ việc này", "Đợi thêm"):
+                        continue
+                    if not cstore.mark_consumed(row.id, token="follow-up-acted"):
+                        continue  # already acted on (or raced) — never act twice
+                    if answer == "Huỷ việc này":
+                        store.set_task_status(task_id, "cancelled")
+                        _room_note(task_id, item["title"],
+                                   "❌ CEO đã huỷ việc này (trả lời câu hỏi nhắc việc).")
+                        logger.info("follow-up: CEO cancelled task %s via button", task_id)
+                    else:
+                        store._conn.execute(
+                            "UPDATE team_tasks SET last_follow_up_at = ? WHERE id = ?",
+                            (now.isoformat(), task_id),
+                        )
+                        store._conn.commit()
+                        logger.info("follow-up: CEO chose to wait on task %s", task_id)
+                    acted.add(task_id)
+                    break
+            except Exception:  # noqa: BLE001 — one task's consume must not block others
+                logger.warning("follow-up: consume answer failed for %s", task_id,
+                               exc_info=True)
+    finally:
+        cstore.close()
+    return acted
+
+
+def _room_note(task_id: str, title: str, message: str) -> None:
+    """Best-effort room milestone so the cancellation is visible in the feed + chat."""
+    try:
+        from my_crew.runtime.office_room_append import append_office_event, room_for_task
+
+        append_office_event(
+            room_for_task(task_id), author="coordinator", kind="milestone",
+            body={"task_id": task_id, "task_title": title, "milestone": "cancelled",
+                  "message": message},
+            also_office=True,
+        )
+    except Exception:  # noqa: BLE001 — a missed note never blocks the cancel itself
+        logger.warning("follow-up: room note failed for %s", task_id, exc_info=True)
 
 
 def _detect_stuck(store, now: _dt.datetime) -> list[dict]:
