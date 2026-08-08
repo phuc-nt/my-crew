@@ -19,12 +19,18 @@ logger = logging.getLogger(__name__)
 def notify_operator_best_effort(
     text: str, *, dedup_hint: str, rationale: str,
     buttons: list[dict[str, str]] | None = None,
+    fallback_loaded=None,
+    fallback_settings=None,
 ) -> bool:
     """DM the CEO via the admin ops agent's gateway. Returns True when handed off.
 
     False means "no admin ops agent configured" or the send failed — both logged,
     neither raised. `buttons` (v33 P4) rides through to the telegram send as inline
     answer buttons — same gateway, same audit.
+
+    `fallback_loaded`: a caller already holding a bound agent (the admin worker) passes
+    it here — used when the coordinator path yields nothing, INSTEAD of re-scanning the
+    registry. Keeps unit tests offline (no registry/profile reads) and saves the scan.
     """
     try:
         from my_crew.actions.action_gateway import ActionGateway
@@ -33,14 +39,15 @@ def notify_operator_best_effort(
         from my_crew.runtime.agent_paths import agent_data_dir
         from my_crew.runtime.registry import load_registry
 
-        def _try_send(loaded) -> bool | None:
+        def _try_send(loaded, settings=None) -> bool | None:
             """Send via one agent's binding; None = agent has no usable binding."""
             telegram = getattr(loaded.config, "telegram", None)
             operator = getattr(telegram, "ops_operator_id", "") if telegram else ""
             if not telegram or not operator:
                 return None
             gw = ActionGateway(
-                loaded.settings, external_channels=loaded.config.slack_external_channels,
+                settings if settings is not None else loaded.settings,
+                external_channels=loaded.config.slack_external_channels,
                 actor=getattr(loaded, "profile_id", ""),  # v46
             )
             try:
@@ -70,6 +77,13 @@ def notify_operator_best_effort(
                     return sent
             except Exception:  # noqa: BLE001 — coordinator problems must not kill the notice
                 logger.warning("operator notice: coordinator path failed", exc_info=True)
+
+        if fallback_loaded is not None:
+            sent = _try_send(fallback_loaded, settings=fallback_settings)
+            if sent is not None:
+                return sent
+            logger.info("operator notice skipped — fallback agent has no usable binding")
+            return False
 
         for entry in load_registry():
             try:

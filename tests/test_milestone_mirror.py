@@ -67,6 +67,13 @@ def _patch_send(monkeypatch, sent: list):
             pass
 
     monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway", _FakeGateway)
+    # Force the coordinator-first path OFF so the notify helper deterministically uses
+    # the mirror's own `fallback_loaded` binding — without this, the unit test would
+    # read the developer's REAL company/registry/profiles (green here, red on CI).
+    def _no_company():
+        raise RuntimeError("no company in unit tests")
+
+    monkeypatch.setattr("my_crew.runtime.company.load_company", _no_company)
 
 
 def _run(monkeypatch, tmp_path):

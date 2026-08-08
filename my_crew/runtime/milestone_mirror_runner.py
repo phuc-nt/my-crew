@@ -92,9 +92,7 @@ class _CursorStore:
 def run_milestone_mirror(loaded: Any, settings: Any, *, now: datetime | None = None) -> dict:
     """One mirror tick. Returns `{status, checked, cost_usd, delivered}` (worker's
     run-event shape, matching `run_ops_alerts`)."""
-    from my_crew.actions.action_gateway import ActionGateway
     from my_crew.actions.dedup_store import DedupStore
-    from my_crew.actions.telegram_write import send_telegram_message
     from my_crew.runtime.office_room_store import (
         OFFICE_ROOM_ID,
         OfficeRoomStore,
@@ -134,10 +132,6 @@ def run_milestone_mirror(loaded: Any, settings: Any, *, now: datetime | None = N
 
         local_date = now.astimezone().date().isoformat()
         dedup = DedupStore(Path(settings.data_dir) / "dedup.db")
-        gateway = ActionGateway(
-            settings, external_channels=loaded.config.slack_external_channels,
-            actor=getattr(loaded, "profile_id", ""),  # v46
-        )
         try:
             fresh = [
                 m for m in milestones
@@ -148,25 +142,28 @@ def run_milestone_mirror(loaded: Any, settings: Any, *, now: datetime | None = N
                 return {"status": "no_new_milestones", "checked": len(milestones),
                         "cost_usd": None, "delivered": False}
             push_key = "|".join(_key(m) for m in fresh)
-            result = send_telegram_message(
+            # CEO rule ("giao việc cho bot nào thì bot đó nhận mọi thông tin"): the
+            # digest goes through the coordinator-first helper, so it lands in the
+            # ASSIGNING chat when that binding exists; this admin agent's own binding
+            # is the fallback inside the helper. The admin-binding gate above still
+            # decides whether the mirror runs at all — unchanged.
+            from my_crew.runtime.operator_notify import notify_operator_best_effort
+
+            delivered = notify_operator_best_effort(
                 _format(fresh),
-                gateway=gateway,
-                telegram=telegram,
-                chat_id=operator,
                 dedup_hint=f"milestone-mirror-push:{local_date}:{push_key}",
                 rationale="office room milestone mirror",
+                fallback_loaded=loaded, fallback_settings=settings,
             )
-            delivered = result.status in ("executed", "pending_approval")
             # Cursor advances only once the send outcome is known — a failed/pending
             # send still means Telegram has (or will have) the message, and re-reading
             # the same rows next tick is harmless once dedup has already claimed them;
             # the cursor's only job is bounding how much history each tick re-scans.
             cursor.set(last_seq)
-            return {"status": "delivered" if delivered else result.status,
+            return {"status": "delivered" if delivered else "send_failed",
                     "checked": len(milestones), "cost_usd": None, "delivered": delivered}
         finally:
             dedup.close()
-            gateway.close()
     finally:
         room.close()
         cursor.close()
