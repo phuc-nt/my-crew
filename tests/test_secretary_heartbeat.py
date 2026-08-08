@@ -51,6 +51,15 @@ def isolated(tmp_path, monkeypatch):
     return tmp_path
 
 
+@pytest.fixture(autouse=True)
+def _isolated_team_tasks_root(monkeypatch, tmp_path):
+    """The digest also reads the SHARED team-task store (stalled/undelivered) via the
+    global `team_task_paths.DATA_DIR` — unpatched, these tests read the developer's
+    REAL production DB and turn truthy the moment a real task stalls (observed: every
+    'quiet system' test failed the morning after a live task genuinely stalled)."""
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+
+
 # --- config parsing ------------------------------------------------------------------
 
 
