@@ -28,7 +28,8 @@ def test_poke_worthy_actions_chain_terminates():
     tick instead of self-sustaining a 5s tick loop."""
     from my_crew.runtime.team_tick_runner import poke_worthy
 
-    for action in ("spawned", "aggregated", "stuck_retry", "stuck_reassigned"):
+    for action in ("spawned", "aggregated", "stuck_retry", "stuck_reassigned",
+                   "review_inserted", "fanout_inserted"):
         assert poke_worthy(action) is True
     for action in ("none", "failed", "stalled", "cap_exceeded", "timeout_escalated",
                    "gave_up"):

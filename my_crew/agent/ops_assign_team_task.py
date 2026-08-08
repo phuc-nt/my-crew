@@ -394,6 +394,12 @@ def run_assign_team_task(slots: dict[str, str]) -> str:
                   "message": f"Đội đã nhận việc '{task.title}' ({len(task.steps)} bước)."},
             also_office=True,
         )
+    # v74.1: a freshly-confirmed task lands between two minute ticks — poke so the
+    # first dispatch happens within a ~5s sleep slice instead of up to 60s later
+    # (benchmark 18a8396a76fa measured a 30s first-dispatch wait). Best-effort inside.
+    from my_crew.runtime.tick_poke import touch_poke
+
+    touch_poke()
     return f"Đã giao việc #{task_id} cho đội — điều phối viên sẽ bắt đầu phân công."
 
 

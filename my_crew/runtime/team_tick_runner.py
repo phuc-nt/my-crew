@@ -45,7 +45,13 @@ _RETRY_SIDECAR_NAME = "team_tick_retries.json"
 #: poke chain terminates the first tick that finds nothing to do; failure-ish ends
 #: (failed/stalled/timeout_escalated/gave_up/cap_exceeded) don't poke either — their
 #: next move is either impossible or arrives via a worker-exit poke anyway.
-_POKE_WORTHY_ACTIONS = frozenset({"spawned", "aggregated", "stuck_retry", "stuck_reassigned"})
+#: `review_inserted`/`fanout_inserted` mint rows a LATER tick spawns — exactly the
+#: minted-then-wait shape (benchmark 18a8396a76fa: 44s review gap; 0a03ebc1ab2f:
+#: 98-190s sub-step gaps).
+_POKE_WORTHY_ACTIONS = frozenset({
+    "spawned", "aggregated", "stuck_retry", "stuck_reassigned",
+    "review_inserted", "fanout_inserted",
+})
 
 
 def poke_worthy(action: str) -> bool:
