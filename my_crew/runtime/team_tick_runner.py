@@ -524,16 +524,27 @@ def _roster_ok(agent_id: str) -> bool:
 
 
 def _web_search_enabled(agent_id: str) -> bool:
-    """Whether that agent can search the web. Unknown/unloadable profile ⇒ False.
+    """Whether that agent can ACTUALLY search the web. Unknown/unloadable profile ⇒ False.
 
     Read from the profile rather than the registry: `web_search:` is the same per-agent
-    flag that arms both the native pre-work hook and the loop tier's `web.search` tool,
-    so it is the honest answer to "can this agent look anything up".
+    flag that arms both the native pre-work hook and the loop tier's `web.search` tool.
+    The flag alone is not the whole truth, though: a deep_agent runs its work INSIDE a
+    sandbox, and with no network opt-in that sandbox cannot reach any search provider —
+    the flag arms nothing usable there. Observed live (twice): research steps reassigned
+    to the deep-tier analyst on the strength of its flag, which then honestly reported
+    'không có quyền truy cập thời gian thực' and burned the step's whole budget.
     """
     from my_crew.profile.loader import load_profile
 
     try:
-        return bool(getattr(load_profile(agent_id), "web_search", False))
+        loaded = load_profile(agent_id)
+        if not bool(getattr(loaded, "web_search", False)):
+            return False
+        runtime = getattr(loaded, "agent_runtime", None)
+        if getattr(runtime, "kind", "") == "deep_agent":
+            sandbox = getattr(runtime, "sandbox", None) or {}
+            return bool(sandbox.get("network"))
+        return True
     except Exception:  # noqa: BLE001 — an unreadable profile must not wedge the tick
         logger.warning("team-tick: cannot read web_search for %s", agent_id, exc_info=True)
         return False
