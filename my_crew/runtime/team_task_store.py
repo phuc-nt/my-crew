@@ -31,6 +31,7 @@ handed to an external delivery path.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -47,6 +48,8 @@ from my_crew.runtime.team_task_amend import (  # re-exported for callers
 )
 from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
 from my_crew.runtime.team_task_steps import TeamStep  # re-exported for callers
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "AmendmentDraft", "ConfirmAmendmentResult", "TeamStep", "TeamTask", "TeamTaskStore",
@@ -679,7 +682,38 @@ class TeamTaskStore:
             self._conn, task_id, step_id, attempt_id=attempt_id,
         )
         self._conn.commit()
+        if updated:
+            self._clear_step_checkpoint(task_id, step_id)
         return updated
+
+    def _clear_step_checkpoint(self, task_id: str, step_id: str) -> None:
+        """A reset/reassign means REDO, not resume: a mid-run checkpoint left by a
+        killed attempt would otherwise be adopted by the next attempt, which then
+        resumes PAST `perceive` — so it never reads the coordinator's fresh guidance
+        (guidance enters the context at perceive) and, if the saved position is the
+        toolless `rework` node, it cannot search either. Observed live (task
+        dfdc472c423c): consecutive retries re-emitted the identical 'xin cấp quyền tra
+        cứu' letter within minutes because each adopted the same rework-node
+        checkpoint. Crash-continuity resume (same attempt, no ruling) is untouched —
+        this clears only when a ruling/CEO explicitly ordered a redo. Best-effort:
+        checkpoints are an optimization, their DB must never break a store write."""
+        try:
+            from my_crew.runtime.team_task_paths import team_checkpoints_db_path
+
+            thread_id = f"team:{task_id}:{step_id}"
+            con = sqlite3.connect(team_checkpoints_db_path(), timeout=5)
+            try:
+                for table in ("checkpoints", "writes"):
+                    try:
+                        con.execute(f"delete from {table} where thread_id = ?", (thread_id,))
+                    except sqlite3.OperationalError:
+                        pass  # table absent (fresh/older schema) — nothing to clear
+                con.commit()
+            finally:
+                con.close()
+        except Exception:  # noqa: BLE001 — best-effort by contract
+            logger.warning("could not clear checkpoint thread for %s/%s",
+                           task_id, step_id, exc_info=True)
 
     def bump_intervention(self, task_id: str, step_id: str) -> int:
         """Record one coordinator intervention on a stuck step; returns the new total so
@@ -710,6 +744,9 @@ class TeamTaskStore:
         auto-inserted review/rework rows re-stamps to the digest that check expects.
         Both writes share one commit: a tick reading between them would see a mismatch.
         """
+        # A reassign is likewise a REDO under a new owner — never adopt the old
+        # owner's mid-run checkpoint (see _clear_step_checkpoint).
+        self._clear_step_checkpoint(task_id, step_id)
         updated = _steps.reassign_step(self._conn, task_id, step_id, assigned_to)
         if updated:
             self._conn.execute(

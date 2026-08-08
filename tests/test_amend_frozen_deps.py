@@ -81,3 +81,37 @@ def test_dep_on_a_truly_unknown_id_is_still_rejected(monkeypatch):
     ]})
     with pytest.raises(DecompositionError, match="ghost"):
         amend_with_retries(_task(), "x", [("agent-a", "pm")])
+
+
+def test_reset_and_reassign_clear_the_step_checkpoint(tmp_path, monkeypatch):
+    """A coordinator-ordered reset/reassign means REDO: adopting a killed attempt's
+    mid-run checkpoint resumes PAST perceive, so fresh guidance is never read and a
+    rework-node resume cannot search (observed live: identical 'xin cấp quyền' letters
+    re-emitted for an hour). The store write must clear the thread."""
+    import sqlite3
+
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    from my_crew.runtime.team_task_paths import team_checkpoints_db_path
+
+    ckpt = sqlite3.connect(team_checkpoints_db_path())
+    ckpt.execute("create table checkpoints (thread_id text, blob text)")
+    ckpt.execute("create table writes (thread_id text, blob text)")
+    for t in ("checkpoints", "writes"):
+        ckpt.execute(f"insert into {t} values ('team:t1:s1', 'x')")
+        ckpt.execute(f"insert into {t} values ('team:t1:other', 'x')")
+    ckpt.commit(); ckpt.close()
+
+    store = TeamTaskStore(tmp_path / "team_tasks.sqlite3")
+    steps = [{"step_id": "s1", "title": "t", "assigned_to": "agent-a", "deps": []}]
+    store.create_task(task_id="t1", title="demo", original_request="demo")
+    store.set_plan("t1", steps, plan_hash="h")
+    store.reserve_step("t1", "s1")
+    store.mark_failed("t1", "s1")
+    assert store.reset_step_to_pending("t1", "s1") is True
+
+    ckpt = sqlite3.connect(team_checkpoints_db_path())
+    left = ckpt.execute("select thread_id from checkpoints").fetchall()
+    assert left == [("team:t1:other",)]  # only the reset step's thread was cleared
+    ckpt.close()
