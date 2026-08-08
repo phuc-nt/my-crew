@@ -353,3 +353,29 @@ def test_hash_changes_when_needs_web_set_and_flagless_stays_migration_identical(
         sort_keys=True, ensure_ascii=True, separators=(",", ":"),
     )
     assert decomposition_content_hash(flagless) == hashlib.sha256(pre_v74.encode()).hexdigest()
+
+
+# --- v74 phase 3: entity fan-out ----------------------------------------------------
+
+
+def test_fanout_plan_two_parallel_collects_validates():
+    """The shape the fan-out prompt rule asks for — 2 dep-less collect steps feeding a
+    terminal fan-in — must sail through parse + validate unchanged (no validator work
+    was needed for v74; this pins that assumption)."""
+    task = parse_decomposed_task(_raw([
+        {**_step("collect_a", assigned_to="agent-a"), "needs_web": True},
+        {**_step("collect_b", assigned_to="agent-b"), "needs_web": True},
+        _step("finalize", assigned_to="agent-a", deps=["collect_a", "collect_b"]),
+    ]))
+    validated = validate_decomposition(task, staff_ids={"agent-a", "agent-b"})
+    assert [s.step_id for s in validated.steps if not s.deps] == ["collect_a", "collect_b"]
+
+
+def test_decompose_prompt_pins_fanout_rule():
+    """v74: the ≥4-independent-entities → parallel collect split, with entity names
+    demanded in title + acceptance, must stay in the decompose system prompt."""
+    from my_crew.llm.team_task_prompt import _DECOMPOSE_SYSTEM
+
+    assert "QUY TẮC TÁCH SONG SONG" in _DECOMPOSE_SYSTEM
+    assert "4 THỰC THỂ" in _DECOMPOSE_SYSTEM
+    assert "NÊU ĐÍCH DANH" in _DECOMPOSE_SYSTEM
