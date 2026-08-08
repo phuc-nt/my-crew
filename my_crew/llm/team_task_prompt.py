@@ -18,7 +18,7 @@ _DECOMPOSE_SYSTEM = (
     "và danh sách nhân sự (mã + vai trò) có thể giao việc, hãy trả về DUY NHẤT một JSON "
     '(không markdown) đúng dạng: {"steps":[{"step_id":"...","title":"...",'
     '"assigned_to":"<mã nhân sự>","deps":["..."],"acceptance":"...",'
-    '"needs_review":true,"needs_shell":false,"external_write":false}],'
+    '"needs_review":true,"needs_shell":false,"needs_web":false,"external_write":false}],'
     '"pic_id":"<mã nhân sự>","requires_approval":true}. '
     "Tối đa 7 bước. `assigned_to` PHẢI là một mã trong danh sách nhân sự được cung cấp — "
     "không tự bịa mã. `deps` liệt kê step_id của các bước phải xong TRƯỚC bước này (rỗng "

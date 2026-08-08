@@ -379,3 +379,7 @@ def test_decompose_prompt_pins_fanout_rule():
     assert "QUY TẮC TÁCH SONG SONG" in _DECOMPOSE_SYSTEM
     assert "4 THỰC THỂ" in _DECOMPOSE_SYSTEM
     assert "NÊU ĐÍCH DANH" in _DECOMPOSE_SYSTEM
+    # e2e round v74-1 lesson: the flag must sit in the EXAMPLE SCHEMA, not only the
+    # prose — the model mirrors the example and never emitted needs_web without it,
+    # silently forcing research steps onto the searchless native tier.
+    assert '"needs_web":false' in _DECOMPOSE_SYSTEM
