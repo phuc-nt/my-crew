@@ -3,6 +3,70 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.9.0] — 2026-08-09
+
+Speed and proactive coordination (v70–v75): the same multi-agent survey task that took
+~40 minutes now finishes in 11–16 at a third of the cost, and a stalled task no longer
+just waits for the human — the coordinator retries, proposes a DIFFERENT plan through
+the amendment flow, then falls back to accept/drop, all bounded and audited. Verified
+across 12 live end-to-end rounds (real web data, real Telegram) with the honesty chain
+intact: no fabricated numbers, gaps reported as THIẾU with the correct reason.
+
+### Added
+- **Personal assistant pong** (v70–v71): a second personal-pack agent with its own
+  Telegram bot — morning briefing (07:00) and Sunday weekly review (08:00) reading
+  Goodreads RSS + Google Tasks; profile-only `goodreads_user_id` (deliberately no env
+  fallback — a bookshelf belongs to one person). Quick-build crew templates.
+- **Per-step tier routing `needs_web`** (v74): the decomposer marks which steps need
+  live web lookup; tool-less work (grading, synthesis, rework briefs) runs the
+  one-shot native tier instead of a heavy tool loop — measured 64% of wall-clock
+  before the change. A wrong hint self-heals after the first coordinator ruling. The
+  flag is carried by all three step-minting paths (decompose, runtime split, amend)
+  and conditionally hash-bound like `needs_shell`.
+- **Event-driven dispatch** (v74): team-step workers, door-opening tick actions, task
+  confirm, and row minting all touch a poke file; the service sleeps in 5s slices and
+  runs the next coordinator tick early. Dispatch gaps fell from ~253s per task to
+  0–8s per step; the 60s cadence stays as the fallback, so a lost poke costs latency,
+  never work.
+- **Entity fan-out, code-enforced** (v74–75): a brief listing 4+ same-kind entities
+  must split collection into parallel dep-less steps — first a prompt rule, then a
+  validator (`fanout_gap`) feeding the existing decompose retry loop, fail-open on
+  the last attempt so a slow plan still beats a failed assign.
+- **Goal-directed replan** (v75): autopilot ladder rung 2 — a stalled task whose plan
+  is the problem gets ONE amend-LLM proposal for a different approach on the pending
+  tail, through the exact CEO amendment flow (frozen prefix, hash-guarded confirm).
+  Fail-closed: model failure or an identity proposal refuses and the stall stands.
+- **Hybrid collect launcher** (v75): code prefetches 1–3 searches (per-entity query
+  variants, no LLM) and injects the bundle so collect steps run native — measured
+  119s vs 199–425s on the tool loop. Fail-open to the old path.
+- **Search 3-path sentinels** (v75): "the web says nothing" and "we never reached the
+  web" are now different answers on both tiers (`web_search_outcome`); a watcher tick
+  where every poll failed reports `all_polls_failed`, never `no_change`.
+- **Transcript salvage** (v74.1): a tool loop that exhausts its budget synthesizes an
+  honest answer from the partial transcript (gaps marked THIẾU) instead of returning
+  empty.
+
+### Changed
+- Fleet default model → `qwen/qwen3.7-plus`; graders are date-anchored and capped by
+  the CEO's original ask (inflated acceptance criteria no longer fail honest work).
+- First stuck ruling always retries with guidance before any reassign; reassignment
+  and dead-step resets check actual tool capability (web flag + sandbox network).
+- All CEO-facing Telegram messages route to the assigning bot's chat (coordinator-
+  first), with the admin bot as fallback only; task-done sends once with a workroom
+  link (`MPM_WEB_BASE_URL`).
+- Weekly review no longer re-greets or repeats the same-morning briefing items.
+- `team_task_concurrency` semantics documented (per-task cap, no per-agent
+  single-flight); default stays 2, per-install tuning supported.
+
+### Fixed
+- Runtime-split subs inherit the parent's `needs_web` (flagless subs were forced onto
+  the searchless tier, each burning a coordinator ruling to recover).
+- Routing flags must live in every prompt's EXAMPLE schema — prose alone is mirrored
+  away by the model; fixed in decompose and amend, pinned by tests.
+- Redo/reassign clears the step's checkpoint thread so a retry cannot resume past its
+  guidance; duplicate ✅ messages after task completion removed (`delivered_direct`
+  survives the PII projection).
+
 ## [0.8.0] — 2026-08-05
 
 Disciplined autonomy (v67–v69): 0.7.0 let the AI approve its own work; this release
