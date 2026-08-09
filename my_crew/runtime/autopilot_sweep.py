@@ -2,11 +2,15 @@
 
 With `company.autopilot` ON, a task that stalls no longer waits on the CEO: this sweep
 resolves it with the SAME one-touch handlers the CEO would use (`ops_stalled_task`),
-on a deterministic ladder — no LLM call, so every decision is reproducible and cheap:
+on a deterministic ladder:
 
   attempt 1: RETRY — review-stall ⇒ one extra rework round; dead-step ⇒ reset to pending.
-  attempt 2: review-stall ⇒ ACCEPT the deliverable as-is; dead-step ⇒ DROP the dead rows.
-  attempt 3+: leave stalled — the escalation (already sent) stands for the CEO.
+  attempt 2: GOAL-REPLAN (v75) — one amend-LLM proposal for a DIFFERENT approach on the
+             pending tail, through the CEO amend flow (draft → hash-guarded confirm).
+             Fail-closed: LLM error / identity proposal / no pending tail refuse and
+             the rung is spent — the ONLY LLM rung, everything else stays code-only.
+  attempt 3: review-stall ⇒ ACCEPT the deliverable as-is; dead-step ⇒ DROP the dead rows.
+  attempt 4+: leave stalled — the escalation (already sent) stands for the CEO.
 
 `team_tasks.autopilot_attempts` carries the ladder position (incremented BEFORE acting,
 so a crash mid-resolution can never re-run the same rung forever). Tasks with
@@ -24,8 +28,8 @@ from my_crew.runtime.team_task_store import TeamTask, TeamTaskStore
 
 logger = logging.getLogger(__name__)
 
-#: Ladder height: one retry + one accept/drop. Beyond this the CEO decides.
-MAX_AUTOPILOT_ATTEMPTS = 2
+#: Ladder height: retry + goal-replan + accept/drop. Beyond this the CEO decides.
+MAX_AUTOPILOT_ATTEMPTS = 3
 
 
 def run_autopilot_sweep(store: TeamTaskStore) -> int:
@@ -60,6 +64,7 @@ def _resolve(task: TeamTask, attempt: int) -> tuple[str | None, str]:
         run_drop_stalled_step,
         run_retry_stalled_step,
     )
+    from my_crew.runtime.goal_replan import run_goal_replan
 
     slots = {"task_id": task.id}
     is_review_stall = _has_failed_review(task)
@@ -67,6 +72,12 @@ def _resolve(task: TeamTask, attempt: int) -> tuple[str | None, str]:
         if attempt <= 1:
             reply = run_retry_stalled_step(dict(slots))
             return "retry_step", f"Tự thử lại việc '{task.title}' thay CEO — {reply}"
+        if attempt == 2:
+            reply = run_goal_replan(dict(slots))
+            return "goal_replan", (
+                f"Tự chỉnh kế hoạch việc '{task.title}' thay CEO (thử lại 1 lần không "
+                f"thành, đổi cách tiếp cận) — {reply}"
+            )
         if is_review_stall:
             reply = run_accept_stalled_result(dict(slots))
             return "accept_result", (

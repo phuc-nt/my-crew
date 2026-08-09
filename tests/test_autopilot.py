@@ -271,12 +271,18 @@ def _mk_review_stalled(tmp_path, task_id="t1"):
     )
 
 
-def test_sweep_rung1_retries_then_rung2_accepts_then_stops(tmp_path, monkeypatch):
+def test_sweep_rung1_retry_rung2_replan_rung3_accept_then_stops(tmp_path, monkeypatch):
     from my_crew.agent.team_task_artifact import read_review_verdict_artifact
     from my_crew.runtime.autopilot_sweep import run_autopilot_sweep
 
     _autopilot_company(monkeypatch)
     _mk_review_stalled(tmp_path)
+    # v75 rung 2 is the ONLY LLM rung — stub it as a refusal here (its own success
+    # path is covered in test_goal_replan.py) so this ladder test stays offline.
+    monkeypatch.setattr(
+        "my_crew.runtime.goal_replan.run_goal_replan",
+        lambda slots: (_ for _ in ()).throw(ValueError("không soạn được")),
+    )
     store = _open_store(tmp_path)
     try:
         # Rung 1: retry — one extra rework round, task reopened.
@@ -286,15 +292,21 @@ def test_sweep_rung1_retries_then_rung2_accepts_then_stops(tmp_path, monkeypatch
         assert task.autopilot_attempts == 1
         assert any(s.step_id == "s1-rework-2" for s in task.steps)
 
-        # Task stalls again (simulated) — rung 2: accept the deliverable.
+        # Rung 2: goal-replan refused (stubbed) — rung spent, task stays stalled.
         store.set_task_status("t1", "stalled")
+        assert run_autopilot_sweep(store) == 0
+        task = store.get("t1")
+        assert task.status == "stalled"
+        assert task.autopilot_attempts == 2
+
+        # Rung 3: accept the deliverable.
         assert run_autopilot_sweep(store) == 1
         task = store.get("t1")
         assert task.status == "open"
-        assert task.autopilot_attempts == 2
+        assert task.autopilot_attempts == 3
         assert read_review_verdict_artifact(tmp_path, "t1", 1, 2)["passed"] is True
 
-        # Ladder exhausted: a third stall stays with the CEO.
+        # Ladder exhausted: a fourth stall stays with the CEO.
         store.set_task_status("t1", "stalled")
         assert run_autopilot_sweep(store) == 0
         assert store.get("t1").status == "stalled"
