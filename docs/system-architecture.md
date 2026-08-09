@@ -246,6 +246,24 @@ collect deps rỗng, tên thực thể đích danh trong title + acceptance.
   $0.02–0.05, gap dispatch 0–8s; biến động còn lại = chất lượng dữ liệu nguồn + vòng review/clarify
   (hành vi đúng, không tối ưu bỏ).
 
+**v75 — coordination chủ động (học chọn lọc Hermes/OpenClaw, xem
+`docs/journals/260809-v75-proactive-coordination.md`)**:
+- **Sentinel 3-path** (`web_search_outcome`): "web nói không có" ("empty") ≠ "không tới được web"
+  ("provider_error") — cả native hook lẫn tool-loop `web.search` render 2 sentinel khác nhau, chặn
+  chuỗi "nguồn sập → bước kết luận 'dữ liệu không tồn tại'". Watcher tick toàn-lỗi trả
+  `all_polls_failed`, không bao giờ đội lốt `no_change`. Wake-context line theo attempt đi kênh
+  guidance (retry/rework biết mình là lần thử thứ mấy).
+- **Goal-replan** (`runtime/goal_replan.py`): ladder autopilot 3 rung — retry → **replan** (amend-LLM
+  đề xuất cách tiếp cận khác cho phần bước chờ, qua ĐÚNG flow amend draft + hash-guarded confirm;
+  fail-CLOSED: LLM lỗi / đề xuất giữ nguyên / hết bước chờ = từ chối, stall + escalation đứng nguyên)
+  → accept/drop. Rung replan là rung LLM duy nhất của ladder.
+- **Hybrid collect launcher** (`runtime/collect_prefetch.py`, pattern Hermes launcher): bước
+  `needs_web` lần-đầu no-shell được CODE chạy 1-3 query (title + biến thể topic+entity, không LLM)
+  qua đúng WebSearchConfig + audit, bundle inject vào slot search-hook → route native one-shot
+  (`resolve_step_runtime(prefetched=True)`). Fail-open: không có kết quả sạch → tool-loop như cũ;
+  bước bị can thiệp không prefetch (self-heal giữ tier agent + tool sống). Đo sống: collect 119s
+  gap 2s (vs 199–425s tool-loop).
+
 **Triết lý moat (chốt qua research v45)**: **shell thật CHỈ chạy trong Docker sandbox**; việc no-shell
 (đại đa số: suy luận + đọc + viết báo cáo) chạy **Docker-free** trên create_agent. **Bác host-exec +
 shell-approval** (mô hình Hermes/OpenClaw/Claude Code): 3 harness kia an toàn vì CÓ NGƯỜI duyệt lệnh
