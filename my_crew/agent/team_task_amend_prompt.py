@@ -85,8 +85,18 @@ def _build_amend_messages(
     pic_id = getattr(task, "pic_id", "") or ""
     if pic_id:
         pic_line = f"\n\nPIC: {pic_id} (bước chốt cuối trong các bước MỚI phải thuộc PIC này)"
+    # v76 UAT: the frozen DAG lists failed/review/rework rows the model MAY NOT dep on,
+    # and on a review-heavy task it picked those ids three times in a row and burned
+    # the retry budget. Spell the legal set out instead of leaving it implied.
+    dependable = sorted(
+        s.step_id for s in task.steps
+        if s.status in ("done", "running") and not getattr(s, "system_inserted", 0)
+    )
+    dependable_line = ("\n\nBước cũ ĐƯỢC PHÉP tham chiếu trong deps (chỉ những mã này, "
+                       f"ngoài các bước MỚI): {', '.join(dependable) or '(không có)'}")
     user = (
-        f"DAG HIỆN TẠI (đã xong/đang chạy/thất bại — CỐ ĐỊNH):\n{frozen}{pic_line}\n\n"
+        f"DAG HIỆN TẠI (đã xong/đang chạy/thất bại — CỐ ĐỊNH):\n{frozen}{pic_line}"
+        f"{dependable_line}\n\n"
         f"{wrapped_request}\n\nNHÂN SỰ CÓ THỂ GIAO:\n{staff_lines}"
     )
     if retry_error.strip():
