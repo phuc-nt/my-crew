@@ -41,6 +41,19 @@
   đến" trước khi kịp chạy tay; may mà mọi nhánh đều audit + notify nên quan sát đủ.
 - `settings_factory` fixture sẵn có làm contract test gateway rẻ hơn dự kiến nhiều.
 
+## UAT toàn stack (chiều 09/08 — 5 task sống, 7 pattern, ~$0.27)
+Báo cáo đầy đủ: `plans/reports/uat-260809-1620-full-stack-v74-v76-live-patterns-report.md`.
+- Đủ 7 pattern PASS, trong đó 3 ca sống đắt giá: goal-replan **áp thành công tự
+  nhiên** (T1: thay qa+finalize bằng 2 bước mới → done với data thật) VÀ **từ chối
+  fail-closed** (T3 doomed: amend 3 lần deps sai → validator chặn, stalled chờ CEO);
+  supervised ép soát cả bước thu thập; trusted waive terminal nội bộ (sau fix).
+- 3 bug thật tìm + fix + verify trong phiên: decompose cạn retry vì model noise
+  (60d4650); amend không nêu rõ deps hợp lệ (c798a20); **trusted band no-op** —
+  policy v64 chỉ flag terminal+external mà rule trusted giữ nguyên cả hai → rỗng
+  giao (77be73b). Bài học: rule mới phải đối chiếu PHÂN BỐ THẬT của cờ nó điều
+  chỉnh, không chỉ đúng về logic.
+- Audit chain sống sót bão đa-worker: 897 dòng, 68 hashed mới, 0 restart, verify OK.
+
 ## Mở / sang sau
 - Ed25519 ký + checkpoint ngoài data-dir (bước 2 của chain) — khi có nhu cầu multi-machine.
 - Band hiện chưa hiện trên kanban card (mới có audit/Telegram/`team_metrics`).
