@@ -37,6 +37,7 @@ import re
 
 from my_crew.agent.task_decomposition import (
     DecompositionError,
+    fanout_gap,
     parse_decomposed_task,
     validate_decomposition,
 )
@@ -194,6 +195,18 @@ def _decompose_with_retries(
             from my_crew.agent.team_task_roster import validate_shell_steps
 
             validate_shell_steps(task.steps)
+            # v74.2 fan-out bias: a ≥4-entity brief whose collection was NOT split
+            # into parallel steps goes back through the retry loop with a concrete
+            # instruction (measured: fanned ~11-12min vs un-fanned ~17-25min).
+            # FAIL-OPEN on the last attempt: a valid-but-slow plan always beats a
+            # failed assign, so the gap is only retried while attempts remain.
+            gap = fanout_gap(brief, task)
+            if gap and _attempt < _MAX_DECOMPOSE_ATTEMPTS - 1:
+                raise DecompositionError(gap)
+            if gap:
+                logger.warning(
+                    "assign_team_task: accepting un-fanned plan after retries (%s)", gap
+                )
             return _widen_terminal_deps(task), total_cost
         except DecompositionError as exc:
             last_error = str(exc)

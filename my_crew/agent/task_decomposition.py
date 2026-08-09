@@ -387,3 +387,53 @@ def decomposition_content_hash(task: DecomposedTask) -> str:
         sort_keys=True, ensure_ascii=True, separators=(",", ":"),
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def count_enumerated_entities(brief: str) -> int:
+    """Largest comma/`và`-separated list following a colon in the CEO's brief.
+
+    The fan-out rule keys on "đề liệt kê ≥4 thực thể độc lập cùng dạng", and in real
+    briefs that enumeration is written as a colon-led list ("5 sàn: Shopee, Lazada,
+    TikTok Shop, Tiki, Sendo"). Items longer than 7 words are dropped — those are
+    prose clauses, not entity names. Pure heuristic feeding a RETRY BIAS, never a hard
+    gate (see `fanout_gap`), so a false positive costs one decompose retry and a false
+    negative just keeps today's behavior.
+    """
+    import re
+
+    best = 0
+    for m in re.finditer(r":\s*([^.\n:?!]+)", brief):
+        items = [
+            part.strip()
+            for chunk in m.group(1).split(",")
+            for part in chunk.split(" và ")
+        ]
+        items = [i for i in items if i and len(i.split()) <= 7]
+        best = max(best, len(items))
+    return best
+
+
+def fanout_gap(brief: str, task: DecomposedTask) -> str:
+    """"" when the plan's collection shape matches the brief; else the retry message.
+
+    Fires only when ALL hold: the brief enumerates ≥4 entities, the plan does research
+    at all (some step has needs_web — a pure-writing task over given data has nothing
+    to fan out), and fewer than 2 dep-less needs_web collect steps exist. Measured
+    stake (benchmark 08-08): a fanned 5-entity survey finishes in ~11-12min, an
+    un-fanned one ~17-25min — the single biggest remaining wall-clock lever.
+    """
+    n = count_enumerated_entities(brief)
+    if n < 4:
+        return ""
+    if not any(s.needs_web for s in task.steps):
+        return ""
+    parallel_collects = [s for s in task.steps if s.needs_web and not s.deps]
+    if len(parallel_collects) >= 2:
+        return ""
+    return (
+        f"đề liệt kê {n} thực thể độc lập cùng dạng nhưng kế hoạch chỉ có "
+        f"{len(parallel_collects)} bước thu thập song song — PHẢI tách phần thu thập "
+        "thành 2-3 bước deps rỗng chạy song song, chia đều thực thể, NÊU ĐÍCH DANH tên "
+        "thực thể trong title + acceptance từng bước, và giao cho các nhân sự khác nhau "
+        "nếu đội có nhiều người tra cứu được"
+    )

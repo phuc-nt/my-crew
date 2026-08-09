@@ -383,3 +383,54 @@ def test_decompose_prompt_pins_fanout_rule():
     # prose — the model mirrors the example and never emitted needs_web without it,
     # silently forcing research steps onto the searchless native tier.
     assert '"needs_web":false' in _DECOMPOSE_SYSTEM
+
+
+# --- v74.2: code-side fan-out bias --------------------------------------------------
+
+
+def test_count_enumerated_entities_on_real_brief_shapes():
+    from my_crew.agent.task_decomposition import count_enumerated_entities
+
+    assert count_enumerated_entities(
+        "So sánh phí bán hàng trên 5 sàn: Shopee, Lazada, TikTok Shop, Tiki, Sendo. "
+        "Mỗi sàn kèm link nguồn."
+    ) == 5
+    assert count_enumerated_entities("Viết bài về xu hướng AI, kèm 3 ví dụ.") < 4
+    # "và" joins the last pair — still 4 entities
+    assert count_enumerated_entities(
+        "Khảo sát 4 công cụ: Notion, Obsidian, Logseq và Anytype. Kèm nguồn."
+    ) == 4
+
+
+def _task_from(steps: list[dict]):
+    return parse_decomposed_task(_raw(steps))
+
+
+def test_fanout_gap_flags_single_collect_and_accepts_split():
+    from my_crew.agent.task_decomposition import fanout_gap
+
+    brief = "So sánh 5 sàn: Shopee, Lazada, TikTok Shop, Tiki, Sendo. Kèm nguồn."
+    single = _task_from([
+        {**_step("research"), "needs_web": True},
+        _step("finalize", deps=["research"]),
+    ])
+    assert "PHẢI tách" in fanout_gap(brief, single)
+
+    split = _task_from([
+        {**_step("r1"), "needs_web": True},
+        {**_step("r2"), "needs_web": True},
+        _step("finalize", deps=["r1", "r2"]),
+    ])
+    assert fanout_gap(brief, split) == ""
+
+
+def test_fanout_gap_skips_non_research_and_small_briefs():
+    from my_crew.agent.task_decomposition import fanout_gap
+
+    listy_brief = "Soạn slide về 5 giá trị: Tốc độ, Trung thực, Kỷ luật, Tò mò, Bền bỉ."
+    writing_only = _task_from([_step("draft"), _step("final", deps=["draft"])])
+    assert fanout_gap(listy_brief, writing_only) == ""  # no needs_web step → nothing to fan
+
+    small_brief = "So sánh Shopee với Lazada, kèm nguồn."
+    single = _task_from([{**_step("research"), "needs_web": True}])
+    assert fanout_gap(small_brief, single) == ""
