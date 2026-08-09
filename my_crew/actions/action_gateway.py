@@ -356,7 +356,25 @@ class ActionGateway:
             # the rule id audited. Only a gated-but-reversible action is a candidate — a
             # Lớp A hard-deny already fell through untouched, so a rule can never override it.
             if gated_but_reversible:
-                rule = self._approval_rules.match(action)
+                # v76 break-glass: a broken rules store normally fails CLOSED (the
+                # action does not run — see gateway_fail_contract). With the env flag
+                # set, degrade to "no rule matched" so a corrupt SQLite file cannot
+                # brick every external write. Lớp A was already decided above.
+                try:
+                    rule = self._approval_rules.match(action)
+                except Exception as exc:  # noqa: BLE001 — contract: closed unless break-glass
+                    from my_crew.actions.gateway_fail_contract import (
+                        break_glass_active,
+                        log_break_glass,
+                    )
+
+                    if not break_glass_active():
+                        raise
+                    log_break_glass("learned_rules", exc)
+                    self._record(action_type, tool, "skipped",
+                                 "break-glass: learned_rules store unavailable",
+                                 action, rationale)
+                    rule = None
                 if rule is not None and rule.scope == SCOPE_DENY:
                     self._approval_rules.record_use(rule.id)
                     self._record(
@@ -381,13 +399,48 @@ class ActionGateway:
                 # the automation ProposeStep) must still QUEUE for a human, never auto-skip +
                 # burn a slot on a no-op.
                 if handler is not None:
-                    auto = self._try_auto_approve(action, origin="scheduled")
+                    # v76 break-glass: ladder-store failure degrades to "no slot" (the
+                    # action still queues below) — never to a silent auto-run.
+                    try:
+                        auto = self._try_auto_approve(action, origin="scheduled")
+                    except Exception as exc:  # noqa: BLE001 — contract: closed unless break-glass
+                        from my_crew.actions.gateway_fail_contract import (
+                            break_glass_active,
+                            log_break_glass,
+                        )
+
+                        if not break_glass_active():
+                            raise
+                        log_break_glass("auto_approve_ladder", exc)
+                        auto = None
                     if auto is not None:
                         return self._execute(action, handler=handler, rationale=auto,
                                              approved=True)
-                approval_id = self._approvals.enqueue(
-                    action, reason=interrupt.reason, rationale=rationale, actor=self._actor
-                )
+                try:
+                    approval_id = self._approvals.enqueue(
+                        action, reason=interrupt.reason, rationale=rationale,
+                        actor=self._actor,
+                    )
+                except Exception as exc:  # noqa: BLE001 — contract: closed unless break-glass
+                    from my_crew.actions.gateway_fail_contract import (
+                        break_glass_active,
+                        log_break_glass,
+                    )
+
+                    if not break_glass_active() or handler is None:
+                        # No queue AND no break-glass (or nothing to run) → the write
+                        # stays blocked; the raise surfaces the store failure loudly.
+                        raise
+                    # Queue unavailable + operator holds the break-glass: run as an
+                    # autonomous-style approved action so the fleet keeps moving; the
+                    # audit row names break-glass explicitly. Lớp A/kill-switch/dry-run/
+                    # rate-limit/dedup all still apply on the re-entry.
+                    log_break_glass("approval_enqueue", exc)
+                    return self._execute(
+                        action, handler=handler,
+                        rationale="break-glass: approval store unavailable",
+                        approved=True,
+                    )
                 self._record(
                     action_type, tool, "pending", interrupt.reason, action, rationale
                 )

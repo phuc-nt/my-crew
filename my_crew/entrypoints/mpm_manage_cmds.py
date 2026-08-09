@@ -188,6 +188,28 @@ def _rules(loaded, rest: list[str]) -> int:
 def _audit(agent_id: str, rest: list[str]) -> int:
     from my_crew.audit.audit_log import AuditLog
 
+    # v76: `mpm agent audit <id> verify` (or `--team` for the shared team-tasks trail)
+    # walks the hash-chain and reports the first break — the command that turns
+    # "append-only by discipline" into "tamper-evident, checkable".
+    if "verify" in rest:
+        from my_crew.audit.audit_chain import verify_chain
+
+        if "--team" in rest:
+            from my_crew.runtime.team_task_paths import team_tasks_root
+
+            target = team_tasks_root() / "audit" / "audit.jsonl"
+        else:
+            target = agent_data_dir(agent_id) / "audit" / "audit.jsonl"
+        v = verify_chain(target)
+        print(f"{target}")
+        print(f"  total={v['total']} hashed={v['hashed']} legacy_prefix={v['legacy_prefix']} "
+              f"restarts={v['restarts']}")
+        if v["ok"]:
+            print("  OK — chain nguyên vẹn")
+            return 0
+        print(f"  BROKEN tại dòng {v['broken_line']} (lý do: {v['reason']})")
+        return 1
+
     limit_raw = _flag_value(rest, "--limit")
     path = agent_data_dir(agent_id) / "audit" / "audit.jsonl"
     entries = AuditLog(path).query(

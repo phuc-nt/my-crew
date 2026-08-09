@@ -64,12 +64,36 @@ class AuditLog:
         The whole payload is redacted (params, reason, result_summary, rationale,
         ...) so a secret cannot leak through any free-text field — including on a
         credential-deny, where the offending value would otherwise be echoed.
+
+        v76: the line carries `prev_hash`/`entry_hash` (see `audit_chain`) so a later
+        rewrite of the trail is detectable. Read-tail + append run under an exclusive
+        flock (several workers share the team-tasks trail); ANY chain-bookkeeping
+        failure degrades to `prev_hash=""` — a visible chain restart `verify_chain`
+        reports — because the audit row itself must never be dropped or block work.
         """
+        import fcntl
+
+        from my_crew.audit.audit_chain import chain_fields, read_tip_hash
+
         self._path.parent.mkdir(parents=True, exist_ok=True)
         payload = redact(asdict(entry))
-        line = json.dumps(payload, ensure_ascii=False)
-        with self._path.open("a", encoding="utf-8") as fh:
-            fh.write(line + "\n")
+        lock_path = self._path.with_suffix(self._path.suffix + ".lock")
+        try:
+            with lock_path.open("a") as lock_fh:
+                fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
+                try:
+                    linked = chain_fields(payload, read_tip_hash(self._path))
+                    line = json.dumps(linked, ensure_ascii=False)
+                    with self._path.open("a", encoding="utf-8") as fh:
+                        fh.write(line + "\n")
+                finally:
+                    fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+        except OSError:
+            logger.warning("audit chain bookkeeping failed — appending with a chain "
+                           "restart (prev_hash='')", exc_info=True)
+            line = json.dumps(chain_fields(payload, ""), ensure_ascii=False)
+            with self._path.open("a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
 
     def query(
         self,
