@@ -65,6 +65,20 @@
   không còn đúng khi split-sub mang chính việc collect của cha — flag mới phải rà
   MỌI đường mint row, không chỉ decompose.
 
+## v74.2 (09/08 sáng): đóng nốt 3 việc CEO chốt
+- **Fan-out ép code** (`fanout_gap` + `count_enumerated_entities`, 5683575): đề liệt
+  kê ≥4 thực thể mà plan không tách collect song song → quay lại vòng retry decompose
+  sẵn có với chỉ dẫn cụ thể; FAIL-OPEN lượt cuối (plan chậm vẫn hơn giao việc hỏng);
+  plan thuần viết (không needs_web) không bao giờ bị ép. Bench-4 xác nhận: plan chuẩn
+  ngay roll đầu.
+- **Đo concurrency**: không có single-flight per agent — tuần tự trước đây là cap
+  per-task `team_task_concurrency: 2`; nâng company.yaml (user data) lên 3, code
+  default giữ 2.
+- **Bench-4** (6 dịch vụ email): 16,4' / $0.045 / delivered, gap 0–8s, review pass
+  lần đầu; 8' trong đó là 2 vòng retry-with-guidance của 1 bước collect khó — vòng
+  chất lượng, không phải hạ tầng. Weekly-review trùng chào buổi sáng Chủ nhật cũng
+  vá cùng buổi (0f23908 — bỏ chào + cấm lặp mục briefing).
+
 ## Mở / sang sau
 - `MPM_WEB_BASE_URL` (link bấm được trên điện thoại): chốt phương án `tailscale serve`
   (giữ bind localhost, không cần password web-auth) nhưng BLOCKED — cần bật HTTPS
