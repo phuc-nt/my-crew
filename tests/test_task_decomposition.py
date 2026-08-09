@@ -434,3 +434,15 @@ def test_fanout_gap_skips_non_research_and_small_briefs():
     small_brief = "So sánh Shopee với Lazada, kèm nguồn."
     single = _task_from([{**_step("research"), "needs_web": True}])
     assert fanout_gap(small_brief, single) == ""
+
+
+def test_amend_prompt_pins_flags_in_example_schema():
+    """Bài học lặp 2 lần (decompose 112033f, replan 260809): flag định tuyến phải nằm
+    trong SCHEMA VÍ DỤ — model mirror ví dụ, mô tả bằng văn xuôi không đủ. Đường amend
+    là đường mint bước mới thứ ba (decompose, split, amend) và từng thiếu toàn bộ."""
+    from my_crew.agent.team_task_amend_prompt import _AMEND_SYSTEM
+
+    assert '"needs_web":false' in _AMEND_SYSTEM
+    assert '"needs_shell":false' in _AMEND_SYSTEM
+    assert '"external_write":false' in _AMEND_SYSTEM
+    assert '"acceptance"' in _AMEND_SYSTEM
