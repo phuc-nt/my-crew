@@ -94,7 +94,9 @@ class SandboxUnavailableForShellStep(RuntimeError):
     """
 
 
-def resolve_step_runtime(loaded: LoadedProfile | None, step: Any) -> AgentRuntime:
+def resolve_step_runtime(
+    loaded: LoadedProfile | None, step: Any, *, prefetched: bool = False,
+) -> AgentRuntime:
     """v45 per-step routing: pick the runtime for ONE step by its `needs_shell` flag + the
     assignee profile's configured kind.
 
@@ -141,8 +143,12 @@ def resolve_step_runtime(loaded: LoadedProfile | None, step: Any) -> AgentRuntim
     #   - a WRONG needs_web=False self-heals: after the first coordinator ruling
     #     (intervention_count >= 1) the forcing is dropped and the step runs the
     #     agent's own tier. Hint-only, never permissions.
+    # v75 phase 3: `prefetched=True` means the launcher already fetched this step's
+    # web data into the prompt — the ONLY capability the agent tier held over native
+    # for this step is spent, so it runs the fast one-shot tier. Callers only set it
+    # for un-intervened work steps (self-heal after a ruling keeps the agent tier).
     step_type = str(getattr(step, "step_type", "work") or "work")
-    needs_web = bool(getattr(step, "needs_web", False))
+    needs_web = bool(getattr(step, "needs_web", False)) and not prefetched
     intervened = int(getattr(step, "intervention_count", 0) or 0) > 0
     if step_type == "review" or (step_type == "work" and not needs_web and not intervened):
         return NativeGraphRuntime()

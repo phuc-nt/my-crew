@@ -1,0 +1,84 @@
+"""v75 phase 3: hybrid collect launcher — query derivation, fail-open, routing."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+from my_crew.runtime.collect_prefetch import derive_queries, prefetch_for_step
+
+
+def _step(title):
+    return SimpleNamespace(title=title)
+
+
+def test_derive_queries_plain_title_is_one_query():
+    assert derive_queries(_step("Khảo sát thị trường xe điện Việt Nam")) == [
+        "Khảo sát thị trường xe điện Việt Nam"
+    ]
+
+
+def test_derive_queries_entity_list_adds_topic_prefixed_variants():
+    qs = derive_queries(_step("Thu thập giá Google One, iCloud+, Dropbox"))
+    assert qs[0] == "Thu thập giá Google One, iCloud+, Dropbox"
+    assert len(qs) == 3
+    assert any("iCloud+" in q and "Thu thập giá" in q for q in qs[1:])
+    assert any("Dropbox" in q for q in qs[1:])
+
+
+def test_derive_queries_caps_at_three():
+    qs = derive_queries(_step("Khảo sát A1, B2, C3, D4, E5"))
+    assert len(qs) == 3
+
+
+def _settings(tmp_path):
+    return SimpleNamespace(tavily_api_key="t", brave_api_key=None,
+                           data_dir=str(tmp_path / "agent"))
+
+
+def _loaded():
+    return SimpleNamespace(web_search=True)
+
+
+def test_prefetch_returns_bundle_when_any_query_hits(tmp_path, monkeypatch):
+    from my_crew.tools.search_result_formatter import SearchResult
+
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    hit = SearchResult(title="Giá Google One", snippet="2TB $9.99", source="one.google.com")
+    outcomes = iter([([hit], "ok"), ([], "empty"), ([], "provider_error")])
+    monkeypatch.setattr("my_crew.tools.web_search_tool.web_search_outcome",
+                        lambda q, **kw: next(outcomes))
+    bundle = prefetch_for_step(_loaded(), _settings(tmp_path),
+                               _step("Thu thập giá Google One, iCloud+, Dropbox"))
+    assert "KẾT QUẢ TÌM KIẾM" in bundle
+    assert "[KHÔNG CÓ KẾT QUẢ]" in bundle  # per-query sentinel preserved
+    assert "[LỖI NGUỒN TÌM KIẾM]" in bundle
+
+
+def test_prefetch_fails_open_when_no_query_hits(tmp_path, monkeypatch):
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.tools.web_search_tool.web_search_outcome",
+                        lambda q, **kw: ([], "provider_error"))
+    assert prefetch_for_step(_loaded(), _settings(tmp_path), _step("Khảo sát X")) == ""
+
+
+def test_prefetch_skips_without_optin_or_keys(tmp_path):
+    no_flag = SimpleNamespace(web_search=False)
+    assert prefetch_for_step(no_flag, _settings(tmp_path), _step("X")) == ""
+    no_keys = SimpleNamespace(tavily_api_key=None, brave_api_key=None,
+                              data_dir=str(tmp_path))
+    assert prefetch_for_step(_loaded(), no_keys, _step("X")) == ""
+
+
+def test_routing_prefetched_web_step_runs_native(monkeypatch):
+    from my_crew.runtime_backends.protocol import resolve_step_runtime
+
+    class _Cfg:
+        kind = "create_agent"
+
+    loaded = SimpleNamespace(agent_runtime=_Cfg(), profile_id="a")
+    step = SimpleNamespace(needs_shell=False, needs_web=True, step_type="work",
+                           intervention_count=0)
+    assert type(resolve_step_runtime(loaded, step)).__name__ == "ToolCallingRuntime"
+    assert type(resolve_step_runtime(loaded, step, prefetched=True)).__name__ == (
+        "NativeGraphRuntime"
+    )

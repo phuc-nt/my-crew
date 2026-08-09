@@ -130,7 +130,7 @@ def test_deep_team_flag_threads_into_started_step_event_when_true(
 
     monkeypatch.setattr(
         "my_crew.runtime_backends.protocol.resolve_step_runtime",
-        lambda loaded, step: _FakeNonNativeRuntime(captured_build_kwargs),
+        lambda loaded, step, **_kw: _FakeNonNativeRuntime(captured_build_kwargs),
     )
 
     def _fake_append_phase_event(*_a, **kw):
@@ -172,7 +172,7 @@ def test_deep_team_flag_omitted_from_started_event_when_false(
 
     monkeypatch.setattr(
         "my_crew.runtime_backends.protocol.resolve_step_runtime",
-        lambda loaded, step: _FakeNonNativeRuntime(captured_build_kwargs),
+        lambda loaded, step, **_kw: _FakeNonNativeRuntime(captured_build_kwargs),
     )
 
     def _fake_append_phase_event(*_a, **kw):

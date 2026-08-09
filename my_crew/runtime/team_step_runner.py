@@ -456,14 +456,27 @@ def _run_graph(
     # (a step whose profile failed to load still runs with EMPTY context) — resolve_runtime
     # degrades that to native. NativeGraphRuntime.build_task delegates to build_team_task_graph
     # unchanged, so native output is byte-identical.
+    # v75 phase 3 hybrid launcher: a first-attempt no-shell collect step gets its web
+    # data PRE-FETCHED by code; success ⇒ the step runs the native one-shot tier with
+    # the bundle injected as its search context. Any failure ⇒ "" ⇒ the old tool-loop
+    # path, byte-identical. Intervened steps skip prefetch: the self-heal contract
+    # gives them the agent's own tier + live tools.
+    from my_crew.runtime.collect_prefetch import prefetch_for_step
     from my_crew.runtime_backends.protocol import resolve_step_runtime
+
+    _prefetch_context = ""
+    if (str(getattr(step, "step_type", "work") or "work") == "work"
+            and bool(getattr(step, "needs_web", False))
+            and not bool(getattr(step, "needs_shell", False))
+            and int(getattr(step, "intervention_count", 0) or 0) == 0):
+        _prefetch_context = prefetch_for_step(loaded, settings, step)
 
     # v45: resolve the runtime PER STEP — a no-shell step on a deep_agent-pinned agent drops to
     # the fast, Docker-free create_agent tier; a needs_shell step escalates to deep_agent (or fails
     # loud if the agent has no sandbox). The `_extra` wiring below is gated on the EFFECTIVE kind,
     # not the profile kind, so a dropped step feeds the tool-calling runtime the right kwargs (each
     # runtime already pops what it doesn't use — v43/v44). `loaded=None` → native (degrade path).
-    runtime = resolve_step_runtime(loaded, step)
+    runtime = resolve_step_runtime(loaded, step, prefetched=bool(_prefetch_context))
     effective_kind = type(runtime).__name__
     _is_non_native = effective_kind != "NativeGraphRuntime"
 
@@ -537,7 +550,13 @@ def _run_graph(
         settings=settings, context=context, step_title=step.title,
         data_dir=team_tasks_root(), task_id=task_id, step_seq=step.seq,
         step_deps=step.deps,
-        search_hook=None if _toolless else _resolve_search_hook(loaded, settings),
+        search_hook=(
+            # Prefetched bundle rides the native pre-work hook slot: the graph calls
+            # the hook once and injects the return as its (sandboxed) search context.
+            (lambda _q, _bundle=_prefetch_context: _bundle) if _prefetch_context
+            else None if _toolless
+            else _resolve_search_hook(loaded, settings)
+        ),
         self_id=step.assigned_to, telemetry=telemetry, remember_node=remember_node,
         guidance=_guidance_with_wake_context(step), **_extra,
     )
