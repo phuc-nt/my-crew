@@ -63,8 +63,15 @@ giữ nó sau trần thì phán quyết cho step hỏng chờ >3h (đo thật).
 → finally-touch `.data/tick.poke`; service ngủ lát 5s, thấy mtime poke vượt watermark →
 spawn 1 team-tick sớm trên thread riêng (debounce theo lát, poke cũ trước khi daemon
 start được coi đã xử lý). Nhịp 60s giữ nguyên làm fallback — mất poke chỉ trả về độ
-trễ cũ, không mất việc. Đo thật: gap dispatch bước sẵn-deps từ ~253s/task (11%
-wall-clock) xuống 1–17s/bước.
+trễ cũ, không mất việc. **v74.1 mở rộng 3 nguồn poke nữa**: (a) chính team-tick khi kết
+thúc bằng action mở đường (`poke_worthy`: spawned/aggregated/stuck_retry/
+stuck_reassigned/review_inserted/fanout_inserted — "none" và dead-end KHÔNG poke nên
+chuỗi luôn tự dừng); (b) `run_assign_team_task` ngay sau confirm (dispatch đầu ≤5s thay
+vì đợi nhịp phút); (c) row mint (review/fanout) → tick kế spawn trong lát ngủ. Đo qua 7
+vòng benchmark: gap dispatch từ ~253s/task (11% wall-clock) xuống **0–8s mọi đường**,
+kể cả dưới tải 2 task đồng thời. Song song per-task theo `company.yaml::
+team_task_concurrency` (dispatcher spawn tới `concurrency - running`); KHÔNG có
+single-flight per agent — hai bước cùng một agent chạy song song được nếu còn slot.
 
 ### 3.2a Integration health (`my_crew/server/integration_health.py`, v47)
 **Health check Docker chủ động** (`_docker_check`): probe `docker info` giới hạn 5s, báo ✓/✗ sạch khi daemon tắt/offline — panel Sức khỏe noti lỗi TRƯỚC khi giao việc deep_agent (no-shell step chạy 0-Docker qua `create_agent`, chỉ needs_shell→deep_agent thì dùng Docker).
@@ -219,8 +226,25 @@ văn không đủ, model mirror ví dụ); `resolve_step_runtime` ép **native o
 lỗi dữ liệu cần tool — bài học vòng 7); hint sai tự hồi phục sau ruling đầu (`intervention_count≥1` bỏ
 ép). Bind hash có điều kiện như `needs_shell`. Hint-only, không phải quyền — tier native không vì thế
 có thêm tool nào. Decompose thêm QUY TẮC TÁCH SONG SONG: đề ≥4 thực thể độc lập cùng dạng → 2-3 bước
-collect deps rỗng, tên thực thể đích danh trong title + acceptance. Đo e2e v74 (5 trợ lý AI): wall
-25,8' (vs 40' vòng 8), $0.083, collect song song thật, qa/finalize/rework chạy native.
+collect deps rỗng, tên thực thể đích danh trong title + acceptance.
+
+**v74.1–74.2 hoàn thiện (kiểm chứng qua 7 vòng benchmark, xem
+`docs/journals/260808-v74-multi-agent-speed.md`)**:
+- **Row mint kế thừa cờ**: runtime-split sub kế thừa `needs_web` của bước cha qua param
+  keyword-only (pattern `needs_review` — không bao giờ đọc từ dict caller); gather giữ False.
+  Bug đo được dưới tải: sub flagless bị ép native searchless, mỗi sub đốt 1 ruling tự hồi phục.
+- **Fan-out ép bằng code** (`task_decomposition.fanout_gap`): đề liệt kê ≥4 thực thể (heuristic
+  danh sách sau dấu hai chấm) mà plan không có ≥2 collect `needs_web` deps rỗng → trả lỗi vào vòng
+  retry decompose; FAIL-OPEN lượt cuối (plan chậm vẫn hơn giao việc hỏng); plan thuần viết không bị ép.
+- **Cạn loop không còn trả rỗng** (`community_loop_core.invoke_capped`): chạy qua stream giữ state
+  cuối; overflow → 1 lượt tổng hợp bounded từ transcript dở ("dừng tool, thiếu ghi THIẾU"), hỏng nữa
+  mới degrade rỗng.
+- **Dead-step reset đổi người**: bước `needs_web` chết mà assignee không search được → reset chuyển
+  cho đồng nghiệp web-capable đầu tiên (`agent_web_capable` — cờ + sandbox network cho deep tier);
+  `_can_do_step` cũng chặn reassign vào agent không search được khi bước khai `needs_web`.
+- **Số chốt** (baseline vòng 8 = 40'/$0.05): đề khảo sát 5-6 thực thể giờ ổn định **11–16'**,
+  $0.02–0.05, gap dispatch 0–8s; biến động còn lại = chất lượng dữ liệu nguồn + vòng review/clarify
+  (hành vi đúng, không tối ưu bỏ).
 
 **Triết lý moat (chốt qua research v45)**: **shell thật CHỈ chạy trong Docker sandbox**; việc no-shell
 (đại đa số: suy luận + đọc + viết báo cáo) chạy **Docker-free** trên create_agent. **Bác host-exec +

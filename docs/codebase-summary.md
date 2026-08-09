@@ -1,7 +1,16 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-08-08 — as-built sau arc "cứng hoá tự chủ" 08-07→08-08** (~30 commit,
+> Status: **2026-08-09 — as-built sau arc v74 "tốc độ đa-agent" 08-08→08-09** (chi tiết
+> `journals/260808-v74-multi-agent-speed.md`, 7 vòng benchmark sống): tier theo bước
+> `needs_web` (bước không-web + review row → native one-shot; split-sub kế thừa cờ cha);
+> dispatch hướng sự kiện `runtime/tick_poke.py` (worker exit / tick action mở đường /
+> confirm giao việc / row mint → team-tick trong ≤5s, nhịp 60s làm fallback); fan-out
+> ≥4 thực thể ép bằng code (`task_decomposition.fanout_gap`, fail-open); cạn loop tổng
+> hợp từ transcript dở thay vì trả rỗng (`community_loop_core`); dead-step reset đổi
+> người web-capable; `team_task_concurrency` user-config 3. Số chốt: đề khảo sát 5-6
+> thực thể 40'→11-16', $0.02-0.05, gap dispatch 0-8s. 2959 backend tests.
+> Arc trước — **"cứng hoá tự chủ" 08-07→08-08** (~30 commit,
 > chi tiết ở `journals/260807-autonomy-e2e-hardening.md` + `260808-grader-judgment-hardening.md`):
 > model mặc định fleet → `qwen/qwen3.7-plus`; team-tick miễn tick-cap; memory-extractor
 > lọc poison bằng code; deep_agent sanitizer batch 1-call (skip khi network-off);

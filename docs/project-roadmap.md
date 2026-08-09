@@ -1,13 +1,20 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v70 / 0.8.0+). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-08-05.
+> Lộ trình + trạng thái (as-built v74 / 0.8.0+). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Cập nhật: 2026-08-09.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v69 (PyPI 0.8.0), v70 in-progress.**
-2802 BE + 279 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
-(live daemon, kill-9 resume, fan-out parallelism, 3 vòng UAT đối kháng + heartbeat live UAT Telegram).
+**Production-usable, single-user autonomy-first. Đã ship tới v74 (PyPI 0.8.0+).**
+2959 BE + 279 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
+(live daemon, kill-9 resume, fan-out parallelism, UAT đối kháng + 7 vòng benchmark tốc độ sống).
+
+**v71–v74 (arc tốc độ + phán đoán — 08-06→08-09):** v71 personal crew quick-build · v72 tick
+spawn-then-drain · v73 grader neo ngày + retry-first coercion + Telegram coordinator-first ·
+**v74 tốc độ đa-agent** (tier theo bước `needs_web` → bước không-tool chạy native; dispatch hướng
+sự kiện `tick.poke` 4 nguồn, gap 253s→0-8s; fan-out ≥4 thực thể ép code fail-open; salvage
+transcript khi cạn loop; dead-step reset đổi người web-capable; concurrency 3). Số chốt benchmark:
+đề khảo sát 5-6 thực thể 40'→11-16', $0.02-0.05/task, honesty chain giữ vững qua 7 vòng.
 
 **v69 (bề mặt chat cho approval — 0.8.0):** Lớp B queue → **DM Telegram ngay khi enqueue**
 (chỉ trường định danh, không lộ subject/body) · **duyệt/từ chối ngay trong chat** (bề mặt
