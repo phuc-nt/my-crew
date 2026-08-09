@@ -1,5 +1,10 @@
 # v75 — Coordination chủ động (học chọn lọc từ Hermes/OpenClaw)
-2026-08-09 · ✅ Done
+2026-08-09 · ✅ Done · **shipped cùng v70–v74 trong release 0.9.0 (PyPI, tag v0.9.0)**
+
+> Lúc cắt release phát hiện CI main đỏ từ 08-08: gate `tsc -b` bắt lỗi typing
+> `Record<string, string>` trong office-message-line mà `tsc --noEmit` chạy tay không
+> bắt — vá + rebuild dist (9047861), CI xanh lại. Bài học: gate local phải chạy ĐÚNG
+> lệnh CI dùng, không phải lệnh gần giống.
 
 ## Làm gì
 - Brainstorm đối chiếu coordination core với OpenClaw/Hermes (khảo sát file-level) +
