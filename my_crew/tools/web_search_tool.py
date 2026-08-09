@@ -123,12 +123,36 @@ def web_search(
 ) -> list[SearchResult]:
     """Redact -> fail-closed gate -> Tavily/Brave -> audit. Never raises for a
     provider/network failure or a missing key (both degrade to `[]`); a bad `query`
-    type is the only programmer error that still surfaces.
+    type is the only programmer error that still surfaces. Callers that need to
+    DISTINGUISH "reachable but empty" from "provider failed" use
+    `web_search_outcome` — this wrapper keeps the original results-only contract.
+    """
+    return web_search_outcome(
+        query, config=config, audit_log=audit_log, actor=actor,
+        tavily_fn=tavily_fn, brave_fn=brave_fn,
+    )[0]
 
+
+def web_search_outcome(
+    query: str,
+    *,
+    config: WebSearchConfig,
+    audit_log: AuditLog | None = None,
+    actor: str = "",
+    tavily_fn: ProviderFn = _tavily_search,
+    brave_fn: ProviderFn = _brave_search,
+) -> tuple[list[SearchResult], str]:
+    """`web_search` + an explicit outcome status: `(results, status)`.
+
+    status ∈ {"ok", "empty", "provider_error", "skipped_sensitive", "no_provider",
+    "empty_query"}. The v75 silent-success guard exists because `[]` used to mean BOTH
+    "the web says nothing" and "we never reached the web" — two opposite conclusions
+    for a research step (honest THIẾU-vì-không-có vs THIẾU-vì-nguồn-hỏng) that looked
+    identical to every caller.
     """
     query = (query or "").strip()
     if not query:
-        return []
+        return [], "empty_query"
 
     redacted, counts = redact_query(query)
     if query_still_sensitive(redacted):
@@ -136,32 +160,38 @@ def web_search(
         _audit(audit_log, redacted="", counts=counts, provider="none", result_count=0,
                verdict="skipped", reason="query still sensitive after redaction",
                actor=actor)
-        return []
+        return [], "skipped_sensitive"
 
     if not config.available():
         logger.info("web_search: no provider API key configured, degrading to no-op")
-        return []
+        return [], "no_provider"
 
     results: list[SearchResult] = []
     provider = "none"
+    # "empty" requires at least ONE provider to have answered cleanly — a run where
+    # every attempted provider raised must not masquerade as "the web says nothing".
+    clean_answer = False
     if config.tavily_api_key:
         try:
             results = tavily_fn(redacted, config.tavily_api_key)
             provider = "tavily"
+            clean_answer = True
         except Exception as exc:  # noqa: BLE001 — any Tavily failure falls back to Brave
             logger.warning("web_search: tavily failed, trying brave fallback: %s", exc)
     if not results and config.brave_api_key:
         try:
             results = brave_fn(redacted, config.brave_api_key)
-            provider = "brave"
+            provider = "brave" if results else provider
+            clean_answer = True
         except Exception as exc:  # noqa: BLE001 — both providers failed: degrade to no results
             logger.warning("web_search: brave fallback also failed: %s", exc)
-            provider = "none"
 
     _audit(audit_log, redacted=redacted, counts=counts, provider=provider,
            result_count=len(results), verdict="allow" if results else "skipped",
            reason="" if results else "no results / provider unavailable", actor=actor)
-    return results
+    if results:
+        return results, "ok"
+    return [], ("empty" if clean_answer else "provider_error")
 
 
 def _audit(

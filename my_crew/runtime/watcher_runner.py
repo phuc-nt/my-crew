@@ -89,7 +89,7 @@ def run_watchers(
     wake = wake_fn or _wake_via_team_task
 
     store = WatcherStore(Path(settings.data_dir) / "watcher.db")
-    checked, diffs, woke = 0, 0, 0
+    checked, diffs, woke, failed = 0, 0, 0, 0
     try:
         for watcher in watchers:
             wid = f"{loaded.profile_id}:{watcher['id']}"
@@ -98,6 +98,7 @@ def run_watchers(
                 payload = _bounded(lambda w=watcher: poll(w, loaded, settings))
                 current = normalize_and_hash(source, payload)
             except Exception as exc:  # noqa: BLE001 — a failing source must not stop siblings
+                failed += 1
                 store.record_check(wid, source, None, error=str(exc)[:300])
                 state = store.get_state(wid) or {}
                 fails = int(state.get("fail_count") or 0)
@@ -124,9 +125,23 @@ def run_watchers(
                        "nguồn/cấu hình.", wid, "stale")
     finally:
         store.close()
-    status = "woke" if woke else ("diff_wake_failed" if diffs else "no_change")
-    return {"status": status, "checked": checked, "diffs": diffs, "woke": woke,
-            "cost_usd": None, "delivered": False}
+    # v75 silent-success guard: a tick where EVERY poll raised used to report
+    # "no_change" — "nguồn không đổi" and "không đọc được nguồn" are opposite
+    # conclusions and must never share a status. `failed` rides in the event only
+    # when non-zero so healthy ticks stay byte-identical.
+    if woke:
+        status = "woke"
+    elif diffs:
+        status = "diff_wake_failed"
+    elif failed and not checked:
+        status = "all_polls_failed"
+    else:
+        status = "no_change"
+    event = {"status": status, "checked": checked, "diffs": diffs, "woke": woke,
+             "cost_usd": None, "delivered": False}
+    if failed:
+        event["failed"] = failed
+    return event
 
 
 def _bounded(fn: Callable[[], Any]) -> Any:

@@ -232,3 +232,76 @@ def test_resolve_search_hook_writes_audit_row_with_redacted_query(tmp_path, monk
     full_text = json.dumps(entry)
     assert "phucnt0@gmail.com" not in full_text
     assert raw_query not in full_text
+
+
+# --- v75 f1: wake-context line rides the guidance channel ---------------------------
+
+
+def test_wake_context_first_attempt_keeps_guidance_unchanged():
+    from types import SimpleNamespace
+
+    from my_crew.runtime.team_step_runner import _guidance_with_wake_context
+
+    step = SimpleNamespace(guidance="làm kỹ phần nguồn", step_type="work",
+                           intervention_count=0, review_round=0)
+    assert _guidance_with_wake_context(step) == "làm kỹ phần nguồn"
+
+
+def test_wake_context_retry_after_ruling_names_the_attempt():
+    from types import SimpleNamespace
+
+    from my_crew.runtime.team_step_runner import _guidance_with_wake_context
+
+    step = SimpleNamespace(guidance="bổ sung link nguồn", step_type="work",
+                           intervention_count=1, review_round=0)
+    text = _guidance_with_wake_context(step)
+    assert "lần thử thứ 2" in text
+    assert "không lặp lại nguyên văn" in text
+    assert text.endswith("bổ sung link nguồn")
+
+
+def test_wake_context_rework_row_names_the_round():
+    from types import SimpleNamespace
+
+    from my_crew.runtime.team_step_runner import _guidance_with_wake_context
+
+    step = SimpleNamespace(guidance="", step_type="rework",
+                           intervention_count=0, review_round=1)
+    text = _guidance_with_wake_context(step)
+    assert "vòng SỬA thứ 2" in text
+
+
+# --- v75 f2/f3: search hook 3-path sentinels ----------------------------------------
+
+
+def _hook_with(monkeypatch, tmp_path, outcome):
+    import my_crew.tools.web_search_tool as wst
+    from my_crew.runtime.team_step_runner import _resolve_search_hook
+
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr(wst, "web_search_outcome",
+                        lambda query, **kw: outcome)
+    loaded = type("L", (), {"web_search": True})()
+    settings = type("S", (), {"tavily_api_key": "t", "brave_api_key": None,
+                              "data_dir": str(tmp_path / "agent")})()
+    hook = _resolve_search_hook(loaded, settings)
+    assert hook is not None
+    return hook
+
+
+def test_search_hook_provider_error_yields_source_fault_sentinel(monkeypatch, tmp_path):
+    hook = _hook_with(monkeypatch, tmp_path, ([], "provider_error"))
+    text = hook("giá X")
+    assert "LỖI NGUỒN" in text
+    assert "không tồn tại" in text  # câu cấm kết luận sai
+
+
+def test_search_hook_clean_empty_yields_no_result_sentinel(monkeypatch, tmp_path):
+    hook = _hook_with(monkeypatch, tmp_path, ([], "empty"))
+    text = hook("giá X")
+    assert "KHÔNG CÓ KẾT QUẢ" in text
+
+
+def test_search_hook_sensitive_skip_stays_silent(monkeypatch, tmp_path):
+    hook = _hook_with(monkeypatch, tmp_path, ([], "skipped_sensitive"))
+    assert hook("giá X") == ""

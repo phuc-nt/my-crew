@@ -539,7 +539,7 @@ def _run_graph(
         step_deps=step.deps,
         search_hook=None if _toolless else _resolve_search_hook(loaded, settings),
         self_id=step.assigned_to, telemetry=telemetry, remember_node=remember_node,
-        guidance=getattr(step, "guidance", "") or "", **_extra,
+        guidance=_guidance_with_wake_context(step), **_extra,
     )
     initial_state: dict[str, Any] = {
         "step_title": step.title, "acceptance": step.acceptance,
@@ -750,6 +750,32 @@ def _append_step_phase_event(
                         body=body, also_office=True)
 
 
+def _guidance_with_wake_context(step: Any) -> str:
+    """The stored coordinator guidance, prefixed with ONE wake-context line telling the
+    model which attempt this is (v75 f1 — OpenClaw's `[cron:job]` trigger-attribution
+    idea applied at the step-prompt layer). A model that knows "this is retry #2 after
+    a failed ruling" stops repeating its previous attempt verbatim — the exact loop the
+    round-7 rework-resume bug produced. First attempts of ordinary steps return the
+    stored guidance unchanged, so the common-case prompt stays byte-identical.
+    """
+    stored = (getattr(step, "guidance", "") or "").strip()
+    step_type = str(getattr(step, "step_type", "work") or "work")
+    interventions = int(getattr(step, "intervention_count", 0) or 0)
+    line = ""
+    if step_type == "rework":
+        round_no = int(getattr(step, "review_round", 0) or 0) + 1
+        line = (f"Bối cảnh: đây là vòng SỬA thứ {round_no} theo kết quả soát chéo — đọc "
+                "danh sách lỗi trong dữ liệu vào và sửa đúng các mục đó, không làm lại "
+                "từ đầu.")
+    elif interventions > 0:
+        line = (f"Bối cảnh: lần thử thứ {interventions + 1} của bước này sau phán quyết "
+                "của điều phối viên — lần trước CHƯA ĐẠT. Làm khác đi theo chỉ dẫn, "
+                "tuyệt đối không lặp lại nguyên văn lần trước.")
+    if not line:
+        return stored
+    return f"{line}\n{stored}".strip()
+
+
 def _resolve_search_hook(loaded: Any, settings: Any) -> Callable[[str], str] | None:
     """Build the real `search_hook` iff the agent's profile opted in (`web_search:
     true`) AND at least one provider key is configured — either gate absent ⇒ None
@@ -768,7 +794,7 @@ def _resolve_search_hook(loaded: Any, settings: Any) -> Callable[[str], str] | N
     from my_crew.audit.audit_log import AuditLog
     from my_crew.runtime.team_task_paths import team_tasks_root
     from my_crew.tools.search_result_formatter import format_search_results
-    from my_crew.tools.web_search_tool import WebSearchConfig, web_search
+    from my_crew.tools.web_search_tool import WebSearchConfig, web_search_outcome
 
     config = WebSearchConfig(
         tavily_api_key=getattr(settings, "tavily_api_key", None),
@@ -781,9 +807,28 @@ def _resolve_search_hook(loaded: Any, settings: Any) -> Callable[[str], str] | N
 
     def _hook(query: str) -> str:
         actor = Path(str(getattr(settings, "data_dir", ""))).name
-        results = web_search(query, config=config, audit_log=audit_log, actor=actor)
-        text, _count, _quarantined = format_search_results(results)
-        return text
+        results, status = web_search_outcome(
+            query, config=config, audit_log=audit_log, actor=actor,
+        )
+        if results:
+            text, _count, _quarantined = format_search_results(results)
+            return text
+        # v75 silent-success guard: "the web says nothing" and "we never reached the
+        # web" are OPPOSITE conclusions for a research step — a provider outage
+        # rendered as an empty context made steps report 'dữ liệu không tồn tại' for
+        # data that exists (bench-2). Fixed OUR-OWN sentinel text (not untrusted
+        # content), so injecting it into the search-context slot is safe.
+        if status == "provider_error":
+            return ("[LỖI NGUỒN TÌM KIẾM] Không truy cập được web search cho truy vấn "
+                    "này (nhà cung cấp lỗi/timeout). Phần dữ liệu tương ứng phải ghi "
+                    "THIẾU DO NGUỒN LỖI — KHÔNG được kết luận 'dữ liệu không tồn tại'.")
+        if status == "empty":
+            return ("[KHÔNG CÓ KẾT QUẢ] Nguồn tìm kiếm hoạt động bình thường nhưng "
+                    "không trả kết quả nào cho truy vấn này — nhiều khả năng dữ liệu "
+                    "không có công khai; ghi THIẾU kèm lý do đó, thử đổi cách đặt truy "
+                    "vấn nếu còn lượt.")
+        # skipped_sensitive / empty_query: behave as before — no context injected.
+        return ""
 
     return _hook
 

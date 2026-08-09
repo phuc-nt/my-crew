@@ -350,3 +350,24 @@ def test_effective_schedule_synthesizes_watch(tmp_path):
     schedule, reports = _effective_schedule(loaded)
     assert schedule["watch"] == "*/5 * * * *"
     assert "watch" in reports
+
+
+def test_all_polls_failed_never_reads_as_no_change(tmp_path, monkeypatch):
+    """v75 silent-success guard: 'nguồn không đổi' và 'không đọc được nguồn' là hai
+    kết luận ngược nhau — một tick mà MỌI poll đều raise phải nói thẳng điều đó."""
+    monkeypatch.setattr("my_crew.runtime.watcher_runner._alert",
+                        lambda text, wid, kind: None)
+
+    def boom(w, lo, s):
+        raise RuntimeError("nguồn sập")
+
+    loaded = _loaded(tmp_path, [_W])
+    out = run_watchers(loaded, loaded.settings, poll_fn=boom,
+                       wake_fn=lambda lo, w: True)
+    assert out["status"] == "all_polls_failed"
+    assert out["failed"] == 1
+
+    ok = run_watchers(loaded, loaded.settings, poll_fn=lambda w, lo, s: [],
+                      wake_fn=lambda lo, w: True)
+    # healthy tick: event giữ nguyên hình dạng cũ — không có key "failed"
+    assert "failed" not in ok

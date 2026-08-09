@@ -313,3 +313,43 @@ def test_format_internal_content_label_with_newline_falls_back_to_placeholder():
 def test_format_internal_content_blank_label_falls_back_to_placeholder():
     text = format_internal_content("nội dung bình thường", label="   ")
     assert "[INTERNAL_STEP_RESULT label=internal]" in text
+
+
+# --- v75: outcome status — "web nói không có" ≠ "không tới được web" -----------------
+
+
+def test_outcome_empty_when_a_provider_answered_cleanly():
+    from my_crew.tools.web_search_tool import web_search_outcome
+
+    results, status = web_search_outcome(
+        "giá dịch vụ X", config=_cfg(), tavily_fn=lambda q, k: [],
+        brave_fn=lambda q, k: [],
+    )
+    assert results == [] and status == "empty"
+
+
+def test_outcome_provider_error_when_every_attempted_provider_raises():
+    from my_crew.tools.web_search_tool import web_search_outcome
+
+    def boom(q, k):
+        raise TimeoutError("provider down")
+
+    results, status = web_search_outcome(
+        "giá dịch vụ X", config=_cfg(tavily="t", brave="b"), tavily_fn=boom,
+        brave_fn=boom,
+    )
+    assert results == [] and status == "provider_error"
+
+
+def test_outcome_ok_via_brave_after_tavily_raises():
+    from my_crew.tools.web_search_tool import SearchResult, web_search_outcome
+
+    def boom(q, k):
+        raise RuntimeError("tavily down")
+
+    hit = SearchResult(title="t", snippet="s", source="example.com")
+    results, status = web_search_outcome(
+        "giá dịch vụ X", config=_cfg(tavily="t", brave="b"), tavily_fn=boom,
+        brave_fn=lambda q, k: [hit],
+    )
+    assert status == "ok" and results == [hit]
