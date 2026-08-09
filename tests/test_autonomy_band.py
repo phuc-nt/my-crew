@@ -67,7 +67,11 @@ def test_supervised_forces_review_even_when_plan_waived(monkeypatch, tmp_path):
     assert effective_needs_review(_task([s1]), s1) is True
 
 
-def test_trusted_waives_ordinary_but_never_terminal_or_external(monkeypatch, tmp_path):
+def test_trusted_waives_internal_reviews_but_never_external(monkeypatch, tmp_path):
+    """v76 UAT finding: the v64 policy only flags terminals + external writes, so a
+    trusted rule sparing terminals waived nothing — trusted now waives every INTERNAL
+    flagged review (terminal included; that is the CEO consciously relaxing the
+    terminal rule for one proven agent via set_band), external writes never."""
     from my_crew.agent.coordinator_nodes.review_insert import effective_needs_review
 
     _patch_data_dir(monkeypatch, tmp_path)
@@ -77,8 +81,8 @@ def test_trusted_waives_ordinary_but_never_terminal_or_external(monkeypatch, tmp
     mid = _step("mid", needs_review=True)
     terminal = _step("final", needs_review=True, deps=("mid",))
     task = _task([mid, terminal])
-    assert effective_needs_review(task, mid) is False  # ordinary step waived
-    assert effective_needs_review(task, terminal) is True  # terminal always reviewed
+    assert effective_needs_review(task, mid) is False
+    assert effective_needs_review(task, terminal) is False  # internal terminal waived
     ext = _step("ext", needs_review=True, external_write=True)
     task2 = _task([ext, _step("z", deps=("ext",))])
     assert effective_needs_review(task2, ext) is True  # external write always reviewed

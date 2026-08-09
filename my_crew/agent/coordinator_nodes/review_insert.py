@@ -67,22 +67,24 @@ def effective_needs_review(task: TeamTask, step: TeamStep) -> bool:
 
     This RUNTIME gate is the ONLY thing a band may change (plan invariant, pinned by
     `test_band_autonomy_invariants`): supervised → every work step gets a review row
-    regardless of the plan flag/waiver; trusted → the small-task waiver widens to
-    ordinary steps, but a TERMINAL step (nothing depends on it — it is the delivery)
-    or an `external_write` step keeps its review no matter how trusted the author.
-    normal → the plan flag, byte-identical to pre-v76. Reads the band via `band_for`
-    (no store file ⇒ normal, broken store ⇒ supervised — fail-strict)."""
+    regardless of the plan flag/waiver; trusted → the review the plan flagged is
+    waived for INTERNAL steps — including the terminal (the v64 policy only ever
+    flags terminals + external writes, so a trusted rule that spared terminals was a
+    live no-op, v76 UAT finding); an `external_write` step keeps its review no matter
+    how trusted the author — a write leaving the company always gets a second pair of
+    eyes. `trusted` only ever enters via the CEO's `set_band`, so this IS the CEO
+    consciously relaxing the v64 terminal rule for one proven agent. normal → the
+    plan flag, byte-identical to pre-v76. Reads the band via `band_for` (no store
+    file ⇒ normal, broken store ⇒ supervised — fail-strict)."""
     from my_crew.runtime.band_store import BAND_SUPERVISED, BAND_TRUSTED, band_for
 
     band = band_for(step.assigned_to)
     if band == BAND_SUPERVISED:
         return True
     flag = bool(step.needs_review)
-    if band == BAND_TRUSTED and flag:
-        dep_targets = {d for s in task.steps for d in s.deps}
-        is_terminal = step.step_id not in dep_targets
-        if not is_terminal and not bool(getattr(step, "external_write", False)):
-            return False
+    if (band == BAND_TRUSTED and flag
+            and not bool(getattr(step, "external_write", False))):
+        return False
     return flag
 
 
