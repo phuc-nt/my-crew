@@ -200,20 +200,31 @@ def _web_search_tool(settings: Any) -> Callable[[dict], Any] | None:
         from my_crew.audit.audit_log import AuditLog
         from my_crew.runtime.team_task_paths import team_tasks_root
         from my_crew.tools.search_result_formatter import format_search_results
-        from my_crew.tools.web_search_tool import web_search
+        from my_crew.tools.web_search_tool import web_search_outcome
 
         try:
             audit_log = AuditLog(team_tasks_root() / "audit" / "audit.jsonl")
             # Actor = the per-agent data_dir basename (agent_data_dir(<id>) layout) — the
             # audit row was previously actor-less, making searches unattributable.
             actor = Path(str(getattr(settings, "data_dir", ""))).name
-            results = web_search(query, config=config, audit_log=audit_log, actor=actor)
+            results, status = web_search_outcome(
+                query, config=config, audit_log=audit_log, actor=actor,
+            )
         except Exception as exc:  # noqa: BLE001 — search best-effort, never crash the loop
             return f"(tra cứu web lỗi: {exc})"
-        if not results:
-            return "(không có kết quả — thử từ khoá khác, ngắn và cụ thể hơn)"
-        text, _count, _quarantined = format_search_results(results)
-        return text
+        if results:
+            text, _count, _quarantined = format_search_results(results)
+            return text
+        # v75 silent-success guard, loop-tier mirror of the native hook's 3-path:
+        # "the web says nothing" vs "we never reached the web" are opposite THIẾU
+        # reasons and the model must see which one happened.
+        if status == "provider_error":
+            return ("[LỖI NGUỒN TÌM KIẾM] Không truy cập được web search (nhà cung "
+                    "cấp lỗi/timeout). Phần dữ liệu này ghi THIẾU DO NGUỒN LỖI — "
+                    "KHÔNG kết luận 'dữ liệu không tồn tại'.")
+        return ("[KHÔNG CÓ KẾT QUẢ] Nguồn tìm kiếm hoạt động bình thường nhưng không "
+                "có kết quả cho truy vấn này — thử từ khoá khác ngắn và cụ thể hơn; "
+                "nếu vẫn không có, ghi THIẾU vì dữ liệu không có công khai.")
 
     return _search
 

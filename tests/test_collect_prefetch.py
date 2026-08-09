@@ -82,3 +82,22 @@ def test_routing_prefetched_web_step_runs_native(monkeypatch):
     assert type(resolve_step_runtime(loaded, step, prefetched=True)).__name__ == (
         "NativeGraphRuntime"
     )
+
+
+def test_loop_tier_web_search_tool_mirrors_the_3_path_sentinels(tmp_path, monkeypatch):
+    """The tool-loop's web.search must distinguish outage from clean-empty exactly
+    like the native hook — the Zetakron e2e ran on the loop tier and the old text
+    could not say WHY nothing came back."""
+    from my_crew.runtime_backends.read_only_toolset import _web_search_tool
+
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    settings = SimpleNamespace(tavily_api_key="t", brave_api_key=None,
+                               data_dir=str(tmp_path / "agent"))
+    outcomes = {"v": ([], "provider_error")}
+    monkeypatch.setattr("my_crew.tools.web_search_tool.web_search_outcome",
+                        lambda q, **kw: outcomes["v"])
+    tool = _web_search_tool(settings)
+    assert tool is not None
+    assert "LỖI NGUỒN" in tool({"query": "giá X"})
+    outcomes["v"] = ([], "empty")
+    assert "KHÔNG CÓ KẾT QUẢ" in tool({"query": "giá X"})

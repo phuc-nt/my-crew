@@ -54,11 +54,11 @@ def test_results_arrive_spotlight_wrapped(monkeypatch):
     reach the model through the same delimiter/spotlight wrap the native hook applies,
     not as bare strings the loop would read as instructions."""
     monkeypatch.setattr(
-        "my_crew.tools.web_search_tool.web_search",
-        lambda query, *, config, audit_log=None, actor="": [
+        "my_crew.tools.web_search_tool.web_search_outcome",
+        lambda query, *, config, audit_log=None, actor="": ([
             SearchResult(title="Giá thuê Q1", snippet="Hạng A ~55 USD/m²/tháng",
                          source="https://example.com/bao-cao/q1-2026"),
-        ],
+        ], "ok"),
     )
     tools = build_read_toolset(_FakeConfig(), settings=_Settings(), web_search=True)
     out = tools["web.search"]({"query": "giá thuê văn phòng quận 1"})
@@ -74,12 +74,12 @@ def test_empty_results_tell_the_model_to_retry_differently(monkeypatch):
     """The loop's advantage over the one-shot hook is the model can rephrase and try
     again — but only if emptiness comes back as guidance, not as silence."""
     monkeypatch.setattr(
-        "my_crew.tools.web_search_tool.web_search",
-        lambda query, *, config, audit_log=None, actor="": [],
+        "my_crew.tools.web_search_tool.web_search_outcome",
+        lambda query, *, config, audit_log=None, actor="": ([], "empty"),
     )
     tools = build_read_toolset(_FakeConfig(), settings=_Settings(), web_search=True)
     out = tools["web.search"]({"query": "abc"})
-    assert "không có kết quả" in out
+    assert "KHÔNG CÓ KẾT QUẢ" in out
     assert "thử" in out
 
 
