@@ -47,7 +47,10 @@ logger = logging.getLogger(__name__)
 #: Bounded retry for a malformed/invalid decomposition (schema violation, unknown
 #: assignee, cycle, step-count) — re-prompts with the validation error appended, so a
 #: transient model slip self-corrects instead of failing the whole command outright.
-_MAX_DECOMPOSE_ATTEMPTS = 3
+# 4 (v76 UAT): with the fan-out bias legitimately consuming one retry, two transient
+# model hiccups (empty/refusal completions observed live with qwen) exhausted the old
+# budget of 3 and failed the whole assign — one extra attempt is cheap insurance.
+_MAX_DECOMPOSE_ATTEMPTS = 4
 
 
 def _agent_has_operator_route(agent_id: str) -> bool:
@@ -210,7 +213,10 @@ def _decompose_with_retries(
             return _widen_terminal_deps(task), total_cost
         except DecompositionError as exc:
             last_error = str(exc)
-            logger.warning("assign_team_task decompose attempt failed: %s", exc)
+            # Head of the raw completion rides the log (v76 UAT): "not valid JSON"
+            # alone cannot distinguish an empty completion from prose or truncation.
+            logger.warning("assign_team_task decompose attempt failed: %s (raw head: %r)",
+                           exc, (result.content or "")[:120])
     raise DecompositionError(f"không phân rã được kế hoạch hợp lệ sau {_MAX_DECOMPOSE_ATTEMPTS} "
                              f"lần thử: {last_error}")
 
