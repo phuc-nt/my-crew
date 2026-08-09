@@ -62,7 +62,7 @@ export function messageLine(m: OfficeMessage, t: Translate = defaultT): string {
       const suffix = phaseLabel ? ` (${phaseLabel})` : ''
       // v34 P2: status values that do not read as plain language get a human label —
       // the rest (started/done/failed) read fine as-is and stay byte-identical.
-      const STATUS_LABEL: Record<string, string> = {
+      const STATUS_LABEL: Record<string, UiKey> = {
         waiting_clarify: 'officeMessageLine.waitingClarify',
         needs_decision: 'officeMessageLine.needsDecision',
       }
