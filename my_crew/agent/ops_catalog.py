@@ -375,6 +375,14 @@ def _task_summary(task) -> str:
     return task.kind
 
 
+def _run_team_metrics(slots: dict[str, str]) -> str:
+    """v76: the CAPTURE→ANALYZE surface — per-agent rates with Wilson CI, min-sample
+    badges, and zero-contrast honesty, rendered for Telegram. Read-only."""
+    from my_crew.runtime.agent_metrics import agent_metrics, render_team_metrics_vi
+
+    return render_team_metrics_vi(agent_metrics())
+
+
 def _run_cancel_task(slots: dict[str, str]) -> str:
     store = _task_store_for(slots["agent_id"])
     try:
@@ -683,6 +691,13 @@ OPS_COMMANDS: dict[str, dict] = {
         "slots": {},
         "run": run_list_lessons,
     },
+    "team_metrics": {
+        "description": "Xem số liệu hiệu suất đội (tỉ lệ xong, thời gian, chi phí, "
+                       "can thiệp — kèm khoảng tin cậy, mẫu nhỏ gắn dấu *)",
+        "readonly": True,
+        "slots": {},
+        "run": _run_team_metrics,
+    },
     "list_approvals": {
         "description": "Xem mọi việc đang chờ CEO duyệt, của tất cả agent",
         "readonly": True,
@@ -806,6 +821,9 @@ ORCHESTRATION_COMMAND_IDS = frozenset({
     # v69 lessons — reads the coordinator's own reflection memory; a delegation question,
     # not fleet authority (unlike the approval commands, which reach into other agents).
     "list_lessons",
+    # v76 metrics — read-only aggregates over telemetry; same delegation-question class
+    # as list_lessons (how is my team doing), no fleet authority involved.
+    "team_metrics",
 })
 
 

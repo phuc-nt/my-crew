@@ -234,6 +234,26 @@ def run_team_step(
         store.close()
 
 
+def _profile_fingerprint(agent_id: str) -> str:
+    """Short sha256 of the assignee's profile.yaml + SOUL.md at attempt time (v76
+    provenance) — "which prompt/policy version did this run use". Best-effort: any
+    read failure returns "" (telemetry never blocks work)."""
+    import hashlib
+
+    try:
+        from my_crew.config.settings import MY_CREW_HOME
+
+        base = MY_CREW_HOME / "profiles" / agent_id
+        h = hashlib.sha256()
+        for name in ("profile.yaml", "SOUL.md"):
+            f = base / name
+            if f.exists():
+                h.update(f.read_bytes())
+        return h.hexdigest()[:16]
+    except Exception:  # noqa: BLE001 — provenance is telemetry, never load-bearing
+        return ""
+
+
 def _record_capture(
     *, attempt_id: str, task_id: str, step, engine: str, status: str, telemetry,
     cost_usd, started_at: str, t0: float, error: str | None,
@@ -268,7 +288,7 @@ def _record_capture(
                 cost_usd=cost_usd, cost_source=telemetry.cost_source,
                 input_tokens=telemetry.input_tokens, output_tokens=telemetry.output_tokens,
                 started_at=started_at, ended_at=ended_at, duration_ms=duration_ms, error=error,
-                criteria=criteria,
+                criteria=criteria, profile_hash=_profile_fingerprint(step.assigned_to),
             )
         finally:
             cs.close()

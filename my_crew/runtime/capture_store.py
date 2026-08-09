@@ -81,6 +81,15 @@ class CaptureStore:
             self._conn.execute("ALTER TABLE captures ADD COLUMN criteria_json TEXT")
         except sqlite3.OperationalError:
             pass  # column already exists
+        # v76 provenance: fingerprint of the assignee's profile (profile.yaml + SOUL) at
+        # attempt time — answers "which policy/prompt version did this run use" when
+        # debugging a regression after editing an agent. "" for legacy rows.
+        try:
+            self._conn.execute(
+                "ALTER TABLE captures ADD COLUMN profile_hash TEXT NOT NULL DEFAULT ''"
+            )
+        except sqlite3.OperationalError:
+            pass  # column already exists
         from my_crew.runtime.store_schema_meta import ensure_schema_meta
 
         ensure_schema_meta(self._conn)
@@ -113,6 +122,7 @@ class CaptureStore:
         duration_ms: int | None = None,
         error: str | None = None,
         criteria: list[dict[str, Any]] | None = None,
+        profile_hash: str = "",
     ) -> None:
         """Upsert one attempt's telemetry row (idempotent on `attempt_id`).
 
@@ -127,13 +137,13 @@ class CaptureStore:
             "  attempt_id, task_id, step_id, agent_id, engine, status,"
             "  step_type, review_round, cost_usd, cost_source,"
             "  input_tokens, output_tokens, started_at, ended_at, duration_ms, error, ts,"
-            "  criteria_json"
-            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "  criteria_json, profile_hash"
+            ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 attempt_id, task_id, step_id, agent_id, engine, status,
                 step_type, review_round, cost_usd, cost_source,
                 input_tokens, output_tokens, started_at, ended_at, duration_ms,
-                error, datetime.now(UTC).isoformat(), criteria_json,
+                error, datetime.now(UTC).isoformat(), criteria_json, profile_hash,
             ),
         )
         self._conn.commit()
