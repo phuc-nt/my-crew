@@ -375,6 +375,32 @@ def _task_summary(task) -> str:
     return task.kind
 
 
+def _run_set_band(slots: dict[str, str]) -> str:
+    """v76: CEO sets an agent's autonomy band by hand (admin scope — this re-scopes
+    another agent's oversight, fleet authority). The loop can tighten on its own;
+    `trusted` (loosening past default) only ever enters through THIS command."""
+    from my_crew.runtime.band_store import BandStore
+
+    agent_id = (slots.get("agent_id") or "").strip()
+    band = (slots.get("band") or "").strip().lower()
+    store = BandStore()
+    try:
+        store.set(agent_id, band, reason=(slots.get("reason") or "CEO đặt tay").strip(),
+                  changed_by="ceo")
+    finally:
+        store.close()
+    label = {"supervised": "giám sát chặt (mọi bước soát chéo)",
+             "normal": "bình thường",
+             "trusted": "tin cậy (bớt soát bước thường)"}.get(band, band)
+    return f"Đã đặt band của {agent_id} → {band} ({label})."
+
+
+def _preview_set_band(slots: dict[str, str]) -> str:
+    return (f"Mình sẽ đặt band tự chủ của agent '{slots.get('agent_id')}' thành "
+            f"'{slots.get('band')}'. Band chỉ đổi mức soát chéo, không đổi quyền "
+            "ghi/ngân sách. Xác nhận? (trả lời: xác nhận / huỷ)")
+
+
 def _run_team_metrics(slots: dict[str, str]) -> str:
     """v76: the CAPTURE→ANALYZE surface — per-agent rates with Wilson CI, min-sample
     badges, and zero-contrast honesty, rendered for Telegram. Read-only."""
@@ -697,6 +723,19 @@ OPS_COMMANDS: dict[str, dict] = {
         "readonly": True,
         "slots": {},
         "run": _run_team_metrics,
+    },
+    "set_band": {
+        "description": "Đặt band tự chủ cho một agent (supervised/normal/trusted — "
+                       "chỉ đổi mức soát chéo, không đổi quyền)",
+        "readonly": False,
+        "slots": {
+            "agent_id": {"prompt": "Agent nào?", "required": True, "max_len": 40},
+            "band": {"prompt": "Band nào? (supervised / normal / trusted)",
+                     "required": True, "max_len": 12},
+            "reason": {"prompt": "Lý do (tuỳ chọn)?", "required": False, "max_len": 200},
+        },
+        "run": _run_set_band,
+        "preview": _preview_set_band,
     },
     "list_approvals": {
         "description": "Xem mọi việc đang chờ CEO duyệt, của tất cả agent",

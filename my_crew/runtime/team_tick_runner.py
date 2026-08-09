@@ -168,6 +168,15 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
             run_autopilot_sweep(store)
         except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
             logger.warning("team-tick: autopilot sweep failed", exc_info=True)
+        # v76: metrics → autonomy band closed loop (asymmetric: auto-tighten on clear
+        # evidence, propose-only when ambiguous, auto-recover to normal). Hour-gated
+        # internally; never touches dispatch — hygiene like everything else here.
+        try:
+            from my_crew.runtime.band_loop import run_band_loop
+
+            run_band_loop()
+        except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
+            logger.warning("team-tick: band loop failed", exc_info=True)
         # v36 P1: retention GC (captures/office_room/clarify/dedup grew unbounded) +
         # a daily read-only integrity audit. Both best-effort; storage_hygiene guards
         # each store internally, this wrapper is the final backstop for the tick.

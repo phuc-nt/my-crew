@@ -62,6 +62,30 @@ def _review_child(task: TeamTask, content_step_id: str, step_type: str) -> TeamS
     return matches[-1] if matches else None
 
 
+def effective_needs_review(task: TeamTask, step: TeamStep) -> bool:
+    """The plan's `needs_review` flag adjusted by the assignee's autonomy band (v76).
+
+    This RUNTIME gate is the ONLY thing a band may change (plan invariant, pinned by
+    `test_band_autonomy_invariants`): supervised → every work step gets a review row
+    regardless of the plan flag/waiver; trusted → the small-task waiver widens to
+    ordinary steps, but a TERMINAL step (nothing depends on it — it is the delivery)
+    or an `external_write` step keeps its review no matter how trusted the author.
+    normal → the plan flag, byte-identical to pre-v76. Reads the band via `band_for`
+    (no store file ⇒ normal, broken store ⇒ supervised — fail-strict)."""
+    from my_crew.runtime.band_store import BAND_SUPERVISED, BAND_TRUSTED, band_for
+
+    band = band_for(step.assigned_to)
+    if band == BAND_SUPERVISED:
+        return True
+    flag = bool(step.needs_review)
+    if band == BAND_TRUSTED and flag:
+        dep_targets = {d for s in task.steps for d in s.deps}
+        is_terminal = step.step_id not in dep_targets
+        if not is_terminal and not bool(getattr(step, "external_write", False)):
+            return False
+    return flag
+
+
 def maybe_insert_review(deps: CoordinatorDeps, task: TeamTask, done_step: TeamStep) -> bool:
     """After a `work` step (`needs_review=True`) turns `done`: mint its review-step
     child if one does not already exist. Returns True iff a row was inserted (the
@@ -73,7 +97,7 @@ def maybe_insert_review(deps: CoordinatorDeps, task: TeamTask, done_step: TeamSt
     step is treated as fully done, no stall — matching the phase's explicit "never
     stall on missing reviewer" contract.
     """
-    if done_step.step_type != "work" or not done_step.needs_review:
+    if done_step.step_type != "work" or not effective_needs_review(task, done_step):
         return False
     if done_step.split_proposal_json:
         # v34 P4: a split parent delivered only the "Đã chia bước" notice — reviewing
