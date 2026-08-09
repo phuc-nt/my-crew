@@ -1,7 +1,7 @@
 # Project Overview & PDR — my-crew
 
 > Product definition + requirements. Đọc file này TRƯỚC khi plan hay code.
-> Cập nhật: 2026-08-05 (v69 live, v70 in-progress). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified — PyPI 0.8.0+**.
+> Cập nhật: 2026-08-09 (v75 live). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified — PyPI 0.9.0**.
 > Liên quan: [system-architecture](system-architecture.md) · [action-gateway-explainer](action-gateway-explainer.md) · [uat-theo-user-story](uat-theo-user-story.md).
 
 ## 1. Vấn đề
@@ -23,6 +23,13 @@ Từ v57–v66 (arc thư ký), cửa vận hành chính là **chat Telegram vớ
 xem kanban + chi phí) đi qua một cửa; **autopilot** cho phép AI là người quyết cuối
 (tự xác nhận kế hoạch, tự gỡ kẹt, tự duyệt Lớp B) — Lớp A + trần chi phí vẫn chỉ người
 thật đổi được.
+
+Từ v70–v75 (arc tốc độ + coordination chủ động), giá trị đo được bằng số: một đề khảo
+sát 5-6 thực thể từ ~40 phút xuống **11–16 phút, $0.02–0.05/việc** (dispatch hướng sự
+kiện 0–8s, bước không-tool chạy tier nhẹ, thu thập tách song song + code pre-fetch);
+task bế tắc được coordinator **tự thử lại → tự đề xuất KẾ HOẠCH KHÁC → tự chấp nhận/bỏ**
+theo thang có trần, mọi nấc audit + báo CEO; chuỗi trung thực giữ tuyệt đối — thiếu dữ
+liệu ghi THIẾU kèm đúng lý do ("web không có" khác "không tới được web"), không bịa số.
 
 ## 3. Nguyên tắc bất khả xâm phạm (v30: autonomy-first)
 
@@ -51,8 +58,10 @@ Xem [action-gateway-explainer.md](action-gateway-explainer.md) cho mô hình đ�
 | Đội ngũ | Tạo/tắt/xoá agent; đội = mọi agent enabled; registry là user-data (không mất) |
 | Giao việc | @PIC / @all / tự-xác-nhận; phân rã ≤7 bước; hash-bind chống tamper; giao/chỉnh/huỷ qua chat thư ký (catalog scope theo domain) |
 | Theo dõi | Màn Văn phòng realtime (3D + feed + kết quả) theo từng phòng việc; kanban + chi phí qua chat |
-| Tự vận hành | Soát chéo THEO RỦI RO (chỉ bước cuối + ghi-ra-ngoài, task nhỏ waiver); tự cứu lỗi 1 lần; autopilot: tự xác nhận / tự gỡ kẹt thang 2 nấc / tự duyệt Lớp B, opt-out per-task; scheduler round-robin công bằng |
-| Trợ lý cá nhân | Chat DM tức thì; briefing sáng/tuần; đọc Gmail/Calendar; gửi email; tạo/sửa/xoá lịch; nhắc đúng-giờ về Telegram; đa-lệnh một tin |
+| Tự vận hành | Soát chéo THEO RỦI RO (chỉ bước cuối + ghi-ra-ngoài, task nhỏ waiver); tự cứu lỗi 1 lần; autopilot: tự xác nhận / tự gỡ kẹt **thang 3 nấc (retry → tự đề xuất kế hoạch khác qua flow amend+hash, fail-closed → accept/drop)** / tự duyệt Lớp B, opt-out per-task; scheduler round-robin công bằng |
+| Tốc độ (v74–75) | Dispatch hướng sự kiện (poke, gap 0–8s, fallback nhịp 60s); tier theo bước `needs_web` (bước không-tool chạy native, hint sai tự hồi phục); đề ≥4 thực thể ép tách thu thập song song (fail-open); code pre-fetch search cho bước collect (fail-open về tool-loop); cạn loop tổng hợp từ transcript dở |
+| Trung thực | Sentinel 3-path: "web không có dữ liệu" ≠ "không truy cập được nguồn" ở mọi tier; watcher toàn-lỗi không đội lốt "không đổi"; grader neo ngày + trần đề gốc CEO; thiếu ghi THIẾU, không bịa |
+| Trợ lý cá nhân | Chat DM tức thì; briefing sáng/tuần (thư ký + **pong** — Goodreads/Google Tasks, weekly không lặp briefing); đọc Gmail/Calendar; gửi email; tạo/sửa/xoá lịch; nhắc đúng-giờ về Telegram; đa-lệnh một tin |
 | Trí nhớ | Store SQLite bền dùng chung; đội đọc chéo; thư ký chỉ-đọc (`memory_share: read_only`); retention 90 ngày |
 | An toàn (v30) | Action Gateway (Lớp A chặn cứng luôn / Lớp B: autonomous chạy ngay vs guarded duyệt per-agent); PII firewall; chat flatten (autonomous mode); shell chỉ trong Docker sandbox (không mount host, network off, fail-closed) |
 | Báo cáo | daily/weekly/okr/resource + headcount (hr); xuất .xlsx qua email; đa-audience |
@@ -77,12 +86,15 @@ Xem [action-gateway-explainer.md](action-gateway-explainer.md) cho mô hình đ�
 
 ## 8. Trạng thái & lộ trình
 
-Đã ship tới **v68** (…**v51 productize** (PyPI) · v52–v55 office cockpit · **v56
-Playwright e2e** · **v57–v60 thư ký cá nhân** (pack `personal`, briefing, Gmail/Calendar,
-email, sửa lịch) · **v61 chat = cổng điều phối đội** · **v62 English identifiers** ·
-**v63 autopilot + review theo rủi ro + gỡ kẹt 1 chạm** · **v64 UAT hardening (chống bịa
-sau bước bị bỏ)** · **v65 nhắc đúng-giờ + scheduler công bằng** · **v66 cross-agent
-memory SQLite** · **v67 learned Lớp B rules + task lifecycle** (CEO approve/reject + --always/--deny → rule; delivery_status tách execution; escalation contract) · **v68 heartbeat + reflection** (secretary heartbeat opt-in; task reflection chưng cất lesson)), **2692 BE + 279 FE + 8 e2e tests**, live E2E verified, PyPI 0.7.0+.
+Đã ship tới **v75 = PyPI 0.9.0** (mốc gần: **v56 Playwright e2e** · **v57–v61 thư ký +
+chat = cổng điều phối** · **v62 English identifiers** · **v63 autopilot + review theo
+rủi ro** · **v64–v66 UAT hardening + nhắc đúng-giờ + cross-agent memory** · **v67–v69
+learned Lớp B rules + heartbeat + approval từ chat** · **v70–v71 personal assistant
+pong + quick-build crew** · **v72–v74 tốc độ**: spawn-then-drain, grader neo ngày,
+Telegram coordinator-first, tier theo bước, dispatch poke, fan-out ép code ·
+**v75 coordination chủ động**: sentinel 3-path, goal-replan ladder, hybrid collect
+launcher — chuẩn hoá sau brainstorm đối chiếu OpenClaw/Hermes/landscape 2026),
+**2982 BE + 282 FE + 8 e2e tests**, 12 vòng benchmark/e2e sống, CHANGELOG đầy đủ.
 Kiến trúc runtime-tier + moat: xem [system-architecture](system-architecture.md) §3.9.
 Lộ trình + việc tiếp: [project-roadmap.md](project-roadmap.md).
 

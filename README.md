@@ -36,7 +36,9 @@ Full walkthrough: **[docs/action-gateway-explainer.md](docs/action-gateway-expla
 
 ## What it grew into
 
-One PM agent (daily/weekly/OKR/resource reports) became a **company you run from one chat**: a personal **secretary agent** on Telegram handles your own work (briefings, Gmail/Calendar, email, timed reminders) *and* dispatches the whole team — one Vietnamese sentence becomes a validated multi-agent task DAG with per-step peer review. Under it: many isolated agents, a browser cockpit, one-click staff templates, multi-runtime tiers (native / tool-calling / Docker-sandboxed deep-agent for real code), **cross-agent persistent memory**, and an **autopilot mode** where the AI is the final approver — plans auto-confirm, stalls auto-resolve, routine writes auto-approve — while Lớp A and cost caps stay human-only. The safety invariant held across every step. Full history: **[docs/project-roadmap.md](docs/project-roadmap.md)**.
+One PM agent (daily/weekly/OKR/resource reports) became a **company you run from one chat**: a personal **secretary agent** on Telegram handles your own work (briefings, Gmail/Calendar, email, timed reminders) *and* dispatches the whole team — one Vietnamese sentence becomes a validated multi-agent task DAG with per-step peer review. Under it: many isolated agents, a browser cockpit, one-click staff templates, multi-runtime tiers (native / tool-calling / Docker-sandboxed deep-agent for real code), **cross-agent persistent memory**, and an **autopilot mode** where the AI is the final approver — plans auto-confirm, stalls auto-resolve (retry → **propose a different plan** through the hash-guarded amendment flow → accept/drop, all bounded and audited), routine writes auto-approve — while Lớp A and cost caps stay human-only. The safety invariant held across every step. Full history: **[docs/project-roadmap.md](docs/project-roadmap.md)**.
+
+As of **0.9.0** the speed is measured, not hoped: a 5-6-entity survey task runs **11–16 minutes end-to-end at $0.02–0.05** (was ~40 min) — event-driven dispatch (steps start seconds after their dependencies finish), per-step runtime tiers (tool-less work runs one-shot), enforced parallel fan-out for multi-entity briefs, and code-side search prefetch — verified across 12 live end-to-end rounds with the honesty chain intact (missing data reported as missing, with the *true* reason: "the web says nothing" vs "we never reached the web").
 
 ## Documentation
 
@@ -74,7 +76,7 @@ Full setup — integrations, cron, trust modes: **[docs/deployment-guide.md](doc
 
 ```bash
 git clone git@github.com:phuc-nt/my-crew.git && cd my-crew && uv sync
-uv run pytest    # 2530 BE tests pass, no secrets needed (FE: 279 vitest + 8 Playwright)
+uv run pytest    # 2982 BE tests pass, no secrets needed (FE: 282 vitest + 8 Playwright)
 ```
 
 `DRY_RUN=true` by default everywhere — the agent logs what it *would* do, posts nothing, until you flip it.

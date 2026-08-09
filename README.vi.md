@@ -38,6 +38,8 @@ Chi tiết đầy đủ: **[docs/action-gateway-explainer.md](docs/action-gatewa
 
 Một agent PM (báo cáo ngày/tuần/OKR/nguồn lực) đã thành **một công ty điều hành trọn vẹn qua MỘT cửa chat**: agent **thư ký riêng** trên Telegram lo việc cá nhân của bạn (briefing sáng/tuần, đọc Gmail/Calendar, gửi email, nhắc đúng giờ) *và* giao việc cho cả đội — một câu tiếng Việt thành DAG đa-agent có kiểm chứng, soát chéo theo rủi ro. Bên dưới: nhiều agent độc lập, cockpit trình duyệt, template nhân sự một-click, nhiều tầng runtime (native / tool-calling / deep-agent chạy code THẬT trong Docker sandbox), **trí nhớ bền dùng chung giữa agent**, và **chế độ autopilot** — AI là người quyết cuối: kế hoạch tự xác nhận, task kẹt tự gỡ, việc ghi thường tự duyệt — còn Lớp A + trần chi phí vẫn chỉ người thật đổi được. Bất biến an toàn giữ nguyên qua mọi bước. Lịch sử đầy đủ: **[docs/project-roadmap.md](docs/project-roadmap.md)**.
 
+Từ **0.9.0**, tốc độ là số đo được chứ không phải kỳ vọng: đề khảo sát 5-6 thực thể chạy **11–16 phút, $0.02–0.05/việc** (trước ~40 phút) — dispatch hướng sự kiện (bước sau chạy trong vài giây khi bước trước xong), tier runtime theo từng bước (việc không-tool chạy one-shot), ép tách thu thập song song cho đề nhiều thực thể, và code lấy sẵn dữ liệu search — kiểm chứng qua 12 vòng e2e sống, chuỗi trung thực giữ nguyên (thiếu ghi THIẾU kèm đúng lý do: "web không có" khác "không tới được web").
+
 ## Tài liệu
 
 | Để… | Tài liệu |
@@ -73,7 +75,7 @@ Toàn bộ setup — tích hợp, cron, trust mode: **[docs/deployment-guide.vi.
 
 ```bash
 git clone git@github.com:phuc-nt/my-crew.git && cd my-crew && uv sync
-uv run pytest    # 2530 BE test pass, không cần bí mật (FE: 279 vitest + 8 Playwright)
+uv run pytest    # 2982 BE test pass, không cần bí mật (FE: 282 vitest + 8 Playwright)
 ```
 
 `DRY_RUN=true` mặc định — agent log ý định mà không đăng gì. Để chạy thật, theo **[docs/deployment-guide.vi.md](docs/deployment-guide.vi.md)**.

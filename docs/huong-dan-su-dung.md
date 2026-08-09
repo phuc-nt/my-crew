@@ -1,4 +1,4 @@
-# Hướng dẫn sử dụng — my-crew (v69 / 0.8.0)
+# Hướng dẫn sử dụng — my-crew (v75 / 0.9.0)
 
 Trợ lý ảo tự động làm công việc quản lý dự án (PM / Scrum Master): đọc Jira · GitHub · Confluence ·
 Slack, phân tích, rồi *tự hành động* (viết báo cáo, cảnh báo rủi ro, theo dõi OKR) như một PM thật.
@@ -489,7 +489,7 @@ thì `registry.yaml` khác bản gốc — **tắt demo trước khi commit code
 
 ---
 
-# Phần C — Thư ký riêng & chế độ tự chủ (v57–v66)
+# Phần C — Thư ký riêng & chế độ tự chủ (v57–v75)
 
 Từ v57, cửa vận hành chính chuyển sang **chat Telegram với thư ký riêng**: việc cá nhân
 của bạn lẫn việc công ty đi qua một cửa. Web dashboard thành "phòng quan sát".
@@ -580,6 +580,25 @@ mở web thì không ai biết. Từ v69:
 Kèm theo: *"xem bài học"* — điều phối rút ra được gì từ những việc đã giao (bài học về
 **cách giao việc**, không lẫn trí nhớ chat thường); bảng thẻ việc giờ ghi rõ việc nào
 phải **hồi sinh N lần** thay vì báo cáo y hệt việc chạy mượt.
+
+## C.8. Nhanh hơn + tự gỡ kẹt thông minh hơn (v70–v75 / 0.9.0)
+
+Bạn không phải làm gì mới — nhóm thay đổi này là tốc độ và độ lì của đội:
+
+- **Nhanh hơn 2,5–3,5 lần**: đề khảo sát 5-6 mục từ ~40 phút xuống **11–16 phút**
+  ($0.02–0.05/việc). Bước xong là bước kế chạy trong vài giây (không đợi nhịp phút);
+  đề liệt kê nhiều mục tự tách thu thập chạy song song; phần tra cứu được máy lấy
+  sẵn dữ liệu trước khi agent viết.
+- **Tự gỡ kẹt 3 nấc** (khi bật autopilot): việc bế tắc → thử lại → **tự đề xuất kế
+  hoạch KHÁC cho phần còn lại** (bạn thấy diff, đi đúng đường chỉnh-kế-hoạch có
+  xác nhận hash) → chấp nhận/bỏ bước chết. Mỗi nấc đều báo về Telegram + ghi audit.
+  Không bật autopilot thì mọi thứ vẫn chờ bạn như cũ.
+- **Trung thực rõ lý do hơn**: khi thiếu dữ liệu, báo cáo phân biệt "web không có
+  dữ liệu này" với "không truy cập được nguồn" — hai kết luận khác nhau, giờ không
+  còn lẫn.
+- **Trợ lý cá nhân pong** (bot Telegram riêng): briefing 7h sáng hằng ngày + nhìn lại
+  tuần Chủ nhật 8h (đọc kệ sách Goodreads + Google Tasks của bạn); bản nhìn-lại-tuần
+  không lặp lại những gì briefing sáng đã nói.
 
 ---
 

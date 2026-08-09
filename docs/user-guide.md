@@ -4,7 +4,7 @@
 >
 > Dashboard and team operations for CEO / team leads (no technical knowledge required).
 > All work via browser dashboard or Telegram.
-> **Updated:** 2026-08-05 (v69 / 0.8.0).
+> **Updated:** 2026-08-09 (v75 / 0.9.0).
 
 ---
 
@@ -38,6 +38,21 @@ becomes the observation room. In one DM you can:
   words. The heartbeat also names every approval still waiting, so a blocked agent can't
   wait unnoticed. Plus: "xem bài học" shows what the coordinator learned from finished
   tasks, and the kanban reports how often a task had to be revived.
+
+- **Personal assistant "pong"** (v70–71 / 0.8.0+): a second personal agent with its own
+  Telegram bot — 07:00 morning briefing and Sunday 08:00 weekly review reading your
+  Goodreads shelf + Google Tasks. The weekly review summarizes the week and next-week
+  priorities without repeating that morning's briefing.
+- **Faster teams, same honesty** (v72–75 / 0.9.0): a 5-6-entity survey brief now
+  finishes in ~11–16 minutes (was ~40) at $0.02–0.05 — steps dispatch within seconds
+  of the previous one finishing, collection splits into parallel steps automatically,
+  and data lookups are pre-fetched by code where possible. Nothing changes in what you
+  see except speed; missing data is still reported as THIẾU with the true reason
+  (source unreachable vs data doesn't exist are now distinguished).
+- **Smarter stall recovery** (v75 / 0.9.0): under autopilot, a stuck task now climbs a
+  3-rung ladder — retry, then propose a DIFFERENT plan for the remaining steps (you
+  see the diff, every change goes through the same amendment flow), then accept/drop.
+  Off autopilot everything still waits for you.
 
 Details (Vietnamese): [huong-dan-su-dung.md — Phần C](huong-dan-su-dung.md).
 
