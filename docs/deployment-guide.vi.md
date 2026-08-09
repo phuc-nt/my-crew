@@ -277,7 +277,7 @@ Flag toàn công ty trong `company.yaml` (cạnh repo, hoặc dưới `MY_CREW_H
 autopilot: true    # mặc định false
 ```
 
-Khi bật: kế hoạch việc đội tự xác nhận, việc kẹt tự gỡ theo thang 2 nấc, duyệt Lớp B
+Khi bật: kế hoạch việc đội tự xác nhận, việc kẹt tự gỡ theo thang 3 nấc (thử lại → tự đề xuất kế hoạch khác qua flow amend + hash → chấp nhận/bỏ), duyệt Lớp B
 đang chờ tự duyệt — mỗi quyết định báo lại qua Telegram + ghi audit. Opt-out per-task:
 CEO nói "để anh duyệt" khi giao. Lớp A + trần chi phí per-task KHÔNG bị flag này ảnh
 hưởng (pin bằng test).

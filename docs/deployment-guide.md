@@ -2,7 +2,7 @@
 
 > Full setup for installing, running, and configuring my-crew as a production system.
 > **For daily operations (CEO / team lead):** see [user-guide.md](user-guide.md).
-> **Updated:** 2026-08-04 (0.7.0).
+> **Updated:** 2026-08-09 (0.9.0).
 
 ## 1. Prerequisites
 
