@@ -42,8 +42,18 @@
 - Nâng `MAX_AUTOPILOT_ATTEMPTS` mở rung mới cho cả task stalled CŨ trong store —
   vô hại (refusal) nhưng đáng nhớ khi nâng trần bất kỳ ladder nào.
 
+## Ca sống goal-replan (trưa 09/08, staged task v75replan01)
+- Dựng task stalled với bước chết + ap=1 (mô phỏng retry đã tiêu) → tick kế **rung 2
+  bắn thật**: amend LLM thay 1 bước chết bằng 5 bước mới (3 research song song giao 3
+  người khác + verify + synthesize), confirm hash thật, reopen, chạy đến **done +
+  delivered ($0.032)**; rung 3 drop dọn bước chết cũ bằng placeholder trung thực
+  ("chủ động bỏ qua"); bản chốt giữ nguyên cảnh báo toàn vẹn, không bịa.
+- Ca sống lộ ngay bug lặp bài học 112033f lần 3: **schema ví dụ amend thiếu toàn bộ
+  flags + acceptance** → 5 bước mới đều needs_web=0. Vá 947412f (example schema mang
+  acceptance + 4 cờ, pin test). Ba đường mint bước (decompose/split/amend) giờ đều
+  qua bài kiểm "flag nằm trong ví dụ".
+
 ## Mở / sang sau
-- Goal-replan chờ ca sống đầu tiên (task bế tắc mà retry không cứu được).
 - Prefetch mới phủ native-route; bước bị can thiệp quay lại tool-loop có thể prefetch
   bổ sung — xem sau khi có số.
 - Tailscale (2 thao tác phía CEO) vẫn pending.
