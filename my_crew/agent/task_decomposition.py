@@ -398,19 +398,15 @@ def count_enumerated_entities(brief: str) -> int:
     prose clauses, not entity names. Pure heuristic feeding a RETRY BIAS, never a hard
     gate (see `fanout_gap`), so a false positive costs one decompose retry and a false
     negative just keeps today's behavior.
-    """
-    import re
 
-    best = 0
-    for m in re.finditer(r":\s*([^.\n:?!]+)", brief):
-        items = [
-            part.strip()
-            for chunk in m.group(1).split(",")
-            for part in chunk.split(" và ")
-        ]
-        items = [i for i in items if i and len(i.split()) <= 7]
-        best = max(best, len(items))
-    return best
+    Shares `listed_entities`' parse so this count and the names the retry message asks
+    the planner to fan out can never disagree. A brief that trails its subjects with an
+    attribute clause ("A, B và C theo giá, offline") otherwise counts the attributes as
+    entities too, and the message then quotes a subject count nobody can point at.
+    """
+    from my_crew.runtime.sprint_runner import listed_entities
+
+    return len(listed_entities(brief))
 
 
 def fanout_gap(brief: str, task: DecomposedTask) -> str:

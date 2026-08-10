@@ -402,6 +402,31 @@ def test_count_enumerated_entities_on_real_brief_shapes():
     ) == 4
 
 
+def test_the_count_stops_where_the_attribute_clause_begins():
+    """"A, B và C theo giá, offline" is three subjects and two attributes. Counting the
+    attributes inflates the number quoted back to the planner, telling it to fan out
+    over things that are not entities."""
+    from my_crew.agent.task_decomposition import count_enumerated_entities
+
+    assert count_enumerated_entities(
+        "So sánh 5 công cụ note-taking: Notion, Obsidian, Logseq, Google Keep và "
+        "Apple Notes theo giá, khả năng offline, liên kết ghi chú."
+    ) == 5
+
+
+def test_parenthesised_subjects_are_counted_over_the_attributes_after_the_colon():
+    """Benchmark A's shape. Counting the three attributes put this brief UNDER the
+    fan-out threshold, so the collection step was never split and the team run spent
+    ~17 minutes on one bundled step."""
+    from my_crew.agent.task_decomposition import count_enumerated_entities
+
+    assert count_enumerated_entities(
+        "So sánh 5 dịch vụ streaming nhạc tại Việt Nam (Spotify, YouTube Music, "
+        "Apple Music, Zing MP3, Nhaccuatui): giá gói cá nhân, kho nhạc Việt, "
+        "chất lượng âm thanh."
+    ) == 5
+
+
 def _task_from(steps: list[dict]):
     return parse_decomposed_task(_raw(steps))
 

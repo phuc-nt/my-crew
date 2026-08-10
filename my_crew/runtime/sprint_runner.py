@@ -122,22 +122,49 @@ def listed_entities(text: str) -> list[str]:
     paren = _longest_enumeration(re.finditer(r"\(([^)\n]+)\)", text or ""))
     if paren:
         return paren
-    return _longest_enumeration(re.finditer(r":\s*([^.\n:?!]+)", text or ""))
+    return _longest_enumeration(
+        re.finditer(r":\s*([^.\n:?!]+)", text or ""), stop_at_attributes=True
+    )
 
 
-def _longest_enumeration(matches: Any) -> list[str]:
-    """The longest comma/`và`-separated item list among `matches`, else []."""
+def _longest_enumeration(matches: Any, *, stop_at_attributes: bool = False) -> list[str]:
+    """The longest comma/`và`-separated item list among `matches`, else [].
+
+    `stop_at_attributes` applies only to the colon form, where the subject list and
+    the attribute clause share one run of text: "Notion, Obsidian và Apple Notes theo
+    giá, offline" ends its subjects at "theo". Without the cut, "Apple Notes theo giá"
+    becomes an entity and each attribute becomes one too, so the sprint searches for
+    a product that does not exist and reports coverage gaps it can never close. The
+    parenthesised form needs no such cut — its closing bracket already ends the list.
+    """
     best: list[str] = []
     for m in matches:
+        text = m.group(1)
+        if stop_at_attributes:
+            text = _before_attribute_lead_in(text)
         items = [
             part.strip(" .;–-")
-            for chunk in m.group(1).split(",")
+            for chunk in text.split(",")
             for part in re.split(r"\s+và\s+", chunk)
         ]
         items = [i for i in items if i and len(i.split()) <= 7]
         if len(items) > len(best):
             best = items
     return best if len(best) >= 2 else []
+
+
+def _before_attribute_lead_in(text: str) -> str:
+    """`text` truncated at the first attribute lead-in that follows an entity.
+
+    Matched on word boundaries so a lead-in buried inside a name ("Theo Dõi Chi Tiêu")
+    does not sever the list, and only from the second word on, since a clause that
+    OPENS with a lead-in has no subjects before it to keep.
+    """
+    for lead in _ATTRIBUTE_LEAD_INS:
+        m = re.search(rf"\S\s+\b{re.escape(lead)}\b\s", text, flags=re.IGNORECASE)
+        if m:
+            text = text[: m.start() + 1]
+    return text
 
 
 #: Words that describe the ASSIGNMENT rather than its subject. A search engine is not
