@@ -742,7 +742,7 @@ class TeamTaskStore:
         first — this write trusts the id it is given.
 
         Re-stamps `plan_hash` in the SAME transaction as the assignee write. `assigned_to`
-        is one of the four fields `decomposition_content_hash` covers, so changing it
+        is one of the fields `decomposition_content_hash` covers, so changing it
         without re-stamping would make the next tick's `_verify_plan_hash` recompute a
         different digest, stall the task, and escalate a tampering alarm about a change
         the coordinator itself made. WHO does a step is the coordinator's operational
@@ -768,11 +768,20 @@ class TeamTaskStore:
         """The digest `coordinator_graph._verify_plan_hash` recomputes on every tick:
         `decomposition_content_hash` over the CEO-confirmed (`system_inserted = 0`) rows
         in `seq` order, read fresh from the connection so it reflects writes made earlier
-        in the current (uncommitted) transaction."""
+        in the current (uncommitted) transaction.
+
+        MUST select every column the hash reads — the conditional flags (`needs_shell`,
+        `external_write`, `needs_web`) included. The verify side hashes real `TeamStep`
+        rows where those flags resolve to their persisted values; reconstructing here
+        without them silently hashes them as False, so re-stamping any task whose
+        confirmed plan carries a True flag (every research plan sets `needs_web`) writes
+        a digest the next tick can never reproduce — a permanent, self-inflicted
+        plan_hash-mismatch stall right after a stuck-reassign."""
         from my_crew.agent.task_decomposition import decomposition_content_hash
 
         rows = self._conn.execute(
-            "SELECT step_id, title, assigned_to, deps_json FROM team_steps "
+            "SELECT step_id, title, assigned_to, deps_json, needs_shell, external_write, "
+            "needs_web FROM team_steps "
             "WHERE task_id = ? AND system_inserted = 0 ORDER BY seq",
             (task_id,),
         ).fetchall()
@@ -780,6 +789,7 @@ class TeamTaskStore:
             SimpleNamespace(
                 step_id=r[0], title=r[1], assigned_to=r[2],
                 deps=tuple(json.loads(r[3] or "[]")),
+                needs_shell=bool(r[4]), external_write=bool(r[5]), needs_web=bool(r[6]),
             )
             for r in rows
         ]

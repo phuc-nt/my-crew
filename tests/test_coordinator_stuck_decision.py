@@ -27,6 +27,9 @@ def _content_hash(steps: list[dict]) -> str:
         SimpleNamespace(
             step_id=s["step_id"], title=s["title"], assigned_to=s["assigned_to"],
             deps=tuple(s.get("deps", ())),
+            needs_shell=bool(s.get("needs_shell", False)),
+            external_write=bool(s.get("external_write", False)),
+            needs_web=bool(s.get("needs_web", False)),
         )
         for s in steps
     ]))
@@ -146,6 +149,42 @@ def test_reassign_restamp_only_covers_the_ceo_confirmed_rows(tmp_path):
     assert store.get("t1").plan_hash == _content_hash(
         [{"step_id": "s1", "title": "tra cuu", "assigned_to": "agent-b", "deps": []}]
     )
+
+
+def test_reassign_on_a_web_flagged_plan_still_passes_the_next_ticks_hash_check(tmp_path):
+    """The live stall this reproduces: a research plan (needs_web=True at confirm) got a
+    stuck-reassign, the re-stamp reconstructed rows WITHOUT the conditional flags, and
+    the very next tick — hashing the real rows, flags included — could never match the
+    freshly stamped digest again. The task stalled permanently with a tampering alarm
+    about a write the coordinator itself made. The hash treats every flagged plan this
+    way, so this covers `needs_shell`/`external_write` through the same seam."""
+    steps = [
+        {"step_id": "s1", "title": "tra cuu web", "assigned_to": "agent-a", "deps": [],
+         "needs_web": True},
+        {"step_id": "s2", "title": "chay script", "assigned_to": "agent-a",
+         "deps": ["s1"], "needs_shell": True, "external_write": True},
+    ]
+    store = TeamTaskStore(tmp_path / "team_tasks.sqlite3")
+    store.create_task(task_id="t1", title="demo task", original_request="lam demo")
+    store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    attempt = store.reserve_step("t1", "s1")
+    store.mark_needs_decision("t1", "s1", attempt_id=attempt, outcome_ref="ref-1")
+    store.bump_intervention("t1", "s1")  # 2nd ruling — past the retry-first coercion
+
+    reassigned = run_one_tick(_deps(store, judge_stuck_step=lambda brief, step: {
+        "decision": "reassign", "assign_to": "agent-b",
+    }))
+    assert reassigned.action == "stuck_reassigned"
+
+    result = run_one_tick(_deps(store, judge_stuck_step=lambda brief, step: None))
+
+    assert result.detail != "plan_hash mismatch"
+    task = store.get("t1")
+    assert task.status != "stalled"
+    # The stored digest is the one the tick recompute (flags included) produces.
+    assert task.plan_hash == _content_hash([
+        {**steps[0], "assigned_to": "agent-b"}, steps[1],
+    ])
 
 
 def test_a_refused_reassign_leaves_the_plan_hash_untouched(tmp_path):

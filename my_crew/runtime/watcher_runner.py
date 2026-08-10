@@ -66,7 +66,13 @@ def _wake_plan_hash(steps: list[dict[str, Any]]) -> str:
 
     return decomposition_content_hash(SimpleNamespace(steps=[
         SimpleNamespace(step_id=s["step_id"], title=s["title"],
-                        assigned_to=s["assigned_to"], deps=tuple(s.get("deps", ())))
+                        assigned_to=s["assigned_to"], deps=tuple(s.get("deps", ())),
+                        # Carry the conditional-emit flags too: hashing a flagged step
+                        # without them writes a digest the tick recompute (over real
+                        # TeamStep rows) can never match — instant stall on tick one.
+                        needs_shell=bool(s.get("needs_shell", False)),
+                        external_write=bool(s.get("external_write", False)),
+                        needs_web=bool(s.get("needs_web", False)))
         for s in steps
     ]))
 
