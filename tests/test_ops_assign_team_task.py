@@ -297,3 +297,47 @@ def test_widen_terminal_deps_gives_the_sink_every_other_step():
     assert next(s for s in widened.steps if s.step_id == "draft").deps == ("research",)
     one = DecomposedTask(steps=(TeamStepPlan(step_id="s", title="t", assigned_to="a"),))
     assert _widen_terminal_deps(one) is one
+
+
+def test_decompose_falls_back_to_code_side_fanout_when_the_model_never_splits(
+    monkeypatch,
+):
+    """Benchmark B live shape: a 5-entity brief where the model returns the SAME
+    packed plan through every retry. The old fail-open accepted it (one react-loop
+    over 5 entities → truncated output, ~17min for that step); now the last attempt
+    splits the packed collect step in code and the assign returns a fanned DAG."""
+    import json
+
+    packed_plan = json.dumps({
+        "pic_id": "agent-a",
+        "steps": [
+            {"step_id": "research", "title": "Tra cứu cả 5 công cụ",
+             "assigned_to": "agent-a", "deps": [], "needs_web": True},
+            {"step_id": "finalize", "title": "Tổng hợp báo cáo",
+             "assigned_to": "agent-a", "deps": ["research"]},
+        ],
+    })
+    calls = []
+
+    class _Llm:
+        def complete(self, messages):
+            calls.append(messages)
+            return SimpleNamespace(content=packed_plan, cost_usd=0.001)
+
+    monkeypatch.setattr(mod, "_build_llm", lambda: (_Llm(), None))
+
+    brief = ("So sánh 5 công cụ note-taking: Notion, Obsidian, Evernote, Apple Notes, "
+             "Google Keep. Nêu rõ nguồn.")
+    task, cost = mod._decompose_with_retries(brief, [("agent-a", "office")])
+
+    # The model got every retry (the bias stays a bias) before code took over.
+    assert len(calls) == mod._MAX_DECOMPOSE_ATTEMPTS
+    subs = [s for s in task.steps if s.needs_web and not s.deps]
+    assert len(subs) == 2
+    assert all("research" != s.step_id for s in task.steps)
+    for entity in ("Notion", "Obsidian", "Evernote", "Apple Notes", "Google Keep"):
+        assert sum(entity in s.title for s in subs) == 1, entity
+    # `_widen_terminal_deps` ran on the SPLIT plan: the terminal fans in on the subs.
+    fin = next(s for s in task.steps if s.step_id == "finalize")
+    assert set(fin.deps) == {s.step_id for s in subs}
+    assert cost == pytest.approx(0.001 * mod._MAX_DECOMPOSE_ATTEMPTS)

@@ -433,3 +433,82 @@ def fanout_gap(brief: str, task: DecomposedTask) -> str:
         "thực thể trong title + acceptance từng bước, và giao cho các nhân sự khác nhau "
         "nếu đội có nhiều người tra cứu được"
     )
+
+
+def fanout_split(brief: str, task: DecomposedTask) -> DecomposedTask | None:
+    """Code-side fan-out for a plan the retry loop could not get the model to split.
+
+    `fanout_gap` is a retry BIAS: it re-prompts, and on the last attempt the loop used
+    to fail-open and accept the packed plan — a single react-loop over every entity,
+    which is exactly the measured truncation/slowdown case (benchmark B: one step
+    packing 5 entities → output cut → ~17min for that step alone). Code-paced beats
+    model-paced (the v77 principle): when the model refuses to fan out, split the
+    packed collect step deterministically here instead of just logging.
+
+    Returns the split task, or None when the shape is not the one the gap describes —
+    the caller then keeps today's fail-open behavior. Conservative by design; every
+    guard below protects an invariant `validate_decomposition` already proved:
+
+    - exactly ONE dep-less needs_web collect step (0 ⇒ ambiguous target; ≥2 ⇒ the gap
+      would not have fired),
+    - that step has a dependent (splitting the single terminal would mint multiple
+      terminals and break the one-terminal rule),
+    - the generated sub-ids collide with nothing.
+
+    Entities come from `listed_entities` — the same parse `fanout_gap` counted with,
+    so the split can never disagree with the message that demanded it. Sub-steps keep
+    the original assignee (capability-safe: that agent was already validated for a
+    needs_web step; spreading to other staff would need capability data this layer
+    does not have). Chunks are contiguous, 2-3 steps per the gap's own spec, entity
+    names ride in title + acceptance so each worker knows its exact scope.
+    """
+    from my_crew.runtime.sprint_runner import listed_entities
+
+    entities = listed_entities(brief)
+    if len(entities) < 4:
+        return None
+    packed = [s for s in task.steps if s.needs_web and not s.deps]
+    if len(packed) != 1:
+        return None
+    orig = packed[0]
+    if not any(orig.step_id in s.deps for s in task.steps):
+        return None
+
+    n_subs = 2 if len(entities) <= 6 else 3
+    base, extra = divmod(len(entities), n_subs)
+    chunks, start = [], 0
+    for i in range(n_subs):
+        end = start + base + (1 if i < extra else 0)
+        chunks.append(entities[start:end])
+        start = end
+
+    existing_ids = {s.step_id for s in task.steps}
+    subs = []
+    for i, chunk in enumerate(chunks, start=1):
+        # step_id is capped at 40 chars — truncate the base so the suffix always fits.
+        sub_id = f"{orig.step_id[:37]}-e{i}"
+        if sub_id in existing_ids:
+            return None
+        names = ", ".join(chunk)
+        subs.append(orig.model_copy(update={
+            "step_id": sub_id,
+            "title": f"{orig.title} — chỉ: {names}"[:300],
+            "acceptance": (
+                (f"{orig.acceptance} " if orig.acceptance else "")
+                + f"CHỈ phủ các thực thể: {names}. Không tra cứu thực thể khác."
+            )[:2000],
+        }))
+
+    steps: list[TeamStepPlan] = []
+    for s in task.steps:
+        if s.step_id == orig.step_id:
+            steps.extend(subs)
+        elif orig.step_id in s.deps:
+            steps.append(s.model_copy(update={
+                "deps": tuple(d for d in s.deps if d != orig.step_id)
+                + tuple(sub.step_id for sub in subs),
+            }))
+        else:
+            steps.append(s)
+    return DecomposedTask(steps=tuple(steps), pic_id=task.pic_id,
+                          requires_approval=task.requires_approval)

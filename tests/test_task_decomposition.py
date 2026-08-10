@@ -461,6 +461,110 @@ def test_fanout_gap_skips_non_research_and_small_briefs():
     assert fanout_gap(small_brief, single) == ""
 
 
+def test_fanout_split_slices_the_packed_collect_into_named_parallel_steps():
+    from my_crew.agent.task_decomposition import fanout_gap, fanout_split
+
+    brief = "So sánh 5 sàn: Shopee, Lazada, TikTok Shop, Tiki, Sendo. Kèm nguồn."
+    packed = _task_from([
+        {**_step("research"), "needs_web": True, "acceptance": "kèm link nguồn"},
+        _step("finalize", deps=["research"]),
+    ])
+    split = fanout_split(brief, packed)
+
+    assert split is not None
+    subs = [s for s in split.steps if s.needs_web and not s.deps]
+    assert len(subs) == 2  # ≤6 entities → 2 parallel collect steps
+    # Every entity is named in exactly one sub-step's title AND acceptance.
+    for entity in ("Shopee", "Lazada", "TikTok Shop", "Tiki", "Sendo"):
+        owners = [s for s in subs if entity in s.title]
+        assert len(owners) == 1, entity
+        assert entity in owners[0].acceptance
+    # The original acceptance rubric survives on each sub.
+    assert all("kèm link nguồn" in s.acceptance for s in subs)
+    # The dependent was rewired onto the subs; the packed id is gone.
+    finalize = next(s for s in split.steps if s.step_id == "finalize")
+    assert set(finalize.deps) == {s.step_id for s in subs}
+    assert all(s.step_id != "research" for s in split.steps)
+    # The split satisfies the very gap that demanded it.
+    assert fanout_gap(brief, split) == ""
+
+
+def test_fanout_split_uses_three_steps_past_six_entities():
+    from my_crew.agent.task_decomposition import fanout_split
+
+    brief = ("Khảo sát 7 framework: React, Vue, Svelte, Angular, Solid, Qwik, Astro. "
+             "Kèm nguồn.")
+    packed = _task_from([
+        {**_step("research"), "needs_web": True},
+        _step("finalize", deps=["research"]),
+    ])
+    split = fanout_split(brief, packed)
+
+    assert split is not None
+    subs = [s for s in split.steps if s.needs_web and not s.deps]
+    assert len(subs) == 3
+    # 7 entities over 3 steps: 3+2+2, no entity dropped or duplicated.
+    named = [e for s in subs for e in ("React", "Vue", "Svelte", "Angular", "Solid",
+                                       "Qwik", "Astro") if e in s.title]
+    assert sorted(named) == sorted(
+        ["React", "Vue", "Svelte", "Angular", "Solid", "Qwik", "Astro"])
+
+
+def test_fanout_split_declines_shapes_it_cannot_prove_safe():
+    from my_crew.agent.task_decomposition import fanout_split
+
+    brief = "So sánh 5 sàn: Shopee, Lazada, TikTok Shop, Tiki, Sendo. Kèm nguồn."
+    # A packed collect step that is also the terminal: splitting it would mint
+    # multiple terminals, so the splitter declines.
+    terminal_collect = _task_from([{**_step("research"), "needs_web": True}])
+    assert fanout_split(brief, terminal_collect) is None
+    # Two dep-less collects: the gap would not have fired; nothing to split.
+    already_fanned = _task_from([
+        {**_step("r1"), "needs_web": True},
+        {**_step("r2"), "needs_web": True},
+        _step("finalize", deps=["r1", "r2"]),
+    ])
+    assert fanout_split(brief, already_fanned) is None
+    # The only needs_web step has deps — not the shape the gap describes.
+    dependent_collect = _task_from([
+        _step("outline"),
+        {**_step("research", deps=["outline"]), "needs_web": True},
+        _step("finalize", deps=["research"]),
+    ])
+    assert fanout_split(brief, dependent_collect) is None
+    # Under 4 entities: fan-out never applies.
+    packed = _task_from([
+        {**_step("research"), "needs_web": True},
+        _step("finalize", deps=["research"]),
+    ])
+    assert fanout_split("So sánh Shopee với Lazada.", packed) is None
+
+
+def test_fanout_split_output_survives_validation_and_hashing():
+    """The split plan must pass the same gate a model plan does, and its hash must be
+    recomputable from the flags it carries — a fanned plan that later stalls on
+    `plan_hash mismatch` would be worse than no fan-out at all."""
+    from my_crew.agent.task_decomposition import (
+        decomposition_content_hash,
+        fanout_split,
+        validate_decomposition,
+    )
+
+    brief = "So sánh 5 sàn: Shopee, Lazada, TikTok Shop, Tiki, Sendo. Kèm nguồn."
+    packed = _task_from([
+        {**_step("research"), "needs_web": True},
+        _step("finalize", deps=["research"]),
+    ])
+    split = fanout_split(brief, packed)
+    validated = validate_decomposition(split, staff_ids={"agent-a"})
+    # Hash over the split steps is stable and reflects needs_web on every sub.
+    assert decomposition_content_hash(validated) == decomposition_content_hash(split)
+    no_flag = split.model_copy(update={"steps": tuple(
+        s.model_copy(update={"needs_web": False}) for s in split.steps
+    )})
+    assert decomposition_content_hash(no_flag) != decomposition_content_hash(split)
+
+
 def test_amend_prompt_pins_flags_in_example_schema():
     """Bài học lặp 2 lần (decompose 112033f, replan 260809): flag định tuyến phải nằm
     trong SCHEMA VÍ DỤ — model mirror ví dụ, mô tả bằng văn xuôi không đủ. Đường amend

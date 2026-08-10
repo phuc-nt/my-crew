@@ -39,6 +39,7 @@ from my_crew.agent.sprint_intake import strip_mode_prefix
 from my_crew.agent.task_decomposition import (
     DecompositionError,
     fanout_gap,
+    fanout_split,
     parse_decomposed_task,
     validate_decomposition,
 )
@@ -202,15 +203,41 @@ def _decompose_with_retries(
             # v74.2 fan-out bias: a ≥4-entity brief whose collection was NOT split
             # into parallel steps goes back through the retry loop with a concrete
             # instruction (measured: fanned ~11-12min vs un-fanned ~17-25min).
-            # FAIL-OPEN on the last attempt: a valid-but-slow plan always beats a
-            # failed assign, so the gap is only retried while attempts remain.
+            # On the last attempt, code takes over from the model (code-paced beats
+            # model-paced): `fanout_split` slices the packed collect step into 2-3
+            # parallel entity-named steps deterministically. Only if the plan's shape
+            # defeats the splitter does the old fail-open (accept the packed plan)
+            # remain — a valid-but-slow plan always beats a failed assign.
             gap = fanout_gap(brief, task)
             if gap and _attempt < _MAX_DECOMPOSE_ATTEMPTS - 1:
                 raise DecompositionError(gap)
             if gap:
-                logger.warning(
-                    "assign_team_task: accepting un-fanned plan after retries (%s)", gap
-                )
+                split = fanout_split(brief, task)
+                if split is not None:
+                    # Full re-validation (not just review policy): the split provably
+                    # preserves acyclicity/staff/terminal, but proving it cheaply here
+                    # beats trusting it — a rejected split falls back to the packed
+                    # plan instead of failing the assign.
+                    try:
+                        task = validate_decomposition(
+                            split, staff_ids={a for a, _ in staff},
+                            pic_id=pic_requested if pic_requested else None,
+                        )
+                        logger.info(
+                            "assign_team_task: code-side fan-out split the packed "
+                            "collect step into %d parallel steps",
+                            sum(1 for s in task.steps if s.needs_web and not s.deps),
+                        )
+                    except DecompositionError as split_exc:
+                        logger.warning(
+                            "assign_team_task: code-side fan-out rejected (%s) — "
+                            "accepting un-fanned plan (%s)", split_exc, gap,
+                        )
+                else:
+                    logger.warning(
+                        "assign_team_task: accepting un-fanned plan after retries (%s)",
+                        gap,
+                    )
             return _widen_terminal_deps(task), total_cost
         except DecompositionError as exc:
             last_error = str(exc)
