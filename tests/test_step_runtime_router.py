@@ -122,3 +122,23 @@ def test_rework_row_keeps_the_agent_tier():
     a toolless fixer degrades honestly but uselessly)."""
     rt = resolve_step_runtime(_LP("create_agent"), _Step(needs_web=False, step_type="rework"))
     assert _kind(rt) == "ToolCallingRuntime"
+
+
+def test_a_sprint_step_is_always_native_even_when_it_needs_web():
+    """v77: the sprint pipeline rides `work_override`, a seam only the native runtime
+    honors. Routing it to a tool-calling tier would discard the whole code-paced
+    pipeline and hand the model back the react loop sprint mode exists to avoid."""
+    rt = resolve_step_runtime(
+        _LP("create_agent"), _Step(needs_web=True, step_type="sprint"),
+    )
+    assert _kind(rt) == "NativeGraphRuntime"
+
+
+def test_a_sprint_step_stays_native_after_a_coordinator_ruling():
+    """Self-heal re-arms the agent tier for a mis-hinted WORK step; a sprint step has
+    no react loop to fall back to, so the pin must survive an intervention."""
+    rt = resolve_step_runtime(
+        _LP("deep_agent", sandbox={"provider": "docker"}),
+        _Step(needs_web=True, step_type="sprint", intervention_count=1),
+    )
+    assert _kind(rt) == "NativeGraphRuntime"

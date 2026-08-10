@@ -104,6 +104,33 @@ or just skip the `@` entirely. The system suggests which agent is best suited an
 
 Click **Assistant** → type the request → answer questions step-by-step → the assistant creates the task and shows it in real-time on the **Office** screen.
 
+### Sprint Mode — One Agent, Start to Finish (v77+)
+
+Not every task needs the whole team. A research brief like *"compare 5 tools across 3
+criteria"* used to be split into 5 steps, each handed to a different agent, each starting
+cold — **tens of minutes**. The system now recognises this shape and gives it to **one
+agent to finish in a single pass** (a **sprint**): measured at **3–9 minutes** on briefs
+that took the team 23–31 minutes, at roughly a quarter of the cost.
+
+You don't have to do anything — assignment picks the mode for you. To force it:
+
+| Type | Result |
+|---|---|
+| `sprint: compare 5 note-taking tools…` | force one agent, single pass |
+| `team: compare 5 note-taking tools…` | force the usual multi-step team plan |
+| (no prefix) | auto-detected; falls back to team when unsure |
+
+The prefix chooses the **mode**, not the safety rails. These four kinds of work **always**
+go to team mode even with `sprint:`, because they need review rounds a sprint doesn't run:
+
+- writing **outside the company** (sending mail, publishing, updating a website…)
+- work that **needs a shell / code execution**
+- work you explicitly said **needs several people**
+- **long, multi-stage** work
+
+A sprint task still gets its own workroom, peer review, clarification questions when it
+hits a dead end, and the usual Telegram milestones — it just runs in one continuous pass.
+
 ### Reviewing the Plan
 
 After you type a task, the system:

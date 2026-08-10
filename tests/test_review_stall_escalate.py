@@ -103,6 +103,54 @@ def test_max_round_needs_rework_is_explicit_stall_not_dead_end(tmp_path, monkeyp
     assert not [s for s in task.steps if s.step_type == "rework"]
 
 
+def test_the_stall_message_quotes_what_the_reviewer_kept_rejecting(tmp_path, monkeypatch):
+    """Without the failures the message says only "review failed after 3 rounds" — the
+    one thing the CEO can already see. Benchmark 210e3686daf5 is why it matters: all
+    three rounds failed on the same impossible criterion (a per-source access date that
+    search snippets never carry) while the report itself was complete, so the actionable
+    fact was the criterion, not the round count."""
+    store = _store(tmp_path)
+    _plan_with_final_round_review(store, tmp_path)
+    escalated: list[tuple[str, str]] = []
+    deps = _deps(store, escalate=lambda task, step, kind, msg: escalated.append((kind, msg)))
+
+    task = store.get("t1")
+    review_step = next(
+        s for s in task.steps
+        if s.step_type == "review" and s.review_round == MAX_REVIEW_ROUNDS
+    )
+    assert maybe_handle_review_done(deps, task, review_step) is True
+
+    _, message = escalated[0]
+    assert "vẫn sai" in message, "the surviving failure must reach the CEO"
+
+
+def test_a_verdict_with_no_failures_adds_nothing_to_the_stall_message(tmp_path, monkeypatch):
+    """The quote is a suffix, not a required field: a verdict that failed without
+    itemising why still stalls with the plain message rather than a dangling label."""
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    store = _store(tmp_path)
+    _plan_with_final_round_review(store, tmp_path)
+    write_review_verdict_artifact(
+        team_tasks_root(), "t1", 1, MAX_REVIEW_ROUNDS,
+        {"passed": False, "failures": [], "result_text": "brief"},
+    )
+    escalated: list[tuple[str, str]] = []
+    deps = _deps(store, escalate=lambda task, step, kind, msg: escalated.append((kind, msg)))
+
+    task = store.get("t1")
+    review_step = next(
+        s for s in task.steps
+        if s.step_type == "review" and s.review_round == MAX_REVIEW_ROUNDS
+    )
+    assert maybe_handle_review_done(deps, task, review_step) is True
+
+    _, message = escalated[0]
+    assert "Soát chéo còn vướng" not in message
+    assert message.endswith("cần CEO xem lại.")
+
+
 def test_max_round_stall_never_relies_on_dead_end_path(tmp_path, monkeypatch):
     """`_dead_end_result` only fires on `failed`/`timeout` steps — with every step
     `done`, the ticker's dead-end branch would find nothing; the stall MUST come from

@@ -121,7 +121,10 @@ class HistorySearchIndex:
             store.close()
         for t in tasks:
             for s in t.steps:
-                if s.status != "done" or s.step_type not in ("work", "rework"):
+                # "sprint" (v77) indexes like any other content step — it is the only
+                # step a sprint task has, so omitting it would make a whole mode of
+                # work unsearchable ("tuần trước đội khảo sát cái gì?").
+                if s.status != "done" or s.step_type not in ("work", "sprint", "rework"):
                     continue
                 ts = s.last_seen or s.spawned_at or t.created_at
                 if not ts or ts <= mark:

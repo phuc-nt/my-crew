@@ -225,6 +225,33 @@ Vẫn giao được qua **Trợ lý** (gõ "giao việc …", hỏi-đáp từng
 Tiến trình hiển thị ngay cột phải màn Văn phòng; Telegram cũng nhận cột mốc (nhận việc /
 xong bước / hoàn thành / cần duyệt).
 
+### B.3-sprint. Việc một người làm trọn — chế độ sprint (v77)
+
+Không phải việc nào cũng cần cả đội. Một bài nghiên cứu kiểu *"so sánh 5 công cụ theo 3
+tiêu chí"* trước đây bị chia thành 5 bước, mỗi bước một người, mỗi bước khởi động lại từ
+đầu — mất **hàng chục phút**. Nay hệ thống tự nhận ra dạng việc này và giao **một người
+làm trọn** (gọi là **sprint**): cùng đề bài đo được **3–9 phút** thay vì 23–31 phút, và
+rẻ hơn ~4 lần.
+
+Bạn **không cần làm gì thêm** — cứ giao việc như thường, hệ thống tự chọn. Muốn ép:
+
+| Gõ | Kết quả |
+|---|---|
+| `sprint: so sánh 5 công cụ ghi chú…` | ép một người làm trọn |
+| `team: so sánh 5 công cụ ghi chú…` | ép chia việc cho đội như cũ |
+| (không gõ tiền tố) | hệ thống tự chọn, thiên về đội khi nghi ngờ |
+
+Tiền tố chọn **chế độ**, không gỡ được rào an toàn. Bốn loại việc dưới đây **luôn** đi
+đường đội dù bạn có gõ `sprint:`, vì chúng cần đúng vòng duyệt/soát mà sprint không có:
+
+- việc **ghi ra ngoài công ty** (gửi mail, đăng bài, cập nhật website…)
+- việc **cần chạy shell/mã**
+- việc bạn **nói rõ là cần nhiều người**
+- việc **dài nhiều giai đoạn**
+
+Việc sprint vẫn hiện đủ trong phòng việc, vẫn có soát chéo, vẫn hỏi ý bạn khi bế tắc, và
+vẫn báo Telegram như mọi việc khác — chỉ khác là nó chạy trong một mạch liền.
+
 ### B.3a. Giao diện Văn phòng v54 — 3 khu vực (cockpit)
 
 Màn Văn phòng được **thiết kế lại thành 3 khu vực** (≥1100px rộng; dưới đó xếp thành 1 cột):

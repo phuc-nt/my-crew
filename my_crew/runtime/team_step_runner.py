@@ -496,6 +496,9 @@ def _run_graph(
     # loud if the agent has no sandbox). The `_extra` wiring below is gated on the EFFECTIVE kind,
     # not the profile kind, so a dropped step feeds the tool-calling runtime the right kwargs (each
     # runtime already pops what it doesn't use — v43/v44). `loaded=None` → native (degrade path).
+    # v77: `resolve_step_runtime` pins a sprint step to native (its work_override seam
+    # exists only there) — no extra gating needed at this call site.
+    _is_sprint = str(getattr(step, "step_type", "work") or "work") == "sprint"
     runtime = resolve_step_runtime(loaded, step, prefetched=bool(_prefetch_context))
     effective_kind = type(runtime).__name__
     _is_non_native = effective_kind != "NativeGraphRuntime"
@@ -562,10 +565,23 @@ def _run_graph(
     # synthesis read their handoff, and the hook's one search per run was pure cost.
     # After a ruling (intervention_count > 0) the hook returns with the agent's tier.
     _step_type = str(getattr(step, "step_type", "work") or "work")
-    _toolless = (_step_type == "review"
+    _toolless = (_step_type in ("review", "sprint")
                  or (_step_type == "work"
                      and not bool(getattr(step, "needs_web", False))
                      and int(getattr(step, "intervention_count", 0) or 0) == 0))
+    # v77: the sprint pipeline REPLACES the work node — it runs its own searches (via
+    # `prefetch_queries`, same gates and audit trail) and never calls the graph's
+    # pre-work hook, which is why `_toolless` counts it above. Everything downstream of
+    # `work` (self_check → rework → deliver → gateway) is untouched, so a sprint step
+    # keeps every guardrail a normal step has.
+    if _is_sprint:
+        from my_crew.runtime.sprint_runner import build_sprint_work
+
+        _extra["work_override"] = build_sprint_work(
+            loaded=loaded, settings=settings, context=context,
+            acceptance=step.acceptance, telemetry=telemetry,
+            on_phase=lambda _phase: on_node() if on_node is not None else None,
+        )
     graph = runtime.build_task(
         settings=settings, context=context, step_title=step.title,
         data_dir=team_tasks_root(), task_id=task_id, step_seq=step.seq,

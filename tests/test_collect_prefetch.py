@@ -61,6 +61,22 @@ def test_prefetch_fails_open_when_no_query_hits(tmp_path, monkeypatch):
     assert prefetch_for_step(_loaded(), _settings(tmp_path), _step("Khảo sát X")) == ""
 
 
+def test_keep_sentinels_reports_a_total_blackout_instead_of_failing_open(
+    tmp_path, monkeypatch,
+):
+    """A sprint step has no tool loop to fall back to, so "" would read as "we never
+    searched" and turn a provider outage into "đã tìm nhưng không có dữ liệu"."""
+    from my_crew.runtime.collect_prefetch import prefetch_queries
+
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr("my_crew.tools.web_search_tool.web_search_outcome",
+                        lambda q, **kw: ([], "provider_error"))
+    bundle = prefetch_queries(_loaded(), _settings(tmp_path), ["giá Netflix"],
+                              keep_sentinels=True)
+    assert "[LỖI NGUỒN TÌM KIẾM]" in bundle
+    assert "giá Netflix" in bundle
+
+
 def test_prefetch_skips_without_optin_or_keys(tmp_path):
     no_flag = SimpleNamespace(web_search=False)
     assert prefetch_for_step(no_flag, _settings(tmp_path), _step("X")) == ""

@@ -21,6 +21,13 @@ from my_crew.runtime.team_task_store import TeamTaskStore
 @pytest.fixture()
 def wired(tmp_path, monkeypatch):
     monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    # The audit source walks the REGISTRY, which DATA_DIR does not redirect — without
+    # this a test that skips `_seed_audit` sweeps the developer's real audit log
+    # (observed: 66k rows). Point it at the tmp tree; `_seed_audit` refines it further.
+    monkeypatch.setattr(
+        "my_crew.runtime.agent_paths.agent_data_dir",
+        lambda agent_id: tmp_path / "agents" / agent_id,
+    )
     return tmp_path
 
 
@@ -43,6 +50,16 @@ def _seed_step(tmp_path, text="Quyết định: chốt agenda 4 mục cho buổi
         "status": "done", "result_text": text,
         "step_title": "Chốt agenda", "attempt": "a1", "self_check_failed": False,
     })
+
+
+def _mark_sprint(step_id: str = "s1") -> None:
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+
+    store = TeamTaskStore(team_tasks_db_path())
+    store._conn.execute(
+        "UPDATE team_steps SET step_type='sprint' WHERE step_id=?", (step_id,))
+    store._conn.commit()
+    store.close()
 
 
 def _seed_audit(tmp_path, monkeypatch):
@@ -77,6 +94,21 @@ def test_sweep_indexes_steps_and_audit_then_is_incremental(wired, monkeypatch):
         audit_hits = idx.search("báo cáo tuần")
         assert len(audit_hits) == 1 and audit_hits[0]["source"] == "audit"
         assert audit_hits[0]["agent_id"] == "content"
+    finally:
+        idx.close()
+
+
+def test_sweep_indexes_a_sprint_step(wired):
+    """A sprint task's only step is its whole output — skipping the type would make an
+    entire mode of work unsearchable ("tuần trước đội khảo sát cái gì?")."""
+    _seed_step(wired)
+    _mark_sprint()
+    idx = HistorySearchIndex()
+    try:
+        idx.sweep()
+        hits = idx.search("agenda")
+        assert [h["source"] for h in hits] == ["step"]
+        assert hits[0]["ref"].startswith("t1:")
     finally:
         idx.close()
 

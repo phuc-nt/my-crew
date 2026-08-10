@@ -108,7 +108,9 @@ _SYSTEM = (
     "đề bài, chỉ đưa ra kết quả/nội dung của bước này. QUY TẮC TRUNG THỰC DỮ LIỆU: nếu "
     "kết quả bước trước ghi 'KHÔNG CÓ KẾT QUẢ' / bước bị bỏ qua / không chạy được, bạn "
     "TUYỆT ĐỐI không được bịa số liệu hay kết quả đo đạc thay thế — phải nêu rõ phần "
-    "nào thiếu dữ liệu và chỉ kết luận trên những gì thật sự có."
+    "nào thiếu dữ liệu và chỉ kết luận trên những gì thật sự có. ĐỊNH DẠNG: bắt đầu "
+    "câu trả lời NGAY bằng nội dung kết quả; KHÔNG viết quá trình suy nghĩ, không "
+    "lời dẫn, không phân tích meta về đề bài hay về chính hướng dẫn này."
 )
 
 

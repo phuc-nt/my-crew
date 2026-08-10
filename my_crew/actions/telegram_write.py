@@ -36,6 +36,7 @@ Handler = Callable[[dict[str, Any]], str]
 _API_BASE = "https://api.telegram.org"
 #: Telegram hard-caps messages at 4096 chars; truncate below it so the marker fits.
 _MAX_TEXT_CHARS = 3900
+_TRUNCATED_MARKER = "… [cắt bớt do giới hạn độ dài Telegram]"
 #: v33 P4 inline-keyboard bounds: at most 4 answer buttons, and callback_data must be
 #: our own `clarify:<id>:<n>` shape (Telegram caps callback_data at 64 bytes anyway).
 _MAX_BUTTONS = 4
@@ -112,6 +113,21 @@ def make_telegram_send_handler(telegram: TelegramConfig) -> Handler:
     return _handler
 
 
+def with_tail(body: str, tail: str) -> str:
+    """`body` + `tail`, shortening the BODY so the tail always survives truncation.
+
+    `send_telegram_message` truncates from the end, so a trailing "🔎 Chi tiết đầy đủ:
+    <url>" link is the first thing a long report loses — the CEO gets a cut-off body AND
+    no way to reach the full one (v77: a sprint report is a single artifact that can
+    easily exceed the cap). Reserving the tail's own length keeps the recovery link even
+    when nothing else fits.
+    """
+    room = _MAX_TEXT_CHARS - len(tail)
+    if room > 0 and len(body) > room:
+        body = body[: max(0, room - len(_TRUNCATED_MARKER))] + _TRUNCATED_MARKER
+    return f"{body}{tail}"
+
+
 def send_telegram_message(
     text: str,
     *,
@@ -136,7 +152,7 @@ def send_telegram_message(
     if not text.strip():
         raise ValueError("Refusing to send an empty telegram message.")
     if len(text) > _MAX_TEXT_CHARS:
-        text = text[:_MAX_TEXT_CHARS] + "… [cắt bớt do giới hạn độ dài Telegram]"
+        text = text[:_MAX_TEXT_CHARS] + _TRUNCATED_MARKER
     action: dict[str, Any] = {
         "type": "telegram_send",
         "chat_id": str(chat_id),

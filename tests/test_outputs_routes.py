@@ -80,6 +80,20 @@ def test_index_lists_only_delivered_steps(client, tmp_path):
     assert items[0]["step_title"] == "Soạn"
 
 
+def test_index_lists_a_sprint_step(client, tmp_path):
+    """A sprint task has exactly ONE content step, so its artifact is not part of the
+    output — it IS the output. Omitting the type hid a whole mode of work from the hub."""
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+
+    _seed_tasks()
+    store = TeamTaskStore(team_tasks_db_path())
+    store._conn.execute("UPDATE team_steps SET step_type='sprint' WHERE step_id='t1s1'")
+    store._conn.commit()
+    store.close()
+    items = client.get("/api/outputs").json()["items"]
+    assert [i["step_title"] for i in items] == ["Soạn"]
+
+
 def test_index_agent_filter(client, tmp_path):
     _seed_tasks()
     assert client.get("/api/outputs?agent=content").json()["items"]

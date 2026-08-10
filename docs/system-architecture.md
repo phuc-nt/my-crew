@@ -126,6 +126,53 @@ không field dấu hiệu injection).
   office event `milestone: autopilot_decision` (audit) → admin mirror DM CEO
   (notify-after, không cần plumbing mới).
 
+### 3.5b Sprint mode — bước một-người-làm-trọn, code điều nhịp (v77)
+
+**Vì sao**: đề research vừa (5 thực thể × 3 tiêu chí) đi trọn DAG mất 23–31 phút vì mỗi
+bước cold-start lại + soát chéo giữa chừng. Thử react-loop model-tự-lái thì tệ hơn: đo
+**780s cho MỘT bước synthesis** trên fleet model (`qwen/qwen3.7-plus`) vs 60–120s native.
+Kết luận: nhịp phải do **code** giữ, không giao cho model.
+
+**Hình dạng**: sprint = **team task suy biến** — đúng 1 content step gắn
+`step_type="sprint"` (`team_task_steps.CONTENT_STEP_TYPES = ("work", "sprint")`). KHÔNG có
+nhánh runtime thứ hai: kanban/cost/lease/delivery/clarify/stuck/band/metrics dùng chung
+đường cũ. Quy tắc chỉ áp cho việc fan-out phải hỏi `step_type`, không mặc định `"work"` —
+một bước sprint tự phủ hết thực thể trong pipeline của nó và không bao giờ được fan out.
+
+**Pipeline** (`my_crew/runtime/sprint_runner.build_sprint_work`, cắm vào graph qua
+`work_override` trong `team_step_runner`; `self_check → rework → deliver → gateway` giữ
+nguyên):
+
+```
+prefetch (code: 1 truy vấn/thực thể + 1 tổng quan, ≤ MAX_SPRINT_PREFETCH_QUERIES=6)
+   → draft (LLM, 1 call)
+   → coverage_gaps (code: thực thể nào chưa được phủ)
+   → targeted-search + revise (LLM, ≤ MAX_REVISE_ROUNDS=2)
+   → done          # trần cứng MAX_TOTAL_QUERIES=8
+```
+
+Truy vấn dựng bằng `_topic_phrase` — cắt tối đa `_MAX_TOPIC_WORDS=6` nhưng **tôn trọng
+ranh giới cụm danh từ** (`_governs_next`/`_trimmed_to_whole_phrase`): cắt giữa cụm từng
+làm search trả blog thay vì trang giá. `_source_refused` phân biệt "không tìm ra nguồn"
+với "nguồn nói không có" — đề bịa thực thể phải bế tắc thật, không được bịa số liệu.
+
+**Router** (`my_crew/agent/sprint_intake.py`, thuần code, không gọi model):
+`classify_brief` **thiên về từ chối** (nghi ngờ → team). CEO ép bằng tiền tố
+`sprint:`/`team:` (`strip_mode_prefix`). Tiền tố chọn CHẾ ĐỘ, **không** gỡ rào an toàn:
+`sprint_refusal` giữ 4 loại luôn về team — ghi-ra-ngoài, cần shell, CEO nêu cần nhiều
+người, việc dài nhiều giai đoạn. Lý do: `_build_sprint_task` đóng cứng
+`external_write=False`, mà `review_insert` lại bắt buộc review cho mọi bước
+`external_write` ở MỌI band — đề ghi-ra-ngoài lọt vào sprint sẽ mất đúng vòng review nó cần.
+
+**Giao kết quả**: artifact sprint CHÍNH LÀ thứ CEO cần, nên `_sprint_result_text` trả
+nguyên văn, bỏ qua `make_aggregate` (bộ này cắt `parts` còn 500 ký tự). Đánh đổi: lớp
+tóm tắt đó đang **âm thầm** gánh luật "bắt đầu NGAY bằng kết quả" — bỏ nó thì
+chain-of-thought lọt thẳng tới CEO, nên luật ĐỊNH DẠNG được chuyển vào `_SYSTEM` của
+`llm/team_task_prompt.py` (pin bởi `tests/test_team_step_prompt_format_rule.py`).
+
+**Đo thật** (`plans/reports/benchmark-260810-0654-v77-sprint-vs-team-mode-report.md`):
+cùng đề, team 31m12s/$0.0700 vs sprint 8m43s/$0.0169, chấm mù 8 vs 28 điểm.
+
 ### 3.6 Action Gateway (`my_crew/actions/`, v30–v31, v67–v68 learned rules)
 `action_gateway.py` = cửa duy nhất. `hard_block.py` = Lớp A (chặn cứng, không duyệt được).
 Lớp B = phụ thuộc `safety.trust_mode` per-agent:

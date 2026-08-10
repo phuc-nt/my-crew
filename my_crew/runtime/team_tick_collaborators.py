@@ -38,6 +38,30 @@ _ONE_TOUCH_SUGGESTION_TEMPLATE = (
     "`drop_stalled_step {task_id}` (bỏ bước chết)"
 )
 
+#: v77 sprint dead-end. Carries NO task/step text for the same reason as the two
+#: templates above, and no `{task_id}`: the remedy is a NEW task in the other mode, so
+#: interpolating the dead task's id would invite the CEO to paste an id that re-opens
+#: nothing. The suggestion names a MODE, not a person, because a sprint step has only
+#: one runner — `reassign` moves it to a different agent running the identical
+#: code-paced pipeline, so "ask someone else" is the one remedy that cannot work here.
+_SPRINT_UPGRADE_SUGGESTION = (
+    "\nViệc này chạy chế độ sprint (1 người, pipeline ngắn). Nếu cần đào sâu hơn, "
+    "CEO giao lại bằng tiền tố `team:` để chạy chế độ đội đầy đủ."
+)
+
+
+def _is_sprint_dead_end(task: TeamTask, event_kind: str) -> bool:
+    """True when this escalation ends a task whose only content step was a sprint.
+
+    Gated on `gave_up` alone: the earlier `stuck` escalations are rulings that PUT THE
+    STEP BACK to pending, so suggesting a mode change there would talk the CEO into
+    abandoning a task the coordinator is still actively retrying.
+    """
+    if event_kind != "gave_up":
+        return False
+    steps = getattr(task, "steps", None) or ()
+    return any(getattr(s, "step_type", "") == "sprint" for s in steps)
+
 
 def _review_evidence_block(task: TeamTask, step: TeamStep | None) -> str:
     """v63 evidence pack: the failing round's verdict summary, so the CEO/secretary can
@@ -72,6 +96,34 @@ def _review_evidence_block(task: TeamTask, step: TeamStep | None) -> str:
     except Exception:  # noqa: BLE001 — evidence must never break the escalation itself
         logger.exception("team-tick: evidence block failed for task %s", task.id)
     return ""
+
+
+def _sprint_result_text(task: TeamTask) -> str:
+    """The full result text a sprint task should deliver, or "" to use the normal path.
+
+    "" for anything that is not exactly one `sprint` content step with a readable
+    artifact — a multi-step task, a plain work step, or a sprint whose artifact went
+    missing all fall through to the normal aggregate rather than delivering nothing.
+
+    A REWORK row wins over the sprint row when one exists. A supervised band mints a
+    review row for a sprint step, and a failed verdict then mints a rework row that
+    writes its corrected output to ITS OWN seq — so reading the sprint step's seq
+    unconditionally would hand the CEO the exact draft the reviewer had just rejected.
+    Latest done rework (highest seq) is the current truth.
+    """
+    from my_crew.agent.team_task_artifact import read_step_artifact
+
+    content = [s for s in task.steps if s.step_type in ("work", "sprint")]
+    if len(content) != 1 or content[0].step_type != "sprint":
+        return ""
+    reworks = [
+        s for s in task.steps
+        if s.step_type == "rework" and s.parent_step_id == content[0].step_id
+        and s.status == "done"
+    ]
+    seq = max(reworks, key=lambda s: s.seq).seq if reworks else content[0].seq
+    artifact = read_step_artifact(team_tasks_root(), task.id, seq)
+    return str((artifact or {}).get("result_text") or "").strip()
 
 
 def make_aggregate(loaded: Any, settings: Any):
@@ -123,6 +175,18 @@ def make_aggregate(loaded: Any, settings: Any):
             snippet = text[:500] if text else "(không có kết quả)"
             parts.append(f"- {step.title}: {snippet}")
         fallback_summary = f"Việc '{task.title}' đã hoàn tất:\n" + "\n".join(parts)
+
+        # v77: a sprint task has exactly ONE content step whose artifact IS the
+        # deliverable the CEO asked for. Summarizing it would pay a second LLM call to
+        # compress a text that was already written to be read — and worse, the `parts`
+        # snippets above are truncated at 500 chars, so the summary would be built from
+        # a cut-off copy of the only thing that matters. Hand back the full result.
+        # This returns before `format_internal_content` runs, which is harmless: that
+        # pass strips the LLM's summary-shaped scaffolding, and a sprint artifact has
+        # none — it went through the same `deliver` path every work step's output does.
+        direct = _sprint_result_text(task)
+        if direct:
+            return direct, None
 
         if not settings.openrouter_api_key:
             return fallback_summary, None
@@ -188,7 +252,10 @@ def make_deliver_room(loaded: Any = None, settings: Any = None):
         if loaded is not None and settings is not None:
             try:
                 from my_crew.actions.action_gateway import ActionGateway
-                from my_crew.actions.telegram_write import send_telegram_message
+                from my_crew.actions.telegram_write import (
+                    send_telegram_message,
+                    with_tail,
+                )
 
                 telegram = getattr(loaded.config, "telegram", None)
                 operator = getattr(telegram, "ops_operator_id", "") if telegram else ""
@@ -206,8 +273,10 @@ def make_deliver_room(loaded: Any = None, settings: Any = None):
                             else f"✅ Việc '{task.title[:120]}' — HOÀN THÀNH:\n\n")
                     try:
                         result = send_telegram_message(
-                            f"{head}{summary}"
-                            f"\n\n🔎 Chi tiết đầy đủ: {workroom_url(task.id)}",
+                            with_tail(
+                                f"{head}{summary}",
+                                f"\n\n🔎 Chi tiết đầy đủ: {workroom_url(task.id)}",
+                            ),
                             gateway=gateway, telegram=telegram, chat_id=operator,
                             dedup_hint=f"team-tick:{task.id}:done",
                             rationale="task-done fast path to the assigning chat",
@@ -241,6 +310,8 @@ def make_escalate(loaded: Any, settings: Any):
         if event_kind in _STALL_EVENT_KINDS:
             message = (message + _AMEND_SUGGESTION_TEMPLATE.format(task_id=task.id)
                        + _ONE_TOUCH_SUGGESTION_TEMPLATE.format(task_id=task.id))
+        if _is_sprint_dead_end(task, event_kind):
+            message = message + _SPRINT_UPGRADE_SUGGESTION
 
         # Room append comes FIRST and unconditionally: the admin agent's milestone
         # mirror polls the room store and DMs the CEO, so an escalation reaches

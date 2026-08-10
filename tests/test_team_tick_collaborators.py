@@ -9,6 +9,7 @@ path via the mirror.
 
 from __future__ import annotations
 
+import dataclasses
 from types import SimpleNamespace
 
 import pytest
@@ -306,3 +307,152 @@ def test_dead_step_stall_gets_one_touch_but_no_review_evidence(tmp_path, monkeyp
         store.close()
     assert "retry_stalled_step stalled-task-8" in message
     assert "Lý do vòng soát cuối" not in message
+
+
+# --- v77 sprint: the one content step's artifact IS the deliverable -------------------
+
+
+def _sprint_task(tmp_path, monkeypatch, *, result_text, steps=None):
+    from my_crew.agent.team_task_artifact import write_step_artifact
+    from my_crew.runtime import team_task_paths
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    task = _task()
+    rows = steps if steps is not None else (_step_row("sprint", 1, step_type="sprint"),)
+    task = type(task)(**{**task.__dict__, "steps": rows})
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": result_text,
+                                            "version": "attempt-1"})
+    return task
+
+
+def test_a_sprint_task_delivers_its_full_result_without_an_llm_call(tmp_path, monkeypatch):
+    """The sprint artifact was already written to be read by the CEO. Summarizing it
+    would pay a second call to compress it — and the aggregate's `parts` snippets are
+    cut at 500 chars, so the summary would be built from a truncated copy."""
+    from my_crew.runtime.team_tick_collaborators import make_aggregate
+
+    long_report = "Báo cáo đầy đủ. " + ("chi tiết " * 200)
+    task = _sprint_task(tmp_path, monkeypatch, result_text=long_report)
+
+    def _boom(_settings):
+        raise AssertionError("a sprint task must not reach the aggregate LLM call")
+
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", _boom)
+    aggregate = make_aggregate(
+        _loaded_no_telegram(), settings=SimpleNamespace(openrouter_api_key="sk-test"),
+    )
+    summary, cost = aggregate(task)
+
+    assert summary == long_report.strip()
+    assert cost is None
+
+
+def test_a_sprint_task_with_a_review_row_still_delivers_directly(tmp_path, monkeypatch):
+    """A supervised band mints one review row next to the sprint step. That does not
+    make the task multi-step — the sprint artifact is still the whole deliverable."""
+    from my_crew.runtime.team_tick_collaborators import make_aggregate
+
+    rows = (_step_row("sprint", 1, step_type="sprint"),
+            _step_row("sprint-review-0-0", 2, step_type="review", parent="sprint"))
+    task = _sprint_task(tmp_path, monkeypatch, result_text="nội dung sprint", steps=rows)
+
+    aggregate = make_aggregate(
+        _loaded_no_telegram(), settings=SimpleNamespace(openrouter_api_key=""),
+    )
+    summary, _cost = aggregate(task)
+    assert summary == "nội dung sprint"
+
+
+def test_a_sprint_task_whose_artifact_vanished_falls_back_to_the_normal_aggregate(
+    tmp_path, monkeypatch,
+):
+    """Missing artifact must degrade to the usual summary, never deliver an empty message."""
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_tick_collaborators import make_aggregate
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    task = _task()
+    task = type(task)(**{**task.__dict__,
+                         "steps": (_step_row("sprint", 1, step_type="sprint"),)})
+
+    aggregate = make_aggregate(
+        _loaded_no_telegram(), settings=SimpleNamespace(openrouter_api_key=""),
+    )
+    summary, _cost = aggregate(task)
+    assert "đã hoàn tất" in summary
+
+
+def test_a_multi_step_task_is_untouched_by_the_sprint_shortcut(tmp_path, monkeypatch):
+    from my_crew.runtime.team_tick_collaborators import make_aggregate
+
+    rows = (_step_row("s1", 1), _step_row("s2", 2))
+    task = _sprint_task(tmp_path, monkeypatch, result_text="nội dung một", steps=rows)
+
+    aggregate = make_aggregate(
+        _loaded_no_telegram(), settings=SimpleNamespace(openrouter_api_key=""),
+    )
+    summary, _cost = aggregate(task)
+    assert "đã hoàn tất" in summary
+    assert "s2" in summary
+
+
+def test_the_workroom_link_survives_a_report_too_long_to_send():
+    """Truncation cuts from the END, so a long sprint report used to lose both its tail
+    AND the link that was the CEO's only way to reach the full text."""
+    from my_crew.actions import telegram_write
+
+    tail = "\n\n🔎 Chi tiết đầy đủ: http://localhost:8765/room/abc"
+    text = telegram_write.with_tail("x" * 9000, tail)
+    assert text.endswith(tail)
+    assert len(text) <= telegram_write._MAX_TEXT_CHARS
+    assert "cắt bớt" in text
+
+
+def test_a_short_report_keeps_its_body_intact():
+    from my_crew.actions import telegram_write
+
+    assert telegram_write.with_tail("ngắn", "\n\nlink") == "ngắn\n\nlink"
+
+
+def test_a_sprint_dead_end_escalation_carries_the_upgrade_hint(tmp_path, monkeypatch):
+    """End-to-end through the room append (the path that always runs): the CEO reading
+    a `gave_up` milestone for a sprint task must see the `team:` remedy in the SAME
+    message body, not only in a Telegram fast path that may have no binding at all."""
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_tick_collaborators import _SPRINT_UPGRADE_SUGGESTION
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+
+    sprint_step = dataclasses.replace(_step(), step_type="sprint")
+    task = dataclasses.replace(_task(), steps=(sprint_step,))
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+    escalate(task, sprint_step, "gave_up", "Việc 'Demo task' KHÔNG LÀM ĐƯỢC.")
+
+    store = OfficeRoomStore(team_task_paths.team_tasks_root() / "office_room.sqlite3")
+    try:
+        rows = store.list("t1")
+    finally:
+        store.close()
+
+    assert rows[0].body["message"].endswith(_SPRINT_UPGRADE_SUGGESTION)
+    assert "KHÔNG LÀM ĐƯỢC" in rows[0].body["message"]
+
+
+def test_a_team_task_dead_end_escalation_is_byte_identical_to_before(tmp_path, monkeypatch):
+    """The hint must not leak into normal team tasks — `gave_up` there already carries
+    its own honest summary and has no mode to switch to."""
+    from my_crew.runtime import team_task_paths
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+
+    task = dataclasses.replace(_task(), steps=(_step(),))
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+    escalate(task, _step(), "gave_up", "không làm được")
+
+    store = OfficeRoomStore(team_task_paths.team_tasks_root() / "office_room.sqlite3")
+    try:
+        rows = store.list("t1")
+    finally:
+        store.close()
+
+    assert rows[0].body["message"] == "không làm được"

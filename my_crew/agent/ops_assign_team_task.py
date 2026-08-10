@@ -35,6 +35,7 @@ from __future__ import annotations
 import logging
 import re
 
+from my_crew.agent.sprint_intake import strip_mode_prefix
 from my_crew.agent.task_decomposition import (
     DecompositionError,
     fanout_gap,
@@ -249,11 +250,102 @@ def _widen_terminal_deps(task):
 
 
 def _render_plan(task) -> str:
+    if _is_sprint_plan(task):
+        step = task.steps[0]
+        lines = [f"Chế độ SPRINT (một người làm trọn): {step.title}",
+                 f"- Người làm: {step.assigned_to}"]
+        if step.acceptance:
+            lines.append("- Nghiệm thu:")
+            lines.extend(f"  {ln.strip()}" for ln in step.acceptance.splitlines() if ln.strip())
+        return "\n".join(lines)
     lines = ["Kế hoạch phân rã:"]
     for step in task.steps:
         deps_txt = f" (sau: {', '.join(step.deps)})" if step.deps else ""
         lines.append(f"- [{step.step_id}] {step.title} → {step.assigned_to}{deps_txt}")
     return "\n".join(lines)
+
+
+def _is_sprint_plan(task) -> bool:
+    """A sprint plan is the degenerate DAG: exactly one step carrying the sprint marker.
+
+    The marker rides in `_SPRINT_STEP_IDS` rather than `step_type` because
+    `DecomposedTask._step_type_bounds` reserves every non-"work" type for ticker-minted
+    rows; the sprint step only becomes `step_type="sprint"` when it is written to the
+    store (see `_step_type_for`), which is past that validator.
+    """
+    return len(task.steps) == 1 and task.steps[0].step_id == _SPRINT_STEP_ID
+
+
+#: Step id of the single sprint step. Fixed (not model-chosen) so both the preview
+#: renderer and the persist path can recognise a sprint plan without a side channel.
+_SPRINT_STEP_ID = "sprint"
+
+
+def _build_sprint_task(plan, pic_requested: str):
+    """Wrap a `SprintPlan` in the SAME `DecomposedTask` shape team mode produces.
+
+    Deliberately not a parallel type: everything downstream of this function (content
+    hash, draft persist, confirm, kanban, cost) already speaks `DecomposedTask`, and a
+    one-step DAG is a legal one. `step_type` stays "work" here — see `_is_sprint_plan`.
+    """
+    from my_crew.agent.task_decomposition import DecomposedTask, TeamStepPlan
+
+    step = TeamStepPlan(
+        step_id=_SPRINT_STEP_ID,
+        title=plan.goal[:300],
+        assigned_to=plan.assigned_to,
+        deps=(),
+        acceptance=plan.acceptance,
+        needs_review=False,  # v64 waiver already yields this for a 1-step internal task
+        # Both hardcoded because `sprint_refusal` sends shell/external-write briefs to
+        # team mode before this runs — on BOTH paths, the heuristic and the CEO's
+        # `sprint:` prefix. If that gate ever loosens, these two lines become the hole:
+        # a shell step would route to the sandbox tier and silently drop `work_override`,
+        # and an external-write step would lose its always-on review.
+        needs_shell=False,
+        needs_web=plan.needs_web,
+        external_write=False,
+    )
+    return DecomposedTask(
+        steps=(step,),
+        pic_id=pic_requested or plan.assigned_to,
+        requires_approval=True,
+    )
+
+
+def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str,
+                    forced_mode: str) -> tuple:
+    """Pick the mode and produce `(DecomposedTask, cost_usd, is_sprint)`.
+
+    The router lives HERE, before decompose, because this is the only place that has
+    both the cleaned brief and the roster while nothing has been persisted yet — a
+    later switch would mean writing a plan and rewriting it.
+
+    An explicit `sprint:`/`team:` prefix from the CEO always wins over the heuristic.
+    """
+    from my_crew.agent.sprint_intake import classify_brief, sprint_intake, sprint_refusal
+
+    if forced_mode == "team":
+        logger.info("assign_team_task: team mode (CEO ép bằng tiền tố)")
+        return (*_decompose_with_retries(brief, staff, pic_requested), False)
+
+    if forced_mode == "sprint":
+        # Tiền tố của CEO thắng bộ ĐOÁN, nhưng không gỡ được bốn loại trừ cứng: sprint
+        # đóng cứng external_write/needs_shell = False, nên một đề ghi-ra-ngoài lọt vào
+        # đây sẽ mất vòng review bắt buộc mà `review_insert` giữ cho đúng loại bước đó.
+        refusal = sprint_refusal(brief)
+        if refusal:
+            logger.info("assign_team_task: team mode (CEO ép sprint nhưng %s)", refusal)
+            return (*_decompose_with_retries(brief, staff, pic_requested), False)
+        want_sprint, reason = True, "CEO ép bằng tiền tố"
+    else:
+        want_sprint, reason = classify_brief(brief)
+    logger.info("assign_team_task: %s mode (%s)", "sprint" if want_sprint else "team", reason)
+    if not want_sprint:
+        return (*_decompose_with_retries(brief, staff, pic_requested), False)
+
+    plan, cost = sprint_intake(brief, staff, pic_requested)
+    return _build_sprint_task(plan, pic_requested), cost, True
 
 
 def preview_assign_team_task(slots: dict[str, str]) -> str:
@@ -276,25 +368,32 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
             "mirror phòng làm việc chuyển tin. Thiết lập xong hãy giao việc lại."
         )
 
-    # v15: optional "@<id> " / "@all " PIC prefix on the brief.
-    pic_requested, clean_brief = parse_pic_prefix(brief)
+    # v77: "sprint:"/"team:" mode prefix strips FIRST (it wraps the whole brief),
+    # then v15's "@<id> "/"@all " PIC prefix inside it.
+    forced_mode, brief_after_mode = strip_mode_prefix(brief)
+    pic_requested, clean_brief = parse_pic_prefix(brief_after_mode)
     staff = _staff_roster()
     if pic_requested and not any(a == pic_requested for a, _ in staff):
         raise ValueError(
             f"@{pic_requested} không có trong danh sách nhân sự có thể giao việc — "
             "kiểm tra lại mã nhân sự (hoặc dùng @all để đội tự chọn người chịu trách nhiệm)"
         )
-    try:
-        task, decompose_cost = _decompose_with_retries(clean_brief, staff, pic_requested)
-    except DecompositionError as exc:
-        raise ValueError(str(exc)) from None
+
+    task, decompose_cost, is_sprint = _plan_for_brief(
+        clean_brief, staff, pic_requested, forced_mode,
+    )
 
     task_id = uuid.uuid4().hex[:12]
     plan_hash = decomposition_content_hash(task)
+    # The sprint marker is stamped HERE, not on `TeamStepPlan`: the decompose schema
+    # reserves every non-"work" step_type for ticker-minted rows, and the content hash
+    # never reads step_type, so a sprint task's plan_hash is that of the same one-step
+    # work DAG — confirm-time verification is unaffected.
     step_dicts = [
         {"step_id": s.step_id, "title": s.title, "assigned_to": s.assigned_to,
          "deps": list(s.deps), "acceptance": s.acceptance,
-         "step_type": s.step_type, "needs_review": s.needs_review,
+         "step_type": "sprint" if is_sprint else s.step_type,
+         "needs_review": s.needs_review,
          "needs_shell": s.needs_shell,  # v45 tier-0 routing
          "needs_web": s.needs_web,  # v74 — hash-bound conditionally
          "external_write": s.external_write}  # v63 review-waiver + conditional hash

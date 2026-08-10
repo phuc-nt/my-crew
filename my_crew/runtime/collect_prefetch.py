@@ -67,7 +67,31 @@ def prefetch_for_step(loaded: Any, settings: Any, step: Any) -> str:
     Queries that individually failed still get their 3-path sentinel line in the
     bundle (phase-1 guard: a partial outage must read as THIẾU-do-nguồn, not as
     'dữ liệu không tồn tại')."""
+    return prefetch_queries(loaded, settings, derive_queries(step))
+
+
+def prefetch_queries(
+    loaded: Any, settings: Any, queries: list[str], *, keep_sentinels: bool = False,
+) -> str:
+    """Same launcher, but over CALLER-CHOSEN queries.
+
+    v77 sprint mode drives this directly: its pipeline picks queries per entity and
+    then again per coverage gap, which `derive_queries` (title-only, one shot) cannot
+    express. Same gates, same audit trail — the only thing that moves is who decides
+    what to search for.
+
+    `keep_sentinels` changes what a TOTAL failure returns. The default "" exists so a
+    collect step can fall back to its tool loop, which will do its own searching — for
+    that caller the sentinels are noise. A sprint step has no such fallback: for it, ""
+    is indistinguishable from "we never searched", and it would then report a provider
+    outage as "đã tìm nhưng không có dữ liệu" — the exact confusion between THIẾU-do-
+    nguồn and dữ liệu-không-tồn-tại this module exists to prevent. With the flag, the
+    sentinel lines survive so the caller can report the real reason.
+    """
     if loaded is None or not getattr(loaded, "web_search", False):
+        return ""
+    queries = [q.strip() for q in queries if q and q.strip()]
+    if not queries:
         return ""
     from my_crew.audit.audit_log import AuditLog
     from my_crew.runtime.team_task_paths import team_tasks_root
@@ -85,7 +109,7 @@ def prefetch_for_step(loaded: Any, settings: Any, step: Any) -> str:
     actor = Path(str(getattr(settings, "data_dir", ""))).name
     blocks: list[str] = []
     any_ok = False
-    for query in derive_queries(step):
+    for query in queries:
         try:
             results, status = web_search_outcome(
                 query, config=config, audit_log=audit_log, actor=actor,
@@ -110,6 +134,6 @@ def prefetch_for_step(loaded: Any, settings: Any, step: Any) -> str:
                 "ghi THIẾU kèm lý do đó."
             )
         # skipped_sensitive/empty_query: contribute nothing, matching the in-loop hook.
-    if not any_ok:
+    if not any_ok and not keep_sentinels:
         return ""
     return "\n\n".join(blocks)

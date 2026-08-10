@@ -70,10 +70,13 @@ class TeamStep:
     # docstring) — purely a round-trip field from decompose -> store -> self_check.
     acceptance: str
     # --- P2 peer-review columns (all additive, migrate-free) ---
-    # "work" (a normal content step) | "review" (ticker-inserted peer soát) |
-    # "rework" (ticker-inserted fix-up after a "needs_rework" verdict). Confirmed steps
-    # are always "work"; review/rework rows are minted ONLY by the ticker rule
-    # (`coordinator_nodes.tick_actions`), never by the decompose LLM.
+    # "work" (a normal content step) | "sprint" (v77 — a content step whose whole
+    # micro-pipeline runs inside ONE worker process) | "review" (ticker-inserted peer
+    # soát) | "rework" (ticker-inserted fix-up after a "needs_rework" verdict).
+    # Confirmed steps are always "work" or "sprint"; review/rework rows are minted ONLY
+    # by the ticker rule (`coordinator_nodes.tick_actions`), never by the decompose LLM.
+    # Use `is_content_step` rather than comparing to "work" when the question is "is
+    # this a step the CEO's plan asked for" — see that function's docstring.
     step_type: str
     # True (content steps only, LLM-set + code-validated) iff this step's completion
     # should trigger the ticker's review-insert rule. review/rework steps are never
@@ -127,6 +130,27 @@ class TeamStep:
     # context. Empty on every step that was never handed back. Like `acceptance`, it is
     # outside `decomposition_content_hash` — guidance is not part of the confirmed plan.
     guidance: str = ""
+
+
+#: Step types that carry CEO-asked-for content, as opposed to the ticker-minted
+#: review/rework rows. "sprint" (v77) joined "work" here: it is a content step that
+#: happens to run its whole micro-pipeline inside one worker process.
+CONTENT_STEP_TYPES = ("work", "sprint")
+
+
+def is_content_step(step: object) -> bool:
+    """True iff `step` is a content step (`work` or `sprint`), not review/rework.
+
+    Exists so the review gate, the kanban counters, and the metrics rollups can ask the
+    real question — "did the CEO's plan ask for this row?" — instead of comparing to
+    "work" and silently dropping sprint rows. Rules that must apply ONLY to fan-out-able
+    multi-step work (e.g. `fanout_insert`) deliberately keep their own `== "work"` check:
+    a sprint step covers its entities inside its own pipeline and must never fan out.
+
+    Takes `object` because both `TeamStep` and the pre-persist `TeamStepPlan` flow
+    through these call sites; a row with no `step_type` at all reads as "work".
+    """
+    return str(getattr(step, "step_type", "work") or "work") in CONTENT_STEP_TYPES
 
 
 def create_schema(conn: sqlite3.Connection) -> None:
@@ -361,16 +385,29 @@ def next_pending_step(conn: sqlite3.Connection, task_id: str) -> TeamStep | None
     return None
 
 
-def reserve_step(conn: sqlite3.Connection, task_id: str, step_id: str, *, lease_ttl_s: int) -> str:
+def reserve_step(conn: sqlite3.Connection, task_id: str, step_id: str, *, lease_ttl_s: int,
+                 only_if_pending: bool = False) -> str | None:
     """Claim a fresh spawn attempt: new `attempt_id`, `running`, lease clock reset.
 
-    Always claims — the caller (ticker) must decide beforehand whether re-reserving an
-    already-`running` step is legitimate (lease expired AND outcome artifact absent).
+    By default this ALWAYS claims — the caller (ticker) must decide beforehand whether
+    re-reserving an already-`running` step is legitimate (lease expired AND outcome
+    artifact absent).
+
+    `only_if_pending` narrows the UPDATE to a row still `pending` and returns None when
+    it matches nothing. That makes a first dispatch atomic against a CONCURRENT ticker,
+    which is a real configuration and not a theoretical one: a tick that spawns also
+    pokes (`_POKE_WORTHY_ACTIONS`), and the poked tick runs in its own process off its
+    own snapshot, so two ticks can both read the step as `pending` and both claim it.
+    Observed on benchmark 3d860be3c58b — two `action=spawned` lines for the same sprint
+    step, two workers, one of which then failed `verify_attempt` and died as a rejected
+    no-op after burning a process. The narrowed UPDATE moves that decision into SQLite,
+    where it is actually atomic, instead of into a read-then-write window.
 
     Raises `ValueError` if `(task_id, step_id)` does not exist: a lease minted for a row
     that was never planned (typo, stale task) can never be verified by anyone, so a
     silent "successful" reserve here would only surface as a confusing later failure —
-    fail loud at the point of the actual mistake instead.
+    fail loud at the point of the actual mistake instead. Kept distinct from the
+    `only_if_pending` miss above: "no such step" is a bug, "someone else got it" is not.
     """
     attempt_id = uuid.uuid4().hex
     now = _now()
@@ -379,14 +416,19 @@ def reserve_step(conn: sqlite3.Connection, task_id: str, step_id: str, *, lease_
     # stale id from a PRIOR attempt (e.g. this reserve is the resume-after-approval
     # re-run) must never be read by the next `awaiting_approval` poll as if it still
     # applied to the new attempt.
-    cur = conn.execute(
+    sql = (
         "UPDATE team_steps SET status = 'running', attempt_id = ?, spawned_at = ?, "
         "last_seen = ?, lease_expires_at = ?, approval_id = NULL, clarify_id = NULL, "
         "split_proposal_json = NULL "
-        "WHERE task_id = ? AND step_id = ?",
-        (attempt_id, now, now, expires, task_id, step_id),
+        "WHERE task_id = ? AND step_id = ?"
     )
+    params = [attempt_id, now, now, expires, task_id, step_id]
+    if only_if_pending:
+        sql += " AND status = 'pending'"
+    cur = conn.execute(sql, params)
     if cur.rowcount == 0:
+        if only_if_pending and get_step_row(conn, task_id, step_id) is not None:
+            return None  # lost the race — the other ticker owns this attempt
         raise ValueError(f"cannot reserve unknown team step ({task_id!r}, {step_id!r})")
     return attempt_id
 

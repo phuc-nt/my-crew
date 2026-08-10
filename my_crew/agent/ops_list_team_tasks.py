@@ -36,10 +36,13 @@ def run_list_team_tasks(slots: dict[str, str]) -> str:
     if not tasks:
         return "Chưa có thẻ việc nhóm nào."
 
+    from my_crew.runtime.team_task_steps import is_content_step
+
     lines = ["Thẻ việc nhóm gần đây:"]
     waiting = 0
     for t in tasks:
-        work = [s for s in t.steps if s.step_type == "work"]
+        work = [s for s in t.steps if is_content_step(s)]
+        sprint = " · sprint" if any(s.step_type == "sprint" for s in t.steps) else ""
         reviews = [s for s in t.steps if s.step_type == "review"]
         reworks = [s for s in t.steps if s.step_type == "rework"]
         done = len([s for s in t.steps if s.status == "done"])
@@ -64,7 +67,8 @@ def run_list_team_tasks(slots: dict[str, str]) -> str:
         pic = f" · PIC {t.pic_id}" if t.pic_id else ""
         manual = " · để CEO duyệt" if t.require_ceo_approval else ""
         lines.append(
-            f"- `{t.id}` {t.title[:60]} — {label} ({retro}, {len(work)} việc chính{pic}{manual})"
+            f"- `{t.id}` {t.title[:60]} — {label} "
+            f"({retro}, {len(work)} việc chính{sprint}{pic}{manual})"
         )
     if waiting:
         lines.append(

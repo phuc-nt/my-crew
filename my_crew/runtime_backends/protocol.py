@@ -147,10 +147,16 @@ def resolve_step_runtime(
     # web data into the prompt — the ONLY capability the agent tier held over native
     # for this step is spent, so it runs the fast one-shot tier. Callers only set it
     # for un-intervened work steps (self-heal after a ruling keeps the agent tier).
+    # v77: a sprint step is ALWAYS native. Its work loop (`sprint_runner`) does its own
+    # searching in code and rides the graph's `work_override` seam, which only the native
+    # runtime honors — routing it to a tool-calling tier would silently discard the whole
+    # pipeline and hand the model back the react loop this mode exists to avoid.
     step_type = str(getattr(step, "step_type", "work") or "work")
     needs_web = bool(getattr(step, "needs_web", False)) and not prefetched
     intervened = int(getattr(step, "intervention_count", 0) or 0) > 0
-    if step_type == "review" or (step_type == "work" and not needs_web and not intervened):
+    if step_type in ("review", "sprint") or (
+        step_type == "work" and not needs_web and not intervened
+    ):
         return NativeGraphRuntime()
 
     # no-shell: a deep_agent-pinned agent drops to the fast, Docker-free create_agent tier.

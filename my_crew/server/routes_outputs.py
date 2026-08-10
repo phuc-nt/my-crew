@@ -31,7 +31,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["outputs"])
 
 _INDEX_TASK_LIMIT = 200
-_DELIVERED_TYPES = ("work", "rework")
+#: Step types whose artifact is a deliverable the CEO should be able to find. "sprint"
+#: (v77) belongs here for the strongest reason of all: a sprint task has exactly ONE
+#: content step, so its artifact is not merely part of the output — it IS the output.
+_DELIVERED_TYPES = ("work", "sprint", "rework")
 #: Kanban lanes in display order; stalled/cancelled roll into the side lane.
 _BOARD_LANES = ("planning", "open", "running", "done", "khac")
 

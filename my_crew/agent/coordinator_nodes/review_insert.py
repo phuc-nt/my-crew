@@ -39,6 +39,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from my_crew.runtime.office_room_append import append_office_event, room_for_task
+from my_crew.runtime.team_task_steps import is_content_step
 from my_crew.runtime.team_task_store import TeamStep, TeamTask
 
 if TYPE_CHECKING:
@@ -49,6 +50,32 @@ if TYPE_CHECKING:
 #: of ever minting a 3rd rework attempt (R "oscillation rework" in the phase's risk
 #: register).
 MAX_REVIEW_ROUNDS = 2
+
+
+#: How many of the final verdict's failures the stall message quotes. The point is to
+#: name WHAT kept failing, not to reproduce the verdict — a CEO reading a push
+#: notification needs the reason in a glance, and the full artifact is one click away.
+_STALL_NOTE_FAILURES = 3
+
+
+def _last_failures_note(verdict: dict | None) -> str:
+    """The failures that outlasted every rework round, as a short suffix — or "".
+
+    Without this the stall message says only "review failed after 3 rounds", which is
+    the one thing the CEO can already see. Benchmark 210e3686daf5 is why it matters: all
+    three rounds failed on the SAME impossible criterion (a per-source access date that
+    search snippets never carry), and the report itself was complete and correct. Quoting
+    the failure turns "something went wrong, go dig" into "the reviewer wants access
+    dates" — which is the difference between the CEO fixing it and re-running it.
+    """
+    failures = [str(f).strip() for f in (verdict or {}).get("failures", []) if str(f).strip()]
+    if not failures:
+        return ""
+    shown = failures[:_STALL_NOTE_FAILURES]
+    note = " Soát chéo còn vướng: " + " | ".join(shown)
+    if len(failures) > len(shown):
+        note += f" (và {len(failures) - len(shown)} điểm nữa)"
+    return note
 
 
 def _review_child(task: TeamTask, content_step_id: str, step_type: str) -> TeamStep | None:
@@ -99,7 +126,9 @@ def maybe_insert_review(deps: CoordinatorDeps, task: TeamTask, done_step: TeamSt
     step is treated as fully done, no stall — matching the phase's explicit "never
     stall on missing reviewer" contract.
     """
-    if done_step.step_type != "work" or not effective_needs_review(task, done_step):
+    # `is_content_step`, not `== "work"`: a v77 sprint step is content too, and a
+    # supervised band must be able to mint its one final review row (band's only lever).
+    if not is_content_step(done_step) or not effective_needs_review(task, done_step):
         return False
     if done_step.split_proposal_json:
         # v34 P4: a split parent delivered only the "Đã chia bước" notice — reviewing
@@ -180,7 +209,8 @@ def maybe_handle_review_done(deps: CoordinatorDeps, task: TeamTask, review_step:
         deps.escalate(
             task, content_step, "review_rounds_exhausted",
             f"Việc '{task.title}' bị dừng: bước '{content_step.title}' soát chéo "
-            f"không đạt sau {MAX_REVIEW_ROUNDS + 1} lượt sửa — cần CEO xem lại.",
+            f"không đạt sau {MAX_REVIEW_ROUNDS + 1} lượt sửa — cần CEO xem lại."
+            + _last_failures_note(verdict),
         )
         from my_crew.agent.coordinator_graph import _reflect_safely
 

@@ -15,6 +15,7 @@ ticker's action list.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from my_crew.agent.task_decomposition import MAX_STEPS
@@ -24,6 +25,8 @@ from my_crew.runtime.team_task_store import TeamStep, TeamTask
 
 if TYPE_CHECKING:
     from my_crew.agent.coordinator_graph import CoordinatorDeps, TickResult
+
+logger = logging.getLogger(__name__)
 
 #: A dead-pid step is retried exactly once before being marked permanently `failed`.
 MAX_STEP_RETRIES = 1
@@ -102,6 +105,12 @@ def reserve_and_spawn(deps: CoordinatorDeps, task: TeamTask, step: TeamStep) -> 
     passed — this step was either `pending` or an already-caught dead/expired
     `running` step whose caller cleared it back to reservable via `poll_running_step`).
 
+    The one case that guard cannot cover is two ticks racing on the SAME `pending` step
+    (a spawning tick pokes, and the poked tick runs concurrently off its own snapshot).
+    For that entry — and only that one — the claim is made conditional in SQL via
+    `only_if_pending`; losing the race returns a `none` result instead of a second
+    worker for a step that already has one.
+
     Dispatch-time role re-check: the step's `assigned_to` was authorized once
     at decompose-validation time, but the registry/roles can drift between confirm and
     dispatch (an agent disabled, removed, or promoted to coordinator/admin since). A
@@ -120,7 +129,16 @@ def reserve_and_spawn(deps: CoordinatorDeps, task: TeamTask, step: TeamStep) -> 
         )
         return TickResult(task_id=task.id, action="failed", detail=step.step_id)
 
-    attempt_id = deps.store.reserve_step(task.id, step.step_id)
+    # Only a first dispatch is guarded: a re-reserve (dead pid / expired lease) targets a
+    # `running` row on purpose, and the pending-only condition would refuse every one.
+    first_dispatch = step.status == "pending"
+    attempt_id = deps.store.reserve_step(
+        task.id, step.step_id, only_if_pending=first_dispatch,
+    )
+    if attempt_id is None:
+        logger.info("team-tick: %s/%s already claimed by a concurrent tick — no second spawn",
+                    task.id, step.step_id)
+        return TickResult(task_id=task.id, action="none", detail=step.step_id)
     pid = deps.spawn_step(task, step, attempt_id)
     deps.store.record_spawn(task.id, step.step_id, pid)
     # `author` stays "coordinator" (the ticker is the one dispatching this event, not
