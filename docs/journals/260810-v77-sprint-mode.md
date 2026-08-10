@@ -47,5 +47,9 @@
 
 ## Mở / sang sau
 
-- Bug cắt output của team mode khi gói nhiều thực thể trong 1 bước — ngoài scope v77.
+- ~~Bug cắt output của team mode khi gói nhiều thực thể trong 1 bước~~ — fixed cùng
+  ngày (`1333e8e`, `fanout_split` code-side) cùng bug plan_hash sau stuck-reassign
+  (`4e933f4`). Benchmark C post-fix (đề học online 5×3, có replan tự-chữa
+  end-to-end): sprint 7m48s/$0.0191/mù 29 vs team 20m14s/$0.0757/mù 10 —
+  `plans/reports/benchmark-260810-1602-v77-postfix-team-vs-sprint-report.md`.
 - Cân nhắc gộp release 0.10.0 (kèm soak autonomy band đang chờ).
