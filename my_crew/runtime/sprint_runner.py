@@ -38,6 +38,8 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from my_crew.runtime.collect_prefetch import NO_SEARCH_CAPABILITY
+
 logger = logging.getLogger(__name__)
 
 #: Hard ceilings for one sprint step. `MAX_REVISE_ROUNDS` bounds LLM calls at
@@ -59,6 +61,15 @@ MAX_SPRINT_PREFETCH_QUERIES = 6
 #: the entities that are genuinely still missing rather than re-asking for these.
 _SOURCE_FAILED = "[LỖI NGUỒN TÌM KIẾM]"
 _NO_RESULTS = "[KHÔNG CÓ KẾT QUẢ]"
+
+#: The bundle-wide marker meaning no search was ATTEMPTED (no opt-in, no provider key).
+#: It carries no `(truy vấn: …)`, so it can only be read at bundle level — every
+#: entity is uncovered for the same one reason, and saying so once beats listing
+#: every name under "đã tìm nhưng không đủ kết quả", which would be a lie twice over.
+#: IMPORTED at the module header, never re-declared: the producer writes it and this
+#: module reads it, so a copied literal would let either side be reworded while both
+#: suites stayed green — and the only symptom would be this whole guard going dark.
+_NO_CAPABILITY = NO_SEARCH_CAPABILITY
 
 
 def entity_queries(goal: str, acceptance: str = "") -> list[str]:
@@ -334,9 +345,53 @@ def _source_refused(entity: str, bundle: str, entities: list[str]) -> bool:
 
 def _query_of(line: str) -> str:
     """The lowercased query text out of a `(truy vấn: ...)` sentinel line, or ""."""
+    return _sentinel_query(line).lower()
+
+
+def _sentinel_query(line: str) -> str:
+    """The query text of a `(truy vấn: …)` sentinel line, brackets balanced.
+
+    Splitting at the FIRST `)` is wrong here: `entity_queries` appends the raw goal as
+    its overview query, and `listed_entities` exists precisely because CEOs write their
+    subjects in parentheses — so "So sánh 3 sàn (Shopee, Lazada, Tiki)" routinely rides
+    inside the sentinel and gets cut at "Tiki", leaving an unbalanced bracket in the
+    note the CEO reads. Track the depth instead and close on the paren that actually
+    matches the opener.
+    """
     if "(truy vấn:" not in line:
         return ""
-    return line.split("(truy vấn:", 1)[1].split(")", 1)[0].strip().lower()
+    rest = line.split("(truy vấn:", 1)[1]
+    depth = 0
+    for i, ch in enumerate(rest):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            if depth == 0:
+                return rest[:i].strip()
+            depth -= 1
+    return rest.strip()
+
+
+def _has_results(bundle: str) -> bool:
+    """True when `bundle` carries anything beyond failure sentinels.
+
+    A bundle of nothing but `[LỖI NGUỒN…]`/`[KHÔNG CÓ KẾT QUẢ]` lines is non-empty but
+    informationally empty — treating it as new data buys a revise round whose entire
+    supporting payload is failure notices.
+
+    Asked as "is there a non-sentinel line", not "is there a `RESULTS_BLOCK` header":
+    the header is what `collect_prefetch` writes, but a caller may inject a bundle by
+    other means, and content without that header is still content. Only the sentinels
+    are known-empty, so only they are subtracted.
+    """
+    for line in (bundle or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if _SOURCE_FAILED in stripped or _NO_RESULTS in stripped:
+            continue
+        return True
+    return False
 
 
 def missing_note(gaps: list[str], bundle: str) -> str:
@@ -346,8 +401,17 @@ def missing_note(gaps: list[str], bundle: str) -> str:
     the two reasons applies, so "not in the report" can never be misread as "does not
     exist". Empty string when nothing is missing.
     """
+    if _NO_CAPABILITY in (bundle or ""):
+        # No query ran, so there is nothing to enumerate per entity — and calling this
+        # "đã tìm nhưng không đủ" would claim a search that never happened.
+        return (
+            "PHẦN THIẾU (do quy trình tự ghi nhận):\n"
+            "- Không thực hiện được tra cứu web (thiếu quyền hoặc thiếu cấu hình nguồn), "
+            "nên mọi số liệu cần tra cứu đều THIẾU DO KHÔNG TRA CỨU ĐƯỢC — "
+            "KHÔNG kết luận là dữ liệu không tồn tại."
+        )
     refused = [
-        line.split("(truy vấn:", 1)[1].split(")", 1)[0].strip()
+        _sentinel_query(line)
         for line in (bundle or "").splitlines()
         if (_SOURCE_FAILED in line or _NO_RESULTS in line) and "(truy vấn:" in line
     ]
@@ -453,6 +517,11 @@ def build_sprint_work(
             gaps = coverage_gaps(draft, entities, bundle)
             if not gaps:
                 break
+            if _NO_CAPABILITY in bundle:
+                # Searching was never possible; a targeted round would hit the same
+                # wall and a revise call would only ask the model to invent the gap.
+                logger.info("sprint: no search capability — reporting %d gap(s)", len(gaps))
+                break
             if used_queries >= MAX_TOTAL_QUERIES:
                 logger.info("sprint: query budget spent with %d gap(s) open", len(gaps))
                 break
@@ -464,12 +533,20 @@ def build_sprint_work(
                 logger.warning("sprint: targeted search failed", exc_info=True)
                 extra = ""
             used_queries += len(extra_queries)
-            if not extra:
+            # Merged BEFORE the stop decision, not after: the round's sentinels are the
+            # evidence for WHY these gaps stay open, and `missing_note` reads them off
+            # the bundle. Breaking first would drop them, and the note would then blame
+            # the gaps on thin results for searches that actually hit a dead source.
+            bundle = f"{bundle}\n\n{extra}" if bundle else extra
+            if not _has_results(extra):
                 # Nothing new came back, so a revise call would re-read the same
                 # context and produce the same gaps. Stop and report them instead.
+                # "Nothing" includes a round that returned ONLY sentinels: those say
+                # the sources failed, and paying for a revise whose entire supporting
+                # payload is failure notices asks the model to close a gap using data
+                # it was never given — the one thing this pipeline must not invite.
                 logger.info("sprint: round %d found no new data — stopping honest", round_no)
                 break
-            bundle = f"{bundle}\n\n{extra}" if bundle else extra
             # Cumulative context: the draft and the new results ride in the SAME
             # thread. Re-briefing from scratch each round is what makes a team task's
             # rework rounds expensive, and there is no reason to repeat it here.

@@ -105,11 +105,13 @@ def reserve_and_spawn(deps: CoordinatorDeps, task: TeamTask, step: TeamStep) -> 
     passed — this step was either `pending` or an already-caught dead/expired
     `running` step whose caller cleared it back to reservable via `poll_running_step`).
 
-    The one case that guard cannot cover is two ticks racing on the SAME `pending` step
-    (a spawning tick pokes, and the poked tick runs concurrently off its own snapshot).
-    For that entry — and only that one — the claim is made conditional in SQL via
-    `only_if_pending`; losing the race returns a `none` result instead of a second
-    worker for a step that already has one.
+    Every entry here is racing another tick (a spawning tick pokes, and the poked tick
+    runs concurrently off its own snapshot), so the claim is ALWAYS made conditional in
+    SQL — on `pending` for a first dispatch, on the attempt_id this ticker read for
+    every re-dispatch (dead pid, expired lease, resumed approval, answered clarify).
+    Both conditions say the same thing: claim only if the row still looks the way it
+    did when this tick decided to act. Losing the race returns a `none` result instead
+    of a second worker for a step that already has one.
 
     Dispatch-time role re-check: the step's `assigned_to` was authorized once
     at decompose-validation time, but the registry/roles can drift between confirm and
@@ -129,11 +131,16 @@ def reserve_and_spawn(deps: CoordinatorDeps, task: TeamTask, step: TeamStep) -> 
         )
         return TickResult(task_id=task.id, action="failed", detail=step.step_id)
 
-    # Only a first dispatch is guarded: a re-reserve (dead pid / expired lease) targets a
-    # `running` row on purpose, and the pending-only condition would refuse every one.
+    # A re-dispatch targets a non-`pending` row on purpose, so the pending-only
+    # condition would refuse every one. Its equivalent is the attempt_id: this tick
+    # decided to act on the row it READ, and a rotated attempt_id means another tick
+    # already re-reserved it. A row with no attempt_id at all (never reserved, or a
+    # test double) has nothing to condition on and falls back to an unguarded claim.
     first_dispatch = step.status == "pending"
     attempt_id = deps.store.reserve_step(
-        task.id, step.step_id, only_if_pending=first_dispatch,
+        task.id, step.step_id,
+        only_if_pending=first_dispatch,
+        only_if_attempt=None if first_dispatch else step.attempt_id,
     )
     if attempt_id is None:
         logger.info("team-tick: %s/%s already claimed by a concurrent tick — no second spawn",

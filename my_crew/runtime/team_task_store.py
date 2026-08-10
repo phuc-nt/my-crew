@@ -533,7 +533,8 @@ class TeamTaskStore:
         return _steps.next_pending_step(self._conn, task_id)
 
     def reserve_step(self, task_id: str, step_id: str, *,
-                     only_if_pending: bool = False) -> str | None:
+                     only_if_pending: bool = False,
+                     only_if_attempt: str | None = None) -> str | None:
         """Claim a step for a fresh spawn attempt: issues a new `attempt_id`, marks the
         step `running`, sets `spawned_at`/`last_seen`/`lease_expires_at`. Returns the
         `attempt_id` (the lease token the worker must present back on `--attempt-id`).
@@ -541,13 +542,14 @@ class TeamTaskStore:
         Always claims — the caller (the ticker) owns the re-reserve decision (lease
         expired AND outcome artifact absent) BEFORE calling this.
 
-        With `only_if_pending`, the claim is conditional on the step still being
-        `pending` and returns None when another ticker already took it. See
-        `team_task_steps.reserve_step` for why a first dispatch needs that.
+        With `only_if_pending` (first dispatch) or `only_if_attempt` (re-reserve of a
+        dead/expired `running` row), the claim is conditional and returns None when
+        another ticker already took it. See `team_task_steps.reserve_step` for why
+        each dispatch shape needs its own condition.
         """
         attempt_id = _steps.reserve_step(
             self._conn, task_id, step_id, lease_ttl_s=self._lease_ttl_s,
-            only_if_pending=only_if_pending,
+            only_if_pending=only_if_pending, only_if_attempt=only_if_attempt,
         )
         self._conn.commit()
         return attempt_id

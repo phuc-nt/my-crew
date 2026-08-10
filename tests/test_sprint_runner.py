@@ -292,7 +292,98 @@ def test_a_provider_error_is_reported_not_silently_passed_as_success(llm):
     assert "KHÔNG kết luận là dữ liệu không tồn tại" in text
 
 
+def test_the_no_capability_marker_is_the_producer_s_own_string():
+    """The guard is a string comparison across two modules, so a copied literal would
+    let either side be reworded with both suites still green — and the only symptom
+    would be the sprint silently going back to claiming a search it never ran. A
+    review proved that exact blind spot: mutating the producer's constant left 59
+    tests passing, because each side asserted against its own copy."""
+    from my_crew.runtime.collect_prefetch import NO_SEARCH_CAPABILITY
+
+    assert mod._NO_CAPABILITY is NO_SEARCH_CAPABILITY
+
+
+def test_a_step_that_could_never_search_says_so_instead_of_claiming_it_tried(llm):
+    """No `web_search` opt-in and no provider key both mean zero queries ran. The note
+    used to read "đã tìm nhưng không đủ kết quả dùng được" for every entity — a claim
+    about a search that never happened, on top of a draft written from model memory."""
+    llm(["Netflix thì tôi nhớ khoảng 260k."])
+    bundle = mod._NO_CAPABILITY + " Agent chưa được cấp quyền web_search"
+    text, _ = _work(lambda *_a: bundle)("So sánh 2 dịch vụ: Netflix, Spotify", "", None)
+
+    assert "Không thực hiện được tra cứu web" in text
+    assert "đã tìm nhưng không đủ" not in text
+    assert "KHÔNG kết luận là dữ liệu không tồn tại" in text
+
+
+def test_no_search_capability_spends_no_revise_rounds(llm):
+    """Every retry would hit the same wall, and the revise prompt asks the model to
+    close gaps it has no new data for — an invitation to invent."""
+    fake = llm(["Chỉ có Netflix.", "KHÔNG ĐƯỢC GỌI", "KHÔNG ĐƯỢC GỌI"])
+    searched: list[list[str]] = []
+
+    def _prefetch(_l, _s, queries):
+        searched.append(list(queries))
+        return mod._NO_CAPABILITY + " Hệ thống chưa cấu hình khoá nhà cung cấp tìm kiếm"
+
+    build_sprint_work(
+        loaded=SimpleNamespace(soul="", project="", web_search=True),
+        settings=SimpleNamespace(),
+        prefetch=_prefetch,
+    )("So sánh 2 dịch vụ: Netflix, Spotify", "", None)
+
+    assert len(fake.calls) == 1
+    assert len(searched) == 1
+
+
+def test_a_targeted_round_of_only_sentinels_buys_no_revise_call(llm):
+    """The round came back non-empty but informationally empty. Spending a revise on it
+    hands the model an instruction to close a gap plus a payload of failure notices —
+    asking it to write from nothing, which is exactly what the honesty contract bans."""
+    fake = llm(["Chỉ có Netflix.", "KHÔNG ĐƯỢC GỌI"])
+    rounds: list[list[str]] = []
+
+    def _prefetch(_l, _s, queries):
+        rounds.append(list(queries))
+        if len(rounds) == 1:
+            return "KẾT QUẢ TÌM KIẾM (truy vấn: giá Netflix):\nNetflix 260k."
+        return "[LỖI NGUỒN TÌM KIẾM] (truy vấn: giá Spotify) Không truy cập được."
+
+    text, _ = _work(_prefetch)("So sánh 2 dịch vụ: Netflix, Spotify", "", None)
+
+    assert len(rounds) == 2, "the targeted round still runs — only the revise is skipped"
+    assert len(fake.calls) == 1
+    # The round's sentinels must survive into the note: they are the evidence for WHY
+    # Spotify is still missing. Dropped, the note blames thin results for a search that
+    # actually hit a dead source — the two reasons this module exists to keep apart.
+    assert "giá Spotify" in text
+    assert "KHÔNG kết luận là dữ liệu không tồn tại" in text
+    assert "đã tìm nhưng không đủ" not in text
+
+
+def test_a_parenthesised_query_survives_into_the_note_with_its_brackets_intact(llm):
+    """`entity_queries` appends the raw goal as the overview query, and CEOs write their
+    subjects in parentheses — so cutting the sentinel at the first `)` truncated the
+    query mid-list and left an unbalanced bracket in what the CEO reads."""
+    llm(["Chưa có dữ liệu."])
+    goal = "So sánh 3 sàn (Shopee, Lazada, Tiki)"
+    bundle = f"[LỖI NGUỒN TÌM KIẾM] (truy vấn: {goal}) Không truy cập được web search."
+    text, _ = _work(lambda *_a: bundle)(goal, "", None)
+
+    assert goal in text
+    assert "Tiki)" in text
+
+
 def test_prefetch_failure_still_produces_a_draft(llm):
+    """Fail-open, same contract as the launcher: no search is not no work."""
+    def _boom(*_args):
+        raise RuntimeError("search down")
+
+    fake = llm(["Viết theo hiểu biết sẵn có."])
+    text, _ = _work(_boom)("tổng hợp tin tức AI", "", None)
+
+    assert len(fake.calls) == 1
+    assert text.startswith("Viết theo hiểu biết sẵn có.")
     """Fail-open, same contract as the launcher: no search is not no work."""
     def _boom(*_args):
         raise RuntimeError("search down")

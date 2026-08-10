@@ -7,8 +7,13 @@ steps skip the 100-400s tool-calling loop entirely. Measured stake: collects wer
 largest remaining wall-clock cost after v74.
 
 Safety shape: same `WebSearchConfig` gates + audit trail the in-loop search uses (no
-new egress, no new permissions); FAIL-OPEN — any outcome without at least one clean
-result set returns "" and the step runs its old tool-loop tier unchanged.
+new egress, no new permissions); FAIL-OPEN by default — any outcome without at least
+one clean result set returns "" and the step runs its old tool-loop tier unchanged.
+
+The one exception is `prefetch_queries(..., keep_sentinels=True)`, for a caller with
+NO tool-loop to fall back to (v77 sprint mode). For it, "" is indistinguishable from
+"we never searched", so a failure comes back as the REASON it failed instead — see
+that function's docstring for the full contract.
 """
 
 from __future__ import annotations
@@ -22,6 +27,37 @@ logger = logging.getLogger(__name__)
 
 #: Cap on launcher searches per step — 3 queries cover a 2-3-entity fanned collect.
 MAX_PREFETCH_QUERIES = 3
+
+
+#: Marks a bundle where NO search was attempted at all — the agent has no `web_search:`
+#: opt-in, or the deployment has no provider key. Distinct from `_SOURCE_FAILED` on
+#: purpose: that one means "we asked and the source broke", this one means "we were
+#: never allowed to ask", and a report that confuses the two tells the CEO a search
+#: happened when the capability simply is not configured.
+NO_SEARCH_CAPABILITY = "[KHÔNG CÓ KHẢ NĂNG TÌM KIẾM]"
+
+
+def _no_capability_line(reason: str) -> str:
+    """The bundle a caller with no fallback gets when searching was never possible."""
+    return (
+        f"{NO_SEARCH_CAPABILITY} {reason} — mọi dữ liệu cần tra cứu phải ghi THIẾU DO "
+        "KHÔNG TRA CỨU ĐƯỢC, không được viết từ trí nhớ mô hình và không được kết luận "
+        "'dữ liệu không tồn tại'."
+    )
+
+
+def _source_failed_line(query: str) -> str:
+    """The sentinel that keeps a provider outage from being read as absence of data.
+
+    Emitted both when the provider answers with an error and when the call raises, so
+    a reader downstream cannot tell the two apart — which is correct: in both cases we
+    did not get to look, and the honest report is THIẾU DO NGUỒN LỖI either way.
+    """
+    return (
+        f"[LỖI NGUỒN TÌM KIẾM] (truy vấn: {query}) Không truy cập được web "
+        "search — phần dữ liệu tương ứng ghi THIẾU DO NGUỒN LỖI, không được "
+        "kết luận 'dữ liệu không tồn tại'."
+    )
 
 
 def derive_queries(step: Any) -> list[str]:
@@ -89,6 +125,8 @@ def prefetch_queries(
     sentinel lines survive so the caller can report the real reason.
     """
     if loaded is None or not getattr(loaded, "web_search", False):
+        if keep_sentinels:
+            return _no_capability_line("Agent chưa được cấp quyền web_search")
         return ""
     queries = [q.strip() for q in queries if q and q.strip()]
     if not queries:
@@ -103,6 +141,8 @@ def prefetch_queries(
         brave_api_key=getattr(settings, "brave_api_key", None),
     )
     if not config.available():
+        if keep_sentinels:
+            return _no_capability_line("Hệ thống chưa cấu hình khoá nhà cung cấp tìm kiếm")
         return ""
 
     audit_log = AuditLog(team_tasks_root() / "audit" / "audit.jsonl")
@@ -115,18 +155,22 @@ def prefetch_queries(
                 query, config=config, audit_log=audit_log, actor=actor,
             )
         except Exception:  # noqa: BLE001 — launcher must never kill the step
-            logger.warning("collect prefetch: query failed hard, falling back", exc_info=True)
-            return ""
+            logger.warning("collect prefetch: query failed hard", exc_info=True)
+            if not keep_sentinels:
+                # The tool-loop caller will search again anyway; the blocks gathered so
+                # far are noise to it.
+                return ""
+            # A caller with no fallback loses everything already collected if we bail —
+            # and worse, reports "đã tìm nhưng không đủ" for queries that never ran.
+            # Record this query as a source failure and keep going.
+            blocks.append(_source_failed_line(query))
+            continue
         if results:
             any_ok = True
             text, _count, _quarantined = format_search_results(results)
             blocks.append(f"KẾT QUẢ TÌM KIẾM (truy vấn: {query}):\n{text}")
         elif status == "provider_error":
-            blocks.append(
-                f"[LỖI NGUỒN TÌM KIẾM] (truy vấn: {query}) Không truy cập được web "
-                "search — phần dữ liệu tương ứng ghi THIẾU DO NGUỒN LỖI, không được "
-                "kết luận 'dữ liệu không tồn tại'."
-            )
+            blocks.append(_source_failed_line(query))
         elif status == "empty":
             blocks.append(
                 f"[KHÔNG CÓ KẾT QUẢ] (truy vấn: {query}) Nguồn hoạt động bình thường "

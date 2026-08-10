@@ -386,28 +386,39 @@ def next_pending_step(conn: sqlite3.Connection, task_id: str) -> TeamStep | None
 
 
 def reserve_step(conn: sqlite3.Connection, task_id: str, step_id: str, *, lease_ttl_s: int,
-                 only_if_pending: bool = False) -> str | None:
+                 only_if_pending: bool = False,
+                 only_if_attempt: str | None = None) -> str | None:
     """Claim a fresh spawn attempt: new `attempt_id`, `running`, lease clock reset.
 
     By default this ALWAYS claims — the caller (ticker) must decide beforehand whether
     re-reserving an already-`running` step is legitimate (lease expired AND outcome
     artifact absent).
 
-    `only_if_pending` narrows the UPDATE to a row still `pending` and returns None when
-    it matches nothing. That makes a first dispatch atomic against a CONCURRENT ticker,
-    which is a real configuration and not a theoretical one: a tick that spawns also
-    pokes (`_POKE_WORTHY_ACTIONS`), and the poked tick runs in its own process off its
-    own snapshot, so two ticks can both read the step as `pending` and both claim it.
-    Observed on benchmark 3d860be3c58b — two `action=spawned` lines for the same sprint
+    Two narrowing conditions make a claim atomic against a CONCURRENT ticker, which is
+    a real configuration and not a theoretical one: a tick that spawns also pokes
+    (`_POKE_WORTHY_ACTIONS`), and the poked tick runs in its own process off its own
+    snapshot, so two ticks routinely look at the same row at the same time.
+
+    `only_if_pending` narrows to a row still `pending` — the FIRST-dispatch race.
+    Observed on benchmark 3d860be3c58b: two `action=spawned` lines for the same sprint
     step, two workers, one of which then failed `verify_attempt` and died as a rejected
-    no-op after burning a process. The narrowed UPDATE moves that decision into SQLite,
-    where it is actually atomic, instead of into a read-then-write window.
+    no-op after burning a process.
+
+    `only_if_attempt` narrows to a row still carrying the attempt_id the caller read —
+    the RE-reserve race (dead pid / expired lease), which the pending condition cannot
+    cover because that row is `running` on purpose. Without it, two ticks that both
+    read the same expired lease each mint a fresh attempt and each spawn a worker; the
+    loser's attempt_id is overwritten, so it never even reports as a rejected no-op —
+    it just runs, does the work twice, and whichever finishes second writes over the
+    first. Rotating the attempt_id is exactly the signal that someone else already
+    acted, so making the UPDATE conditional on it moves the decision into SQLite where
+    it is atomic instead of leaving it in a read-then-write window.
 
     Raises `ValueError` if `(task_id, step_id)` does not exist: a lease minted for a row
     that was never planned (typo, stale task) can never be verified by anyone, so a
     silent "successful" reserve here would only surface as a confusing later failure —
     fail loud at the point of the actual mistake instead. Kept distinct from the
-    `only_if_pending` miss above: "no such step" is a bug, "someone else got it" is not.
+    narrowed misses above: "no such step" is a bug, "someone else got it" is not.
     """
     attempt_id = uuid.uuid4().hex
     now = _now()
@@ -425,9 +436,13 @@ def reserve_step(conn: sqlite3.Connection, task_id: str, step_id: str, *, lease_
     params = [attempt_id, now, now, expires, task_id, step_id]
     if only_if_pending:
         sql += " AND status = 'pending'"
+    if only_if_attempt is not None:
+        sql += " AND attempt_id = ?"
+        params.append(only_if_attempt)
     cur = conn.execute(sql, params)
     if cur.rowcount == 0:
-        if only_if_pending and get_step_row(conn, task_id, step_id) is not None:
+        narrowed = only_if_pending or only_if_attempt is not None
+        if narrowed and get_step_row(conn, task_id, step_id) is not None:
             return None  # lost the race — the other ticker owns this attempt
         raise ValueError(f"cannot reserve unknown team step ({task_id!r}, {step_id!r})")
     return attempt_id

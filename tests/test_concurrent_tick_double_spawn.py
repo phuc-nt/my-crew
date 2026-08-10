@@ -117,6 +117,54 @@ def test_a_re_reserve_of_a_running_step_is_not_blocked_by_the_guard(tmp_path):
     assert store.get(task_id="t1").steps[0].attempt_id == spawned[0][1]
 
 
+def test_the_second_tick_re_reserving_the_same_expired_step_does_not_spawn(tmp_path):
+    """The `pending` guard cannot cover this one: both ticks see a `running` row whose
+    lease expired and whose pid is dead, and both decide to retry it. Unguarded, each
+    mints a fresh attempt and spawns — and the loser is worse off than in the pending
+    race, because its attempt_id gets overwritten, so it never fails `verify_attempt`.
+    It just runs, duplicating the work and the spend.
+
+    The attempt_id the tick READ is the condition: once another tick re-reserves, it
+    rotates, and this claim must lose."""
+    store = _planned_store(tmp_path)
+    spawned: list[tuple[str, str]] = []
+    deps = _deps(store, spawned)
+
+    store.reserve_step("t1", "s1")
+    store.record_spawn("t1", "s1", 111)
+
+    # One snapshot of the dead/expired `running` row, read by both ticks.
+    task = store.get(task_id="t1")
+    step = task.steps[0]
+
+    first = reserve_and_spawn(deps, task, step)
+    second = reserve_and_spawn(deps, task, step)
+
+    assert first.action == "spawned"
+    assert second.action == "none"
+    assert len(spawned) == 1, "a lost re-reserve race must not start a second worker"
+    assert store.get(task_id="t1").steps[0].attempt_id == spawned[0][1]
+
+
+def test_a_resumed_step_carrying_no_attempt_id_still_dispatches(tmp_path):
+    """Nothing to condition on is not the same as losing a race. A non-pending row that
+    never held a lease (or a test double that omits the field) must still spawn, or the
+    approval/clarify resume paths would silently strand every step they touch."""
+    store = _planned_store(tmp_path)
+    spawned: list[tuple[str, str]] = []
+    store.reserve_step("t1", "s1")
+    store.mark_awaiting_approval("t1", "s1")
+
+    task = store.get(task_id="t1")
+    step = task.steps[0]
+    object.__setattr__(step, "attempt_id", None)
+
+    result = reserve_and_spawn(_deps(store, spawned), task, step)
+
+    assert result.action == "spawned"
+    assert len(spawned) == 1
+
+
 def test_an_unknown_step_still_raises_rather_than_reporting_a_lost_race(tmp_path):
     """"Someone else claimed it" and "no such step" must stay distinguishable: the
     former is normal under concurrency, the latter is a bug and has to surface."""
