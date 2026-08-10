@@ -410,22 +410,39 @@ def missing_note(gaps: list[str], bundle: str) -> str:
             "nên mọi số liệu cần tra cứu đều THIẾU DO KHÔNG TRA CỨU ĐƯỢC — "
             "KHÔNG kết luận là dữ liệu không tồn tại."
         )
-    refused = [
-        _sentinel_query(line)
-        for line in (bundle or "").splitlines()
-        if (_SOURCE_FAILED in line or _NO_RESULTS in line) and "(truy vấn:" in line
-    ]
+    # Split by sentinel, not pooled. `_source_refused` and `_has_results` may treat the
+    # two alike — neither is re-searchable, neither is data — but this note is the one
+    # place the difference reaches a human, and the two imply opposite next moves: a
+    # broken source is worth retrying later, absent public data never will be. Pooling
+    # them sends the CEO chasing a retry that cannot help.
+    broken: list[str] = []
+    nothing_public: list[str] = []
+    for line in (bundle or "").splitlines():
+        if "(truy vấn:" not in line:
+            continue
+        if _SOURCE_FAILED in line:
+            broken.append(_sentinel_query(line))
+        elif _NO_RESULTS in line:
+            nothing_public.append(_sentinel_query(line))
     lines: list[str] = []
     if gaps:
         lines.append(
             "- Chưa thu thập đủ dữ liệu cho: " + ", ".join(gaps)
             + " (đã tìm nhưng không đủ kết quả dùng được)."
         )
-    if refused:
+    if broken:
         lines.append(
-            "- Nguồn tìm kiếm không trả kết quả cho truy vấn: "
-            + ", ".join(dict.fromkeys(refused))
-            + " — ghi THIẾU do nguồn, KHÔNG kết luận là dữ liệu không tồn tại."
+            "- Nguồn tìm kiếm gặp lỗi, không truy cập được cho truy vấn: "
+            + ", ".join(dict.fromkeys(broken))
+            + " — ghi THIẾU DO NGUỒN LỖI, KHÔNG kết luận là dữ liệu không tồn tại; "
+            "có thể tra cứu lại sau."
+        )
+    if nothing_public:
+        lines.append(
+            "- Nguồn hoạt động bình thường nhưng không có kết quả cho truy vấn: "
+            + ", ".join(dict.fromkeys(nothing_public))
+            + " — nhiều khả năng dữ liệu không công khai; ghi THIẾU kèm lý do đó, "
+            "KHÔNG tự suy ra con số."
         )
     if not lines:
         return ""

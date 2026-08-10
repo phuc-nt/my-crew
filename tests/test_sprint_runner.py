@@ -193,12 +193,52 @@ def test_coverage_gaps_ignores_an_entity_whose_source_already_refused():
     assert coverage_gaps("Netflix giá 260k.", ["Netflix", "YouTube"], bundle) == []
 
 
-def test_missing_note_separates_not_found_from_source_error():
+def test_missing_note_separates_an_uncovered_entity_from_a_failed_query():
+    """The two belong on their own lines: "we searched and got too little for Sendo" is
+    a different fact from "the query for Tiki never reached a source"."""
     bundle = "[LỖI NGUỒN TÌM KIẾM] (truy vấn: giá Tiki) Không truy cập được web search"
     note = missing_note(["Sendo"], bundle)
     assert "Sendo" in note
     assert "giá Tiki" in note
     assert "KHÔNG kết luận là dữ liệu không tồn tại" in note
+
+
+def test_a_dead_source_and_an_empty_one_do_not_produce_the_same_note():
+    """`[LỖI NGUỒN]` and `[KHÔNG CÓ KẾT QUẢ]` imply OPPOSITE next moves — retry later
+    versus never — so the note the CEO acts on must not collapse them.
+
+    Caught by running the pipeline end-to-end rather than by a unit test: both bundles
+    were pooled into one "không trả kết quả ... ghi THIẾU do nguồn" line, which told a
+    CEO the source had broken when the truth was that the data is not public. The unit
+    test that claimed to cover this only ever fed the source-error bundle, so the two
+    were never compared against each other.
+    """
+    query = "(truy vấn: giá Tiki)"
+    dead = missing_note([], f"[LỖI NGUỒN TÌM KIẾM] {query} Không truy cập được")
+    empty = missing_note([], f"[KHÔNG CÓ KẾT QUẢ] {query} Nguồn hoạt động bình thường")
+
+    assert dead and empty
+    assert dead != empty
+    assert "lỗi" in dead.lower() and "không công khai" not in dead
+    assert "không công khai" in empty and "lỗi" not in empty.lower()
+    # Neither may ever license the model to conclude the data does not exist.
+    assert "KHÔNG kết luận là dữ liệu không tồn tại" in dead
+    assert "KHÔNG tự suy ra con số" in empty
+
+
+def test_a_bundle_carrying_both_failure_kinds_reports_each_under_its_own_reason():
+    """A real run mixes them — one entity's source times out while another's simply has
+    no public data. Each query must land under the reason that actually applies to it."""
+    bundle = (
+        "[LỖI NGUỒN TÌM KIẾM] (truy vấn: giá Tiki) Không truy cập được\n\n"
+        "[KHÔNG CÓ KẾT QUẢ] (truy vấn: giá Sendo) Nguồn hoạt động bình thường"
+    )
+    note = missing_note([], bundle)
+    broken_line = next(ln for ln in note.splitlines() if "lỗi" in ln.lower())
+    empty_line = next(ln for ln in note.splitlines() if "không công khai" in ln)
+
+    assert "giá Tiki" in broken_line and "giá Sendo" not in broken_line
+    assert "giá Sendo" in empty_line and "giá Tiki" not in empty_line
 
 
 def test_missing_note_is_empty_when_everything_was_covered():
