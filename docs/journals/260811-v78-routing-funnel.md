@@ -39,11 +39,11 @@
   bị thổi phồng**. Lưới đỡ còn lại cho nhóm này chỉ là ngưỡng 1200 ký tự.
 - **Tải review giảm chứ không tăng**: lo mặc-định-sprint làm phình review là lo sai —
   review mint theo content step, sprint chỉ có một. Cặp benchmark v77: sprint 2 review
-  vs team 6 review trên cùng đề.
-- **Bất biến an toàn sống sót qua replan**: ca `sprint:` + "gửi email" kẹt giữa chừng,
-  hệ tự chỉnh kế hoạch; bước ghi-ra-ngoài trong kế hoạch MỚI vẫn giữ
-  `external_write=True` + `needs_review=True`. Kiểm được ở đường replan, không chỉ
-  đường assign.
+  vs team 6 review. Cặp live v78 chốt cùng chiều: 1 review/$0.0098 vs 2 review/$0.0612.
+- **Bất biến an toàn sống sót qua replan VÀ chặn được ở cuối đường**: ca `sprint:` +
+  "gửi email" kẹt giữa chừng, hệ tự chỉnh kế hoạch; bước ghi-ra-ngoài trong kế hoạch MỚI
+  vẫn giữ `external_write=True` + `needs_review=True`, rồi dừng hẳn ở `waiting_clarify`
+  xin CEO duyệt trước khi gửi thật. Ba lớp — assign, replan, cổng duyệt — đều giữ.
 
 ## Mở / sang sau
 
