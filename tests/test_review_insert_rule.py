@@ -220,6 +220,148 @@ def test_rework_round_cap_stalls_and_escalates_after_max_rounds(tmp_path, monkey
     assert not [s for s in task.steps if s.step_type == "rework"]
 
 
+def test_round_cap_stalls_when_reached_by_actually_reworking_each_round(
+    tmp_path, monkeypatch
+):
+    """The cap must hold on the path production actually takes: every round's rework is
+    minted by the rule itself, not pre-placed.
+
+    The sibling test above reaches `MAX_REVIEW_ROUNDS` with NO rework rows on the step,
+    which cannot happen in a real run -- getting to round N requires rounds 0..N-1 to
+    each have minted and finished a rework. Pinning the reachable path matters because
+    the stall depends on the CEO-override check ("a rework exists at >= this round")
+    being FALSE here; only `retry_stalled_step` may make it true. A live task observed
+    reworking at the exhausted round did so because the autopilot sweep called that
+    override for the CEO -- one bounded extra round, not a cap failure.
+    """
+    store = _store(tmp_path)
+    _plan_one_step(store, needs_review=True)
+    _wire_roster(monkeypatch, [("agent-a", "pm"), ("agent-qa", "pm")])
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    escalated: list[str] = []
+    deps = _deps(store, escalate=lambda t, s, kind, msg: escalated.append(kind))
+    _mint_review(store)
+
+    # Every round fails review, exactly as the runaway live task did.
+    for rnd in range(MAX_REVIEW_ROUNDS + 1):
+        write_review_verdict_artifact(
+            team_tasks_root(), "t1", 1, rnd,
+            {"passed": False, "failures": ["van sai"], "result_text": "brief"},
+        )
+        task = store.get("t1")
+        review_step = next(
+            s for s in task.steps
+            if s.step_type == "review" and s.review_round == rnd
+        )
+        maybe_handle_review_done(deps, task, review_step)
+
+        task = store.get("t1")
+        if task.status == "stalled":
+            break
+        rework = next(
+            (s for s in task.steps
+             if s.step_type == "rework" and s.review_round == rnd), None,
+        )
+        if rework is None:
+            break
+        store.mark_done("t1", rework.step_id, outcome_ref="x", cost_usd=0.0)
+        maybe_insert_review_after_rework(deps, store.get("t1"), rework)
+
+    task = store.get("t1")
+    rounds = sorted(s.review_round for s in task.steps if s.step_type == "rework")
+    assert rounds == list(range(MAX_REVIEW_ROUNDS)), (
+        f"rework minted at rounds {rounds}; the cap allows at most "
+        f"{MAX_REVIEW_ROUNDS} (rounds 0..{MAX_REVIEW_ROUNDS - 1})"
+    )
+    assert task.status == "stalled"
+    assert escalated == ["review_rounds_exhausted"]
+
+
+def test_task_review_budget_stalls_before_round_cap_when_whole_task_churns(
+    tmp_path, monkeypatch
+):
+    """Trần TẦNG TASK: trần theo-từng-bước không thấy tổng — một task nhiều bước có thể
+    hợp lệ đốt hàng chục row soát/sửa mà không bước nào cạn round riêng (đo live: 6 bước
+    → 11 review + 7 rework). Khi tổng row review+rework chạm ngân sách (2× số bước nội
+    dung, sàn 5), verdict fail tiếp theo phải stall + escalate dù round của bước đó
+    chưa cạn — dừng đốt tiền, đưa người vào."""
+    store = _store(tmp_path)
+    steps = [
+        {"step_id": f"s{i}", "title": f"buoc {i}", "assigned_to": "agent-a",
+         "deps": [], "needs_review": True}
+        for i in (1, 2, 3)
+    ]
+    store.create_task(task_id="t1", title="demo task", original_request="lam demo")
+    store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    for i in (1, 2, 3):
+        store.mark_done("t1", f"s{i}", outcome_ref="x", cost_usd=0.0)
+
+    # 3 bước nội dung → ngân sách 6. Dồn 6 row soát/sửa: s1 churn trọn 2 vòng
+    # (2 review + 2 rework), s2 và s3 mỗi bước 1 review vòng 0.
+    _mint_review(store, content_step_id="s1", review_round=0)
+    for rnd in (0, 1):
+        store.insert_step("t1", {
+            "step_id": f"s1-rework-{rnd}", "title": "sua", "assigned_to": "agent-a",
+            "deps": [f"s1-review-{rnd}"], "step_type": "rework",
+            "parent_step_id": "s1", "review_round": rnd,
+        })
+        store.mark_done("t1", f"s1-rework-{rnd}", outcome_ref="x", cost_usd=0.0)
+    _mint_review(store, content_step_id="s1", review_round=1)
+    _mint_review(store, content_step_id="s2", review_round=0)
+    _mint_review(store, content_step_id="s3", review_round=0)
+
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    s3_seq = next(s.seq for s in store.get("t1").steps if s.step_id == "s3")
+    write_review_verdict_artifact(
+        team_tasks_root(), "t1", s3_seq, 0,
+        {"passed": False, "failures": ["van sai"], "result_text": "brief"},
+    )
+    escalated = []
+    task = store.get("t1")
+    review_step = next(
+        s for s in task.steps if s.step_type == "review" and s.parent_step_id == "s3"
+    )
+    assert review_step.review_round < MAX_REVIEW_ROUNDS  # round riêng CHƯA cạn
+
+    deps = _deps(store, escalate=lambda t, s, kind, msg: escalated.append(kind))
+    assert maybe_handle_review_done(deps, task, review_step) is True
+    task = store.get("t1")
+    assert task.status == "stalled"
+    assert escalated == ["task_review_budget_exhausted"]
+    assert not [
+        s for s in task.steps if s.step_type == "rework" and s.parent_step_id == "s3"
+    ]
+
+
+def test_task_review_budget_floor_never_cuts_a_single_step_task_early(
+    tmp_path, monkeypatch
+):
+    """Task 1 bước: ngân sách sàn (5) đúng bằng mức một bước được phép dùng trọn
+    (3 review + 2 rework) — trần task không bao giờ cắt sớm hơn trần bước, nên đường
+    round-cap hiện có giữ nguyên hành vi và lý do escalate cũ."""
+    store = _store(tmp_path)
+    _plan_one_step(store, needs_review=True)
+    _mint_review(store)
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    write_review_verdict_artifact(
+        team_tasks_root(), "t1", 1, 0,
+        {"passed": False, "failures": ["thieu"], "result_text": "brief"},
+    )
+    escalated = []
+    task = store.get("t1")
+    review_step = next(s for s in task.steps if s.step_type == "review")
+    deps = _deps(store, escalate=lambda t, s, kind, msg: escalated.append(kind))
+
+    assert maybe_handle_review_done(deps, task, review_step) is True  # mints rework
+    task = store.get("t1")
+    assert task.status != "stalled"
+    assert escalated == []
+    assert len([s for s in task.steps if s.step_type == "rework"]) == 1
+
+
 def test_stale_artifact_remints_a_fresh_review_at_same_round(tmp_path, monkeypatch):
     store = _store(tmp_path)
     _plan_one_step(store, needs_review=True)

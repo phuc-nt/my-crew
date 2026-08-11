@@ -86,6 +86,10 @@ def test_classify_defaults_to_sprint_for_natural_phrasing(brief):
         ("tổng hợp log rồi chạy script dọn dẹp", "shell"),
         ("nghiên cứu thị trường, chia việc cho mỗi người một mảng", "nhiều người"),
         ("khảo sát đối thủ theo lộ trình từng giai đoạn", "giai đoạn"),
+        # Hai brief lọt lưới trong nghiệm thu live: "chạy BỘ test"/"clone repo" không
+        # khớp needle "chạy test"; "cả TEAM" không khớp "cả đội"/"team làm".
+        ("clone repo my-crew về rồi chạy bộ test, báo kết quả", "shell"),
+        ("phân tích 3 đối thủ chính, việc này cần cả team cùng làm", "nhiều người"),
         ("", "rỗng"),
     ],
 )
@@ -279,7 +283,7 @@ def test_sprint_shaped_brief_persists_exactly_one_sprint_step(monkeypatch):
     assert len(steps) == 1
     assert steps[0].step_type == "sprint"
     assert steps[0].assigned_to == "agent-b"
-    assert steps[0].needs_review is False
+    assert steps[0].needs_review is True  # sprint luôn mang cờ review — không zero-eyes
     assert steps[0].needs_web is True
     assert steps[0].external_write is False
 

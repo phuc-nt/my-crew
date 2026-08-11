@@ -50,21 +50,45 @@ def test_supervised_forces_a_review_on_a_sprint_step(monkeypatch, tmp_path):
     assert effective_needs_review(SimpleNamespace(steps=[step]), step) is True
 
 
-def test_normal_and_trusted_bands_leave_a_sprint_step_review_free(monkeypatch, tmp_path):
-    """The v64 waiver already yields zero reviews for a 1-step internal task, so
-    neither band should mint one — a sprint task's whole point is the absent round-trip."""
+def test_sprint_review_flag_survives_every_band_including_trusted(monkeypatch, tmp_path):
+    """Sprint là đường zero-eyes duy nhất còn lại (một bước, một tiến trình, bản giao
+    đi thẳng đến CEO), nên cờ review của nó không band nào được miễn — kể cả trusted,
+    band vốn được waive mọi review nội bộ trên bước `work`."""
     from my_crew.agent.coordinator_nodes.review_insert import effective_needs_review
 
     _patch_data_dir(monkeypatch, tmp_path)
-    step = _sprint_step(needs_review=False)
+    step = _sprint_step(needs_review=True)
     task = SimpleNamespace(steps=[step])
     assert band_for("agent-a") == BAND_NORMAL
-    assert effective_needs_review(task, step) is False
+    assert effective_needs_review(task, step) is True
 
     store = BandStore()
     store.set("agent-a", BAND_TRUSTED, reason="t", changed_by="ceo")
     store.close()
-    assert effective_needs_review(task, step) is False
+    assert effective_needs_review(task, step) is True
+
+    # Đối chứng: cùng band trusted, một bước `work` nội bộ vẫn được waive như cũ —
+    # ngoại lệ chỉ khoét đúng cho step_type == "sprint".
+    work = SimpleNamespace(
+        step_id="w1", assigned_to="agent-a", needs_review=True, deps=(),
+        external_write=False, step_type="work",
+    )
+    assert effective_needs_review(SimpleNamespace(steps=[work]), work) is False
+
+
+def test_sprint_plan_builder_always_sets_the_review_flag():
+    """`_build_sprint_task` là nơi duy nhất sinh bước sprint — cờ review phải bật từ
+    nguồn, không dựa vào ai nhớ bật nó ở downstream."""
+    from types import SimpleNamespace as NS
+
+    from my_crew.agent.ops_assign_team_task import _build_sprint_task
+
+    plan = NS(goal="khảo sát 5 dịch vụ", assigned_to="agent-a",
+              acceptance="đủ 5 dịch vụ", needs_web=True)
+    task = _build_sprint_task(plan, pic_requested="")
+    assert task.steps[0].needs_review is True
+    assert task.steps[0].external_write is False
+    assert task.steps[0].needs_shell is False
 
 
 def test_the_review_gate_is_reached_via_is_content_step_not_a_work_literal():

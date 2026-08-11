@@ -25,7 +25,9 @@ multiple ticks is always a safe no-op:
          (same original author, carries prior output + failures).
        - "needs_rework" AND `review_round >= MAX_REVIEW_ROUNDS` -> EXPLICIT stall +
          escalate (v12's `_dead_end_result` cannot see this: every step here is `done`,
-         never `failed`/`timeout`).
+         never `failed`/`timeout`). Cùng nhánh đó còn một trần TẦNG TASK
+         (`_task_review_budget_exhausted`): tổng row review+rework của cả task vượt
+         ngân sách -> stall + escalate dù round của bước này chưa cạn.
        - verdict artifact missing/stale (`stale_artifact`, the reviewed content re-ran
          since this review was queued) -> mint a FRESH review-step (round unchanged) so
          a new reviewer run grades the CURRENT artifact instead of leaving the task stuck
@@ -50,6 +52,24 @@ if TYPE_CHECKING:
 #: of ever minting a 3rd rework attempt (R "oscillation rework" in the phase's risk
 #: register).
 MAX_REVIEW_ROUNDS = 2
+
+#: Trần TẦNG TASK cho tổng số row review+rework đã mint — chốt chặn thứ hai bên trên
+#: trần theo-từng-bước ở trên. Trần theo bước không thấy được tổng: một task nhiều bước
+#: có thể hợp lệ đốt hàng chục row soát/sửa mà không bước nào chạm trần riêng của nó
+#: (đo được trong nghiệm thu: task 6 bước mint 11 review + 7 rework, tất cả đúng luật).
+#: Ngân sách = _TASK_REVIEW_LOAD_FACTOR × số bước nội dung, nhưng không bao giờ thấp
+#: hơn mức một bước đơn lẻ được phép dùng trọn (3 review + 2 rework) — để task 1-2 bước
+#: không bị trần task cắt sớm hơn trần bước.
+_TASK_REVIEW_LOAD_FACTOR = 2
+
+
+def _task_review_budget_exhausted(task: TeamTask) -> tuple[bool, int, int]:
+    """(exhausted, minted, budget) — tổng row review+rework so với ngân sách tầng task."""
+    minted = sum(1 for s in task.steps if s.step_type in ("review", "rework"))
+    content = sum(1 for s in task.steps if is_content_step(s))
+    floor = (MAX_REVIEW_ROUNDS + 1) + MAX_REVIEW_ROUNDS
+    budget = max(_TASK_REVIEW_LOAD_FACTOR * content, floor)
+    return minted >= budget, minted, budget
 
 
 #: How many of the final verdict's failures the stall message quotes. The point is to
@@ -97,7 +117,9 @@ def effective_needs_review(task: TeamTask, step: TeamStep) -> bool:
     regardless of the plan flag/waiver; trusted → the review the plan flagged is
     waived for INTERNAL steps — including the terminal (the v64 policy only ever
     flags terminals + external writes, so a trusted rule that spared terminals was a
-    live no-op, v76 UAT finding); an `external_write` step keeps its review no matter
+    live no-op, v76 UAT finding) — EXCEPT a `sprint` step, which keeps its review ở
+    mọi band vì đó là hàng rào duy nhất giữa một tiến trình đơn lẻ và bản giao cho
+    CEO; an `external_write` step keeps its review no matter
     how trusted the author — a write leaving the company always gets a second pair of
     eyes. `trusted` only ever enters via the CEO's `set_band`, so this IS the CEO
     consciously relaxing the v64 terminal rule for one proven agent. normal → the
@@ -110,7 +132,12 @@ def effective_needs_review(task: TeamTask, step: TeamStep) -> bool:
         return True
     flag = bool(step.needs_review)
     if (band == BAND_TRUSTED and flag
-            and not bool(getattr(step, "external_write", False))):
+            and not bool(getattr(step, "external_write", False))
+            and str(getattr(step, "step_type", "work") or "work") != "sprint"):
+        # Sprint là đường zero-eyes duy nhất còn sót: một bước chạy trọn trong một
+        # tiến trình, không đồng nghiệp nào đọc giữa chừng, bản giao đi thẳng đến
+        # CEO. Một lượt soát chéo là con mắt thứ hai duy nhất — nên trusted không
+        # miễn review cho bước sprint (không có đường zero-eyes ở bất kỳ band nào).
         return False
     return flag
 
@@ -190,7 +217,8 @@ def maybe_handle_review_done(deps: CoordinatorDeps, task: TeamTask, review_step:
     if bool(verdict.get("passed")):
         return False  # normal DAG continuation — nothing more to insert.
 
-    if review_step.review_round >= MAX_REVIEW_ROUNDS:
+    budget_exhausted, minted, budget = _task_review_budget_exhausted(task)
+    if review_step.review_round >= MAX_REVIEW_ROUNDS or budget_exhausted:
         # v63 CEO-override guard (review-found C1): `retry_stalled_step` deliberately
         # mints ONE rework row AT this exhausted round — that row IS the override
         # signal. Without this check the ticker re-reads the same failed verdict on
@@ -199,6 +227,7 @@ def maybe_handle_review_done(deps: CoordinatorDeps, task: TeamTask, review_step:
         # it: the rework runs, `maybe_insert_review_after_rework` mints the next
         # round's review, and a round beyond THAT failing has no rework at its own
         # round → stalls again — exactly one extra round per retry, never a loop.
+        # Áp dụng chung cho cả trần theo bước lẫn trần tầng task.
         override_pending = any(
             s.step_type == "rework" and s.parent_step_id == content_step_id
             and s.review_round >= review_step.review_round for s in task.steps
@@ -206,18 +235,26 @@ def maybe_handle_review_done(deps: CoordinatorDeps, task: TeamTask, review_step:
         if override_pending:
             return False
         deps.store.set_task_status(task.id, "stalled")
-        deps.escalate(
-            task, content_step, "review_rounds_exhausted",
-            f"Việc '{task.title}' bị dừng: bước '{content_step.title}' soát chéo "
-            f"không đạt sau {MAX_REVIEW_ROUNDS + 1} lượt sửa — cần CEO xem lại."
-            + _last_failures_note(verdict),
-        )
+        if review_step.review_round >= MAX_REVIEW_ROUNDS:
+            reason = "review_rounds_exhausted"
+            message = (
+                f"Việc '{task.title}' bị dừng: bước '{content_step.title}' soát chéo "
+                f"không đạt sau {MAX_REVIEW_ROUNDS + 1} lượt sửa — cần CEO xem lại."
+            )
+        else:
+            reason = "task_review_budget_exhausted"
+            message = (
+                f"Việc '{task.title}' bị dừng: cả task đã dùng {minted}/{budget} lượt "
+                f"soát/sửa cho phép mà bước '{content_step.title}' vẫn chưa đạt — "
+                f"dừng đốt thêm, cần CEO xem lại."
+            )
+        deps.escalate(task, content_step, reason, message + _last_failures_note(verdict))
         from my_crew.agent.coordinator_graph import _reflect_safely
 
         # The richest lesson in the system: work that was specified clearly enough to
         # dispatch but not clearly enough to pass review, repeatedly.
         _reflect_safely(deps, task, "stalled",
-                        f"review exhausted on '{content_step.title}'")
+                        f"{reason} on '{content_step.title}'")
         return True
 
     # Scoped to THIS review's own round — a prior round's rework row (e.g. round 0's,

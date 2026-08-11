@@ -52,13 +52,15 @@ _SHELL_HINTS = (
     "chạy script", "chay script", "run script", "cài đặt", "cai dat",
     "pip install", "npm install", "curl ", "chạy code", "chay code",
     "thực thi", "build lại", "deploy", "migration", "chạy test", "chay test",
+    "chạy bộ test", "chay bo test", "clone repo", "git clone",
 )
 
 #: Dấu hiệu việc cần NHIỀU NGƯỜI rõ ràng — CEO đã nói ra cấu trúc đội.
 _MULTI_STAFF_HINTS = (
     "chia việc", "chia nhau", "mỗi người", "moi nguoi", "phân công cho",
     "nhiều người", "cả đội", "ca doi", "team làm", "phối hợp giữa",
-    "người thứ hai", "hai bạn", "ba bạn",
+    "người thứ hai", "hai bạn", "ba bạn", "cả team", "ca team",
+    "cả nhóm", "ca nhom",
 )
 
 #: Dấu hiệu việc kéo dài nhiều ngày / nhiều giai đoạn → team mode.

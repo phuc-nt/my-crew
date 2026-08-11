@@ -93,12 +93,32 @@ Bảy lần độc lập agent từ chối bịa dữ liệu, gồm một lần 
 Không lớp nào trong hệ *ép* nó nói "không biết" — 0 review là không ai soát — mà nó vẫn
 chọn báo thiếu thay vì bịa đủ.
 
+## Quyết định sau nghiệm thu (CEO ủy quyền, 2026-08-11)
+
+CEO ủy quyền chọn phương án cho các mục chờ, căn cứ vision "tự chủ có kỷ luật":
+mặc định rẻ, không đường zero-eyes, chạm giới hạn thì đưa người vào, không bịa.
+
+| Mục | Quyết | Triển khai |
+|-----|-------|-----------|
+| Sprint × trusted = 0 review | Sprint LUÔN mint 1 review, mọi band | `_build_sprint_task` bật `needs_review=True` + `effective_needs_review` không cho trusted waive bước `sprint` (waiver bước `work` nội bộ giữ nguyên) |
+| Churn review/rework tầng task | Thêm trần tầng task → escalate | `_task_review_budget_exhausted`: ngân sách = 2× bước nội dung, sàn 5 (= mức 1 bước dùng trọn, không cắt sớm hơn trần bước); chạm trần mà verdict fail → stall + `task_review_budget_exhausted`, chung nhánh CEO-override với trần bước. A6 (18 row/6 bước) sẽ dừng ở row 12 |
+| 2 họ refusal lọt (A4/A5) | Vá needle | `_SHELL_HINTS` += chạy bộ test/clone repo/git clone; `_MULTI_STAFF_HINTS` += cả team/cả nhóm (+bản không dấu); brief thật A4/A5 ghim vào test |
+| Ngưỡng routing | Giữ nguyên cả 3 | Không có ca route sai; C3 truy về năng lực bước. 0 code |
+| Lượt tra cứu cho sprint | Duyệt hướng, hoãn triển khai | Chưa đủ dữ liệu chốt hình thức (YAGNI) — câu chi phí phải trả lời trước |
+| Nợ B1 | Luật thường trực | Chạy lại B1 ngay trước lần cấp opt-in `team_step_egress` đầu tiên |
+| 4 clarify treo | Đóng cả 4, trung thực, không cấp quyền | #29 TỪ CHỐI gửi email (cancel task `a9027c55aa1b` TRƯỚC khi trả lời để answer không resume được bước gửi); #33 trả lời thẳng "buổi họp không tồn tại"; #26/#32 đóng vì là ca UAT đã xong |
+
+Hệ quả đo được: từ nay số review của sprint là quy luật cố định (1 vòng 0, thiếu
+reviewer thì skip có ghi sổ) — hết cảnh A1=2/B5=0 tùy band lúc chạy.
+
 ## Mở / sang sau
 
 - Ngưỡng 10 thực thể / 1200 ký tự: UAT thêm 3 điểm dữ liệu (A9 12 thực thể, A11 637 ký
   tự, C3) — **đều route đúng**, chưa có ca sai nào để biện minh cho việc đổi. Giữ nguyên.
 - Nợ B1 (trusted×external_write) chỉ test được khi có agent đầu tiên bật opt-in
-  `team_step_egress` — chạy lại NGAY trước khi agent đó nhận việc thật.
-- Ba đề xuất chờ CEO quyết: buộc sprint luôn mint 1 review; đặt trần vòng review/rework
-  cho team; vá 2 họ từ khoá refusal còn lọt.
+  `team_step_egress` — chạy lại NGAY trước khi agent đó nhận việc thật (luật thường trực).
+- Lượt tra cứu theo thực thể cho bước sprint: hướng đã duyệt, chưa triển khai — cần số
+  chi phí trước.
 - Cần ≥20 dòng `route_json` có outcome mới auto-tune được ngưỡng từ dữ liệu thật.
+- Trần cứng chi phí/task (chặn lúc mint bước, học từ vấp A9 cancel-không-phải-phanh)
+  vẫn chưa làm — trần tầng task mới chỉ chặn vòng soát/sửa, không chặn cost trực tiếp.

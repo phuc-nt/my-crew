@@ -186,7 +186,7 @@ def test_review_exhausted_stall_is_reflected_on(tmp_path, monkeypatch):
     maybe_handle_review_done(deps, task, review_step)
 
     assert [(t, o) for t, o, _ in seen] == [("t1", "stalled")]
-    assert "review exhausted" in seen[0][2]
+    assert "review_rounds_exhausted" in seen[0][2]
 
 
 def test_a_review_reflection_that_raises_never_loses_the_stall(tmp_path, monkeypatch):

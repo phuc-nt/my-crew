@@ -323,7 +323,11 @@ def _build_sprint_task(plan, pic_requested: str):
         assigned_to=plan.assigned_to,
         deps=(),
         acceptance=plan.acceptance,
-        needs_review=False,  # v64 waiver already yields this for a 1-step internal task
+        # Sprint luôn mang cờ review: một bước chạy trọn trong một tiến trình là đường
+        # zero-eyes duy nhất còn lại, nên bản giao nào cũng phải qua một con mắt thứ
+        # hai trước khi đến CEO (`effective_needs_review` cũng không cho trusted miễn
+        # cờ này). `pick_reviewer` không tìm được đồng nghiệp thì bỏ qua có ghi sổ.
+        needs_review=True,
         # Both hardcoded because `sprint_refusal` sends shell/external-write briefs to
         # team mode before this runs — on BOTH paths, the heuristic and the CEO's
         # `sprint:` prefix. If that gate ever loosens, these two lines become the hole:
