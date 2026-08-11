@@ -179,6 +179,13 @@ class TeamTaskStore:
             # — the most informative one, since the first fix demonstrably did not work
             # — gets its own reflection instead of being swallowed as "already looked at".
             "ALTER TABLE team_tasks ADD COLUMN reopen_count INTEGER NOT NULL DEFAULT 0",
+            # v78 routing log: which way the team-vs-sprint router sent this task and
+            # on what evidence. Nullable on purpose — tasks assigned before v78 have no
+            # honest answer and are left NULL rather than backfilled with a guess. It
+            # sits in this table, not a separate log, so one query puts the routing
+            # decision next to the outcome columns (wall time, cost, rework) that say
+            # whether it was the right one.
+            "ALTER TABLE team_tasks ADD COLUMN route_json TEXT",
         ):
             try:
                 self._conn.execute(ddl)
@@ -420,6 +427,35 @@ class TeamTaskStore:
             (1 if value else 0, task_id),
         )
         self._conn.commit()
+
+    def set_route(self, task_id: str, route: dict) -> None:
+        """v78: ghi bản ghi định tuyến (mode/source/reason/signals) cho task này."""
+        import json
+
+        self._conn.execute(
+            "UPDATE team_tasks SET route_json = ? WHERE id = ?",
+            (json.dumps(route, ensure_ascii=False), task_id),
+        )
+        self._conn.commit()
+
+    def get_route(self, task_id: str) -> dict | None:
+        """Bản ghi định tuyến đã lưu, hoặc None nếu chưa có / JSON hỏng.
+
+        Nuốt lỗi giải mã có chủ ý: đây là dữ liệu quan sát, không phải dữ liệu vận
+        hành. Một dòng log hỏng không được phép làm hỏng đường đi của task.
+        """
+        import json
+
+        row = self._conn.execute(
+            "SELECT route_json FROM team_tasks WHERE id = ?", (task_id,)
+        ).fetchone()
+        if not row or not row[0]:
+            return None
+        try:
+            value = json.loads(row[0])
+        except (ValueError, TypeError):
+            return None
+        return value if isinstance(value, dict) else None
 
     def increment_autopilot_attempts(self, task_id: str) -> int:
         """v63: bump + return this task's spent stall auto-resolutions (sweep cap)."""

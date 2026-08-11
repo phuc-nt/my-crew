@@ -11,9 +11,11 @@ Mọi thứ khác của team task giữ nguyên (kanban, chi phí, giao kết qu
 audit) vì sprint task VẪN LÀ một team task — chỉ là DAG suy biến còn một đỉnh.
 
 Hai lớp quyết định, cố ý tách rời:
-  - `classify_brief` (thuần code, 0 lượt gọi model): loại trừ những việc sprint KHÔNG
-    được nhận (ghi ra ngoài, cần shell, nhiều mảng chuyên môn, nhiều người). Rẻ và
-    kiểm chứng được bằng test, nên nó là lớp gác chính.
+  - `classify_brief` (thuần code, 0 lượt gọi model): mặc định sprint, chỉ đẩy sang
+    team khi chạm rào an toàn (`sprint_refusal`) hoặc có tín hiệu CẤU TRÚC cần đội
+    (đề quá dài, quá nhiều thực thể, nhiều đầu việc tách dòng). Rẻ và kiểm chứng được
+    bằng test. Nó không cần đoán đúng: hai chiều sai đều có lưới đỡ —
+    `downgrade_to_sprint` (team→sprint) và `sprint_dead_end` (sprint→team).
   - `sprint_intake` (1 lượt gọi model nhẹ): chỉ rút gọn đề thành mục tiêu + tiêu chí
     nghiệm thu + chọn người. Fail-open: model trả rác thì dùng nguyên văn đề của CEO
     làm mục tiêu — không bao giờ vì intake hỏng mà hỏng cả lệnh giao việc.
@@ -27,7 +29,8 @@ import re
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "SprintPlan", "classify_brief", "sprint_intake", "sprint_refusal", "strip_mode_prefix",
+    "SprintPlan", "classify_brief", "downgrade_to_sprint", "route_signals", "sprint_intake",
+    "sprint_refusal", "strip_mode_prefix",
 ]
 
 #: CEO ép chế độ bằng tiền tố ở đầu tin nhắn: "sprint: ..." / "team: ...".
@@ -117,12 +120,66 @@ def sprint_refusal(brief: str) -> str:
     return ""
 
 
+#: Trên ngần này thực thể được liệt kê thì một người làm trọn bắt đầu đuối: mỗi thực
+#: thể là một lượt tra cứu riêng trong CÙNG một context, nên chi phí cộng dồn tuyến
+#: tính còn cửa sổ ngữ cảnh thì không. Ba cặp benchmark đã đo đều 5 thực thể và sprint
+#: thắng cả ba; từ 7 trở lên chưa đo, nên ngưỡng đặt ở 10 — đủ rộng để không chặn nhầm
+#: việc đã biết là chạy tốt, đủ chặt để một đề 20 mục không lọt.
+_MAX_SPRINT_ENTITIES = 10
+
+#: Từ ngần này đầu việc KHÁC CHẤT trở lên thì đề không còn là "một việc" nữa. Đếm
+#: hình thức (bullet/đánh số), không đoán ngữ nghĩa: một map động từ→lĩnh vực sẽ lại
+#: thành whitelist thứ hai, đúng cái sai mà lần lật này đang gỡ.
+_MAX_DISTINCT_ASKS = 2
+
+#: Dòng liệt kê đầu việc: "- ", "* ", "• ", "1. ", "2) ".
+_ASK_LINE_RE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+\S", re.M)
+
+
+def _distinct_asks(brief: str) -> int:
+    """Số ĐẦU VIỆC mà đề này liệt kê ra, đếm thuần hình thức.
+
+    Chỉ đếm dòng bullet/đánh số. Thuộc tính sau dấu hai chấm trên MỘT dòng không phải
+    đầu việc — "So sánh 5 X: giá, chứng chỉ, hoàn tiền" là một việc với ba tiêu chí,
+    không phải ba việc (cùng bài học ngoặc-vs-hai-chấm của `listed_entities`). Đề văn
+    xuôi không xuống dòng luôn trả 1: không có tín hiệu cấu trúc thì không suy diễn.
+    """
+    lines = len(_ASK_LINE_RE.findall(brief or ""))
+    return lines if lines else 1
+
+
+def route_signals(brief: str) -> dict[str, int]:
+    """Các SỐ LIỆU mà bộ định tuyến đọc để quyết, tách riêng để ghi vào log routing.
+
+    Tách khỏi `classify_brief` để chữ ký `(brief) -> (bool, reason)` của bộ định tuyến
+    giữ nguyên. Chỉ số liệu, KHÔNG có nội dung đề: bản ghi routing nằm cạnh outcome
+    trong DB nên phải rẻ và không mang theo nội dung việc của CEO.
+    """
+    from my_crew.runtime.sprint_runner import listed_entities  # tránh vòng import
+
+    return {
+        "brief_len": len(brief or ""),
+        "entities": len(listed_entities(brief or "")),
+        "distinct_asks": _distinct_asks(brief),
+    }
+
+
 def classify_brief(brief: str) -> tuple[bool, str]:
     """Đề này có nên chạy sprint không? Trả `(is_sprint, reason)`.
 
-    Thuần code, không gọi model. Thiết kế THIÊN VỀ TỪ CHỐI: nghi ngờ thì trả team,
-    vì team mode là đường đã chạy hàng chục task thật, còn sprint nhận nhầm việc to
-    sẽ tốn một vòng bế tắc rồi mới quay lại (`sprint_dead_end`).
+    Thuần code, không gọi model. MẶC ĐỊNH LÀ SPRINT: không có rào an toàn nào chạm
+    và không có tín hiệu CẤU TRÚC nào nói cần đội thì đi sprint.
+
+    Bản đầu làm ngược lại (phải khớp whitelist `_SPRINT_SHAPE_HINTS` mới được sprint),
+    vì sợ sprint nhận nhầm việc to. Đo thật cho thấy nỗi sợ đó đặt sai chỗ: đề quá to
+    lọt vào sprint thì `sprint_dead_end` kéo về team trong vài phút, còn đề vừa sức
+    lọt vào team thì tốn 3-4 lần tiền và thời gian (20m14s/$0.0757 so với
+    7m48s/$0.0191 trên cùng một đề) mà kết quả lại kém hơn, và KHÔNG AI BIẾT. Whitelist
+    còn mù trước cách nói tự nhiên — "cho tôi biết giá X, Y, Z" chẳng khớp từ nào.
+    Nên whitelist thôi vai trò gác cổng, chỉ còn để chuỗi reason dễ đọc.
+
+    Nới cửa này chỉ an toàn vì cả hai chiều đã có lưới: team→sprint bằng
+    `downgrade_to_sprint`, sprint→team bằng `sprint_dead_end`.
 
     `reason` luôn có, để log/preview nói được vì sao đi đường nào.
     """
@@ -138,10 +195,20 @@ def classify_brief(brief: str) -> tuple[bool, str]:
     if len(brief) > 1200:
         return False, "đề quá dài (>1200 ký tự)"
 
+    from my_crew.runtime.sprint_runner import listed_entities  # tránh vòng import
+
+    entities = len(listed_entities(brief))
+    if entities > _MAX_SPRINT_ENTITIES:
+        return False, f"quá nhiều thực thể ({entities})"
+
+    asks = _distinct_asks(brief)
+    if asks > _MAX_DISTINCT_ASKS:
+        return False, f"nhiều đầu việc tách dòng ({asks})"
+
     shape = _hit(text, _SPRINT_SHAPE_HINTS)
-    if not shape:
-        return False, "không nhận ra dạng việc một-người-làm-đủ"
-    return True, f"dạng {shape.strip()!r}, không có dấu hiệu cần đội"
+    if shape:
+        return True, f"dạng {shape.strip()!r}, không có dấu hiệu cần đội"
+    return True, "không có tín hiệu cần đội (mặc định sprint)"
 
 
 class SprintPlan:
@@ -276,3 +343,64 @@ def sprint_intake(
 
     return SprintPlan(goal=goal, acceptance=acceptance, assigned_to=assignee,
                       needs_web=needs_web), cost
+
+
+#: Kế hoạch nhiều hơn ngần này bước thì không còn là "một người làm trọn" dù cùng tên
+#: người: mỗi dòng bước là một tiến trình context lạnh, và từ 3 dòng trở lên phần
+#: chi phí điều phối đã đủ lớn để việc chạy team đúng hình dạng của nó.
+_MAX_DEGENERATE_STEPS = 2
+
+
+def downgrade_to_sprint(brief: str, task) -> SprintPlan | None:
+    """Kế hoạch team này thực chất là việc một người? Trả `SprintPlan`, không thì None.
+
+    Chạy SAU decompose, TRƯỚC khi băm/lưu. Lý do đặt ở đây thay vì đoán kỹ hơn trên đề
+    bài: kế hoạch model vừa dựng là bằng chứng mạnh hơn mọi heuristic đọc chữ — nó đã
+    biết roster, đã chia việc, và nếu chia xong vẫn chỉ ra MỘT người thì cái DAG ấy
+    không mang lại gì ngoài chi phí điều phối (đo thật: team 20m14s/$0.0757 so với
+    sprint 7m48s/$0.0191 trên cùng đề, `benchmark-260810-1602`).
+
+    Không gọi model: mọi trường của `SprintPlan` đều lấy được từ đề gốc + các bước.
+
+    Trả None khi KHÔNG chắc — hạ chế độ là tối ưu, không phải sửa lỗi, nên nghi ngờ
+    thì cứ để team chạy. Bốn loại việc `sprint_refusal` cấm vẫn cấm ở đây: sprint đóng
+    cứng `external_write=False`/`needs_shell=False`, nên một bước ghi-ra-ngoài lọt vào
+    sẽ mất đúng vòng review mà `review_insert` giữ bắt buộc cho nó ở mọi band.
+    """
+    steps = list(getattr(task, "steps", ()) or ())
+    if not steps or len(steps) > _MAX_DEGENERATE_STEPS:
+        return None
+    if sprint_refusal(brief):
+        return None
+
+    assignees = {s.assigned_to for s in steps}
+    if len(assignees) != 1:
+        return None
+    if any(s.needs_shell or s.external_write for s in steps):
+        return None
+
+    # Với 2 bước: chỉ nhận chuỗi tuyến tính bước-1 → bước-2. Hình dạng khác (hai bước
+    # rời nhau, hoặc bước 2 phụ thuộc thứ gì đó không có trong plan) nghĩa là ta chưa
+    # đọc đúng ý đồ của kế hoạch — trả None thay vì đoán.
+    if len(steps) == 2:
+        first, second = steps
+        if tuple(first.deps) or tuple(second.deps) != (first.step_id,):
+            return None
+
+    # Acceptance giữ NGUYÊN VĂN từng dòng của mọi bước: chúng là tiêu chí model đã cân
+    # theo đề, viết lại bằng model nữa vừa tốn lượt gọi vừa có cơ hội siết chặt hơn đề
+    # (bệnh cũ của intake — xem `_INTAKE_SYSTEM`).
+    lines: list[str] = []
+    for step in steps:
+        for line in (step.acceptance or "").splitlines():
+            if line.strip() and line not in lines:
+                lines.append(line)
+
+    return SprintPlan(
+        # Mục tiêu lấy nguyên đề của CEO, KHÔNG ghép title các bước: title do model đặt
+        # cho từng mảnh việc, ghép lại sẽ đọc như một kế hoạch chứ không như yêu cầu.
+        goal=brief.strip(),
+        acceptance="\n".join(lines)[:2000],
+        assigned_to=next(iter(assignees)),
+        needs_web=any(s.needs_web for s in steps),
+    )

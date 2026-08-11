@@ -156,11 +156,25 @@ ranh giới cụm danh từ** (`_governs_next`/`_trimmed_to_whole_phrase`): cắ
 làm search trả blog thay vì trang giá. `_source_refused` phân biệt "không tìm ra nguồn"
 với "nguồn nói không có" — đề bịa thực thể phải bế tắc thật, không được bịa số liệu.
 
-**Router** (`my_crew/agent/sprint_intake.py`, thuần code, không gọi model):
-`classify_brief` **thiên về từ chối** (nghi ngờ → team). CEO ép bằng tiền tố
-`sprint:`/`team:` (`strip_mode_prefix`). Tiền tố chọn CHẾ ĐỘ, **không** gỡ rào an toàn:
-`sprint_refusal` giữ 4 loại luôn về team — ghi-ra-ngoài, cần shell, CEO nêu cần nhiều
-người, việc dài nhiều giai đoạn. Lý do: `_build_sprint_task` đóng cứng
+**Router** — v78 đổi từ MỘT phép đoán thành **phễu 6 lớp**, mỗi hướng sai có lưới đỡ
+riêng nên bản thân phép đoán không cần đúng:
+
+| Lớp | Nơi | Vai trò |
+|---|---|---|
+| Tiền tố CEO | `strip_mode_prefix` | `sprint:`/`team:` chọn CHẾ ĐỘ, KHÔNG gỡ rào an toàn |
+| Refusal cứng | `sprint_refusal` | 4 loại luôn về team: ghi-ra-ngoài, cần shell, CEO nêu cần nhiều người, việc dài nhiều giai đoạn |
+| Heuristic cấu trúc | `classify_brief` | **Mặc định sprint**; chỉ đẩy team khi >1200 ký tự, >10 thực thể, hoặc ≥3 đầu việc tách dòng |
+| Downgrade | `downgrade_to_sprint` | Chạy SAU decompose: plan suy biến (≤2 bước, 1 người, tuyến tính) → sprint, 0 lượt gọi model thêm |
+| Dead-end | `_is_sprint_dead_end` | Sprint bế tắc → gợi ý CEO giao lại `team:` |
+| Routing log | cột `route_json` | `mode`/`source`/`reason`/`signals` — chỉ số, không chứa nguyên văn đề |
+
+`classify_brief` **lật chiều mặc định** (v77: nghi ngờ → team; v78: nghi ngờ → sprint).
+Căn cứ là chi phí route sai **bất đối xứng**, đo ở `benchmark-260810-1602`: sai về phía
+sprint thì dead-end kéo về sau vài phút; sai về phía team tốn 20m14s/$0.0757 so với
+7m48s/$0.0191 trên CÙNG một đề, chấm mù 10 so với 29, **và không ai biết** — không có
+tín hiệu nào báo rằng việc này lẽ ra một người làm là xong.
+
+Lý do refusal không bao giờ nới: `_build_sprint_task` đóng cứng
 `external_write=False`, mà `review_insert` lại bắt buộc review cho mọi bước
 `external_write` ở MỌI band — đề ghi-ra-ngoài lọt vào sprint sẽ mất đúng vòng review nó cần.
 

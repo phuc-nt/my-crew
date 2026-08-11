@@ -1028,3 +1028,52 @@ def test_list_undelivered_only_done_pending_or_failed(tmp_path):
         store.set_delivery(task_id, status=delivery, summary="s")
     assert [t.id for t in store.list_undelivered()] == ["t1", "t2"]
     store.close()
+
+
+# --- v78 routing log -----------------------------------------------------------------
+
+
+def test_route_round_trips_and_is_absent_until_written(tmp_path):
+    store = _store(tmp_path)
+    store.create_task(task_id="t1", title="viec")
+    assert store.get_route("t1") is None  # task chưa qua router mới: NULL, không đoán
+
+    route = {"mode": "sprint", "source": "heuristic", "reason": "mặc định sprint",
+             "signals": {"brief_len": 42, "entities": 3, "distinct_asks": 1}}
+    store.set_route("t1", route)
+    assert store.get_route("t1") == route
+    store.close()
+
+
+def test_a_corrupt_route_record_reads_as_absent_and_breaks_no_read_path(tmp_path):
+    """Bản ghi định tuyến là dữ liệu quan sát: hỏng thì coi như không có.
+
+    Đọc task là đường vận hành (ticker chạy mỗi tick) — một dòng log hỏng không được
+    phép làm task chết.
+    """
+    store = _store(tmp_path)
+    store.create_task(task_id="t1", title="viec")
+    store._conn.execute("UPDATE team_tasks SET route_json = ? WHERE id = ?",
+                        ("{khong-phai-json", "t1"))
+    store._conn.commit()
+
+    assert store.get_route("t1") is None
+    assert store.get("t1").id == "t1"
+    assert [t.id for t in store.list_open()] == ["t1"]
+    store.close()
+
+
+def test_a_store_created_before_the_route_column_still_opens(tmp_path):
+    """Migration ALTER TABLE trên DB đã tồn tại: mở lại bằng code mới không được lỗi."""
+    path = tmp_path / "team_tasks.sqlite3"
+    old = TeamTaskStore(path)
+    old.create_task(task_id="t1", title="viec")
+    old._conn.execute("ALTER TABLE team_tasks DROP COLUMN route_json")
+    old._conn.commit()
+    old.close()
+
+    store = TeamTaskStore(path)
+    assert store.get_route("t1") is None
+    store.set_route("t1", {"mode": "team", "source": "prefix", "reason": "x", "signals": {}})
+    assert store.get_route("t1")["mode"] == "team"
+    store.close()

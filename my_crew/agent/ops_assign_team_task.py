@@ -342,19 +342,57 @@ def _build_sprint_task(plan, pic_requested: str):
 
 def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str,
                     forced_mode: str) -> tuple:
-    """Pick the mode and produce `(DecomposedTask, cost_usd, is_sprint)`.
+    """Pick the mode and produce `(DecomposedTask, cost_usd, is_sprint, route)`.
 
     The router lives HERE, before decompose, because this is the only place that has
     both the cleaned brief and the roster while nothing has been persisted yet — a
     later switch would mean writing a plan and rewriting it.
 
     An explicit `sprint:`/`team:` prefix from the CEO always wins over the heuristic.
+
+    `route` is the observation record persisted alongside the task: which way it went,
+    WHICH LAYER of the funnel decided, and the numbers that layer read. It exists so a
+    later question — "are we still sending one-person work through the team machine?" —
+    is answerable from the same table as the outcome, instead of by re-deriving the
+    decision from a brief whose router has since changed.
     """
-    from my_crew.agent.sprint_intake import classify_brief, sprint_intake, sprint_refusal
+    from my_crew.agent.sprint_intake import (
+        classify_brief,
+        downgrade_to_sprint,
+        route_signals,
+        sprint_intake,
+        sprint_refusal,
+    )
+
+    signals = route_signals(brief)
+
+    def _route(mode: str, source: str, reason: str) -> dict:
+        return {"mode": mode, "source": source, "reason": reason, "signals": signals}
+
+    def _team_plan(why_team: str, source: str) -> tuple:
+        """Chạy decompose team, rồi hạ xuống sprint nếu kế hoạch hoá ra là việc 1 người.
+
+        Lưới đỡ chiều team→sprint của bộ định tuyến (chiều ngược đã có: `sprint_dead_end`
+        đẩy sprint bế tắc về team). Nhờ nó bộ đoán trên đề bài không cần đúng tuyệt đối:
+        đoán thừa về phía team thì kế hoạch thật sẽ tự khai ra, và ta chỉ mất đúng lượt
+        decompose vốn đã trả tiền.
+        """
+        task, cost = _decompose_with_retries(brief, staff, pic_requested)
+        plan = downgrade_to_sprint(brief, task)
+        if plan is None:
+            return task, cost, False, _route("team", source, why_team)
+        logger.info("assign_team_task: sprint mode (%s, nhưng kế hoạch suy biến %d bước "
+                    "cùng %r)", why_team, len(task.steps), plan.assigned_to)
+        return (_build_sprint_task(plan, pic_requested), cost, True,
+                _route("sprint", "downgrade",
+                       f"{why_team}; kế hoạch suy biến {len(task.steps)} bước 1 người"))
 
     if forced_mode == "team":
+        # CEO gõ "team:" là quyết định của người giao việc, không phải phỏng đoán —
+        # không hạ chế độ ở đây kể cả khi kế hoạch trông suy biến.
         logger.info("assign_team_task: team mode (CEO ép bằng tiền tố)")
-        return (*_decompose_with_retries(brief, staff, pic_requested), False)
+        return (*_decompose_with_retries(brief, staff, pic_requested), False,
+                _route("team", "prefix", "CEO ép bằng tiền tố"))
 
     if forced_mode == "sprint":
         # Tiền tố của CEO thắng bộ ĐOÁN, nhưng không gỡ được bốn loại trừ cứng: sprint
@@ -362,17 +400,23 @@ def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str
         # đây sẽ mất vòng review bắt buộc mà `review_insert` giữ cho đúng loại bước đó.
         refusal = sprint_refusal(brief)
         if refusal:
+            # Không đi qua `_team_plan`: `downgrade_to_sprint` cũng từ chối đúng bốn loại
+            # này, nên gọi vào đó chỉ tốn công — và đi thẳng giữ được ý "rào an toàn
+            # thắng tiền tố" ở một chỗ đọc là thấy.
             logger.info("assign_team_task: team mode (CEO ép sprint nhưng %s)", refusal)
-            return (*_decompose_with_retries(brief, staff, pic_requested), False)
-        want_sprint, reason = True, "CEO ép bằng tiền tố"
+            return (*_decompose_with_retries(brief, staff, pic_requested), False,
+                    _route("team", "refusal", f"CEO ép sprint nhưng {refusal}"))
+        want_sprint, reason, source = True, "CEO ép bằng tiền tố", "prefix"
     else:
         want_sprint, reason = classify_brief(brief)
+        source = "refusal" if not want_sprint and sprint_refusal(brief) else "heuristic"
     logger.info("assign_team_task: %s mode (%s)", "sprint" if want_sprint else "team", reason)
     if not want_sprint:
-        return (*_decompose_with_retries(brief, staff, pic_requested), False)
+        return _team_plan(reason, source)
 
     plan, cost = sprint_intake(brief, staff, pic_requested)
-    return _build_sprint_task(plan, pic_requested), cost, True
+    return (_build_sprint_task(plan, pic_requested), cost, True,
+            _route("sprint", source, reason))
 
 
 def preview_assign_team_task(slots: dict[str, str]) -> str:
@@ -406,7 +450,7 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
             "kiểm tra lại mã nhân sự (hoặc dùng @all để đội tự chọn người chịu trách nhiệm)"
         )
 
-    task, decompose_cost, is_sprint = _plan_for_brief(
+    task, decompose_cost, is_sprint, route = _plan_for_brief(
         clean_brief, staff, pic_requested, forced_mode,
     )
 
@@ -433,6 +477,7 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
                           assigned_by="ceo-chat", pic_id=task.pic_id,
                           room_id=slots.get("room_id", "").strip())
         store.set_draft_plan(task_id, step_dicts, plan_hash)
+        store.set_route(task_id, route)
         if decompose_cost:
             store.record_task_cost(task_id, decompose=decompose_cost)
     finally:

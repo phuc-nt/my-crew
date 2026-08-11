@@ -63,6 +63,34 @@ def _is_sprint_dead_end(task: TeamTask, event_kind: str) -> bool:
     return any(getattr(s, "step_type", "") == "sprint" for s in steps)
 
 
+def _mark_route_dead_end(task_id: str) -> None:
+    """Ghi vào bản ghi định tuyến rằng chuyến sprint này đã bế tắc.
+
+    Đây là dòng phản hồi duy nhất nói bộ định tuyến ĐOÁN SAI về phía sprint, nên nó
+    phải nằm cùng chỗ với quyết định ban đầu để sau này đếm được tỉ lệ sai. Quyết
+    định gốc giữ nguyên trong khoá `previous`: cái đáng học là "đường nào dẫn tới bế
+    tắc", không phải chỉ "có bế tắc".
+
+    try/degrade như mọi thứ khác trong `_escalate`: đây là dữ liệu quan sát, hỏng thì
+    ghi log — không bao giờ được chặn một cảnh báo đang trên đường tới CEO.
+    """
+    try:
+        from my_crew.runtime.team_task_paths import team_tasks_db_path
+        from my_crew.runtime.team_task_store import TeamTaskStore
+
+        store = TeamTaskStore(team_tasks_db_path())
+        try:
+            route = store.get_route(task_id)
+            if route is None or route.get("source") == "dead_end":
+                return
+            store.set_route(task_id, {**route, "source": "dead_end", "previous": route})
+        finally:
+            store.close()
+    except Exception:
+        logger.warning("không ghi được dấu bế tắc sprint vào route_json (%s)",
+                       task_id, exc_info=True)
+
+
 def _review_evidence_block(task: TeamTask, step: TeamStep | None) -> str:
     """v63 evidence pack: the failing round's verdict summary, so the CEO/secretary can
     decide accept/retry/drop from the escalation alone. The failure lines are reviewer
@@ -312,6 +340,7 @@ def make_escalate(loaded: Any, settings: Any):
                        + _ONE_TOUCH_SUGGESTION_TEMPLATE.format(task_id=task.id))
         if _is_sprint_dead_end(task, event_kind):
             message = message + _SPRINT_UPGRADE_SUGGESTION
+            _mark_route_dead_end(task.id)
 
         # Room append comes FIRST and unconditionally: the admin agent's milestone
         # mirror polls the room store and DMs the CEO, so an escalation reaches

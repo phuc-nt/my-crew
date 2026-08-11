@@ -456,3 +456,56 @@ def test_a_team_task_dead_end_escalation_is_byte_identical_to_before(tmp_path, m
         store.close()
 
     assert rows[0].body["message"] == "không làm được"
+
+
+def test_a_sprint_dead_end_marks_the_routing_record(tmp_path, monkeypatch):
+    """Bế tắc là dòng phản hồi DUY NHẤT nói bộ định tuyến đoán sai về phía sprint.
+
+    Nó ghi đè `source` nhưng giữ quyết định gốc trong `previous`: cái đáng đếm về sau
+    là "lớp nào của phễu dẫn tới bế tắc", không phải chỉ "có bế tắc".
+    """
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+
+    store = TeamTaskStore(team_task_paths.team_tasks_db_path())
+    try:
+        store.create_task(task_id="t1", title="viec")
+        store.set_route("t1", {"mode": "sprint", "source": "heuristic",
+                               "reason": "mặc định sprint", "signals": {}})
+    finally:
+        store.close()
+
+    sprint_step = dataclasses.replace(_step(), step_type="sprint")
+    task = dataclasses.replace(_task(), steps=(sprint_step,))
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+    escalate(task, sprint_step, "gave_up", "không làm được")
+
+    store = TeamTaskStore(team_task_paths.team_tasks_db_path())
+    try:
+        route = store.get_route("t1")
+    finally:
+        store.close()
+    assert route["source"] == "dead_end"
+    assert route["previous"]["source"] == "heuristic"
+    assert route["mode"] == "sprint"  # hướng đã đi giữ nguyên; chỉ ghi thêm kết cục
+
+
+def test_a_missing_routing_record_never_blocks_the_escalation(tmp_path, monkeypatch):
+    """Task trước v78 không có bản ghi định tuyến — cảnh báo vẫn phải tới CEO."""
+    from my_crew.runtime import team_task_paths
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+
+    sprint_step = dataclasses.replace(_step(), step_type="sprint")
+    task = dataclasses.replace(_task(), steps=(sprint_step,))
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+    escalate(task, sprint_step, "gave_up", "không làm được")
+
+    store = OfficeRoomStore(team_task_paths.team_tasks_root() / "office_room.sqlite3")
+    try:
+        rows = store.list("t1")
+    finally:
+        store.close()
+    assert "không làm được" in rows[0].body["message"]
