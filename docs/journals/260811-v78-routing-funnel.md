@@ -111,6 +111,12 @@ mặc định rẻ, không đường zero-eyes, chạm giới hạn thì đưa n
 Hệ quả đo được: từ nay số review của sprint là quy luật cố định (1 vòng 0, thiếu
 reviewer thì skip có ghi sổ) — hết cảnh A1=2/B5=0 tùy band lúc chạy.
 
+**Delta-UAT re-verify (2026-08-12, $0.032):** 5/5 ca live PASS — 3 ca sprint (2 trusted,
+1 normal) đều đúng 1 review vòng 0; 2 brief A4/A5 nay bị phễu bắt ngay (team/refusal,
+trích đúng needle mới). Benchmark KHÔNG chạy lại: cost 3 ca sprint ($0.006–0.0094) đều
+dưới baseline `15c12d2c2e16` ($0.0098) ⇒ luật mới đổi tính tất định chứ không đổi giá.
+Phụ lục + bằng chứng task_id: `plans/reports/uat-260811-1230-acceptance-v77-v78-report.md`.
+
 ## Mở / sang sau
 
 - Ngưỡng 10 thực thể / 1200 ký tự: UAT thêm 3 điểm dữ liệu (A9 12 thực thể, A11 637 ký
@@ -122,3 +128,6 @@ reviewer thì skip có ghi sổ) — hết cảnh A1=2/B5=0 tùy band lúc chạ
 - Cần ≥20 dòng `route_json` có outcome mới auto-tune được ngưỡng từ dữ liệu thật.
 - Trần cứng chi phí/task (chặn lúc mint bước, học từ vấp A9 cancel-không-phải-phanh)
   vẫn chưa làm — trần tầng task mới chỉ chặn vòng soát/sửa, không chặn cost trực tiếp.
+- `task_review_budget_exhausted` mới chỉ có bằng chứng unit test (khiêu khích live tốn
+  ~$0.15 + nhiễu). Quan sát thường trực: lần đầu escalation này bắn tự nhiên → ghi
+  task_id vào journal làm bằng chứng sống.
