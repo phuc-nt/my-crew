@@ -217,3 +217,55 @@ def test_run_review_step_malformed_llm_json_raises_review_verdict_error(tmp_path
 
     with pytest.raises(ReviewVerdictError):
         run_review_step(None, _settings(tmp_path), data_dir=tmp_path, review_input=_input())
+
+
+# --- handoff: the reviewer must SEE what the reviewed step was given -------------------
+#
+# Peer review used to grade output-only. A step whose input said "KHÔNG CÓ KẾT QUẢ" and
+# whose answer was a fully-formed price table citing CBRE/JLL/DKRA passed 3/3 on the fleet
+# model: with only the answer and the rubric in front of it, a well-formed invention
+# satisfies the criteria it was invented to satisfy. Self-check never had this hole — it
+# already received both the input block and the source rule.
+
+
+def test_review_prompt_carries_the_handoff_when_present(tmp_path, monkeypatch):
+    write_step_artifact(
+        tmp_path, "t1", 1, {"result_text": "bảng giá 3 toà", "version": "attempt-1"},
+    )
+    calls = _wire_llm(monkeypatch, verdict={"passed": True, "failures": [], "notes": []})
+
+    run_review_step(
+        None, _settings(tmp_path), data_dir=tmp_path,
+        review_input=_input(handoff="KHÔNG CÓ KẾT QUẢ TÌM KIẾM"),
+    )
+
+    user = calls[0][1]["content"]
+    assert "KHÔNG CÓ KẾT QUẢ TÌM KIẾM" in user
+    assert "ĐẦU VÀO bước này nhận được" in user
+
+
+def test_review_prompt_omits_the_handoff_block_when_blank(tmp_path, monkeypatch):
+    """A first step has no deps, so there is nothing it was given. Grading stays
+    output-only rather than showing the model an empty input block it could misread as
+    "the input was empty" — which is exactly the fabrication signal."""
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": "x", "version": "attempt-1"})
+    calls = _wire_llm(monkeypatch, verdict={"passed": True, "failures": [], "notes": []})
+
+    run_review_step(None, _settings(tmp_path), data_dir=tmp_path, review_input=_input(handoff=""))
+
+    assert "ĐẦU VÀO bước này nhận được" not in calls[0][1]["content"]
+
+
+def test_review_system_prompt_tells_the_grader_to_trace_figures_to_the_input(tmp_path, monkeypatch):
+    """The rule fires on the "input shows there was no data" case only, and explicitly
+    exempts data newer than the model's own knowledge — otherwise the cure (failing
+    anything with a fresh number in it) costs more rework cycles than the disease."""
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": "x", "version": "attempt-1"})
+    calls = _wire_llm(monkeypatch, verdict={"passed": True, "failures": [], "notes": []})
+
+    run_review_step(None, _settings(tmp_path), data_dir=tmp_path, review_input=_input())
+
+    system = calls[0][0]["content"]
+    assert "QUY TẮC NGUỒN" in system
+    assert "KHÔNG CÓ KẾT QUẢ" in system
+    assert "MỚI HƠN kiến thức của bạn KHÔNG phải bằng chứng bịa" in system

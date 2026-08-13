@@ -405,13 +405,32 @@ def _run_review(
 
     from my_crew.runtime.team_task_paths import team_tasks_root
 
+    data_dir = team_tasks_root()
+    # What the CONTENT step was given to work from — its own `deps`, NOT this review
+    # step's deps (those point at the graded row, i.e. the answer being reviewed). Without
+    # it the reviewer grades blind and cannot tell a sourced figure from an invented one:
+    # measured, a price table fabricated from a "KHÔNG CÓ KẾT QUẢ" input passed 3/3.
+    # Best-effort: a store/artifact read failure must degrade to blind grading, which is
+    # the old behaviour, never to a dead review step.
+    try:
+        from my_crew.agent.team_task_graph import _read_deps_handoff
+
+        handoff = _read_deps_handoff(data_dir, task_id, tuple(content_step.deps or ()))
+    except Exception:  # pragma: no cover - defensive
+        logger.warning(
+            "review-step %s/%s: could not read handoff for parent %s — grading output-only",
+            task_id, step.step_id, content_step.step_id, exc_info=True,
+        )
+        handoff = ""
+
     review_input = ReviewStepInput(
         task_id=task_id, graded_seq=graded_seq, verdict_seq=content_step.seq,
         review_round=step.review_round, locked_version=locked_version,
         acceptance=content_step.acceptance, step_title=content_step.title,
+        handoff=handoff,
     )
     return run_review_step(
-        loaded, settings, data_dir=team_tasks_root(), review_input=review_input,
+        loaded, settings, data_dir=data_dir, review_input=review_input,
         telemetry=telemetry,
     )
 

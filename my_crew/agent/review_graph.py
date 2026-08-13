@@ -152,6 +152,10 @@ class ReviewStepInput:
     locked_version: str  # graded step's DONE-attempt `attempt_id` (artifact `version`)
     acceptance: str  # the CONTENT step's acceptance criteria (rubric) — never a review/rework row's
     step_title: str = ""  # the CONTENT step's title, for the room message
+    #: What the reviewed step was GIVEN to work from (its deps' result text). Lets the
+    #: reviewer check figures against their source instead of grading blind — see
+    #: `build_review_messages`. Blank (first step, no deps) ⇒ output-only grading.
+    handoff: str = ""
 
 
 def run_review_step(
@@ -203,6 +207,7 @@ def run_review_step(
     result = llm.complete(
         build_review_messages(
             result_text=result_text, acceptance=review_input.acceptance, persona=context.persona,
+            handoff=review_input.handoff,
         ),
         role="review",
     )
