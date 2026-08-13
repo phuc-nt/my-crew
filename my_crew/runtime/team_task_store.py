@@ -403,6 +403,19 @@ class TeamTaskStore:
         ).fetchall()
         return [t for (task_id,) in rows if (t := self.get(task_id)) is not None]
 
+    def cancelled_tasks_with_running_steps(self) -> list[TeamTask]:
+        """Every `cancelled` task that still has at least one `running` step — the
+        cancel-reap sweep's work list (`team_task_halt`). Cancelled tasks leave
+        `list_dispatchable`, so without this query their in-flight workers are never
+        polled or killed again and keep billing (the A9 post-cancel drift). Derived
+        fresh from the tables each call, so every cancel surface is covered without
+        registering itself anywhere; an empty list is the steady state."""
+        rows = self._conn.execute(
+            "SELECT DISTINCT t.id FROM team_tasks t JOIN team_steps s ON s.task_id = t.id "
+            "WHERE t.status = 'cancelled' AND s.status = 'running' ORDER BY t.created_at"
+        ).fetchall()
+        return [t for (task_id,) in rows if (t := self.get(task_id)) is not None]
+
     def reopen_stalled(self, task_id: str) -> bool:
         """Status-guarded `stalled → open` transition (review M2): the stall handlers
         and the autopilot sweep both act on a read snapshot — the WHERE guard makes a
@@ -694,6 +707,20 @@ class TeamTaskStore:
         updated = _steps.set_step_status(
             self._conn, task_id, step_id, "failed", outcome_ref=outcome_ref, cost_usd=cost_usd,
             attempt_id=attempt_id,
+        )
+        self._conn.commit()
+        return updated
+
+    def halt_step(self, task_id: str, step_id: str, *, attempt_id: str | None) -> bool:
+        """Atomic running→failed for the in-flight brake (`team_task_halt`). Guarded
+        on BOTH the attempt AND the status still being `running` — unlike the
+        lease-expiry kill (worker presumed dead), the brake races a LIVE worker whose
+        own terminal write keeps the attempt_id, so `mark_failed`'s attempt guard
+        alone would let a halt clobber a `done` row the worker landed a moment
+        earlier. Returns True iff this call actually terminated the row."""
+        updated = _steps.set_step_status(
+            self._conn, task_id, step_id, "failed",
+            attempt_id=attempt_id, only_if_status="running",
         )
         self._conn.commit()
         return updated

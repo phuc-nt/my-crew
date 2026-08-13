@@ -365,6 +365,30 @@ def test_cost_cap_exceeded_stalls_task_and_escalates(tmp_path):
     assert escalated == ["cost_cap_exceeded"]
 
 
+def test_cost_cap_exceeded_halts_in_flight_steps(tmp_path):
+    """A breached cap must brake CURRENT spend, not just new spend: the running
+    step's worker is killed (identity-guarded via its attempt_id) and its row fails —
+    without this, a stalled task leaves the dispatch path and its workers keep
+    billing to completion."""
+    store = _store(tmp_path)
+    _plan(store)  # s1 + s2(deps s1)
+    attempt_id = store.reserve_step("t1", "s1")
+    store.record_spawn("t1", "s1", 777)
+    store.record_task_cost("t1", decompose=3.0)  # over the $2 cap mid-flight
+    killed = []
+
+    result = run_one_tick(_deps(
+        store, cost_cap_usd=2.0,
+        kill_pid=lambda pid, aid: killed.append((pid, aid)),
+    ))
+
+    assert result.action == "cap_exceeded"
+    assert store.get("t1").status == "stalled"
+    assert killed == [(777, attempt_id)]
+    assert store.get_step("t1", "s1").status == "failed"
+    assert store.get_step("t1", "s2").status == "pending"
+
+
 def test_cost_cap_checked_before_any_spawn(tmp_path):
     """A task already over cap must never spawn a new step, even if one is ready."""
     store = _store(tmp_path)

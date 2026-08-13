@@ -80,6 +80,7 @@ from my_crew.agent.coordinator_nodes.tick_actions import (
 from my_crew.runtime.company import DEFAULT_TEAM_TASK_CONCURRENCY
 from my_crew.runtime.office_room_append import append_office_event, room_for_task
 from my_crew.runtime.team_task_cost import CostCapResult, check_cost_cap, cost_warn_ratio
+from my_crew.runtime.team_task_halt import halt_running_steps
 from my_crew.runtime.team_task_store import TeamStep, TeamTask, TeamTaskStore
 
 logger = logging.getLogger(__name__)
@@ -349,11 +350,23 @@ def _act_on_task(deps: CoordinatorDeps, task: TeamTask) -> TickResult:
 
     cap = check_cost_cap(deps.store, task.id, cap_usd=deps.cost_cap_usd)
     if not cap.within_cap:
+        # Stall FIRST (the safety transition must not depend on the halt succeeding),
+        # then brake the in-flight steps — a breached ceiling means "stop spending
+        # NOW", and a stalled task leaves the dispatch path so nothing else would
+        # ever poll or kill its running workers (A9: post-cancel drift kept billing).
         deps.store.set_task_status(task.id, "stalled")
+        try:
+            halted = halt_running_steps(
+                deps.store, task, kill_pid=deps.kill_pid, note="vượt trần chi phí",
+            )
+        except Exception:  # noqa: BLE001 — the stall already landed; the brake is best-effort
+            logger.warning("cap halt raised for task %s (bỏ qua)", task.id, exc_info=True)
+            halted = 0
+        halted_note = f" Đã dừng {halted} bước đang chạy để không đốt thêm." if halted else ""
         deps.escalate(
             task, None, "cost_cap_exceeded",
             f"Việc '{task.title}' vượt trần chi phí (${cap.spent_usd:.4f} > "
-            f"${cap.cap_usd:.2f}) — đã dừng, cần CEO xem lại.",
+            f"${cap.cap_usd:.2f}) — đã dừng, cần CEO xem lại.{halted_note}",
         )
         _reflect_safely(deps, task, "cap_exceeded",
                         f"${cap.spent_usd:.4f} > ${cap.cap_usd:.2f}")

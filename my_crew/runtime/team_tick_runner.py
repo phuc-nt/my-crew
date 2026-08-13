@@ -150,6 +150,17 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
             run_follow_up_sweep(store)
         except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
             logger.warning("team-tick: follow-up sweep failed", exc_info=True)
+        # Brake for cancelled tasks: a cancel (gateway move, follow-up auto-cancel,
+        # direct store write) removes the task from dispatch, so its running workers
+        # would never be polled or killed again — they'd finish on their own and keep
+        # billing (A9 drift). Runs right AFTER follow_up_sweep so its auto-cancels
+        # are reaped in the same tick.
+        try:
+            from my_crew.runtime.team_task_halt import run_cancel_reap_sweep
+
+            run_cancel_reap_sweep(store, kill_pid=_kill_pid)
+        except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
+            logger.warning("team-tick: cancel reap sweep failed", exc_info=True)
         # v67 P1: re-send finished-task summaries whose room milestone never landed
         # (delivery split — "done" execution vs "the CEO was actually told"). Bounded
         # per task; the attempts==cap transition escalates exactly once.

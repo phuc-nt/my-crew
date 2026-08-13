@@ -600,6 +600,7 @@ def set_step_status(
     outcome_ref: str | None = None, cost_usd: float | None = None,
     attempt_id: str | None = None, approval_id: int | None = None,
     clarify_id: int | None = None, split_proposal_json: str | None = None,
+    only_if_status: str | None = None,
 ) -> bool:
     """Write a step's status (+ optionally its outcome/cost/approval_id). Returns True
     iff a row was actually updated.
@@ -629,6 +630,13 @@ def set_step_status(
     if attempt_id is not None:
         where += " AND attempt_id = ?"
         params = (*params, attempt_id)
+    if only_if_status is not None:
+        # The attempt_id guard alone can't fence a LIVE worker's terminal write —
+        # `mark_done`/`mark_failed` keep the row's attempt_id, so a caller racing a
+        # still-running worker (the halt brake, unlike lease expiry where the worker
+        # is presumed dead) must also require the status it read, atomically.
+        where += " AND status = ?"
+        params = (*params, only_if_status)
     if outcome_ref is not None or cost_usd is not None or approval_id is not None \
             or clarify_id is not None or split_proposal_json is not None:
         cur = conn.execute(
