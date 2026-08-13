@@ -448,6 +448,37 @@ def test_the_terminal_steps_latest_rework_is_what_gets_delivered(tmp_path, monke
     assert summary == "bản đã sửa"
 
 
+def test_a_review_hanging_off_the_terminal_does_not_hide_its_terminality(
+    tmp_path, monkeypatch,
+):
+    """A review declares a dep on the step it audits. Counting those rows as dependents
+    made every reviewed terminal look non-terminal — zero terminals, so the shape fell
+    back to summarizing (observed on task 1049321b5b2d, whose terminal step 4 was
+    reviewed). Terminality is a property of the content plan only."""
+    from my_crew.agent.team_task_artifact import write_step_artifact
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_tick_collaborators import make_aggregate
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    rows = (_step_row("s1", 1, title="dàn ý"),
+            _step_row("s2", 2, title="viết bài", deps=("s1",)),
+            _step_row("s2-review-0-0", 3, step_type="review", parent="s2",
+                      deps=("s2",), title="Soát chéo: viết bài"))
+    task = _task()
+    task = type(task)(**{**task.__dict__, "steps": rows})
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": "dàn ý thô",
+                                            "version": "attempt-1"})
+    write_step_artifact(tmp_path, "t1", 2, {"result_text": "toàn văn bài viết",
+                                            "version": "attempt-2"})
+
+    aggregate = make_aggregate(
+        _loaded_no_telegram(), settings=SimpleNamespace(openrouter_api_key=""),
+    )
+    summary, _cost = aggregate(task)
+
+    assert summary == "toàn văn bài viết"
+
+
 def test_direct_delivery_still_carries_a_passed_reviews_notes(tmp_path, monkeypatch):
     """A passed-with-notes review mints no rework, so the aggregate is the only path its
     advice has to the CEO. Handing back the artifact alone would silently drop it."""

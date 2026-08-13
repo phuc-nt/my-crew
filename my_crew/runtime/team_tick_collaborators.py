@@ -126,6 +126,21 @@ def _review_evidence_block(task: TeamTask, step: TeamStep | None) -> str:
     return ""
 
 
+def _content_dep_targets(task: TeamTask) -> set[str]:
+    """Step ids that another CONTENT step feeds into.
+
+    Terminality is a property of the plan, and the plan is the content steps. A review
+    (and the rework it mints) always declares a dep on the step it audits, so counting
+    those rows would make every reviewed terminal look non-terminal — the whole shape
+    collapses to zero terminals the moment one review exists. The plan-time terminal
+    checks in `task_decomposition` can use a bare dep scan because they run before any
+    review row is minted; this one runs at delivery time, after.
+    """
+    return {
+        d for s in task.steps if s.step_type in ("work", "sprint") for d in s.deps
+    }
+
+
 def _current_result_text(task: TeamTask, step: TeamStep) -> str:
     """`step`'s deliverable text, preferring its latest done rework.
 
@@ -167,8 +182,7 @@ def _direct_result_text(task: TeamTask) -> str:
         return ""
     if len(content) == 1 and content[0].step_type == "sprint":
         return _current_result_text(task, content[0])
-    dep_targets = {d for s in task.steps for d in s.deps}
-    terminals = [s for s in content if s.step_id not in dep_targets]
+    terminals = [s for s in content if s.step_id not in _content_dep_targets(task)]
     if len(terminals) != 1:
         return ""
     return _current_result_text(task, terminals[0])
@@ -205,7 +219,7 @@ def make_aggregate(loaded: Any, settings: Any):
         # xác nhận đầy đủ toàn văn" instead of the 400-500 word article. Intermediate
         # steps keep the cap — their detail already reached the terminal through the
         # deps handoff, and the prompt must stay bounded.
-        dep_targets = {d for s in task.steps for d in s.deps}
+        dep_targets = _content_dep_targets(task)
         terminal_ids = {
             s.step_id for s in task.steps
             if s.step_type in ("work", "sprint") and s.step_id not in dep_targets
