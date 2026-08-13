@@ -54,7 +54,7 @@ DATA_DIR = MY_CREW_HOME / ".data"
 
 # OpenRouter is OpenAI-compatible; base URL is fixed by the provider.
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_MODEL = "qwen/qwen3.7-plus"
+DEFAULT_MODEL = "deepseek/deepseek-v4-pro"
 
 
 @dataclass(frozen=True)
