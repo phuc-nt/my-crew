@@ -384,12 +384,14 @@ def test_a_sprint_task_whose_artifact_vanished_falls_back_to_the_normal_aggregat
     assert "đã hoàn tất" in summary
 
 
-def test_a_multi_step_task_delivers_its_terminal_step_uncut(tmp_path, monkeypatch):
-    """The terminal step's artifact IS the deliverable — same argument v77 made for the
-    sprint step, one shape up. Truncating it at 500 chars made the summarizer describe a
-    cut-off text instead of delivering it (task 1049321b5b2d: every step passed review,
-    yet the CEO got "bản thảo bị cắt giữa chừng" instead of the article). Intermediate
-    steps stay capped — their detail already reached the terminal via the deps handoff.
+def test_a_single_terminal_multi_step_task_delivers_that_artifact_verbatim(
+    tmp_path, monkeypatch,
+):
+    """The terminal step's artifact IS the deliverable — the argument v77 made for the
+    sprint shape, one shape up. Asking the model to summarize it turns a finished
+    article into a description of itself: observed live (task 1049321b5b2d), a 4-step
+    task whose every step passed review delivered "Bước 2: Đã viết xong bản thảo ..."
+    to a CEO who had asked for the article.
     """
     from my_crew.agent.team_task_artifact import write_step_artifact
     from my_crew.runtime import team_task_paths
@@ -397,14 +399,104 @@ def test_a_multi_step_task_delivers_its_terminal_step_uncut(tmp_path, monkeypatc
 
     monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
     long_draft = "MỞ ĐẦU. " + ("câu văn dài " * 200) + " KẾT THÚC."
-    long_notes = "GHI CHÚ. " + ("ghi chú dài " * 200) + " HẾT GHI CHÚ."
     rows = (_step_row("s1", 1, title="thu thập"),
             _step_row("s2", 2, title="viết bài", deps=("s1",)))
     task = _task()
     task = type(task)(**{**task.__dict__, "steps": rows})
-    write_step_artifact(tmp_path, "t1", 1, {"result_text": long_notes,
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": "ghi chú thô",
                                             "version": "attempt-1"})
     write_step_artifact(tmp_path, "t1", 2, {"result_text": long_draft,
+                                            "version": "attempt-2"})
+
+    def _boom(_settings):
+        raise AssertionError("a single-terminal task must not reach the aggregate LLM call")
+
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", _boom)
+    aggregate = make_aggregate(
+        _loaded_no_telegram(), settings=SimpleNamespace(openrouter_api_key="sk-test"),
+    )
+    summary, cost = aggregate(task)
+
+    assert summary == long_draft
+    assert cost is None
+
+
+def test_the_terminal_steps_latest_rework_is_what_gets_delivered(tmp_path, monkeypatch):
+    """A rework REPLACES its parent's output, so delivering the parent's seq would hand
+    the CEO the exact draft the reviewer had just rejected."""
+    from my_crew.agent.team_task_artifact import write_step_artifact
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_tick_collaborators import make_aggregate
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    rows = (_step_row("s1", 1, title="thu thập"),
+            _step_row("s2", 2, title="viết bài", deps=("s1",)),
+            _step_row("s2-rework-0", 3, step_type="rework", parent="s2",
+                      title="viết bài (sửa)"))
+    task = _task()
+    task = type(task)(**{**task.__dict__, "steps": rows})
+    write_step_artifact(tmp_path, "t1", 2, {"result_text": "bản bị chê",
+                                            "version": "attempt-2"})
+    write_step_artifact(tmp_path, "t1", 3, {"result_text": "bản đã sửa",
+                                            "version": "attempt-3"})
+
+    aggregate = make_aggregate(
+        _loaded_no_telegram(), settings=SimpleNamespace(openrouter_api_key=""),
+    )
+    summary, _cost = aggregate(task)
+
+    assert summary == "bản đã sửa"
+
+
+def test_direct_delivery_still_carries_a_passed_reviews_notes(tmp_path, monkeypatch):
+    """A passed-with-notes review mints no rework, so the aggregate is the only path its
+    advice has to the CEO. Handing back the artifact alone would silently drop it."""
+    from my_crew.agent.team_task_artifact import (
+        write_review_verdict_artifact,
+        write_step_artifact,
+    )
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_tick_collaborators import make_aggregate
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    rows = (_step_row("s1", 1, title="viết bài"),
+            _step_row("s1-review-0-0", 2, step_type="review", parent="s1",
+                      title="Soát chéo: viết bài"))
+    task = _task()
+    task = type(task)(**{**task.__dict__, "steps": rows})
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": "toàn văn bài viết",
+                                            "version": "attempt-1"})
+    write_review_verdict_artifact(
+        tmp_path, "t1", 1, 0,
+        {"passed": True, "failures": [], "notes": ["nên thêm biểu đồ"],
+         "reviewed_version": "attempt-1", "round": 0, "result_text": "toàn văn bài viết"},
+    )
+
+    aggregate = make_aggregate(
+        _loaded_no_telegram(), settings=SimpleNamespace(openrouter_api_key=""),
+    )
+    summary, _cost = aggregate(task)
+
+    assert summary.startswith("toàn văn bài viết")
+    assert "góp ý thêm: nên thêm biểu đồ" in summary
+
+
+def test_a_task_with_several_terminals_still_takes_the_summarize_path(
+    tmp_path, monkeypatch,
+):
+    """Two independent outputs genuinely need weaving together — that is what the
+    aggregate call is for, and the terminal shortcut must not swallow one of them."""
+    from my_crew.agent.team_task_artifact import write_step_artifact
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_tick_collaborators import make_aggregate
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    rows = (_step_row("s1", 1, title="nhánh một"), _step_row("s2", 2, title="nhánh hai"))
+    task = _task()
+    task = type(task)(**{**task.__dict__, "steps": rows})
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": "kết quả một",
+                                            "version": "attempt-1"})
+    write_step_artifact(tmp_path, "t1", 2, {"result_text": "kết quả hai",
                                             "version": "attempt-2"})
 
     aggregate = make_aggregate(
@@ -412,36 +504,8 @@ def test_a_multi_step_task_delivers_its_terminal_step_uncut(tmp_path, monkeypatc
     )
     summary, _cost = aggregate(task)
 
-    assert long_draft in summary                 # terminal: whole text survives
-    assert "KẾT THÚC." in summary
-    assert long_notes not in summary             # intermediate: still capped
-    assert "HẾT GHI CHÚ." not in summary
-
-
-def test_a_rework_of_the_terminal_step_is_also_delivered_uncut(tmp_path, monkeypatch):
-    """A rework REPLACES its parent's output, so it inherits the parent's terminality —
-    otherwise the same hole re-opens one review round later."""
-    from my_crew.agent.team_task_artifact import write_step_artifact
-    from my_crew.runtime import team_task_paths
-    from my_crew.runtime.team_tick_collaborators import make_aggregate
-
-    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
-    fixed = "BẢN SỬA. " + ("nội dung đã sửa " * 200) + " HẾT BẢN SỬA."
-    rows = (_step_row("s1", 1, title="thu thập"),
-            _step_row("s2", 2, title="viết bài", deps=("s1",)),
-            _step_row("s2-rework-0", 3, step_type="rework", parent="s2",
-                      title="viết bài (sửa)"))
-    task = _task()
-    task = type(task)(**{**task.__dict__, "steps": rows})
-    write_step_artifact(tmp_path, "t1", 3, {"result_text": fixed, "version": "attempt-3"})
-
-    aggregate = make_aggregate(
-        _loaded_no_telegram(), settings=SimpleNamespace(openrouter_api_key=""),
-    )
-    summary, _cost = aggregate(task)
-
-    assert fixed in summary
-    assert "HẾT BẢN SỬA." in summary
+    assert "kết quả một" in summary
+    assert "kết quả hai" in summary
 
 
 def test_a_multi_step_task_is_untouched_by_the_sprint_shortcut(tmp_path, monkeypatch):

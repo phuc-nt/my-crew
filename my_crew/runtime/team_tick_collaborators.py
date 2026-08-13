@@ -126,32 +126,52 @@ def _review_evidence_block(task: TeamTask, step: TeamStep | None) -> str:
     return ""
 
 
-def _sprint_result_text(task: TeamTask) -> str:
-    """The full result text a sprint task should deliver, or "" to use the normal path.
+def _current_result_text(task: TeamTask, step: TeamStep) -> str:
+    """`step`'s deliverable text, preferring its latest done rework.
 
-    "" for anything that is not exactly one `sprint` content step with a readable
-    artifact — a multi-step task, a plain work step, or a sprint whose artifact went
-    missing all fall through to the normal aggregate rather than delivering nothing.
-
-    A REWORK row wins over the sprint row when one exists. A supervised band mints a
-    review row for a sprint step, and a failed verdict then mints a rework row that
-    writes its corrected output to ITS OWN seq — so reading the sprint step's seq
-    unconditionally would hand the CEO the exact draft the reviewer had just rejected.
-    Latest done rework (highest seq) is the current truth.
+    A failed verdict mints a rework that writes its corrected output to ITS OWN seq, so
+    reading the original step's seq unconditionally would hand the CEO the exact draft
+    the reviewer had just rejected. Latest done rework (highest seq) is the current truth.
     """
     from my_crew.agent.team_task_artifact import read_step_artifact
 
-    content = [s for s in task.steps if s.step_type in ("work", "sprint")]
-    if len(content) != 1 or content[0].step_type != "sprint":
-        return ""
     reworks = [
         s for s in task.steps
-        if s.step_type == "rework" and s.parent_step_id == content[0].step_id
+        if s.step_type == "rework" and s.parent_step_id == step.step_id
         and s.status == "done"
     ]
-    seq = max(reworks, key=lambda s: s.seq).seq if reworks else content[0].seq
+    seq = max(reworks, key=lambda s: s.seq).seq if reworks else step.seq
     artifact = read_step_artifact(team_tasks_root(), task.id, seq)
     return str((artifact or {}).get("result_text") or "").strip()
+
+
+def _direct_result_text(task: TeamTask) -> str:
+    """The full result text to hand the CEO verbatim, or "" to use the normal path.
+
+    v77 established this for the sprint shape: the artifact was written to be READ, so
+    summarizing it pays a second LLM call to compress the only thing that matters.
+
+    The same holds whenever the plan converges on ONE terminal content step — the step
+    every other step feeds into. Asking the model to "tóm tắt" that artifact turns a
+    finished deliverable into a description of itself: observed live (task
+    1049321b5b2d), a 4-step article task whose steps all passed review delivered
+    "Bước 2: Đã viết xong bản thảo ..." to a CEO who had asked for the article.
+    Multiple terminals still take the summarize path — there the CEO genuinely needs
+    several outputs woven together, which is what the aggregate call is for.
+
+    "" whenever the shape does not apply or the artifact went missing, so a lost file
+    degrades to the usual summary rather than delivering nothing.
+    """
+    content = [s for s in task.steps if s.step_type in ("work", "sprint")]
+    if not content:
+        return ""
+    if len(content) == 1 and content[0].step_type == "sprint":
+        return _current_result_text(task, content[0])
+    dep_targets = {d for s in task.steps for d in s.deps}
+    terminals = [s for s in content if s.step_id not in dep_targets]
+    if len(terminals) != 1:
+        return ""
+    return _current_result_text(task, terminals[0])
 
 
 def make_aggregate(loaded: Any, settings: Any):
@@ -191,6 +211,7 @@ def make_aggregate(loaded: Any, settings: Any):
             if s.step_type in ("work", "sprint") and s.step_id not in dep_targets
         }
         parts: list[str] = []
+        note_lines: list[str] = []
         for step in sorted(task.steps, key=lambda s: s.seq):
             if step.step_type == "review":
                 # v63 "đạt kèm góp ý": a passed review's notes are worth surfacing in
@@ -207,7 +228,9 @@ def make_aggregate(loaded: Any, settings: Any):
                 notes = list(verdict.get("notes") or []) if verdict else []
                 if verdict and bool(verdict.get("passed")) and notes:
                     joined = "; ".join(str(n)[:200] for n in notes[:5])
-                    parts.append(f"- {step.title}: đạt — góp ý thêm: {joined}")
+                    line = f"- {step.title}: đạt — góp ý thêm: {joined}"
+                    parts.append(line)
+                    note_lines.append(line)
                 continue
             artifact = read_step_artifact(team_tasks_root(), task.id, step.seq)
             text = ""
@@ -226,16 +249,19 @@ def make_aggregate(loaded: Any, settings: Any):
             parts.append(f"- {step.title}: {snippet}")
         fallback_summary = f"Việc '{task.title}' đã hoàn tất:\n" + "\n".join(parts)
 
-        # v77: a sprint task has exactly ONE content step whose artifact IS the
-        # deliverable the CEO asked for. Summarizing it would pay a second LLM call to
-        # compress a text that was already written to be read — and worse, the `parts`
-        # snippets above are truncated at 500 chars, so the summary would be built from
-        # a cut-off copy of the only thing that matters. Hand back the full result.
-        # This returns before `format_internal_content` runs, which is harmless: that
-        # pass strips the LLM's summary-shaped scaffolding, and a sprint artifact has
-        # none — it went through the same `deliver` path every work step's output does.
-        direct = _sprint_result_text(task)
+        # A task converging on ONE terminal content step delivers that artifact
+        # verbatim — see `_direct_result_text` for why summarizing it is the wrong
+        # operation. This returns before `format_internal_content` runs, which is
+        # harmless: that pass strips the LLM's summary-shaped scaffolding, and a step
+        # artifact has none — it went through the same `deliver` path every work step's
+        # output does.
+        direct = _direct_result_text(task)
         if direct:
+            # A passed-with-notes review never mints a rework, so this summary is the
+            # only path its advisory notes have to the CEO — handing back the artifact
+            # alone would silently drop them (v63 behaviour, kept intact here).
+            if note_lines:
+                return direct + "\n\n" + "\n".join(note_lines), None
             return direct, None
 
         if not settings.openrouter_api_key:
