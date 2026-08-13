@@ -195,6 +195,37 @@ def test_needs_rework_verdict_mints_rework_step_with_original_author(tmp_path, m
     assert rework.deps == (review_step.step_id,)
 
 
+def test_rework_inherits_the_web_grant_of_the_step_it_redoes(tmp_path, monkeypatch):
+    """A fix round that cannot re-fetch its own sources is not a fix round.
+
+    Observed live (task a0865653ed89): a `needs_web` research step failed review, and
+    its rework — minted without the flag — was routed to the searchless tier, so it
+    could only answer "Công cụ tìm kiếm web không khả dụng" and park on a clarify
+    instead of redoing the lookup.
+    """
+    store = _store(tmp_path)
+    steps = [
+        {"step_id": "s1", "title": "tra giá công cụ", "assigned_to": "agent-a",
+         "deps": [], "needs_review": True, "needs_web": True},
+    ]
+    store.create_task(task_id="t1", title="demo task", original_request="lam demo")
+    store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    store.mark_done("t1", "s1", outcome_ref="x", cost_usd=0.0)
+    _mint_review(store)
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    write_review_verdict_artifact(
+        team_tasks_root(), "t1", 1, 0,
+        {"passed": False, "failures": ["thieu so lieu"], "result_text": "brief"},
+    )
+    task = store.get("t1")
+    review_step = next(s for s in task.steps if s.step_type == "review")
+
+    assert maybe_handle_review_done(_deps(store), task, review_step) is True
+    rework = next(s for s in store.get("t1").steps if s.step_type == "rework")
+    assert rework.needs_web is True
+
+
 def test_rework_round_cap_stalls_and_escalates_after_max_rounds(tmp_path, monkeypatch):
     store = _store(tmp_path)
     _plan_one_step(store, needs_review=True)

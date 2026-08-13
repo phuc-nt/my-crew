@@ -356,9 +356,15 @@ def _insert_rework_step(
     # fde05a52f0ee): it reported "thiếu dữ liệu từ các bước trước" and degraded the
     # artifact instead of fixing it, twice, straight into the review-round cap.
     rework_deps = [dep_id] + [d for d in content_step.deps if d != dep_id]
+    # Same reasoning as the inherited deps, one layer down: the rework REDOES the
+    # original work, so it inherits the web grant the author had. Without it a research
+    # step's rework is routed to the searchless tier and can only ask the CEO what to do
+    # (observed live, task a0865653ed89: "Công cụ tìm kiếm web không khả dụng" →
+    # waiting_clarify) — a fix round that cannot re-fetch its own sources is not a fix
+    # round. Same argument v74 already accepted for runtime-split subs.
     deps.store.insert_step(task.id, {
         "step_id": step_id, "title": content_step.title,
         "assigned_to": content_step.assigned_to, "deps": rework_deps,
         "step_type": "rework",
         "parent_step_id": content_step.step_id, "review_round": review_round,
-    })
+    }, needs_web=content_step.needs_web)
