@@ -358,3 +358,50 @@ def test_lop_a_hard_deny_ignores_the_autopilot_flag(monkeypatch):
               "argv": ["gmail", "users", "messages", "delete", "--params", "{}"],
               "dedup_hint": "x"}
     assert classify(action).blocked
+
+
+# --- delivered tasks are off the ladder ------------------------------------------------
+
+
+def test_the_sweep_never_reopens_a_task_the_ceo_was_already_told_was_finished(
+    tmp_path, monkeypatch,
+):
+    """A task can be `delivered` AND `stalled` at once: the terminal step's summary went
+    out, then a later review round exhausted its budget. Resolving that stall restarts
+    work the CEO believes is over — and every rung emits more Telegram traffic ON TOP of
+    the ✅ HOÀN THÀNH they already have. Observed live (task 999b3473afa1): delivered,
+    then reopened twice, messaging for another 20 minutes. Once delivered, a surviving
+    stall is the CEO's call — which the escalation already asked for.
+    """
+    from my_crew.runtime.autopilot_sweep import run_autopilot_sweep
+
+    _autopilot_company(monkeypatch)
+    _mk_review_stalled(tmp_path)
+    store = _open_store(tmp_path)
+    try:
+        store.set_delivery("t1", status="delivered")
+
+        assert run_autopilot_sweep(store) == 0
+        task = store.get("t1")
+        assert task.status == "stalled"       # left for the CEO, not resurrected
+        assert task.reopen_count == 0
+        assert task.autopilot_attempts == 0   # the rung is not even spent
+    finally:
+        store.close()
+
+
+def test_a_stalled_task_still_awaiting_delivery_is_swept_normally(tmp_path, monkeypatch):
+    """The guard keys on `delivered` specifically — `pending` means the CEO has NOT been
+    told anything yet, so the ladder must still run or the task dies silently."""
+    from my_crew.runtime.autopilot_sweep import run_autopilot_sweep
+
+    _autopilot_company(monkeypatch)
+    _mk_review_stalled(tmp_path)
+    store = _open_store(tmp_path)
+    try:
+        store.set_delivery("t1", status="pending")
+
+        assert run_autopilot_sweep(store) == 1
+        assert store.get("t1").status == "open"
+    finally:
+        store.close()

@@ -43,6 +43,14 @@ def run_autopilot_sweep(store: TeamTaskStore) -> int:
     for task in store.list_stalled():
         if task.require_ceo_approval:
             continue
+        if task.delivery_status == "delivered":
+            # The CEO already has this task's ✅ HOÀN THÀNH notice. Resolving it further
+            # restarts work on a task they were told was finished, and every rung after
+            # that emits more Telegram traffic ON TOP of the completion message —
+            # observed live: one brief produced a "done" notice at 21:19 and kept
+            # messaging until 21:39. Once delivered, the ladder is over; a stall that
+            # survives delivery is the CEO's call, which the escalation already asked for.
+            continue
         if task.autopilot_attempts >= MAX_AUTOPILOT_ATTEMPTS:
             continue
         attempt = store.increment_autopilot_attempts(task.id)

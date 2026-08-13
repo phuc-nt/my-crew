@@ -1,10 +1,14 @@
 """`team_tick_collaborators.make_escalate` (v12 final-review escalation-reachability
-redesign): the office-room `milestone` append must happen FIRST and UNCONDITIONALLY,
-before any attempt at a direct coordinator Telegram send — the admin agent's
-milestone-mirror ops-tick (`milestone_mirror_runner`) polls the room and DMs the CEO
-regardless of whether the coordinator has its own Telegram binding, so a coordinator
-with no bot of its own (the 1-click bootstrap default) still has a working escalation
-path via the mirror.
+redesign): the office-room `milestone` append must happen UNCONDITIONALLY, whatever the
+direct Telegram send does — the admin agent's milestone-mirror ops-tick
+(`milestone_mirror_runner`) polls the room and DMs the CEO regardless of whether the
+coordinator has its own Telegram binding, so a coordinator with no bot of its own (the
+1-click bootstrap default) still has a working escalation path via the mirror.
+
+The direct send now runs BEFORE that append so its outcome can be stamped into the
+milestone body as `delivered_direct` — the flag the mirror reads to avoid re-pushing a
+notice the CEO already received in the same chat. Unconditional-ness is what these
+tests pin; the ordering is an implementation detail in service of it.
 """
 
 from __future__ import annotations
@@ -666,3 +670,94 @@ def test_a_missing_routing_record_never_blocks_the_escalation(tmp_path, monkeypa
     finally:
         store.close()
     assert "không làm được" in rows[0].body["message"]
+
+
+# --- delivered_direct: one event must not reach the CEO twice --------------------------
+#
+# Both the direct escalation send and the milestone mirror's "🏁 Cập nhật tiến độ đội"
+# digest now land in the SAME chat, so every escalation the fast path delivered was
+# arriving a second time inside the digest. `_deliver` already stamped `delivered_direct`
+# for the done-notice; `_escalate` did not, so escalations kept double-sending (observed
+# on the CEO's phone: one brief produced a wall of paired messages).
+
+
+def _loaded_with_telegram():
+    telegram = SimpleNamespace(bot_token_env="X", chat_ids=("op-1",), poll_minutes=5,
+                               ops_operator_id="op-1")
+    return SimpleNamespace(
+        config=SimpleNamespace(telegram=telegram, slack_external_channels=()),
+        profile_id="coordinator",
+    )
+
+
+def _stub_send(monkeypatch, status: str):
+    """Neutralise the gateway + capture what the fast path reports back."""
+    class _Gateway:
+        def __init__(self, *a, **kw):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("my_crew.actions.action_gateway.ActionGateway", _Gateway)
+    monkeypatch.setattr(
+        "my_crew.actions.telegram_write.send_telegram_message",
+        lambda *a, **kw: SimpleNamespace(status=status),
+    )
+
+
+def _milestone_body(tmp_path):
+    from my_crew.runtime import team_task_paths
+
+    store = OfficeRoomStore(team_task_paths.team_tasks_root() / "office_room.sqlite3")
+    try:
+        return store.list("t1")[0].body
+    finally:
+        store.close()
+
+
+def test_a_delivered_escalation_marks_itself_so_the_mirror_skips_the_duplicate(
+    tmp_path, monkeypatch,
+):
+    from my_crew.runtime import team_task_paths
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    _stub_send(monkeypatch, "executed")
+
+    escalate = make_escalate(_loaded_with_telegram(), settings=SimpleNamespace())
+    escalate(_task(), _step(), "step_failed", "bước draft thất bại")
+
+    assert _milestone_body(tmp_path)["delivered_direct"] is True
+
+
+def test_an_escalation_the_fast_path_could_not_send_stays_mirror_deliverable(
+    tmp_path, monkeypatch,
+):
+    """The whole point of the mirror: when the direct send fails, the digest is the
+    CEO's ONLY copy, so the flag must stay False and let it through. Marking it True
+    on a failed send would turn a de-duplication into silent message loss."""
+    from my_crew.runtime import team_task_paths
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    _stub_send(monkeypatch, "failed")
+
+    escalate = make_escalate(_loaded_with_telegram(), settings=SimpleNamespace())
+    escalate(_task(), _step(), "step_failed", "bước draft thất bại")
+
+    # The projection emits the flag only when true (keeping unsent bodies byte-identical
+    # to their pre-flag shape), and the mirror reads it with `.get()` — so "absent" and
+    # "False" are the same instruction: push it, the CEO has no other copy.
+    assert _milestone_body(tmp_path).get("delivered_direct") is not True
+
+
+def test_a_coordinator_without_a_binding_never_claims_direct_delivery(
+    tmp_path, monkeypatch,
+):
+    from my_crew.runtime import team_task_paths
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+    escalate(_task(), _step(), "step_failed", "bước draft thất bại")
+
+    assert _milestone_body(tmp_path).get("delivered_direct") is not True

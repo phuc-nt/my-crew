@@ -406,15 +406,20 @@ def make_escalate(loaded: Any, settings: Any):
             message = message + _SPRINT_UPGRADE_SUGGESTION
             _mark_route_dead_end(task.id)
 
-        # Room append comes FIRST and unconditionally: the admin agent's milestone
-        # mirror polls the room store and DMs the CEO, so an escalation reaches
-        # Telegram even when the coordinator has no bot binding of its own. The direct
-        # coordinator-Telegram send below is only the low-latency fast path.
+        # Whether the direct (fast-path) send below succeeded. Stamped into the room
+        # milestone body so the mirror SKIPS re-pushing a notice the CEO already has —
+        # the same `delivered_direct` contract `_deliver` uses. Without it every
+        # escalation reached the CEO twice: once as its own message, then again inside
+        # the "🏁 Cập nhật tiến độ đội" digest, since both channels now land in the
+        # SAME chat. The send therefore has to run BEFORE the append; the append itself
+        # stays unconditional, so the mirror is still the guaranteed delivery path when
+        # the coordinator has no bot binding of its own.
+        sent_direct = _escalate_direct(task, step, event_kind, message)
         try:
             from my_crew.runtime.office_room_append import append_office_event, room_for_task
 
             body = {"task_id": task.id, "task_title": task.title, "milestone": event_kind,
-                    "message": message}
+                    "message": message, "delivered_direct": sent_direct}
             # Emitted only when this escalation is ABOUT a specific step, which keeps
             # every task-level escalation's body byte-identical to before. The mirror
             # dedups per-step milestones (`stuck`, `step_failed`) on this key — without
@@ -434,6 +439,14 @@ def make_escalate(loaded: Any, settings: Any):
         except Exception:  # noqa: BLE001 — escalation must never crash the ticker
             logger.exception("team-tick: escalate(%s) room append failed for task %s",
                              event_kind, task.id)
+
+    def _escalate_direct(
+        task: TeamTask, step: TeamStep | None, event_kind: str, message: str,
+    ) -> bool:
+        """Low-latency send straight to the assigning chat. Returns whether the CEO can
+        be assumed to have this message already — the mirror reads that to decide
+        whether the digest would be a duplicate. False on every degrade path (no
+        binding, gateway/network error), which keeps the mirror as the fallback."""
         try:
             from my_crew.actions.action_gateway import ActionGateway
             from my_crew.actions.telegram_write import send_telegram_message
@@ -446,14 +459,14 @@ def make_escalate(loaded: Any, settings: Any):
                     "binding — delivered via the room milestone mirror only",
                     event_kind, task.id,
                 )
-                return
+                return False
             gateway = ActionGateway(
                 settings, external_channels=loaded.config.slack_external_channels,
                 actor=getattr(loaded, "profile_id", ""),  # v46
             )
             try:
                 step_id = step.step_id if step is not None else ""
-                send_telegram_message(
+                result = send_telegram_message(
                     message,
                     gateway=gateway,
                     telegram=telegram,
@@ -461,6 +474,7 @@ def make_escalate(loaded: Any, settings: Any):
                     dedup_hint=f"team-tick:{task.id}:{step_id}:{event_kind}",
                     rationale=f"team task escalation: {event_kind}",
                 )
+                return result.status in ("executed", "pending_approval")
             finally:
                 gateway.close()
         except Exception:  # noqa: BLE001 — escalation must never crash the ticker
@@ -468,5 +482,6 @@ def make_escalate(loaded: Any, settings: Any):
                 "team-tick: escalate(%s) failed for task %s (continuing — task state "
                 "already updated)", event_kind, task.id,
             )
+            return False
 
     return _escalate
