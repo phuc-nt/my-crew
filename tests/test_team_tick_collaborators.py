@@ -180,10 +180,12 @@ def test_step_level_escalation_does_not_get_the_amend_suggestion(tmp_path, monke
 # --- v63 make_aggregate: passed-with-notes review rows surface their notes ------------
 
 
-def _step_row(step_id, seq, *, step_type="work", parent=None, review_round=0, title=None):
+def _step_row(step_id, seq, *, step_type="work", parent=None, review_round=0, title=None,
+              deps=()):
     return TeamStep(
         task_id="t1", step_id=step_id, seq=seq, title=title or step_id,
-        assigned_to="agent-a", deps=(), status="done", outcome_ref=None, cost_usd=None,
+        assigned_to="agent-a", deps=tuple(deps), status="done", outcome_ref=None,
+        cost_usd=None,
         attempt_id=f"attempt-{seq}", child_pid=None, spawned_at=None, last_seen=None,
         lease_expires_at=None, escalated_at=None, approval_id=None, acceptance="",
         step_type=step_type, needs_review=False, system_inserted=step_type != "work",
@@ -380,6 +382,66 @@ def test_a_sprint_task_whose_artifact_vanished_falls_back_to_the_normal_aggregat
     )
     summary, _cost = aggregate(task)
     assert "đã hoàn tất" in summary
+
+
+def test_a_multi_step_task_delivers_its_terminal_step_uncut(tmp_path, monkeypatch):
+    """The terminal step's artifact IS the deliverable — same argument v77 made for the
+    sprint step, one shape up. Truncating it at 500 chars made the summarizer describe a
+    cut-off text instead of delivering it (task 1049321b5b2d: every step passed review,
+    yet the CEO got "bản thảo bị cắt giữa chừng" instead of the article). Intermediate
+    steps stay capped — their detail already reached the terminal via the deps handoff.
+    """
+    from my_crew.agent.team_task_artifact import write_step_artifact
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_tick_collaborators import make_aggregate
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    long_draft = "MỞ ĐẦU. " + ("câu văn dài " * 200) + " KẾT THÚC."
+    long_notes = "GHI CHÚ. " + ("ghi chú dài " * 200) + " HẾT GHI CHÚ."
+    rows = (_step_row("s1", 1, title="thu thập"),
+            _step_row("s2", 2, title="viết bài", deps=("s1",)))
+    task = _task()
+    task = type(task)(**{**task.__dict__, "steps": rows})
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": long_notes,
+                                            "version": "attempt-1"})
+    write_step_artifact(tmp_path, "t1", 2, {"result_text": long_draft,
+                                            "version": "attempt-2"})
+
+    aggregate = make_aggregate(
+        _loaded_no_telegram(), settings=SimpleNamespace(openrouter_api_key=""),
+    )
+    summary, _cost = aggregate(task)
+
+    assert long_draft in summary                 # terminal: whole text survives
+    assert "KẾT THÚC." in summary
+    assert long_notes not in summary             # intermediate: still capped
+    assert "HẾT GHI CHÚ." not in summary
+
+
+def test_a_rework_of_the_terminal_step_is_also_delivered_uncut(tmp_path, monkeypatch):
+    """A rework REPLACES its parent's output, so it inherits the parent's terminality —
+    otherwise the same hole re-opens one review round later."""
+    from my_crew.agent.team_task_artifact import write_step_artifact
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_tick_collaborators import make_aggregate
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    fixed = "BẢN SỬA. " + ("nội dung đã sửa " * 200) + " HẾT BẢN SỬA."
+    rows = (_step_row("s1", 1, title="thu thập"),
+            _step_row("s2", 2, title="viết bài", deps=("s1",)),
+            _step_row("s2-rework-0", 3, step_type="rework", parent="s2",
+                      title="viết bài (sửa)"))
+    task = _task()
+    task = type(task)(**{**task.__dict__, "steps": rows})
+    write_step_artifact(tmp_path, "t1", 3, {"result_text": fixed, "version": "attempt-3"})
+
+    aggregate = make_aggregate(
+        _loaded_no_telegram(), settings=SimpleNamespace(openrouter_api_key=""),
+    )
+    summary, _cost = aggregate(task)
+
+    assert fixed in summary
+    assert "HẾT BẢN SỬA." in summary
 
 
 def test_a_multi_step_task_is_untouched_by_the_sprint_shortcut(tmp_path, monkeypatch):

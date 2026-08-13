@@ -177,6 +177,19 @@ def make_aggregate(loaded: Any, settings: Any):
         from my_crew.tools.search_result_formatter import format_internal_content
 
         seq_by_step_id = {s.step_id: s.seq for s in task.steps}
+        # A terminal step's artifact IS the deliverable the CEO asked for — the same
+        # reasoning v77 applied to the sprint step, one shape up. Truncating it at 500
+        # chars like an intermediate handoff makes the summarizer describe a cut-off
+        # text instead of delivering it: observed live (task 1049321b5b2d), every step
+        # passed review yet the CEO received "bản thảo bị cắt giữa chừng ... không thể
+        # xác nhận đầy đủ toàn văn" instead of the 400-500 word article. Intermediate
+        # steps keep the cap — their detail already reached the terminal through the
+        # deps handoff, and the prompt must stay bounded.
+        dep_targets = {d for s in task.steps for d in s.deps}
+        terminal_ids = {
+            s.step_id for s in task.steps
+            if s.step_type in ("work", "sprint") and s.step_id not in dep_targets
+        }
         parts: list[str] = []
         for step in sorted(task.steps, key=lambda s: s.seq):
             if step.step_type == "review":
@@ -200,7 +213,16 @@ def make_aggregate(loaded: Any, settings: Any):
             text = ""
             if artifact:
                 text = str(artifact.get("result_text") or artifact.get("status") or "")
-            snippet = text[:500] if text else "(không có kết quả)"
+            # A rework rides on its parent's terminality: it REPLACES that step's
+            # output, so cutting it would re-open the same hole one round later.
+            is_terminal = (
+                step.step_id in terminal_ids
+                or (step.step_type == "rework" and step.parent_step_id in terminal_ids)
+            )
+            if not text:
+                snippet = "(không có kết quả)"
+            else:
+                snippet = text if is_terminal else text[:500]
             parts.append(f"- {step.title}: {snippet}")
         fallback_summary = f"Việc '{task.title}' đã hoàn tất:\n" + "\n".join(parts)
 
