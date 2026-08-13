@@ -48,7 +48,7 @@ class _FakeLlm:
     def __init__(self, content):
         self._content = content
 
-    def complete(self, messages):
+    def complete(self, messages, **_kw):
         return type("R", (), {"content": self._content, "cost_usd": 0.0002})()
 
 
@@ -116,7 +116,7 @@ def test_classifier_reraises_infra_errors():
     from my_crew.llm.fallback_policy import ProviderCallError
 
     class _DownLlm:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             raise ProviderCallError("all models down")
 
     with pytest.raises(ProviderCallError):
@@ -242,7 +242,7 @@ def test_pack_without_catalog_skips_classifier_entirely(tmp_path):
         commands = {}
 
     class _Boom:
-        def complete(self, messages):  # classifier must NOT be called
+        def complete(self, messages, **_kw):  # classifier must NOT be called
             raise AssertionError("LLM called for a catalog-less pack")
 
     assert maybe_handle_command(

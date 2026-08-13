@@ -93,7 +93,7 @@ def test_weekly_compose_includes_both_okr_and_resource(settings_factory, monkeyp
     )
 
     class _FakeLlm:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             from my_crew.llm.client import LlmResult
             return LlmResult(content="<p>weekly</p>", model="m",
                              prompt_tokens=0, completion_tokens=0, cost_usd=0.0)
@@ -116,7 +116,7 @@ def test_daily_compose_has_no_resource_section(settings_factory, monkeypatch):
     )
 
     class _FakeLlm:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             from my_crew.llm.client import LlmResult
             return LlmResult(content="<p>daily</p>", model="m",
                              prompt_tokens=0, completion_tokens=0, cost_usd=0.0)

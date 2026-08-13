@@ -203,7 +203,8 @@ def run_review_step(
     result = llm.complete(
         build_review_messages(
             result_text=result_text, acceptance=review_input.acceptance, persona=context.persona,
-        )
+        ),
+        role="review",
     )
     verdict = parse_review_verdict(result.content)
 

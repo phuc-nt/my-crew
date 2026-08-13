@@ -66,7 +66,7 @@ def _wire(monkeypatch, *, auto_confirm=False):
             })
 
         class _Llm:
-            def complete(self, messages):
+            def complete(self, messages, **_kw):
                 return _Result()
 
         return _Llm(), None

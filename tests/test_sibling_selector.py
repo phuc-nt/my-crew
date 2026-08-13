@@ -84,7 +84,7 @@ class _FakeLlm:
     def __init__(self, reply):
         self._reply = reply
 
-    def complete(self, messages):
+    def complete(self, messages, **_kw):
         class _R:
             content = self._reply
 
@@ -104,7 +104,7 @@ def test_selector_drops_hallucinated_facts():
 
 def test_make_llm_selector_graceful_on_failure():
     class _Boom:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             raise RuntimeError("no key")
 
     sel = make_llm_selector(_Boom())

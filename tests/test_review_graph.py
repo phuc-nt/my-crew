@@ -30,7 +30,7 @@ def _wire_llm(monkeypatch, *, verdict: dict, cost: float | None = 0.02):
         def __init__(self, _settings):
             pass
 
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             calls.append(messages)
             return _FakeResult(json.dumps(verdict, ensure_ascii=False), cost)
 
@@ -208,7 +208,7 @@ def test_run_review_step_malformed_llm_json_raises_review_verdict_error(tmp_path
         def __init__(self, _settings):
             pass
 
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             return _FakeResult("not json at all")
 
     monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)

@@ -54,7 +54,20 @@ DATA_DIR = MY_CREW_HOME / ".data"
 
 # OpenRouter is OpenAI-compatible; base URL is fixed by the provider.
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_MODEL = "deepseek/deepseek-v4-pro"
+DEFAULT_MODEL = "deepseek/deepseek-v4-pro-0813"
+
+# The work kinds a per-role model override may name (`Settings.role_models`). These are
+# cost shapes, not capabilities — the split is "does a human read this output".
+#   content   — writes the deliverable (team step work/rework, sprint draft+revise,
+#               reports, QA answers). Never downgrade this: it IS the product.
+#   review    — judges another step's output against acceptance; verdict + notes.
+#   aggregate — merges finished step outputs into one summary.
+#   plan      — decomposition, intake, amend, routing, skill/sibling selection.
+#   util      — short mechanical calls (slot extraction, memory consolidation,
+#               reflection). NOTE: the deep-agent sanitizer is deliberately NOT in
+#               this bucket — it is fail-closed and gates sandbox network access, so
+#               it stays on the fleet model regardless of cost.
+MODEL_ROLES = ("content", "review", "aggregate", "plan", "util")
 
 
 @dataclass(frozen=True)
@@ -107,6 +120,16 @@ class Settings:
     # re-checked before every attempt, so a fallback can never spend past the cap.
     model_chain: tuple[str, ...] = ()
 
+    # Per-role model overrides, as (role, model) pairs — a tuple, not a dict, because
+    # this dataclass is frozen and must stay hashable. Empty (default) ⇒ every role
+    # runs the fleet model, byte-identical to pre-v79.
+    #
+    # The point is cost shape, not capability: a review verdict or a slot extraction
+    # is a short mechanical judgement, while the content step writes the artifact a
+    # human reads. Paying content prices for the former is the fleet's largest avoidable
+    # cost. See `model_for_role` for how an override resolves.
+    role_models: tuple[tuple[str, str], ...] = ()
+
     # Optional web-search provider keys for the coordinator's team-task search_hook
     # (`tools/web_search_tool.py`). Both absent ⇒ `WebSearchConfig.available()` is
     # False and the hook degrades to a no-op — no crash, no key required to run.
@@ -121,6 +144,25 @@ class Settings:
     def effective_model_chain(self) -> tuple[str, ...]:
         """The chain `LlmClient.complete` walks: declared chain, or just the model."""
         return self.model_chain or (self.openrouter_model,)
+
+    def model_for_role(self, role: str) -> tuple[str, ...]:
+        """The chain to run `role` on: its override first, then the fleet chain.
+
+        Returns a CHAIN rather than a bare model so a role override never costs the
+        caller its fallback — a cheap model is exactly the kind that gets rate-limited
+        or 5xxs, and silently losing the fallback there would trade pennies for a dead
+        step. The fleet chain is appended after the override for the same reason: when
+        the cheap model is exhausted the role degrades UP to the fleet model rather
+        than failing outright.
+
+        An unknown role is not an error — it simply has no override and gets the fleet
+        chain, so a call site can name a role before anyone configures a model for it.
+        """
+        for name, model in self.role_models:
+            if name == role:
+                fleet = self.effective_model_chain()
+                return (model,) + tuple(m for m in fleet if m != model)
+        return self.effective_model_chain()
 
     def require_api_key(self) -> str:
         """Return the OpenRouter key, or raise a clear error if it is unset.

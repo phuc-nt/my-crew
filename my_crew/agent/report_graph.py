@@ -157,7 +157,7 @@ def default_report_deps(
             company_docs=docs_text,
             sibling_facts=sibling_text,
         )
-        result = llm.complete(messages)
+        result = llm.complete(messages, role="content")
         body = result.content
         # Weekly review also carries OKR + resource sections (internal only — these
         # are internal-detail noise an external stakeholder report should not embed).

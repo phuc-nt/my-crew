@@ -72,6 +72,11 @@ def make_llm_sanitizer(client: LlmClient) -> Sanitizer:
         if not text or not text.strip():
             return "", True  # nothing to clean; not a failure
         try:
+            # Deliberately NO role= here. This call looks like the cheap mechanical
+            # work that `role="util"` exists for, but it is a security control: it
+            # redacts internal-sensitive tokens before a sandbox is allowed online, and
+            # it fails CLOSED. Routing it to a weaker model to save fractions of a cent
+            # would trade a network-access gate for pennies — it stays on the fleet model.
             result = client.complete(
                 [
                     {"role": "system", "content": _SYSTEM},

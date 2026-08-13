@@ -62,7 +62,7 @@ def _wire_llm(
         def __init__(self, _settings):
             pass
 
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             calls.append(messages)
             if raises:
                 raise RuntimeError("llm boom")

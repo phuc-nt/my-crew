@@ -162,7 +162,7 @@ def test_intake_uses_the_models_plan_when_it_is_well_formed(monkeypatch):
     )
     monkeypatch.setattr(
         mod, "_build_llm",
-        lambda: (SimpleNamespace(complete=lambda m: SimpleNamespace(content=payload,
+        lambda: (SimpleNamespace(complete=lambda m, **_kw: SimpleNamespace(content=payload,
                                                                     cost_usd=0.001)), None),
     )
     plan, cost = intake_mod.sprint_intake("khảo sát 5 dịch vụ streaming", _STAFF)
@@ -182,7 +182,7 @@ def test_intake_falls_open_to_the_ceos_own_words(monkeypatch, content):
     costs an empty report)."""
     monkeypatch.setattr(
         mod, "_build_llm",
-        lambda: (SimpleNamespace(complete=lambda m: SimpleNamespace(content=content,
+        lambda: (SimpleNamespace(complete=lambda m, **_kw: SimpleNamespace(content=content,
                                                                     cost_usd=0.002)), None),
     )
     plan, _cost = intake_mod.sprint_intake("khảo sát 5 dịch vụ", _STAFF)
@@ -205,7 +205,7 @@ def test_intake_never_invents_an_assignee(monkeypatch):
     payload = '{"goal":"g","acceptance":"","assigned_to":"nguoi-khong-co-that"}'
     monkeypatch.setattr(
         mod, "_build_llm",
-        lambda: (SimpleNamespace(complete=lambda m: SimpleNamespace(content=payload,
+        lambda: (SimpleNamespace(complete=lambda m, **_kw: SimpleNamespace(content=payload,
                                                                     cost_usd=0.0)), None),
     )
     plan, _ = intake_mod.sprint_intake("khảo sát", _STAFF)
@@ -216,7 +216,7 @@ def test_intake_cannot_override_a_ceo_named_pic(monkeypatch):
     payload = '{"goal":"g","acceptance":"","assigned_to":"agent-b"}'
     monkeypatch.setattr(
         mod, "_build_llm",
-        lambda: (SimpleNamespace(complete=lambda m: SimpleNamespace(content=payload,
+        lambda: (SimpleNamespace(complete=lambda m, **_kw: SimpleNamespace(content=payload,
                                                                     cost_usd=0.0)), None),
     )
     plan, _ = intake_mod.sprint_intake("khảo sát", _STAFF, pic_requested="agent-a")

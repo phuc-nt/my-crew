@@ -48,7 +48,7 @@ class _RecordingLlm:
     def __init__(self, *_a, **_k):
         self.captured: list[list[dict[str, str]]] = []
 
-    def complete(self, messages):
+    def complete(self, messages, **_kw):
         self.captured.append(messages)
         return LlmResult("<p>canned</p>", "fake", 0, 0, 0.0)
 

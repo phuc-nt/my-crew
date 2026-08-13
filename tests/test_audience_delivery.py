@@ -293,7 +293,7 @@ def test_weekly_external_omits_embedded_sections(settings_factory, monkeypatch):
     )
 
     class _FakeLlm:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             from my_crew.llm.client import LlmResult
             return LlmResult(content="<p>weekly</p>", model="m",
                              prompt_tokens=0, completion_tokens=0, cost_usd=0.0)

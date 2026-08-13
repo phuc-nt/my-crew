@@ -171,7 +171,7 @@ def maybe_consolidate(agent_id: str, settings, *, now: datetime | None = None, l
         result = llm.complete([
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": user},
-        ])
+        ], role="util")
     except Exception:  # noqa: BLE001 — maintenance must never take down the scheduler
         logger.warning("memory-consolidation[%s]: LLM call failed — keeping original",
                        agent_id, exc_info=True)

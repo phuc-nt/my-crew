@@ -292,7 +292,8 @@ def _answer_question(
     )
 
     result = llm.complete(
-        [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        role="content",
     )
     reply = result.content.strip()
     cost = result.cost_usd
@@ -309,7 +310,8 @@ def _answer_question(
             "là chưa tra được."
         )
         result2 = llm.complete(
-            [{"role": "system", "content": system}, {"role": "user", "content": user2}]
+            [{"role": "system", "content": system}, {"role": "user", "content": user2}],
+            role="content",
         )
         reply = result2.content.strip()
         if extract_query(reply) is not None:  # model lại đòi tra tiếp — cắt vòng lặp

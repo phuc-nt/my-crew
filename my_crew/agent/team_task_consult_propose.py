@@ -178,7 +178,8 @@ def propose_consults_and_split(
                 step_title=step_title, handoff_context=handoff_context, roster=roster,
                 persona=persona, project=project, memory=memory, allow_ceo=allow_ceo,
                 allow_split=allow_split,
-            )
+            ),
+            role="plan",
         )
         proposal = parse_consult_proposal(result.content)
         valid_ids = {agent_id for agent_id, _ in roster}

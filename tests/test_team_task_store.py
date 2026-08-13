@@ -597,7 +597,7 @@ def _fake_llm(monkeypatch, *, content="step output", cost=0.01):
         def __init__(self, _settings):
             pass
 
-        def complete(self, _messages):
+        def complete(self, _messages, **_kw):
             return result
 
     import my_crew.llm.client as llm_client_mod
@@ -717,7 +717,7 @@ def test_worker_team_step_graph_exception_writes_failed_outcome_and_error_event(
         def __init__(self, _settings):
             pass
 
-        def complete(self, _messages):
+        def complete(self, _messages, **_kw):
             raise RuntimeError("llm exploded")
 
     import my_crew.llm.client as llm_client_mod

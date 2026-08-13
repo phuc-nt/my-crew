@@ -306,7 +306,9 @@ def _model_turn(settings: Any, prompt: str) -> tuple[str | None, float | None]:
     other call uses, so a heartbeat can never spend past the monthly cap."""
     from my_crew.llm.client import LlmClient
 
-    result = LlmClient(settings).complete([{"role": "user", "content": prompt}])
+    result = LlmClient(settings).complete(
+        [{"role": "user", "content": prompt}], role="content"
+    )
     return result.content, result.cost_usd
 
 

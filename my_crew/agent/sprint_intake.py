@@ -315,7 +315,8 @@ def sprint_intake(
 
         llm, _settings = _build_llm()
         result = llm.complete(
-            build_sprint_intake_messages(brief=brief, staff=staff, pic_requested=pic_requested)
+            build_sprint_intake_messages(brief=brief, staff=staff, pic_requested=pic_requested),
+            role="plan",
         )
     except Exception as exc:  # noqa: BLE001 — mọi lỗi hạ tầng model đều fail-open
         return _fallback(f"gọi model lỗi: {exc}")

@@ -164,7 +164,7 @@ def test_sprint_cost_sums_every_call_the_pipeline_made(monkeypatch):
     calls = {"n": 0}
 
     class _Llm:
-        def complete(self, _messages):
+        def complete(self, _messages, **_kw):
             calls["n"] += 1
             return SimpleNamespace(content="Chỉ nói về Netflix.", cost_usd=0.02)
 

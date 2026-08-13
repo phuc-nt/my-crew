@@ -270,7 +270,9 @@ def _reflect_inner(
     # The monthly budget cap is supreme: `LlmClient.complete` raises BudgetExceededError
     # through BudgetTracker, and the outer `_reflect` turns that into a skipped
     # reflection rather than a failed tick.
-    result = LlmClient(settings).complete([{"role": "user", "content": prompt}])
+    result = LlmClient(settings).complete(
+        [{"role": "user", "content": prompt}], role="util"
+    )
     lesson = (result.content or "").strip()
 
     ts = datetime.now(UTC).isoformat()

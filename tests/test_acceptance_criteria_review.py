@@ -61,7 +61,7 @@ def test_run_review_step_threads_criteria_into_artifact_and_result(tmp_path, mon
         def __init__(self, settings):
             pass
 
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             return SimpleNamespace(content=json.dumps({
                 "passed": False, "failures": ["thiếu số liệu"],
                 "criteria": [

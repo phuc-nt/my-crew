@@ -96,7 +96,7 @@ def test_classify_garbage_defaults_to_question(monkeypatch):
     import my_crew.server.routes_office_room_chat as mod
 
     class _Llm:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             class R:
                 content = "not json"
                 cost_usd = 0.0

@@ -201,7 +201,7 @@ def amend_with_retries(task, request: str, staff: list[tuple[str, str]]) -> tupl
         messages = _build_amend_messages(
             task=task, request=request, staff=staff, retry_error=last_error,
         )
-        result = llm.complete(messages)
+        result = llm.complete(messages, role="plan")
         if result.cost_usd:
             total_cost += result.cost_usd
         try:

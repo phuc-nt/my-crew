@@ -33,7 +33,7 @@ class _FakeLlm:
         self._cost = cost
         self.calls: list[list[dict[str, str]]] = []
 
-    def complete(self, messages):
+    def complete(self, messages, **_kw):
         self.calls.append(list(messages))
         reply = self._replies.pop(0) if self._replies else ""
         return SimpleNamespace(content=reply, cost_usd=self._cost)

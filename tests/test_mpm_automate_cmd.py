@@ -152,7 +152,7 @@ def test_real_analyze_fn_reads_llm_result_content(monkeypatch):
         def __init__(self, settings):
             pass
 
-        def complete(self, messages, *, model=None):
+        def complete(self, messages, *, model=None, **_kw):
             return LlmResult(
                 content="summary OK", model="x", prompt_tokens=1,
                 completion_tokens=1, cost_usd=0.0,

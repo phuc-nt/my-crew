@@ -302,7 +302,9 @@ def make_aggregate(loaded: Any, settings: Any):
                 "meta, không tiếng Anh.\n\n"
                 + "\n\n".join(wrapped_parts)
             )
-            result = client.complete([{"role": "user", "content": prompt}])
+            result = client.complete(
+                [{"role": "user", "content": prompt}], role="aggregate"
+            )
             return result.content or fallback_summary, result.cost_usd
         except Exception:  # noqa: BLE001 — never let a summarizer failure block delivery
             logger.exception("team-tick: aggregate LLM call failed for task %s", task.id)

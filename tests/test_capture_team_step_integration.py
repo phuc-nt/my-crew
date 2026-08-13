@@ -37,7 +37,7 @@ def _fake_llm(monkeypatch, *, cost=0.02):
         def __init__(self, _s):
             pass
 
-        def complete(self, _m):
+        def complete(self, _m, **_kw):
             return _Result()
 
     import my_crew.llm.client as mod

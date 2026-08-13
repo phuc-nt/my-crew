@@ -58,7 +58,8 @@ def run_company_activity(
     ]
     user = counts_text + "\n\nCÁC DÒNG GẦN NHẤT:\n" + "\n".join(w for w in wrapped if w)
     result = llm.complete(
-        [{"role": "system", "content": _SUMMARY_SYSTEM}, {"role": "user", "content": user}]
+        [{"role": "system", "content": _SUMMARY_SYSTEM}, {"role": "user", "content": user}],
+        role="aggregate",
     )
     reply = result.content.strip()
     # An empty/garbled completion degrades to the code-computed counts — never an empty reply.

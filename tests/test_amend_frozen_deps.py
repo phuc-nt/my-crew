@@ -44,7 +44,7 @@ def _wire_llm(monkeypatch, completion: dict):
         cost_usd = 0.001
 
     class _Llm:
-        def complete(self, _messages):
+        def complete(self, _messages, **_kw):
             return _Result()
 
     monkeypatch.setattr(

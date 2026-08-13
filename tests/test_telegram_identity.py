@@ -393,7 +393,7 @@ def test_answer_mention_replies_via_telegram_send(tmp_path, monkeypatch):
         report_kinds = {"daily": None}
 
     class _Llm:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             return type("R", (), {"content": "SCRUM-1 đã Done. @acme", "cost_usd": 0.0001})()
 
     loaded = _loaded(tmp_path, telegram={"bot_token_env": _TOKEN_ENV, "chat_ids": ["111"]})
@@ -430,7 +430,7 @@ def test_same_message_never_double_replies(tmp_path, monkeypatch):
         report_kinds = {"daily": None}
 
     class _Llm:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             return type("R", (), {"content": "trả lời", "cost_usd": None})()
 
     loaded = _loaded(tmp_path, telegram={"bot_token_env": _TOKEN_ENV, "chat_ids": ["111"]})

@@ -278,7 +278,7 @@ class _FakeLlm:
         self._content = content
         self.messages = None
 
-    def complete(self, messages):
+    def complete(self, messages, **_kw):
         self.messages = messages
         return type("R", (), {"content": self._content, "cost_usd": 0.0005})()
 

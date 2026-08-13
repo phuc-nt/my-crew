@@ -65,7 +65,7 @@ class _ScriptedLlm:
         self._replies = list(replies)
         self.calls: list[list[dict[str, str]]] = []
 
-    def complete(self, messages):  # noqa: ANN001 — mirrors LlmClient.complete
+    def complete(self, messages, **_kw):  # noqa: ANN001 — mirrors LlmClient.complete
         self.calls.append(list(messages))
         reply = self._replies.pop(0) if self._replies else ""
         return SimpleNamespace(content=reply, cost_usd=0.0, prompt_tokens=0, completion_tokens=0)

@@ -33,7 +33,7 @@ def _wire_llm(monkeypatch, *, content: str):
         def __init__(self, _settings):
             pass
 
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             calls.append(messages)
             return _FakeResult(content)
 

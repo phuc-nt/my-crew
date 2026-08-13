@@ -320,7 +320,7 @@ def test_decompose_falls_back_to_code_side_fanout_when_the_model_never_splits(
     calls = []
 
     class _Llm:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             calls.append(messages)
             return SimpleNamespace(content=packed_plan, cost_usd=0.001)
 

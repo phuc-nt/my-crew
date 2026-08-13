@@ -525,7 +525,7 @@ def build_sprint_work(
             context=context, goal=goal, acceptance=acceptance, handoff=handoff, bundle=bundle,
         )
         _beat("sprint_draft")
-        result = client.complete(messages)
+        result = client.complete(messages, role="content")
         draft = str(getattr(result, "content", "") or "")
         _tally(result)
 
@@ -574,7 +574,7 @@ def build_sprint_work(
                 {"role": "user", "content": extra},
             ]
             _beat(f"sprint_revise_{round_no}")
-            result = client.complete(messages)
+            result = client.complete(messages, role="content")
             revised = str(getattr(result, "content", "") or "")
             _tally(result)
             if revised.strip():

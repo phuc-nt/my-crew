@@ -63,7 +63,7 @@ def fake_llm(monkeypatch):
         def __init__(self, settings):
             pass
 
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             calls.append(messages[0]["content"])
             reply = replies.pop(0) if replies else NOTHING_TOKEN
             return SimpleNamespace(content=reply, cost_usd=0.0001)
@@ -369,7 +369,7 @@ def test_an_llm_failure_never_escapes(monkeypatch):
         def __init__(self, settings):
             pass
 
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             raise RuntimeError("model exploded")
 
     monkeypatch.setattr("my_crew.llm.client.LlmClient", _Boom)
@@ -385,7 +385,7 @@ def test_a_budget_cap_breach_never_escapes(monkeypatch):
         def __init__(self, settings):
             pass
 
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             raise BudgetExceededError("trần tháng")
 
     monkeypatch.setattr("my_crew.llm.client.LlmClient", _Capped)

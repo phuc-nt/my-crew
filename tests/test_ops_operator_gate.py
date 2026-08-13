@@ -114,7 +114,7 @@ def test_personal_unsupported_lists_only_orchestration(tmp_path):
     from my_crew.agent.ops_conversation_store import OpsConversationStore
 
     class _Llm:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             return type("R", (), {
                 "content": '{"intent":"command","command_id":"create_agent","slots":{}}',
                 "cost_usd": 0.0001,
@@ -144,7 +144,7 @@ def test_personal_unsupported_falls_through_to_m12_catalog():
     from my_crew.agent.ops_conversation_store import OpsConversationStore
 
     class _Llm:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             from types import SimpleNamespace
 
             return SimpleNamespace(

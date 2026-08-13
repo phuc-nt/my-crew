@@ -49,7 +49,8 @@ def _build_analyze_fn(settings):
             [
                 {"role": "system", "content": prompt_text},
                 {"role": "user", "content": content},
-            ]
+            ],
+            role="aggregate",
         )
         return result.content
 

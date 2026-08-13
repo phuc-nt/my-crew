@@ -33,7 +33,7 @@ def _wire_llm(monkeypatch, new_steps):
         content = json.dumps({"steps": new_steps, "requires_approval": True})
 
     class _Llm:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             return _Result()
 
     monkeypatch.setattr(amend_mod, "_build_llm", lambda: (_Llm(), None))

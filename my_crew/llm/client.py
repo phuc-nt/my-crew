@@ -118,7 +118,13 @@ class LlmClient:
             )
         return self._client
 
-    def complete(self, messages: list[Message], *, model: str | None = None) -> LlmResult:
+    def complete(
+        self,
+        messages: list[Message],
+        *,
+        model: str | None = None,
+        role: str | None = None,
+    ) -> LlmResult:
         """Run one chat completion, walking the model chain on provider failure (v4 M9).
 
         An explicit `model=` bypasses the chain (single model, pre-v4 behavior); so
@@ -128,11 +134,26 @@ class LlmClient:
         is logged loudly (a completion silently served by a lesser model is how bad
         prose sneaks into reports unnoticed — M9 risk R1).
 
+        `role=` names this call's work kind (see `settings.MODEL_ROLES`) and resolves
+        through `model_for_role`, which keeps the fleet chain as a fallback tail — so
+        naming a role can make a call cheaper but never leaves it without a fallback.
+        A role with no configured override is exactly the default chain, which is why
+        call sites can declare their role before any override exists. An explicit
+        `model=` still wins over `role=`.
+
         Raises BudgetExceededError if the monthly cap is hit, or the last model's
         error when the whole chain is exhausted.
         """
-        chain = (model,) if model else self._settings.effective_model_chain()
-        if not model and len(chain) > 1 and chain[0] != self._settings.openrouter_model:
+        if model:
+            chain: tuple[str, ...] = (model,)
+        elif role:
+            chain = self._settings.model_for_role(role)
+        else:
+            chain = self._settings.effective_model_chain()
+        if (
+            not model and not role and len(chain) > 1
+            and chain[0] != self._settings.openrouter_model
+        ):
             # A declared chain overrides `model:` entirely — say so once per call, or a
             # stale OPENROUTER_MODEL_CHAIN env can silently serve an old model forever.
             logger.warning(

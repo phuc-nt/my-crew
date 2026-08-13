@@ -177,7 +177,7 @@ def _decompose_with_retries(
         messages = build_team_decompose_messages(
             brief=brief, staff=staff, retry_error=last_error, pic_requested=pic_requested,
         )
-        result = llm.complete(messages)
+        result = llm.complete(messages, role="plan")
         if result.cost_usd:
             total_cost += result.cost_usd
         try:

@@ -78,7 +78,7 @@ class _FakeLlm:
     def __init__(self, reply):
         self._reply = reply
 
-    def complete(self, messages):
+    def complete(self, messages, **_kw):
         class _R:
             content = self._reply
 
@@ -99,7 +99,7 @@ def test_llm_selector_empty_pool_skips_call():
     called = []
 
     class _Spy:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             called.append(1)
             raise AssertionError("should not be called for empty pool")
 
@@ -110,7 +110,7 @@ def test_llm_selector_empty_pool_skips_call():
 
 def test_llm_selector_tolerates_failure():
     class _Boom:
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             raise RuntimeError("no key")
 
     sel = make_llm_selector(_Boom())

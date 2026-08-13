@@ -133,7 +133,8 @@ def default_okr_deps(
                     sibling_facts=select_sibling_text(
                         context, audience, kind="okr", project_group=context.sibling_project
                     ),
-                )
+                ),
+                role="content",
             )
             return result.content, result.cost_usd
         except Exception as exc:  # no key / LLM error → narrative is optional

@@ -43,7 +43,8 @@ def make_llm_selector(client: LlmClient) -> SkillSelector:
                     {"role": "system", "content": _SYSTEM},
                     {"role": "user",
                      "content": f"Loại báo cáo: {kind_context}\nKỹ năng:\n{listing}"},
-                ]
+                ],
+                role="plan",
             )
             return _parse_names(result.content)
         except Exception as exc:  # noqa: BLE001 — skill selection is best-effort, never break a run

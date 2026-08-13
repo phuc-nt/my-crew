@@ -11,7 +11,7 @@ from my_crew.llm.client import LlmResult
 class _FakeClient:
     """Stand-in LLM client: echoes input, no network."""
 
-    def complete(self, messages, *, model=None):
+    def complete(self, messages, *, model=None, **_kw):
         return LlmResult(
             content="echo: " + messages[0]["content"],
             model="fake",

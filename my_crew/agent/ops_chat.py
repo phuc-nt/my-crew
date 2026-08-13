@@ -121,7 +121,8 @@ def classify_ops_intent(
     user = f"DANH SÁCH LỆNH:\n{catalog}\n\nTIN NHẮN:\n{message}"
     try:
         result = llm.complete(
-            [{"role": "system", "content": _INTENT_SYSTEM}, {"role": "user", "content": user}]
+            [{"role": "system", "content": _INTENT_SYSTEM}, {"role": "user", "content": user}],
+            role="plan",
         )
         parsed = _parse_json_object(result.content)
         parsed["_cost_usd"] = result.cost_usd
@@ -155,7 +156,8 @@ def extract_slot_value(
         user += f"\nĐỊNH DẠNG MONG MUỐN: {hint}"
     try:
         result = llm.complete(
-            [{"role": "system", "content": _EXTRACT_SYSTEM}, {"role": "user", "content": user}]
+            [{"role": "system", "content": _EXTRACT_SYSTEM}, {"role": "user", "content": user}],
+            role="util",
         )
         parsed = _parse_json_object(result.content)
         value = str(parsed.get("value") or "").strip()

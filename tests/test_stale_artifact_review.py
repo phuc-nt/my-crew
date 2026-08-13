@@ -122,7 +122,7 @@ def test_content_rerun_after_review_minted_forces_stale_artifact_reject_and_remi
         def __init__(self, _settings):
             pass
 
-        def complete(self, messages):
+        def complete(self, messages, **_kw):
             llm_calls.append(messages)
             return SimpleNamespace(
                 content=json.dumps({"passed": True, "failures": []}), cost_usd=0.02,

@@ -79,7 +79,7 @@ def answer_room_question(room_id: str, question: str, *, settings) -> tuple[str,
         result = llm.complete([
             {"role": "system", "content": _QA_SYSTEM},
             {"role": "user", "content": f"DỮ LIỆU PHÒNG VIỆC:\n{context}\n\n{wrapped_q}"},
-        ])
+        ], role="content")
         # m-cost (red-team): QA spend is observability-logged, not task-attributed.
         logger.info("room-qa %s cost_usd=%s", room_id, result.cost_usd)
         return result.content, result.cost_usd or 0.0

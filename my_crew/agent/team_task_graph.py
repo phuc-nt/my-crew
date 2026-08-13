@@ -366,7 +366,8 @@ def default_team_task_deps(
                     capability=context.capability,
                     skills=select_skill_text(context, "internal", kind="team-step"),
                     company_docs=company_docs_text(context, "internal"),
-                )
+                ),
+                role="content",
             )
             # Native path has a real provider cost (cost_source="exact"); fill the side-channel
             # collector with the token counts + provenance so capture is uniform across engines.
@@ -406,7 +407,8 @@ def default_team_task_deps(
                 build_self_check_messages(
                     result_text=result_text, acceptance=criteria, persona=context.persona,
                     handoff=handoff,
-                )
+                ),
+                role="review",
             )
             verdict = parse_check_verdict(result.content)
             return verdict.passed, list(verdict.failures), verdict.confidence
@@ -423,7 +425,8 @@ def default_team_task_deps(
                 build_rework_messages(
                     brief=brief, prior_output=prior_output, failures=failures,
                     persona=context.persona, handoff=handoff,
-                )
+                ),
+                role="content",
             )
             return result.content, result.cost_usd
         except Exception as exc:  # noqa: BLE001 — surfaced to the caller as a failed step

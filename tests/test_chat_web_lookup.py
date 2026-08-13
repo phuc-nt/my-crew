@@ -52,7 +52,7 @@ class _SeqLlm:
         self.contents = list(contents)
         self.calls: list[list[dict]] = []
 
-    def complete(self, messages):
+    def complete(self, messages, **_kw):
         self.calls.append(messages)
         return SimpleNamespace(content=self.contents.pop(0), cost_usd=0.001)
 

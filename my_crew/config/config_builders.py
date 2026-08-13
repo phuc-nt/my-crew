@@ -34,7 +34,7 @@ from my_crew.config.config_builders_reporting import (
     build_reporting_config_from_dict,
     build_reporting_config_from_env,
 )
-from my_crew.config.settings import DATA_DIR, DEFAULT_MODEL, Settings
+from my_crew.config.settings import DATA_DIR, DEFAULT_MODEL, MODEL_ROLES, Settings
 
 __all__ = [
     "build_settings_from_dict",
@@ -71,6 +71,52 @@ def _d_model_chain(value: Any) -> tuple[str, ...]:
     return chain
 
 
+def _d_role_models(value: Any) -> tuple[tuple[str, str], ...]:
+    """Coerce `role_models` (yaml mapping or "role=model,role=model" string) to pairs.
+
+    Empty/absent ⇒ () ⇒ every role runs the fleet model. An unknown ROLE NAME raises:
+    a typo'd role silently means "no override", so the operator would see the fleet
+    model's bill and no error — the same 3 a.m. failure mode `_d_model_chain` guards.
+    A duplicate role also raises rather than letting last-wins decide quietly.
+    """
+    if value is None or value == "" or value == {} or value == []:
+        return ()
+    if isinstance(value, str):
+        entries = [p.strip() for p in value.split(",") if p.strip()]
+        pairs = []
+        for entry in entries:
+            role, sep, model = entry.partition("=")
+            if not sep or not role.strip() or not model.strip():
+                raise ValueError(
+                    f"role_models entry must be 'role=model', got {entry!r} "
+                    "(OPENROUTER_ROLE_MODELS in .env)"
+                )
+            pairs.append((role.strip(), model.strip()))
+    elif isinstance(value, dict):
+        pairs = []
+        for role, model in value.items():
+            if not isinstance(model, str) or not model.strip():
+                raise ValueError(
+                    f"role_models[{role!r}] must be a model name string, got {model!r} "
+                    "— quote model names in yaml"
+                )
+            pairs.append((str(role).strip(), model.strip()))
+    else:
+        raise ValueError("role_models must be a mapping or a 'role=model,...' string")
+
+    seen: set[str] = set()
+    for role, _model in pairs:
+        if role not in MODEL_ROLES:
+            raise ValueError(
+                f"unknown role_models key {role!r} — valid roles are "
+                f"{', '.join(sorted(MODEL_ROLES))}"
+            )
+        if role in seen:
+            raise ValueError(f"role_models declares {role!r} twice")
+        seen.add(role)
+    return tuple(pairs)
+
+
 def _d_trust_mode(value: Any) -> str:
     """Coerce/validate `trust_mode`. Absent/empty ⇒ "autonomous" (the product default).
 
@@ -98,6 +144,7 @@ def build_settings_from_dict(d: dict[str, Any]) -> Settings:
         or "https://github.com/local/my-crew",
         openrouter_title=d.get("openrouter_title") or "my-crew",
         model_chain=_d_model_chain(d.get("model_chain")),
+        role_models=_d_role_models(d.get("role_models")),
         dry_run=_d_bool(d, "dry_run", True),
         write_disabled=_d_bool(d, "write_disabled", False),
         trust_mode=_d_trust_mode(d.get("trust_mode")),
@@ -133,6 +180,7 @@ def build_settings_from_env() -> Settings:
             "openrouter_referer": os.getenv("OPENROUTER_REFERER"),
             "openrouter_title": os.getenv("OPENROUTER_TITLE"),
             "model_chain": os.getenv("OPENROUTER_MODEL_CHAIN"),
+            "role_models": os.getenv("OPENROUTER_ROLE_MODELS"),
             "dry_run": os.getenv("DRY_RUN"),
             "write_disabled": os.getenv("AGENT_WRITE_DISABLED"),
             "trust_mode": os.getenv("TRUST_MODE"),

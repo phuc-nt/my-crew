@@ -116,7 +116,8 @@ def ask_colleague(
             build_consult_messages(
                 colleague_soul=colleague.soul, colleague_project=colleague.project,
                 question=question,
-            )
+            ),
+            role="plan",
         )
         answer, cost = result.content, (result.cost_usd or 0.0)
     except Exception as exc:  # noqa: BLE001 — consult is advisory, must never fail the step

@@ -36,7 +36,11 @@
 
 - Prompt để trong `llm/` (hoặc file riêng), KHÔNG rải rác inline khắp code.
 - Provider-agnostic: không khoá cứng 1 nhà cung cấp ở tầng graph.
-- **Provider = OpenRouter** (OpenAI-compatible, `base_url=https://openrouter.ai/api/v1`). Model qua env `OPENROUTER_MODEL`, default `minimax/minimax-m2.7`, fallback `qwen/qwen-3.7`. Đổi model KHÔNG sửa code — chỉ env.
+- **Provider = OpenRouter** (OpenAI-compatible, `base_url=https://openrouter.ai/api/v1`). Đổi model KHÔNG sửa code. Ba tầng, tầng sau ghi đè tầng trước:
+  1. **Fleet** — `OPENROUTER_MODEL` trong `.env` (vắng ⇒ `DEFAULT_MODEL` trong `config/settings.py`). Đây là công tắc đổi hết.
+  2. **Agent** — `model:` trong `profiles/<id>/profile.yaml`. **Để trống** ⇒ agent theo fleet; ghi giá trị ⇒ ghim riêng agent đó và một lần đổi fleet sẽ BỎ QUA nó. Các profile shipped cố ý để trống.
+  3. **Vai trò** — `OPENROUTER_ROLE_MODELS` (`role=model,...`) hoặc `role_models:` trong profile, cho `content|review|aggregate|plan|util`. Override vẫn giữ chain fleet làm đuôi fallback, nên bước rẻ không bao giờ mất đường lui.
+- Ngoại lệ có chủ đích: `deep_agent_sanitizer` không khai role — nó là chốt an ninh fail-closed gác quyền ra mạng, luôn chạy model fleet.
 - Set header `HTTP-Referer` + `X-Title` cho OpenRouter call.
 - Mọi LLM call: token/cost ý thức được (log usage khi có thể) — quan trọng vì autonomous loop có thể đốt tiền.
 

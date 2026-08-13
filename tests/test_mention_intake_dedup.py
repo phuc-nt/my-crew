@@ -66,7 +66,7 @@ class _StubPack:
 
 
 class _Llm:
-    def complete(self, messages):
+    def complete(self, messages, **_kw):
         return type("R", (), {"content": "đã ghi nhận", "cost_usd": None})()
 
 

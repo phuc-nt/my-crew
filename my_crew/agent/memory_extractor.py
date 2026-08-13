@@ -62,7 +62,8 @@ def make_llm_costed_extractor(
                 [
                     {"role": "system", "content": system},
                     {"role": "user", "content": report_text},
-                ]
+                ],
+                role="util",
             )
             return _parse_facts(result.content), result.cost_usd
         except Exception as exc:  # noqa: BLE001 — memory is best-effort; never break a run

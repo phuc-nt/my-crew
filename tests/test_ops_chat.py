@@ -26,7 +26,7 @@ class _FakeLlm:
     def __init__(self, *contents):
         self._q = list(contents)
 
-    def complete(self, messages):
+    def complete(self, messages, **_kw):
         content = self._q.pop(0)
         return type("R", (), {"content": content, "cost_usd": 0.0001})()
 
@@ -90,7 +90,7 @@ def test_classify_reraises_infra_error():
     from my_crew.llm.fallback_policy import ProviderCallError
 
     class _Down:
-        def complete(self, m):
+        def complete(self, m, **_kw):
             raise ProviderCallError("down")
 
     with pytest.raises(ProviderCallError):

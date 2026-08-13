@@ -65,7 +65,7 @@ def make_judge_stuck_step(settings: Any):
 
         roster = _reassign_candidates(getattr(step, "assigned_to", "") or "")
         client = LlmClient(settings)
-        result = client.complete(build_stuck_judge_messages(brief, roster))
+        result = client.complete(build_stuck_judge_messages(brief, roster), role="review")
         try:
             verdict = parse_stuck_verdict(result.content or "")
         except StuckVerdictError:

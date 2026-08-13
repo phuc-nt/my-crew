@@ -54,7 +54,7 @@ def _classify_with_llm(message: str) -> str:
         result = llm.complete([
             {"role": "system", "content": _CLASSIFY_SYSTEM},
             {"role": "user", "content": format_internal_content(message, label="tin nhắn")},
-        ])
+        ], role="util")
         logger.info("room-chat classify cost_usd=%s", result.cost_usd)
         doc = json.loads(result.content)
         intent = doc.get("intent") if isinstance(doc, dict) else None

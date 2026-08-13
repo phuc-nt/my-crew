@@ -44,7 +44,8 @@ def make_llm_selector(client: LlmClient) -> SiblingFactSelector:
                     {"role": "system", "content": _SYSTEM},
                     {"role": "user",
                      "content": f"Loại báo cáo: {kind_context}\nCác fact:\n{listing}"},
-                ]
+                ],
+                role="plan",
             )
             kept = set(_parse_lines(result.content))
             # Keep only facts that were actually in the input (drop any the LLM invented),

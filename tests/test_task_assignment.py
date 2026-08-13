@@ -305,7 +305,7 @@ def test_watch_pr_assigned_via_ops_chat_confirm_flow(tmp_path, monkeypatch):
         def __init__(self, *c):
             self.q = list(c)
 
-        def complete(self, m):
+        def complete(self, m, **_kw):
             return type("R", (), {"content": self.q.pop(0), "cost_usd": 0.0001})()
 
     try:
@@ -346,7 +346,7 @@ def test_list_tasks_is_readonly_no_confirm(tmp_path, monkeypatch):
         def __init__(self, c):
             self.c = c
 
-        def complete(self, m):
+        def complete(self, m, **_kw):
             return type("R", (), {"content": self.c, "cost_usd": 0.0001})()
 
     try:

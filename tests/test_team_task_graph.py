@@ -122,7 +122,7 @@ def test_default_deps_step1_has_no_handoff_and_writes_artifact(tmp_path, monkeyp
         def __init__(self, _settings):
             pass
 
-        def complete(self, _messages):
+        def complete(self, _messages, **_kw):
             return _FakeResult()
 
     # `default_team_task_deps` lazily imports LlmClient from my_crew.llm.client — patch it
@@ -177,7 +177,7 @@ def test_default_deps_step2_reads_step1_handoff(tmp_path, monkeypatch):
         def __init__(self, _settings):
             pass
 
-        def complete(self, _messages):
+        def complete(self, _messages, **_kw):
             return _FakeResult()
 
     import my_crew.llm.client as llm_client_mod
@@ -209,7 +209,7 @@ def test_default_deps_missing_prior_artifact_yields_empty_handoff(tmp_path, monk
         def __init__(self, _settings):
             pass
 
-        def complete(self, _messages):
+        def complete(self, _messages, **_kw):
             return _FakeResult()
 
     import my_crew.llm.client as llm_client_mod
@@ -240,7 +240,7 @@ def test_failed_self_check_persists_its_reasons_in_the_artifact(tmp_path, monkey
         def __init__(self, _settings):
             pass
 
-        def complete(self, _messages):
+        def complete(self, _messages, **_kw):
             return _FakeResult()
 
     import my_crew.llm.client as llm_client_mod

@@ -60,7 +60,8 @@ def classify_intent(llm: LlmClient, message: str, commands: dict[str, dict]) -> 
     try:
         result = llm.complete(
             [{"role": "system", "content": _CLASSIFIER_SYSTEM},
-             {"role": "user", "content": user}]
+             {"role": "user", "content": user}],
+            role="plan",
         )
         raw = result.content.strip()
         raw = re.sub(r"^```(?:json)?|```$", "", raw, flags=re.MULTILINE).strip()
