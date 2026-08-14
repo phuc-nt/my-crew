@@ -16,6 +16,11 @@ quản lý một-người muốn gì) + kịch bản kiểm thử để tự tay
 Nguyên tắc cốt lõi (v30): *nhân sự ảo tự chủ về TỐC ĐỘ (mặc định); duyệt là tùy chọn* —
 việc gửi ra ngoài công ty **chạy ngay** (mặc định) hoặc **chờ CEO duyệt** (khi ghim guarded cho agent đó); việc nguy hiểm bị chặn cứng luôn.
 
+> **Tự động hoá:** phần lõi của các story giao việc đội (EPIC giao việc qua chat →
+> decompose → review → giao hàng, chống flood, dedup) đã có bản kiểm chứng tự động chạy
+> mỗi lần test: `tests/fullflow/` (xem `docs/fullflow-testing-guide.md`). UAT sống trong
+> tài liệu này vẫn cần cho phần LLM thật + tích hợp thật (Telegram/Jira/Slack).
+
 ## Cách dùng tài liệu
 
 - Mở app: `http://127.0.0.1:8765` (mặc định). Bộ điều phối phải chạy:

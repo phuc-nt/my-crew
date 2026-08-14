@@ -537,6 +537,11 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 
 ## Testing
 
+- **Full-flow scenarios**: `uv run python -m pytest tests/fullflow/` — chat trigger giả
+  lập chạy THẬT toàn pipeline in-process (intent→decompose→confirm→tick→step→review→
+  delivery→mirror), chỉ 2 biên bị double (LlmClient.complete → ScriptedLlm,
+  telegram_write.api_call → outbox); trace JSONL per-scenario. Hướng dẫn vận hành +
+  viết scenario mới: `docs/fullflow-testing-guide.md`.
 - **Unit tests**: `uv run pytest` — ~2344 backend tests pass (M1–M6, M19, M27–M30 + v31–v50 coverage: pack/dispatch/red-line/office/web-search injection, per-step routing, audit actor, sandbox/prepull, MCP pool, onboarding).
 - **Frontend tests**: `vitest` — 200 tests (3D/office views, template-picker, team components).
 - **Linting**: `uv run ruff check src tests` — clean.

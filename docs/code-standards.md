@@ -49,6 +49,9 @@
 - Test trước khi push. KHÔNG ignore test fail để build xanh.
 - KHÔNG fake data/mock để giả pass. Mock chỉ dùng để **cô lập external API** trong unit test, phải rõ ràng là mock.
 - Tool layer thiết kế để mock được (cho test không cần API thật).
+- Sửa hành vi pipeline giao việc (intake/decompose/tick/review/delivery) → chạy
+  `tests/fullflow/` và thêm/cập nhật scenario nếu hành vi user-facing đổi
+  (guide: `docs/fullflow-testing-guide.md`).
 - Chạy compile/import check sau khi sửa code.
 
 ## Git
