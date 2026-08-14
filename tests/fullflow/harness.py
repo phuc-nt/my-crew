@@ -261,7 +261,7 @@ class FullFlowHarness:
             finally:
                 store.close()
             assert pending, "answer_clarify: no pending clarification"
-            clarify_id = pending[-1].clarify_id
+            clarify_id = pending[-1].id
         ok = apply_answer(clarify_id, answer)
         self._trace("clarify_answer", clarify_id=clarify_id, answer=answer, applied=ok)
         assert ok, f"apply_answer({clarify_id}) returned False"

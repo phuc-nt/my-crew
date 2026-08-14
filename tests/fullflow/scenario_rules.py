@@ -41,13 +41,54 @@ def decompose(steps: list[dict[str, Any]], *, title: str,
     """A fixed DAG proposal for the decompose call (validated by the REAL
     `parse_decomposed_task` — invalid steps fail the scenario loudly).
     `pic_id` defaults to the LAST step's assignee — the validator requires the
-    terminal (chốt) step to be owned by the PIC."""
+    terminal (chốt) step to be owned by the PIC.
+
+    Keyed on the decompose system prompt's OWN opening ("bộ phân rã công việc"), not
+    on the roster label — several other `role="plan"` prompts (pre-work consult
+    propose, sprint intake) render the same "danh sách nhân sự" block, and matching
+    on it fed decompose JSON to those calls instead."""
     payload = json.dumps(
         {"title": title, "steps": steps,
          "pic_id": pic_id or steps[-1]["assigned_to"]},
         ensure_ascii=False,
     )
-    return LlmRule(role="plan", marker="danh sách nhân sự", respond=payload)
+    return LlmRule(role="plan", marker="bộ phân rã công việc", respond=payload)
+
+
+def propose_ask_ceo(question: str, options: list[str] | None = None,
+                    *, once: bool = False) -> LlmRule:
+    """The pre-work propose call decides to ask the CEO (`agent_id: "ceo"`), which is
+    the ONLY path that mints a clarification. Shares `role="plan"` with decompose, so
+    it is keyed on the propose prompt's own header — place BEFORE `decompose()`."""
+    payload = json.dumps(
+        {"consults": [{"agent_id": "ceo", "question": question,
+                       "options": options or []}], "split": []},
+        ensure_ascii=False,
+    )
+    return LlmRule(role="plan", marker="Đồng nghiệp có thể hỏi",
+                   respond=payload, once=once)
+
+
+def propose_no_consult() -> LlmRule:
+    """No consult, no split — what the propose call returns for a self-contained step.
+    Place AFTER any `propose_ask_ceo(once=True)` so the one-shot ask wins first."""
+    return LlmRule(role="plan", marker="Đồng nghiệp có thể hỏi",
+                   respond='{"consults":[],"split":[]}')
+
+
+def sprint_intake(goal: str, *, assigned_to: str, acceptance: str = "- kết quả đủ ý",
+                  needs_web: bool = False) -> LlmRule:
+    """The sprint intake call — one person does the whole thing, no decomposition.
+    Keyed on the intake system prompt's own opening ("bộ tiếp nhận việc").
+    Fail-open by design in product code: a broken intake still yields a minimal plan
+    from the CEO's own brief, so a missing rule here degrades silently rather than
+    failing loudly — script it explicitly whenever a scenario routes to sprint."""
+    payload = json.dumps(
+        {"goal": goal, "acceptance": acceptance,
+         "assigned_to": assigned_to, "needs_web": needs_web},
+        ensure_ascii=False,
+    )
+    return LlmRule(role="plan", marker="bộ tiếp nhận việc", respond=payload)
 
 
 def step_work(title_marker: str, result_text: str, *, once: bool = False) -> LlmRule:

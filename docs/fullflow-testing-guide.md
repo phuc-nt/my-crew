@@ -38,7 +38,10 @@ Files:
 | `cast.py` | Công ty tí hon: `admin` (ops gateway của CEO), `coordinator` (chạy tick, share bot send-only), 3 worker |
 | `scenario_rules.py` | Building block rule theo từng hop pipeline |
 | `conftest.py` | Fixture `fullflow` (builder) + luôn ghi trace ở teardown |
-| `test_fullflow_team_task.py` | Bộ scenario giao việc đội |
+| `test_fullflow_team_task.py` | Scenario giao việc đội (DAG nhiều người) |
+| `test_fullflow_clarify.py` | Scenario hỏi CEO giữa chừng, không chặn bước |
+| `test_fullflow_autopilot.py` | Scenario autopilot tự gỡ việc kẹt, có trần |
+| `test_fullflow_sprint.py` | Scenario sprint — một người làm trọn |
 
 ## 3. Viết scenario mới
 
@@ -72,7 +75,10 @@ Rule khớp theo `role` + marker substring; **rule cụ thể đặt trước, c
 | Helper | Role | Marker | Hop |
 |---|---|---|---|
 | `intent_assign_team_task()` | plan | `DANH SÁCH LỆNH` | Phân loại ops intent, echo brief |
-| `decompose(steps, title=, pic_id=)` | plan | `danh sách nhân sự` | DAG proposal — qua validator thật |
+| `decompose(steps, title=, pic_id=)` | plan | `bộ phân rã công việc` | DAG proposal — qua validator thật |
+| `propose_ask_ceo(question, options, once=)` | plan | `Đồng nghiệp có thể hỏi` | Bước quyết định hỏi CEO → mint clarify |
+| `propose_no_consult()` | plan | `Đồng nghiệp có thể hỏi` | Bước tự lo, không hỏi ai — đặt SAU `propose_ask_ceo` |
+| `sprint_intake(goal, assigned_to=)` | plan | `bộ tiếp nhận việc` | Tiếp nhận việc chế độ sprint |
 | `step_work(title_marker, text)` | content | title bước | Nội dung 1 bước |
 | `self_check_pass()` | review | `"confidence"` | Self-check (prompt duy nhất hỏi confidence) |
 | `peer_review(passed, failures, once=)` | review | "" | Soát chéo — đặt SAU self_check_pass |
@@ -81,6 +87,14 @@ Rule khớp theo `role` + marker substring; **rule cụ thể đặt trước, c
 
 Mô phỏng vòng lặp (fail → rework → pass): dùng `once=True` —
 `peer_review(False, ["..."], once=True)` rồi `peer_review(True)`.
+
+**Va chạm marker — bẫy nguy hiểm nhất.** Ba prompt khác nhau cùng mang `role="plan"`
+(decompose, propose consult trước bước, sprint intake) và cả ba đều render khối nhân sự
+có nhãn "danh sách nhân sự". Key rule vào nhãn dùng chung đó thì rule đầu tiên nuốt hết
+call của hai hop kia — mà propose lại **degrade âm thầm** thành `[]` khi parse hỏng, nên
+scenario vẫn xanh trong khi một nửa pipeline không hề được kịch bản hoá. Luôn key vào
+câu mở đầu **riêng** của từng prompt (xem cột Marker ở bảng trên) và script rõ ràng cả
+hop propose (`propose_no_consult()`) thay vì để nó rơi vào degrade.
 
 ### 3.3 Bẫy contract thật (validator sẽ chặn — đây là feature)
 
@@ -96,6 +110,18 @@ Mô phỏng vòng lặp (fail → rework → pass): dùng `once=True` —
   "✅ HOÀN THÀNH" + escalate resolve telegram từ profile của tick.
 - Decompose có retry budget thật (4); trượt hết sẽ fallback sprint —
   nếu scenario "tự nhiên" rơi vào sprint, kiểm tra lại payload decompose.
+- **Bật autopilot là bật luôn tự-xác-nhận** (`ops_assign_team_task`: `autopilot_enabled()`
+  ⇒ auto-confirm — thiết kế v63). Scenario `autopilot=True` **không được** gõ "ok": tin đó
+  bị hiểu là brief MỚI và đẻ thêm task sprint thứ hai.
+- **Sprint không dùng `step_type="work"`**: bước làm là `step_type="sprint"`
+  (`step_id="sprint"`), bước soát là `sprint-review-0-0`. Sprint luôn mint soát chéo bất
+  kể band tin cậy.
+- `classify_brief` là **code thuần, mặc định chọn sprint**; chỉ rẽ sang đội khi brief
+  >1200 ký tự, >10 thực thể, quá nhiều yêu cầu rời, hoặc bị từ chối vì an toàn. Muốn
+  scenario đi đường đội thì brief phải đủ tín hiệu.
+- `sprint_intake` **fail-open** ở product: intake hỏng vẫn ra kế hoạch tối thiểu từ brief
+  của CEO. Nghĩa là thiếu rule ở đây degrade âm thầm chứ không fail loud — luôn script.
+- Trường của `Clarification` là **`id`**, không phải `clarify_id`.
 
 ## 4. Truy vết khi scenario đỏ
 
@@ -110,11 +136,23 @@ Mô phỏng vòng lặp (fail → rework → pass): dùng `once=True` —
 
 ## 5. Phạm vi & vòng 2
 
-Đã phủ (5 scenario): happy DAG + review ép bởi external_write · waiver nội bộ ·
-fail→rework→pass · exhausted→stall→escalate đúng 1 lần rồi im (chống flood) ·
-dedup trigger phát lại cùng `ts`.
+Đã phủ (8 scenario):
 
-Chưa phủ (vòng 2, ghi ở `plans/260814-1138-full-flow-test-harness/plan.md`):
-scenario clarify (contract `propose_consults`→`ask_ceo` — helper `answer_clarify` đã
-sẵn) · scenario sprint (`sprint_intake`/`sprint_runner`) · transport khác Telegram khi
-có (chỉ cần thêm capture seam tương ứng, phần còn lại giữ nguyên).
+- **Đội (`test_fullflow_team_task.py`)** — happy DAG + review ép bởi `external_write` ·
+  waiver việc nhỏ nội bộ · fail→rework→pass · exhausted→stall→escalate đúng 1 lần rồi im
+  (chống flood) · dedup trigger phát lại cùng `ts`.
+- **Clarify (`test_fullflow_clarify.py`)** — bước hỏi CEO kèm nút bấm, hỏi mà KHÔNG chặn
+  (không stall), CEO bấm nút xong việc về đích, giao đúng 1 lần.
+- **Autopilot (`test_fullflow_autopilot.py`)** — reviewer trượt mọi vòng, autopilot tự
+  leo thang trong trần (`MAX_AUTOPILOT_ATTEMPTS`), không kẹt vĩnh viễn và không flood khi
+  cạn lượt.
+- **Sprint (`test_fullflow_sprint.py`)** — brief đơn giản đi đường một người làm trọn,
+  đúng 1 bước `sprint` + 1 bước soát, delivered một lần.
+
+Còn để mở: transport khác Telegram (chỉ cần thêm capture seam tương ứng, phần trong giữ
+nguyên) · kịch bản nhiều task chạy song song tranh nhau một tick.
+
+**Kiểm chứng bộ test có răng.** Đã chạy mutation thủ công: nới `MAX_REVIEW_ROUNDS` 2→99
+làm đỏ đúng 2 scenario phụ thuộc trần soát (stall/escalate + autopilot), 6 scenario còn
+lại vẫn xanh. Khi sửa harness hoặc thêm scenario, lặp lại một mutation tương tự — bộ test
+xanh 100% mà không đỏ khi đảo invariant thì nó chỉ đang xác nhận chính nó.

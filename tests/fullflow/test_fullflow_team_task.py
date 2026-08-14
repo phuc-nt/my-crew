@@ -29,6 +29,7 @@ def _dag_email_steps() -> list[dict]:
 def _happy_rules() -> list:
     return [
         rules.intent_assign_team_task(),
+        rules.propose_no_consult(),
         rules.decompose(_dag_email_steps(), title="Email mời họp quý 3"),
         rules.step_work("Soạn nháp email mời họp", "Nháp: 10h thứ Sáu, phòng A, 3 mục."),
         rules.step_work("Chốt email mời họp", "Email chốt: 10h thứ Sáu, phòng A, agenda 3 mục."),
@@ -92,6 +93,7 @@ def test_small_internal_task_waives_peer_review(fullflow):
     nhưng vẫn phải done + delivered đúng một lần."""
     h = fullflow(rules=[
         rules.intent_assign_team_task(),
+        rules.propose_no_consult(),
         rules.decompose(_internal_steps(), title="Email nội bộ"),
         rules.step_work("Soạn nháp email mời họp", "Nháp nội bộ."),
         rules.step_work("Chốt email mời họp", "Bản chốt nội bộ."),
@@ -120,6 +122,7 @@ def test_review_fail_then_rework_then_pass(fullflow):
     Toàn bộ vòng lặp chạy bằng cadence daemon, không gọi tay hàm nội bộ nào."""
     h = fullflow(rules=[
         rules.intent_assign_team_task(),
+        rules.propose_no_consult(),
         rules.decompose(_dag_email_steps(), title="Email mời họp quý 3"),
         rules.step_work("Soạn nháp email mời họp", "Nháp: 10h thứ Sáu, phòng A."),
         rules.step_work("Chốt email mời họp", "Email chốt (thiếu agenda)."),
@@ -150,6 +153,7 @@ def test_review_exhausted_stalls_and_escalates_once(fullflow):
     + đúng MỘT tin escalate tới CEO, sau đó im lặng (chống flood — bài học v64)."""
     h = fullflow(rules=[
         rules.intent_assign_team_task(),
+        rules.propose_no_consult(),
         rules.decompose(_dag_email_steps(), title="Email mời họp quý 3"),
         rules.step_work("Soạn nháp email mời họp", "Nháp."),
         rules.step_work("Chốt email mời họp", "Email chốt còn lỗi."),
