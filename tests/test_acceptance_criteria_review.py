@@ -91,6 +91,58 @@ def test_run_review_step_threads_criteria_into_artifact_and_result(tmp_path, mon
     assert payload["criteria"][0]["criterion"] == "có số liệu"
 
 
+@pytest.mark.parametrize("passed", [True, False])
+def test_failures_appendix_rides_result_text_only_on_failed_verdicts(
+    tmp_path, monkeypatch, passed
+):
+    """A passed review must hand the prior output on UNTOUCHED — the
+    "Danh sách lỗi cần sửa" appendix (with its "(không có chi tiết)" placeholder)
+    is a rework brief, meaningless on user-facing surfaces when nothing failed."""
+    from my_crew.agent.team_task_artifact import (
+        review_verdict_artifact_path,
+        write_step_artifact,
+    )
+
+    write_step_artifact(tmp_path, "t1", 3, {
+        "status": "done", "result_text": "bản nháp", "step_title": "Soạn",
+        "attempt": "v1", "version": "v1", "self_check_failed": False,
+    })
+
+    class _FakeLlm:
+        def __init__(self, settings):
+            pass
+
+        def complete(self, messages, **_kw):
+            return SimpleNamespace(
+                content=json.dumps({
+                    "passed": passed,
+                    "failures": [] if passed else ["thiếu số liệu"],
+                }),
+                cost_usd=0.01, prompt_tokens=10, completion_tokens=5,
+            )
+
+    import my_crew.llm.client as llm_client_mod
+
+    monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)
+
+    run_review_step(
+        None, SimpleNamespace(), data_dir=tmp_path,
+        review_input=ReviewStepInput(
+            task_id="t1", graded_seq=3, verdict_seq=4, review_round=0,
+            locked_version="v1", acceptance="- có số liệu", step_title="Soạn",
+        ),
+    )
+
+    payload = json.loads(
+        review_verdict_artifact_path(tmp_path, "t1", 4, 0).read_text(encoding="utf-8"))
+    if passed:
+        assert payload["result_text"] == "bản nháp"
+        assert "Danh sách lỗi" not in payload["result_text"]
+    else:
+        assert payload["result_text"].startswith("bản nháp")
+        assert "Danh sách lỗi cần sửa:\n- thiếu số liệu" in payload["result_text"]
+
+
 def test_review_event_carries_counts_only(monkeypatch):
     from my_crew.runtime import team_step_runner as runner
 

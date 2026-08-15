@@ -228,7 +228,10 @@ def run_review_step(
             "passed": verdict.passed, "failures": list(verdict.failures),
             "notes": list(verdict.notes), "criteria": list(verdict.criteria),
             "reviewed_version": review_input.locked_version, "round": review_input.review_round,
-            "result_text": _rework_handoff_text(result_text, verdict.failures),
+            "result_text": (
+                result_text if verdict.passed
+                else _rework_handoff_text(result_text, verdict.failures)
+            ),
         },
     )
     if verdict.passed:
@@ -248,11 +251,13 @@ def run_review_step(
 
 def _rework_handoff_text(prior_output: str, failures: list[str]) -> str:
     """"Prior output + STRUCTURED failures" — the exact brief shape a ticker-minted
-    rework-step needs (phase Implementation Step 6), pre-formatted here so it can ride
-    through the review-step's own verdict artifact as a plain `result_text` field (see
-    module docstring). Plain text only — no `format_internal_content` wrap here, since
-    this is a local artifact write, not an LLM prompt; the wrap happens exactly once,
-    downstream, when the rework step's own `work` node turns this into `handoff_context`.
+    rework-step needs, pre-formatted here so it can ride through the review-step's own
+    verdict artifact as a plain `result_text` field (see module docstring). Only called
+    for FAILED verdicts — a passed review carries the prior output untouched, so the
+    failures appendix (and its placeholder) never reaches user-facing surfaces.
+    Plain text only — no `format_internal_content` wrap here, since this is a local
+    artifact write, not an LLM prompt; the wrap happens exactly once, downstream, when
+    the rework step's own `work` node turns this into `handoff_context`.
     """
     failures_text = "\n".join(f"- {f}" for f in failures) if failures else "(không có chi tiết)"
     return f"{prior_output.strip()}\n\nDanh sách lỗi cần sửa:\n{failures_text}"
