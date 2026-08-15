@@ -356,6 +356,33 @@ def test_a_step_that_could_never_search_says_so_instead_of_claiming_it_tried(llm
     assert "KHÔNG kết luận là dữ liệu không tồn tại" in text
 
 
+def test_a_tool_less_sprint_runs_no_search_and_ships_no_thieu_note(llm):
+    """Intake ruled `needs_web=False` — write/reason on data already in the brief.
+    Live UAT caught the old behavior: a thank-you note still ran a doomed prefetch,
+    hit the no-capability sentinel, and the CEO's final message carried a disclaimer
+    about a web search the task never needed. Tool-less means ALL search machinery
+    off: no prefetch call, no coverage rounds, no PHẦN THIẾU — even when the goal
+    happens to parse as an entity list."""
+    fake = llm(["Cảm ơn Netflix và Spotify đã đồng hành."])
+    searched: list[list[str]] = []
+
+    def _prefetch(_l, _s, queries):
+        searched.append(list(queries))
+        return mod._NO_CAPABILITY + " Agent chưa được cấp quyền web_search"
+
+    text, _ = build_sprint_work(
+        loaded=SimpleNamespace(soul="", project="", web_search=True),
+        settings=SimpleNamespace(),
+        prefetch=_prefetch,
+        needs_web=False,
+    )("Viết thư cảm ơn 2 đối tác: Netflix, Spotify", "", None)
+
+    assert searched == [], "tool-less sprint must never call prefetch"
+    assert len(fake.calls) == 1, "one draft call, no revise rounds"
+    assert "PHẦN THIẾU" not in text
+    assert "tra cứu" not in text
+
+
 def test_no_search_capability_spends_no_revise_rounds(llm):
     """Every retry would hit the same wall, and the revise prompt asks the model to
     close gaps it has no new data for — an invitation to invent."""

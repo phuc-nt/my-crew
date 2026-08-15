@@ -600,6 +600,9 @@ def _run_graph(
             loaded=loaded, settings=settings, context=context,
             acceptance=step.acceptance, telemetry=telemetry,
             on_phase=lambda _phase: on_node() if on_node is not None else None,
+            # Intake's ruling travels with the step: a write/reason-only sprint runs
+            # tool-less — no prefetch, no THIẾU-note about searches it never needed.
+            needs_web=bool(getattr(step, "needs_web", True)),
         )
     graph = runtime.build_task(
         settings=settings, context=context, step_title=step.title,

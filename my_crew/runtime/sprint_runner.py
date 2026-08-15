@@ -458,6 +458,7 @@ def build_sprint_work(
     telemetry: Any = None,
     prefetch: Callable[[Any, Any, list[str]], str] | None = None,
     on_phase: Callable[[str], None] | None = None,
+    needs_web: bool = True,
 ) -> Callable[[str, str, Any], tuple[str, float | None]]:
     """Return a `work_override` callable running the sprint pipeline for one step.
 
@@ -473,6 +474,13 @@ def build_sprint_work(
     `on_phase` is the heartbeat hook. The graph's own `on_node` callback only fires
     between NODES, and this whole pipeline is one node, so without it a long sprint
     would look dead to the lease watchdog.
+
+    `needs_web=False` means intake ruled the step tool-less (write/reason on data
+    already in the brief) — the whole search machinery stays off: no prefetch, no
+    coverage rounds, and no THIẾU note. Live task 780861b42737 is why: a thank-you
+    note with nothing to look up still ran a doomed prefetch, hit the no-capability
+    sentinel, and shipped the CEO a "không thực hiện được tra cứu web" disclaimer
+    about a search the task never needed.
     """
     from my_crew.runtime.collect_prefetch import prefetch_queries
 
@@ -487,7 +495,10 @@ def build_sprint_work(
         from my_crew.llm.client import LlmClient
 
         goal = (title or "").strip()
-        entities = resolve_entities(goal, acceptance)
+        # Tool-less step: no entities to cover means no queries, no coverage gaps and
+        # no THIẾU note — quality control is the review step, same as a needs_web=False
+        # team work step.
+        entities = resolve_entities(goal, acceptance) if needs_web else []
         cost = 0.0
         # Token totals across every call in the pipeline. Native `_run_work` records
         # one call's usage; a sprint step is up to three, so recording only the last
@@ -509,7 +520,7 @@ def build_sprint_work(
                     logger.warning("sprint: phase hook failed", exc_info=True)
 
         _beat("sprint_prefetch")
-        queries = entity_queries(goal, acceptance)
+        queries = entity_queries(goal, acceptance) if needs_web else []
         bundle = ""
         used_queries = 0
         if queries:
