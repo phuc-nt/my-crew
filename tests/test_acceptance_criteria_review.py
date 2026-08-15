@@ -202,6 +202,17 @@ def test_decompose_prompt_demands_measurable_criteria():
     assert "CEO nêu tiêu chí" in _DECOMPOSE_SYSTEM
 
 
+def test_decompose_prompt_demands_a_data_freshness_criterion_for_web_steps():
+    """Live UAT: a reviewer passed 7/2024 pricing for a 2026 question because no
+    criterion asked about recency. The rule stays snippet-compatible — it demands a
+    NOTE when the source itself dates its data, never source metadata (access dates)
+    the excerpt cannot carry, and never rejects old figures with no newer source."""
+    from my_crew.llm.team_task_prompt import _DECOMPOSE_SYSTEM
+
+    assert "ĐỘ TƯƠI" in _DECOMPOSE_SYSTEM
+    assert "KHÔNG loại số liệu chỉ vì cũ" in _DECOMPOSE_SYSTEM
+
+
 def test_parsers_tolerate_markdown_fences_and_leading_prose():
     """v34 UAT finding: a reviewer model wrapped its verdict in ```json fences →
     parse died → review step failed → whole task stalled. Every LLM-JSON parser now

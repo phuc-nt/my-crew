@@ -155,6 +155,15 @@ def test_the_measured_benchmark_brief_still_routes_to_sprint():
 _STAFF = [("agent-a", "content"), ("agent-b", "research")]
 
 
+def test_intake_prompt_demands_a_data_freshness_criterion_for_web_briefs():
+    """Live UAT: 7/2024 figures passed review for a 2026 question — no criterion asked
+    about recency. Same snippet-compatible shape as the decompose rule: a note when the
+    source dates its own data, never access-date metadata, never rejecting old figures
+    that have no newer source."""
+    assert "ĐỘ TƯƠI" in intake_mod._INTAKE_SYSTEM
+    assert "KHÔNG loại số liệu chỉ vì cũ" in intake_mod._INTAKE_SYSTEM
+
+
 def test_intake_uses_the_models_plan_when_it_is_well_formed(monkeypatch):
     payload = (
         '{"goal":"So sánh 5 dịch vụ streaming","acceptance":"- Đủ 5 tên\\n- Có giá",'
