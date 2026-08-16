@@ -4,7 +4,7 @@
 >
 > Dashboard and team operations for CEO / team leads (no technical knowledge required).
 > All work via browser dashboard or Telegram.
-> **Updated:** 2026-08-09 (v75 / 0.9.0).
+> **Updated:** 2026-08-16 (v79 / 0.10.0).
 
 ---
 
@@ -53,6 +53,15 @@ becomes the observation room. In one DM you can:
   3-rung ladder — retry, then propose a DIFFERENT plan for the remaining steps (you
   see the diff, every change goes through the same amendment flow), then accept/drop.
   Off autopilot everything still waits for you.
+- **Sprint by default + spend guardrails** (v77–79 / 0.10.0): a one-person brief now
+  runs as a **sprint** — one agent, single pass, measured 3.6–7× faster and ~4× cheaper
+  than the team plan on the same briefs, always with exactly one peer review (see
+  Sprint Mode, below). A task that keeps failing review now **stalls and escalates to
+  you** instead of burning budget (cap: 2× the number of content steps, floor 5); the
+  cost cap now **halts steps already running**, not just future ones; "done" is
+  announced **exactly once** per task; and web research carries a **data-freshness
+  rule** — newest figures preferred, and when only an older source exists its data
+  date is noted next to the figure.
 
 Details (Vietnamese): [huong-dan-su-dung.md — Phần C](huong-dan-su-dung.md).
 
@@ -104,13 +113,20 @@ or just skip the `@` entirely. The system suggests which agent is best suited an
 
 Click **Assistant** → type the request → answer questions step-by-step → the assistant creates the task and shows it in real-time on the **Office** screen.
 
-### Sprint Mode — One Agent, Start to Finish (v77+)
+### Sprint Mode — One Agent, Start to Finish (v77, default since v78)
 
 Not every task needs the whole team. A research brief like *"compare 5 tools across 3
 criteria"* used to be split into 5 steps, each handed to a different agent, each starting
-cold — **tens of minutes**. The system now recognises this shape and gives it to **one
-agent to finish in a single pass** (a **sprint**): measured at **3–9 minutes** on briefs
-that took the team 23–31 minutes, at roughly a quarter of the cost.
+cold — **tens of minutes**. Such a brief now goes to **one agent to finish in a single
+pass** (a **sprint**): measured at **3–9 minutes** on briefs that took the team 23–31
+minutes, at roughly a quarter of the cost.
+
+Since v78 **sprint is the default**: a brief goes to a full team plan only on
+**structural signals** — longer than 1200 characters, more than 10 listed entities, or
+3+ separate asks on separate (bulleted/numbered) lines. Routing self-corrects in both
+directions: a team plan that turns out to be one person's job is pulled back to sprint,
+and a sprint that hits a dead end **automatically re-routes to a team plan** — you never
+have to re-assign.
 
 You don't have to do anything — assignment picks the mode for you. To force it:
 
@@ -118,7 +134,7 @@ You don't have to do anything — assignment picks the mode for you. To force it
 |---|---|
 | `sprint: compare 5 note-taking tools…` | force one agent, single pass |
 | `team: compare 5 note-taking tools…` | force the usual multi-step team plan |
-| (no prefix) | auto-detected; falls back to team when unsure |
+| (no prefix) | **sprint by default**; team only on the structural signals above |
 
 The prefix chooses the **mode**, not the safety rails. These four kinds of work **always**
 go to team mode even with `sprint:`, because they need review rounds a sprint doesn't run:
@@ -128,8 +144,9 @@ go to team mode even with `sprint:`, because they need review rounds a sprint do
 - work you explicitly said **needs several people**
 - **long, multi-stage** work
 
-A sprint task still gets its own workroom, peer review, clarification questions when it
-hits a dead end, and the usual Telegram milestones — it just runs in one continuous pass.
+A sprint task still gets its own workroom, **exactly one peer review** (in every trust
+band — there is no zero-review path), clarification questions when it hits a dead end,
+and the usual Telegram milestones — it just runs in one continuous pass.
 
 ### Reviewing the Plan
 

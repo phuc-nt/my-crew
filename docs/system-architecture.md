@@ -1,9 +1,9 @@
 # System Architecture — my-crew
 
-> Kiến trúc kỹ thuật (as-built, v69 / 0.8.0+ — v70 personal-pack expansion in-progress). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
+> Kiến trúc kỹ thuật (as-built, v79 / 0.10.0). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
 > (vì sao) + [action-gateway-explainer](action-gateway-explainer.md) (mô hình an toàn) +
 > [codebase-summary](codebase-summary.md) (cái gì ở file nào).
-> Cập nhật: 2026-08-05.
+> Cập nhật: 2026-08-16.
 
 ## 1. Nguyên tắc kiến trúc
 
@@ -156,8 +156,15 @@ ranh giới cụm danh từ** (`_governs_next`/`_trimmed_to_whole_phrase`): cắ
 làm search trả blog thay vì trang giá. `_source_refused` phân biệt "không tìm ra nguồn"
 với "nguồn nói không có" — đề bịa thực thể phải bế tắc thật, không được bịa số liệu.
 
+**v79 — sprint tool-less**: `build_sprint_work` nhận `needs_web` từ intake;
+`needs_web=False` (việc viết/suy luận trên dữ liệu có sẵn trong đề) tắt TOÀN BỘ máy
+search — không prefetch, không vòng coverage, không note THIẾU. Đo sống: một thank-you
+note từng chạy prefetch định-sẵn-thất-bại rồi ship disclaimer về việc tra cứu nó không
+hề cần. Kiểm soát chất lượng cho đường này dồn về bước review.
+
 **Router** — v78 đổi từ MỘT phép đoán thành **phễu 6 lớp**, mỗi hướng sai có lưới đỡ
-riêng nên bản thân phép đoán không cần đúng:
+riêng nên bản thân phép đoán không cần đúng (4 lớp đầu ở `my_crew/agent/sprint_intake.py`;
+dead-end ở `runtime/team_tick_collaborators.py`; cột `route_json` ở `team_task_store`):
 
 | Lớp | Nơi | Vai trò |
 |---|---|---|
@@ -165,7 +172,7 @@ riêng nên bản thân phép đoán không cần đúng:
 | Refusal cứng | `sprint_refusal` | 4 loại luôn về team: ghi-ra-ngoài, cần shell, CEO nêu cần nhiều người, việc dài nhiều giai đoạn |
 | Heuristic cấu trúc | `classify_brief` | **Mặc định sprint**; chỉ đẩy team khi >1200 ký tự, >10 thực thể, hoặc ≥3 đầu việc tách dòng |
 | Downgrade | `downgrade_to_sprint` | Chạy SAU decompose: plan suy biến (≤2 bước, 1 người, tuyến tính) → sprint, 0 lượt gọi model thêm |
-| Dead-end | `_is_sprint_dead_end` | Sprint bế tắc → gợi ý CEO giao lại `team:` |
+| Dead-end | `_is_sprint_dead_end` | Sprint bế tắc (`gave_up`) → gợi ý CEO giao lại `team:`; `_mark_route_dead_end` ghi đè `source` nhưng giữ phán quyết gốc dưới `previous` |
 | Routing log | cột `route_json` | `mode`/`source`/`reason`/`signals` — chỉ số, không chứa nguyên văn đề |
 
 `classify_brief` **lật chiều mặc định** (v77: nghi ngờ → team; v78: nghi ngờ → sprint).
@@ -178,14 +185,62 @@ Lý do refusal không bao giờ nới: `_build_sprint_task` đóng cứng
 `external_write=False`, mà `review_insert` lại bắt buộc review cho mọi bước
 `external_write` ở MỌI band — đề ghi-ra-ngoài lọt vào sprint sẽ mất đúng vòng review nó cần.
 
-**Giao kết quả**: artifact sprint CHÍNH LÀ thứ CEO cần, nên `_sprint_result_text` trả
-nguyên văn, bỏ qua `make_aggregate` (bộ này cắt `parts` còn 500 ký tự). Đánh đổi: lớp
-tóm tắt đó đang **âm thầm** gánh luật "bắt đầu NGAY bằng kết quả" — bỏ nó thì
-chain-of-thought lọt thẳng tới CEO, nên luật ĐỊNH DẠNG được chuyển vào `_SYSTEM` của
-`llm/team_task_prompt.py` (pin bởi `tests/test_team_step_prompt_format_rule.py`).
+**Sprint luôn có đúng 1 review ở mọi band** (chốt sau nghiệm thu v78 — ca trusted×sprint
+từng ra 0 mắt soát): `_build_sprint_task` đặt `needs_review=True` và
+`effective_needs_review` (`coordinator_nodes/review_insert.py`) không cho band trusted
+waive bước `sprint` — waiver review nội bộ cho bước `work` giữ nguyên. Hết đường
+zero-eyes ở mọi tổ hợp band.
+
+**Giao kết quả (v79 tổng quát hoá từ sprint)**: artifact của bước terminal CHÍNH LÀ thứ
+CEO cần. `_direct_result_text` (`runtime/team_tick_collaborators.py`) trả NGUYÊN VĂN
+artifact khi plan hội tụ về MỘT bước nội dung terminal (sprint là ca 1 bước); nhiều
+terminal mới đi đường tóm tắt `make_aggregate` — và ngay trong aggregate, bước terminal
+cũng không còn bị cắt 500 ký tự (chỉ bước trung gian giữ trần, chi tiết của chúng đã tới
+terminal qua deps handoff). **Terminality tính từ bước nội dung** (`_content_dep_targets`
+— chỉ quét deps của row `work`/`sprint`): review/rework mint sau confirm khai dep vào
+bước nó soát, nên quét deps trần từng làm mọi terminal-có-review "biến mất" và bản giao
+lặng lẽ rơi về tóm tắt ("Bước 2: Đã viết xong bản thảo..." thay vì bài viết). Đánh đổi
+giữ từ v77: lớp tóm tắt từng âm thầm gánh luật "bắt đầu NGAY bằng kết quả" — luật ĐỊNH
+DẠNG nằm ở `_SYSTEM` của `llm/team_task_prompt.py`
+(pin bởi `tests/test_team_step_prompt_format_rule.py`).
 
 **Đo thật** (`plans/reports/benchmark-260810-0654-v77-sprint-vs-team-mode-report.md`):
 cùng đề, team 31m12s/$0.0700 vs sprint 8m43s/$0.0169, chấm mù 8 vs 28 điểm.
+
+### 3.5c Ngân sách review tầng task + phanh chi phí in-flight (v78–v79)
+
+- **Trần review/rework theo TASK** (`coordinator_nodes/review_insert.
+  _task_review_budget_exhausted`): trần theo-từng-bước (`MAX_REVIEW_ROUNDS=2`) không
+  thấy được tổng — nghiệm thu đo một task 6 bước mint 11 review + 7 rework mà bước nào
+  cũng đúng luật. Ngân sách = `_TASK_REVIEW_LOAD_FACTOR=2` × số bước nội dung, sàn 5
+  (= một bước đơn lẻ dùng trọn trần bước: 3 review + 2 rework — trần task không bao giờ
+  cắt sớm hơn trần bước). Chạm trần mà verdict vẫn fail → stall + escalate
+  `task_review_budget_exhausted`, chung nhánh CEO-override với trần bước.
+- **Phanh in-flight** (`runtime/team_task_halt.py`): `check_cost_cap` chỉ chặn spend
+  MỚI — task `cancelled`/`stalled` rời `list_dispatchable()` nên worker đã spawn chạy
+  nốt và vẫn tính tiền (đo sống: ~$0.05 cháy SAU lệnh huỷ, "cancel không phải phanh").
+  Nay: (1) nhánh `cost_cap_exceeded` của coordinator stall TRƯỚC (an toàn không phụ
+  thuộc phanh) rồi gọi `halt_running_steps` — kill qua `_kill_pid` pid-reuse-guarded
+  (verify command line còn mang attempt_id), terminal write `TeamTaskStore.halt_step`
+  atomic trên attempt_id AND status='running'; (2) hygiene mỗi team-tick chạy
+  `run_cancel_reap_sweep` quét "task cancelled còn bước running" — derive tươi từ bảng
+  nên đúng cho MỌI đường cancel by construction, giá là 1 tick trễ. Stall vì lý do
+  khác (review cạn, ruling bước kẹt) chủ ý KHÔNG halt — phần việc in-flight còn lại
+  vẫn được cần khi CEO resume.
+
+### 3.5d Model 3 tầng: fleet → per-agent → per-role (v79)
+
+`Settings.model_for_role(role)` (`my_crew/config/settings.py`, call-site `llm/client.py`)
+trả về CHAIN: model override của role đứng đầu, đuôi là fleet chain — model rẻ là đúng
+loại hay bị rate-limit/5xx, nên role degrade LÊN fleet model thay vì chết bước. Role hợp
+lệ `MODEL_ROLES = ("content", "review", "aggregate", "plan", "util")` — chia theo cost
+shape ("người có đọc output này không"), không phải capability; content là sản phẩm,
+không bao giờ hạ cấp; sanitizer deep-agent chủ ý KHÔNG vào bucket nào (fail-closed gate
+network sandbox, giữ nguyên fleet model). Cấu hình per-agent trong profile.yaml: `model`
+/ `model_chain` / `role_models` (yaml mapping hoặc chuỗi `"role=model,..."`, env fallback
+`OPENROUTER_ROLE_MODELS`; validate ở `config_builders._d_role_models` — role lạ/trùng
+raise rõ). Fleet default: `deepseek/deepseek-v4-pro-0813`
+(`DEFAULT_MODEL`). Role chưa cấu hình → nguyên fleet chain, byte-identical pre-v79.
 
 ### 3.6 Action Gateway (`my_crew/actions/`, v30–v31, v67–v68 learned rules)
 `action_gateway.py` = cửa duy nhất. `hard_block.py` = Lớp A (chặn cứng, không duyệt được).
@@ -387,8 +442,10 @@ hoạt-động / kết-quả + panel 3D (`views/office-3d/`, react-three-fiber).
 
 ## 4. Luồng dữ liệu chính: giao 1 việc
 
-1. CEO gõ `@content <việc>` → `routes_office_assign` → `ops_assign_team_task.preview` →
-   1 LLM call phân rã → validate code-side → lưu draft (status `planning`) + hash.
+1. CEO gõ `@content <việc>` → `routes_office_assign` → `ops_assign_team_task.preview` —
+   phễu định tuyến (§3.5b) quyết sprint/team trước; đường team: 1 LLM call phân rã →
+   validate code-side → `downgrade_to_sprint` kéo plan suy biến về sprint → lưu draft
+   (status `planning`) + hash.
 2. CEO xác nhận (hoặc auto-confirm) → `confirm_plan(hash)` TOCTOU-proof → task `open`.
 3. Coordinator daemon tick kế: đọc task, `_verify_plan_hash` (chống tamper), dispatch
    bước sẵn sàng → spawn worker.
@@ -435,7 +492,7 @@ và tin "✅ HOÀN THÀNH" fast-path kèm link workroom
 
 | File (.data/) | Nội dung |
 |---|---|
-| `team_tasks.sqlite3` | Task đội + steps + lease state + `delivery_status` (v67) |
+| `team_tasks.sqlite3` | Task đội + steps + lease state + `delivery_status` (v67) + `route_json` (v78, chỉ số định tuyến — NULL trên task trước v78) |
 | `office_room.sqlite3` | Office events (feed realtime, projected PII-safe) |
 | `captures.sqlite3` | Team-step telemetry: attempt_id, task_id, step_id, agent_id, engine, cost_usd, tokens (WAL, INTERNAL-only) |
 | `approvals.db` | Hàng đợi Lớp B + `approval_rules` table (v67 learned rules per-agent) |
@@ -453,3 +510,10 @@ User-data (gitignored): `.data/`, `registry.yaml`, `company.yaml`, `profiles/<id
 Xem [codebase-summary.md](codebase-summary.md) "THE INVARIANT" + HANDOVER §5. Tóm tắt:
 gateway-only egress · Lớp A/B · PII firewall write-time · hash-bind confirm · process
 isolation · registry user-data.
+
+## 7. Kiểm thử full-flow (v79)
+
+Nguyên pipeline intake → decompose → work → review → aggregate chạy được TRONG MỘT tiến
+trình test với LLM kịch-bản-hoá — 8 kịch bản người-dùng-thật (clarify, autopilot,
+sprint...), mutation-verified. Hướng dẫn vận hành + cách thêm kịch bản:
+[fullflow-testing-guide](fullflow-testing-guide.md).

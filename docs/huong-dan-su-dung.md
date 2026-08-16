@@ -1,4 +1,4 @@
-# Hướng dẫn sử dụng — my-crew (v75 / 0.9.0)
+# Hướng dẫn sử dụng — my-crew (v79 / 0.10.0)
 
 Trợ lý ảo tự động làm công việc quản lý dự án (PM / Scrum Master): đọc Jira · GitHub · Confluence ·
 Slack, phân tích, rồi *tự hành động* (viết báo cáo, cảnh báo rủi ro, theo dõi OKR) như một PM thật.
@@ -225,13 +225,18 @@ Vẫn giao được qua **Trợ lý** (gõ "giao việc …", hỏi-đáp từng
 Tiến trình hiển thị ngay cột phải màn Văn phòng; Telegram cũng nhận cột mốc (nhận việc /
 xong bước / hoàn thành / cần duyệt).
 
-### B.3-sprint. Việc một người làm trọn — chế độ sprint (v77)
+### B.3-sprint. Việc một người làm trọn — chế độ sprint (v77, mặc định từ v78)
 
 Không phải việc nào cũng cần cả đội. Một bài nghiên cứu kiểu *"so sánh 5 công cụ theo 3
 tiêu chí"* trước đây bị chia thành 5 bước, mỗi bước một người, mỗi bước khởi động lại từ
-đầu — mất **hàng chục phút**. Nay hệ thống tự nhận ra dạng việc này và giao **một người
-làm trọn** (gọi là **sprint**): cùng đề bài đo được **3–9 phút** thay vì 23–31 phút, và
-rẻ hơn ~4 lần.
+đầu — mất **hàng chục phút**. Nay dạng việc này được giao **một người làm trọn** (gọi là
+**sprint**): cùng đề bài đo được **3–9 phút** thay vì 23–31 phút, và rẻ hơn ~4 lần.
+
+Từ v78, **sprint là mặc định**: đề chỉ đi đường đội khi có **tín hiệu cấu trúc** — dài
+hơn 1200 ký tự, liệt kê hơn 10 thực thể, hoặc từ 3 đầu việc trở lên tách dòng riêng
+(gạch đầu dòng / đánh số). Định tuyến tự sửa cả hai chiều: kế hoạch đội mà hoá ra là
+việc một người thì được kéo về sprint; sprint bế tắc thì **tự động chuyển sang kế hoạch
+đội** — bạn không phải giao lại.
 
 Bạn **không cần làm gì thêm** — cứ giao việc như thường, hệ thống tự chọn. Muốn ép:
 
@@ -239,7 +244,7 @@ Bạn **không cần làm gì thêm** — cứ giao việc như thường, hệ 
 |---|---|
 | `sprint: so sánh 5 công cụ ghi chú…` | ép một người làm trọn |
 | `team: so sánh 5 công cụ ghi chú…` | ép chia việc cho đội như cũ |
-| (không gõ tiền tố) | hệ thống tự chọn, thiên về đội khi nghi ngờ |
+| (không gõ tiền tố) | **mặc định sprint**; chỉ đi đường đội khi có tín hiệu cấu trúc ở trên |
 
 Tiền tố chọn **chế độ**, không gỡ được rào an toàn. Bốn loại việc dưới đây **luôn** đi
 đường đội dù bạn có gõ `sprint:`, vì chúng cần đúng vòng duyệt/soát mà sprint không có:
@@ -249,8 +254,9 @@ Tiền tố chọn **chế độ**, không gỡ được rào an toàn. Bốn lo
 - việc bạn **nói rõ là cần nhiều người**
 - việc **dài nhiều giai đoạn**
 
-Việc sprint vẫn hiện đủ trong phòng việc, vẫn có soát chéo, vẫn hỏi ý bạn khi bế tắc, và
-vẫn báo Telegram như mọi việc khác — chỉ khác là nó chạy trong một mạch liền.
+Việc sprint vẫn hiện đủ trong phòng việc, vẫn có đúng **một vòng soát chéo** (ở mọi mức
+tin tưởng — không có đường "0 mắt soát"), vẫn hỏi ý bạn khi bế tắc, và vẫn báo Telegram
+như mọi việc khác — chỉ khác là nó chạy trong một mạch liền.
 
 ### B.3a. Giao diện Văn phòng v54 — 3 khu vực (cockpit)
 
@@ -516,7 +522,7 @@ thì `registry.yaml` khác bản gốc — **tắt demo trước khi commit code
 
 ---
 
-# Phần C — Thư ký riêng & chế độ tự chủ (v57–v75)
+# Phần C — Thư ký riêng & chế độ tự chủ (v57–v79)
 
 Từ v57, cửa vận hành chính chuyển sang **chat Telegram với thư ký riêng**: việc cá nhân
 của bạn lẫn việc công ty đi qua một cửa. Web dashboard thành "phòng quan sát".
@@ -626,6 +632,22 @@ Bạn không phải làm gì mới — nhóm thay đổi này là tốc độ v�
 - **Trợ lý cá nhân pong** (bot Telegram riêng): briefing 7h sáng hằng ngày + nhìn lại
   tuần Chủ nhật 8h (đọc kệ sách Goodreads + Google Tasks của bạn); bản nhìn-lại-tuần
   không lặp lại những gì briefing sáng đã nói.
+
+## C.9. Sprint mặc định + phanh chi tiêu (v77–v79 / 0.10.0)
+
+Nhóm thay đổi này cũng không đòi bạn làm gì mới:
+
+- **Việc một người mặc định chạy sprint** — một người làm trọn, nhanh 3,6–7 lần và rẻ
+  ~4 lần so với chia đội trên cùng đề bài, luôn có đúng 1 vòng soát chéo. Chi tiết cách
+  định tuyến + tiền tố ép chế độ: xem **B.3-sprint**.
+- **Trần vòng soát/sửa theo việc**: việc soát mãi không đạt sẽ **dừng và hỏi bạn** thay
+  vì đốt tiền (trần = 2× số bước nội dung, tối thiểu 5 vòng).
+- **Trần chi phí là phanh thật**: chạm trần thì cả những bước **đang chạy** cũng dừng,
+  không chỉ bước chưa chạy.
+- **Báo "xong" đúng một lần** mỗi việc — hết cảnh nhận thêm tin nhắn sau khi việc đã
+  hoàn thành.
+- **Độ tươi dữ liệu**: tra cứu web ưu tiên số liệu mới nhất; nguồn cũ vẫn dùng được khi
+  không có nguồn mới hơn, nhưng phải ghi rõ thời điểm dữ liệu bên cạnh con số.
 
 ---
 

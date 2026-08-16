@@ -14,6 +14,11 @@ thật từ Jira·GitHub·Confluence·Slack, và *tự hành động* (viết b�
 Từ v57–v66: **thư ký riêng** trên Telegram là cửa vận hành chính (việc cá nhân: briefing/
 Gmail/Calendar/nhắc đúng giờ + giao việc đội qua chat), **autopilot** cho AI tự quyết
 (Lớp A + trần chi phí vẫn bất biến), trí nhớ SQLite bền dùng chung giữa agent.
+Từ v67–v79 (0.10.0): **tự chủ có kỷ luật** — băng tin tưởng (autonomy bands) + audit
+hash-chain, **sprint mode** 1-agent là đường mặc định (rẻ/nhanh ~4×, phễu định tuyến
+6 tầng tự sửa 2 chiều sprint↔team), luôn đúng 1 vòng soát chéo ở mọi băng (không có
+đường zero-review), trần chi phí có **phanh in-flight** (halt bước đang chạy), model
+cấu hình 3 tầng fleet → agent → role.
 
 **Triết lý cốt lõi — thuộc nằm lòng:** *tự chủ về TỐC ĐỘ, không bao giờ tự chủ về TRÁCH
 NHIỆM.* Mọi hành động ghi ra ngoài công ty đi qua MỘT cửa kiểm soát (Action Gateway);
@@ -27,9 +32,10 @@ việc mất-dữ-liệu/lộ-bí-mật bị chặn cứng, LLM không vượt �
   Build dist commit vào `my_crew/server/static/app/` (server serve tĩnh).
 - **Tích hợp ngoài**: MCP servers (Jira/Confluence/Slack) + `gh` CLI (GitHub) + `gws` CLI
   (Google Sheets hr-pack; Gmail/Calendar personal-pack). LLM qua OpenRouter.
-- **Test**: `uv run python -m pytest` (~2530 BE — dùng `python -m`, shim `uv run pytest`
-  có thể bắt nhầm Python Homebrew ngoài venv; nhớ `uv sync --extra deep` kẻo 68 test deep
-  biến mất) · `cd web && npx vitest run` (~280 FE) · `npx tsc -b` ·
+- **Test**: `uv run python -m pytest` (~3257 BE — dùng `python -m`; nếu "python import
+  được nhưng pytest chết hàng loạt ModuleNotFoundError" thì là shebang venv cũ, chạy
+  `uv sync --all-extras --reinstall`; thiếu extra deep thì 68 test deep biến mất) ·
+  `cd web && npx vitest run` (~282 FE) · `npx tsc -b` ·
   `cd web && npm run test:e2e` (~8 Playwright smoke đo DOM layout cockpit — toàn bộ /api
   mock trong browser, không cần backend; v56).
 
@@ -40,7 +46,7 @@ việc mất-dữ-liệu/lộ-bí-mật bị chặn cứng, LLM không vượt �
 | 1 | **`CLAUDE.md`** | Luật làm việc trong repo (workflow, quy tắc code, commit, hook privacy) | BẮT BUỘC |
 | 2 | **`.claude/rules/*.md`** | Chi tiết: development-rules, primary-workflow, orchestration, review | BẮT BUỘC |
 | 3 | **`docs/project-overview-pdr.md`** | Vision, vấn đề, phạm vi, yêu cầu — VÌ SAO có sản phẩm | BẮT BUỘC |
-| 4 | **`docs/system-architecture.md`** | Kiến trúc as-built v18 (sơ đồ, thành phần, luồng dữ liệu) | BẮT BUỘC |
+| 4 | **`docs/system-architecture.md`** | Kiến trúc as-built (sơ đồ, thành phần, luồng dữ liệu) | BẮT BUỘC |
 | 5 | **`docs/action-gateway-explainer.md`** | Mô hình an toàn (Action Gateway) — trái tim sản phẩm | BẮT BUỘC |
 | 6 | **`docs/codebase-summary.md`** | Bản đồ "cái gì ở file nào" + quyết định theo mốc | BẮT BUỘC |
 | 7 | `docs/uat-theo-user-story.md` | Sản phẩm LÀM ĐƯỢC GÌ (7 epic, 22 story) — spec hành vi | Cao |
@@ -126,11 +132,12 @@ service chạy, nếu không màn Văn phòng hiện banner đỏ "bộ điều 
 
 ## 8. Nợ kỹ thuật & việc nên làm tiếp (bàn giao trung thực)
 
-- **`docs/codebase-summary.md`** phần thân vẫn dài theo dòng lịch sử v1→v18 — bản đồ
-  chính xác nhưng nên gộp phần cũ thành mục ngắn (header đã đồng bộ v18).
-- **Đang chờ quyết ở 0.7.0**: chất lượng NỘI DUNG chuỗi handoff/extractor là điểm yếu
-  số 1 (cơ chế tròn, óc viết chưa sắc — cần vòng riêng); go-live pilot sales-pm chưa bấm;
-  Postgres deferred có chủ đích. Xem `docs/project-roadmap.md` §"Việc nên làm tiếp".
+- **`docs/codebase-summary.md`** viết theo dòng arc, mốc header có thể trễ vài arc so
+  với HEAD — bản đồ file vẫn đúng; delta mới nhất đọc `CHANGELOG.md` + `docs/journals/`.
+- **Mở tại 0.10.0**: ca sống trusted×external_write chưa chạy (chờ lần cấp
+  `team_step_egress` đầu tiên); cấp thêm lượt tra cứu cho sprint đã duyệt chưa triển
+  khai; go-live pilot sales-pm chưa bấm; Postgres deferred có chủ đích. Xem
+  `docs/project-roadmap.md` §"Việc nên làm tiếp".
 - Nhật ký/plan rất nhiều (100+ journal, 50+ plan) — là lịch sử, KHÔNG cần đọc để làm
   tiếp; tra khi cần "vì sao quyết định X".
 - **Hạ tầng máy dev**: repo từng có checkout cũ tên `my-project-manager` (đã xoá

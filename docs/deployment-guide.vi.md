@@ -4,7 +4,7 @@
 >
 > Hướng dẫn cài đặt, chạy, cấu hình hệ thống cho người vận hành (kỹ thuật).
 > **Cho người dùng cuối (CEO / quản lý):** xem [huong-dan-su-dung.md](huong-dan-su-dung.md).
-> **Cập nhật:** 2026-07-18.
+> **Cập nhật:** 2026-08-16 (0.10.0).
 
 ## 1. Yêu cầu
 
@@ -171,6 +171,33 @@ Nơi lưu `.env`, `registry.yaml`, profiles, `.data/`:
 2. Root git checkout (operator dev; dữ liệu live trong repo)
 3. `~/.my-crew/` (user đã install, mặc định)
 
+### Cấu Hình Model: 3 Tầng (v79)
+
+Mỗi lệnh gọi LLM phân giải model qua 3 tầng — tầng cụ thể nhất thắng:
+
+1. **Fleet mặc định** — `OPENROUTER_MODEL` trong `.env`. Không set ⇒ mặc định
+   built-in `deepseek/deepseek-v4-pro-0813` (0.9.x là `qwen/qwen3.7-plus`).
+2. **Per-agent** — `model:` trong `profiles/<id>/profile.yaml` đè fleet mặc định
+   cho riêng agent đó.
+3. **Per-role** — `role_models:` trong profile (hoặc `OPENROUTER_ROLE_MODELS`
+   trong `.env` dạng chuỗi `role=model,role=model`) đè theo loại việc:
+   `content`, `review`, `aggregate`, `plan`, `util`.
+
+```yaml
+# profiles/<id>/profile.yaml
+model: deepseek/deepseek-v4-pro-0813    # tầng 2: model riêng agent này
+role_models:                             # tầng 3: theo loại việc
+  review: your/cheaper-model
+  util: your/cheaper-model
+```
+
+Điểm mấu chốt của tầng 3 là **hình dạng chi phí, không phải năng lực**: role
+`content` viết ra bản giao con người đọc (không bao giờ hạ cấp), còn verdict soát
+chéo hay trích slot là lệnh gọi máy móc ngắn, chạy model rẻ được. Override theo role
+giữ nguyên chain fleet làm fallback — model rẻ bị rate-limit hay lỗi thì role degrade
+*lên* model fleet thay vì chết bước. Tên role sai hoặc khai trùng fail ngay lúc load
+config, không phải 3 giờ sáng trong cron run.
+
 ### Runtime Tier: Chọn Engine Cho Agent
 
 **Mặc định: `native`** — DAG cố định (perceive → analyze → compose → deliver). Rẻ, xác định, tốt cho báo cáo template. **Giữ native cho báo cáo hằng ngày.**
@@ -281,6 +308,15 @@ Khi bật: kế hoạch việc đội tự xác nhận, việc kẹt tự gỡ t
 đang chờ tự duyệt — mỗi quyết định báo lại qua Telegram + ghi audit. Opt-out per-task:
 CEO nói "để anh duyệt" khi giao. Lớp A + trần chi phí per-task KHÔNG bị flag này ảnh
 hưởng (pin bằng test).
+
+### Phanh Chi Phí & Soát Chéo (v78–v79)
+
+- **Trần chi phí per-task:** `team_task_cap_usd` trong `company.yaml` (mặc định $2).
+  Từ 0.10.0, chạm trần còn **halt cả bước ĐANG chạy** — trước đây cancel chỉ đổi
+  trạng thái task trong khi worker đã spawn vẫn chạy (và tốn tiền) đến hết.
+- **Ngân sách soát/sửa per-task:** 2× số bước nội dung của task, sàn 5. Vượt là task
+  stall + escalate cho CEO thay vì mint thêm vòng soát. Không cấu hình được; mỗi bước
+  còn bị trần riêng 2 vòng rework.
 
 ---
 

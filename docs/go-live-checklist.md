@@ -1,15 +1,17 @@
 # Go-live có kiểm soát — checklist vận hành
 
-> Lập 2026-08-03 (v58 P5) từ kiểm kê fleet THẬT + drill kill-switch thật. Người quyết
-> định bật: CEO. Tài liệu này là quy trình, không phải công tắc — không flag nào tự đổi.
+> Lập 2026-08-03 (v58 P5) từ kiểm kê fleet THẬT + drill kill-switch thật. Soát lại
+> 2026-08-16 (0.10.0). Người quyết định bật: CEO. Tài liệu này là quy trình, không
+> phải công tắc — không flag nào tự đổi.
 
-## 1. Hiện trạng fleet (kiểm kê 2026-08-03)
+## 1. Hiện trạng fleet (kiểm kê lại 2026-08-16)
 
 | Agent | dry_run | Kênh ghi cấu hình sẵn | Ghi chú |
 |---|---|---|---|
 | admin, hr, secretary | **false (đã live)** | Telegram (bot riêng, allowlist CEO) | Đã chạy thật ổn định; secretary thêm gws calendar write |
-| coordinator (coordinator) | true | — (ghi nội bộ store, không gateway) | dry_run chủ yếu ảnh hưởng escalate Telegram |
-| content, researcher, analyst, qa, designer | true | qua env fallback: Jira + Slack + Confluence (token có sẵn trong .env) | Ghi ngoài chỉ khi team-task đụng external_action |
+| pong | **false (đã live)** | Telegram (bot riêng, DM CEO) | Trợ lý cá nhân (v70–71): briefing sáng + review Chủ nhật |
+| coordinator (coordinator) | **false (v66)** | — (ghi nội bộ store, không gateway) | Escalate Telegram chạy thật |
+| content, researcher, analyst, qa, designer | **false (v66)** | qua env fallback: Jira + Slack + Confluence (token có sẵn trong .env) | Đội làm việc thật; ghi ngoài chỉ khi team-task đụng external_action |
 | sales-pm | true | schedule `daily` — sẽ post Slack + Confluence THẬT khi bật | Ứng viên pilot tốt nhất: 1 báo cáo/ngày, dễ soi |
 | default | true | — | Giữ nguyên (agent mẫu) |
 
@@ -33,7 +35,10 @@ không ghi giá trị ở đây).
 - **Audit**: `uv run my-crew agent audit <id> | tail -30` hoặc UI trang Đội → Audit
   (cột actor v46). Soi: hành động lạ? rationale `trust_mode=autonomous` có hợp lý?
 - **Chi phí**: `/api/budget` hoặc trang Đội — cap mỗi agent hiện $50/tháng
-  (`budget.monthly_usd`); pilot nên hạ còn $10 để phanh sớm.
+  (`budget.monthly_usd`); pilot nên hạ còn $10 để phanh sớm. Trần per-task
+  `team_task_cap_usd` trong `company.yaml` (mặc định $2) — từ 0.10.0 chạm trần là
+  halt cả bước ĐANG chạy, không chỉ chặn bước mới; ngân sách soát/sửa per-task
+  (2× số bước nội dung, sàn 5) cạn là task stall + escalate thay vì đốt tiếp.
 - **Alert tự động đã có sẵn**: ops-alerts DM CEO khi agent chết ngầm/fail; budget cảnh
   báo ở 80%; follow-up sweep nhắc việc kẹt. Không cần dựng thêm gì.
 

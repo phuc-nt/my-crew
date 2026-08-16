@@ -2,7 +2,7 @@
 
 > Full setup for installing, running, and configuring my-crew as a production system.
 > **For daily operations (CEO / team lead):** see [user-guide.md](user-guide.md).
-> **Updated:** 2026-08-09 (0.9.0).
+> **Updated:** 2026-08-16 (0.10.0).
 
 ## 1. Prerequisites
 
@@ -190,6 +190,33 @@ Determines where `.env`, `registry.yaml`, profiles, and `.data/` live:
 2. Git checkout root (operator behavior unchanged; live data in repo for dev)
 3. `~/.my-crew/` (installed user, default)
 
+### Model Configuration: Three Tiers (v79)
+
+Every LLM call resolves its model through three tiers — most specific wins:
+
+1. **Fleet default** — `OPENROUTER_MODEL` in `.env`. Unset ⇒ the built-in default
+   `deepseek/deepseek-v4-pro-0813` (0.9.x shipped `qwen/qwen3.7-plus`).
+2. **Per-agent** — `model:` in `profiles/<id>/profile.yaml` overrides the fleet
+   default for that agent only.
+3. **Per-role** — `role_models:` in the profile (or `OPENROUTER_ROLE_MODELS`
+   in `.env` as a `role=model,role=model` string) overrides by work kind:
+   `content`, `review`, `aggregate`, `plan`, `util`.
+
+```yaml
+# profiles/<id>/profile.yaml
+model: deepseek/deepseek-v4-pro-0813    # tier 2: this agent's fleet override
+role_models:                             # tier 3: per work kind
+  review: your/cheaper-model
+  util: your/cheaper-model
+```
+
+The point of tier 3 is **cost shape, not capability**: the `content` role writes the
+deliverable a human reads (never downgrade it), while review verdicts and slot
+extraction are short mechanical calls that can run a cheaper model. A role override
+keeps the fleet chain as fallback — when the cheap model is rate-limited or errors,
+the role degrades *up* to the fleet model instead of failing. An unknown role name or
+a duplicate role fails at config load, not at 3 a.m. in a cron run.
+
 ### Runtime Tiers: Choosing an Agent's Engine
 
 **Default: `native`** — fixed DAG (perceive → analyze → compose → deliver). Cheap, deterministic, best for templated reports (daily/weekly/OKR). **Keep native agents for scheduled reports.**
@@ -301,6 +328,15 @@ When on: team-task plans auto-confirm, stalled tasks auto-resolve on a two-step
 ladder, pending Lớp B approvals auto-approve — every decision is reported back over
 Telegram and audited. Per-task opt-out: the CEO says "để anh duyệt" when assigning.
 Lớp A hard-denies and per-task cost caps are unaffected by this flag (pinned by tests).
+
+### Cost & Review Brakes (v78–v79)
+
+- **Per-task cost cap:** `team_task_cap_usd` in `company.yaml` (default $2). Since
+  0.10.0 a breach also **halts steps already running** — previously cancel only
+  flipped the task status while spawned workers ran (and billed) to completion.
+- **Per-task review/rework budget:** 2× the task's content steps, floor 5. On breach
+  the task stalls and escalates to the CEO instead of minting more review rounds.
+  Not configurable; each step's peer review is additionally capped at 2 rework rounds.
 
 ---
 

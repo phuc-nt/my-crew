@@ -1,7 +1,7 @@
 # Project Overview & PDR — my-crew
 
 > Product definition + requirements. Đọc file này TRƯỚC khi plan hay code.
-> Cập nhật: 2026-08-09 (v75 live). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified — PyPI 0.9.0**.
+> Cập nhật: 2026-08-16 (v79 live). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified — PyPI 0.10.0**.
 > Liên quan: [system-architecture](system-architecture.md) · [action-gateway-explainer](action-gateway-explainer.md) · [uat-theo-user-story](uat-theo-user-story.md).
 
 ## 1. Vấn đề
@@ -31,6 +31,16 @@ task bế tắc được coordinator **tự thử lại → tự đề xuất K�
 theo thang có trần, mọi nấc audit + báo CEO; chuỗi trung thực giữ tuyệt đối — thiếu dữ
 liệu ghi THIẾU kèm đúng lý do ("web không có" khác "không tới được web"), không bịa số.
 
+Từ v76–v79 (arc sprint + phễu định tuyến), đề một-người không còn trả "thuế đa-agent":
+**sprint mode** chạy 1 agent duy nhất do code điều nhịp (prefetch → draft → coverage
+check → revise ≤2 vòng), là team task suy biến nên thừa kế nguyên bộ review/clarify/
+escalate/delivery. **Phễu định tuyến 6 lớp** mặc định sprint, chỉ đẩy team khi có tín
+hiệu CẤU TRÚC (>1200 ký tự, >10 thực thể, ≥3 đầu việc); plan suy biến sau decompose
+được kéo về sprint; sprint bế tắc tự lật sang team — router không cần đúng, cần lưới.
+Đo thật: nhanh hơn **3.6–7×, rẻ hơn 4.1×, chấm mù thắng 4/5 cặp**. Kèm theo: autonomy
+band per-agent (trusted/normal/supervised, loop metrics khép kín), trần review tầng
+task + phanh in-flight cho trần chi phí, model config 3 tầng, audit hash-chain.
+
 ## 3. Nguyên tắc bất khả xâm phạm (v30: autonomy-first)
 
 > **Tự chủ về TỐC ĐỘ (mặc định); duyệt là tùy chọn. Luôn duyệt về an toàn.**
@@ -58,12 +68,14 @@ Xem [action-gateway-explainer.md](action-gateway-explainer.md) cho mô hình đ�
 | Đội ngũ | Tạo/tắt/xoá agent; đội = mọi agent enabled; registry là user-data (không mất) |
 | Giao việc | @PIC / @all / tự-xác-nhận; phân rã ≤7 bước; hash-bind chống tamper; giao/chỉnh/huỷ qua chat thư ký (catalog scope theo domain) |
 | Theo dõi | Màn Văn phòng realtime (3D + feed + kết quả) theo từng phòng việc; kanban + chi phí qua chat |
-| Tự vận hành | Soát chéo THEO RỦI RO (chỉ bước cuối + ghi-ra-ngoài, task nhỏ waiver); tự cứu lỗi 1 lần; autopilot: tự xác nhận / tự gỡ kẹt **thang 3 nấc (retry → tự đề xuất kế hoạch khác qua flow amend+hash, fail-closed → accept/drop)** / tự duyệt Lớp B, opt-out per-task; scheduler round-robin công bằng |
+| Tự vận hành | Soát chéo THEO RỦI RO (chỉ bước cuối + ghi-ra-ngoài, task nhỏ waiver); tự cứu lỗi 1 lần; autopilot: tự xác nhận / tự gỡ kẹt **thang 3 nấc (retry → tự đề xuất kế hoạch khác qua flow amend+hash, fail-closed → accept/drop)** / tự duyệt Lớp B, opt-out per-task; scheduler round-robin công bằng; **autonomy band per-agent (v76)** trusted/normal/supervised chỉ đụng cổng review, loop metrics khép kín (siết tự động, nới cần người, cooldown 3 ngày); **trần review tầng task (v78)** = 2× bước nội dung, sàn 5 — chạm trần thì stall + escalate thay vì đốt tiền |
+| Định tuyến (v77–78) | Đề một-người → **sprint mode**: 1 agent code-paced (prefetch → draft → coverage check → revise ≤2 vòng), team task suy biến thừa kế review/clarify/escalate/delivery; **phễu 6 lớp** mặc định sprint, tín hiệu cấu trúc (>1200 ký tự / >10 thực thể / ≥3 đầu việc) đẩy team; downgrade sau decompose (0 gọi model thêm); dead-end tự lật team; tiền tố `sprint:`/`team:` override (KHÔNG ép được sprint khi ghi-ra-ngoài/shell/nhiều người/dài hơi); mọi nhánh log `route_json` (chỉ số đo, không lưu đề); **sprint LUÔN mint đúng 1 review ở mọi band** — không có đường zero-eyes |
 | Tốc độ (v74–75) | Dispatch hướng sự kiện (poke, gap 0–8s, fallback nhịp 60s); tier theo bước `needs_web` (bước không-tool chạy native, hint sai tự hồi phục); đề ≥4 thực thể ép tách thu thập song song (fail-open); code pre-fetch search cho bước collect (fail-open về tool-loop); cạn loop tổng hợp từ transcript dở |
 | Trung thực | Sentinel 3-path: "web không có dữ liệu" ≠ "không truy cập được nguồn" ở mọi tier; watcher toàn-lỗi không đội lốt "không đổi"; grader neo ngày + trần đề gốc CEO; thiếu ghi THIẾU, không bịa |
 | Trợ lý cá nhân | Chat DM tức thì; briefing sáng/tuần (thư ký + **pong** — Goodreads/Google Tasks, weekly không lặp briefing); đọc Gmail/Calendar; gửi email; tạo/sửa/xoá lịch; nhắc đúng-giờ về Telegram; đa-lệnh một tin |
 | Trí nhớ | Store SQLite bền dùng chung; đội đọc chéo; thư ký chỉ-đọc (`memory_share: read_only`); retention 90 ngày |
-| An toàn (v30) | Action Gateway (Lớp A chặn cứng luôn / Lớp B: autonomous chạy ngay vs guarded duyệt per-agent); PII firewall; chat flatten (autonomous mode); shell chỉ trong Docker sandbox (không mount host, network off, fail-closed) |
+| An toàn (v30) | Action Gateway (Lớp A chặn cứng luôn / Lớp B: autonomous chạy ngay vs guarded duyệt per-agent); PII firewall; chat flatten (autonomous mode); shell chỉ trong Docker sandbox (không mount host, network off, fail-closed); audit hash-chain + break-glass env-only (v76) |
+| Model (v79) | Cấu hình 3 tầng: fleet → per-agent → per-role (`role_models` trong profile); fleet mặc định `deepseek/deepseek-v4-pro-0813` |
 | Báo cáo | daily/weekly/okr/resource + headcount (hr); xuất .xlsx qua email; đa-audience |
 | Cảnh báo | agent chết ngầm, bộ điều phối chưa chạy, thiếu web-search key → Telegram/banner |
 
@@ -73,9 +85,13 @@ Xem [action-gateway-explainer.md](action-gateway-explainer.md) cho mô hình đ�
   (không qua terminal/URL/log); audit log không sửa được.
 - **Bền vững khi lỗi**: mọi ghi realtime (office events, heartbeat) fail-degrade, không
   chặn pipeline. Retry = attempt mới (không resume mid-graph).
-- **Chi phí có trần**: mỗi việc đội có cap ($2 mặc định); ngân sách LLM per-agent hàng tháng.
+- **Chi phí có trần**: mỗi việc đội có cap ($2 mặc định); ngân sách LLM per-agent hàng
+  tháng; trần là **phanh thật** (v79): chạm trần thì halt cả bước ĐANG chạy — cancel
+  không phải phanh (bài học đo được: worker đã spawn cháy thêm ~$0.05 sau lệnh huỷ).
 - **Kiểm chứng thật**: mọi tính năng lớn E2E trên browser + LLM + ticker thật, không chỉ
-  suite xanh (bài học "suite xanh ≠ chạy được").
+  suite xanh (bài học "suite xanh ≠ chạy được"); thêm harness fullflow in-process
+  (intake→decompose→work→review→aggregate với LLM kịch bản, mutation-verified —
+  [fullflow-testing-guide](fullflow-testing-guide.md)).
 
 ## 7. Bối cảnh kỹ thuật (1 dòng mỗi cái)
 
@@ -86,15 +102,17 @@ Xem [action-gateway-explainer.md](action-gateway-explainer.md) cho mô hình đ�
 
 ## 8. Trạng thái & lộ trình
 
-Đã ship tới **v75 = PyPI 0.9.0** (mốc gần: **v56 Playwright e2e** · **v57–v61 thư ký +
-chat = cổng điều phối** · **v62 English identifiers** · **v63 autopilot + review theo
-rủi ro** · **v64–v66 UAT hardening + nhắc đúng-giờ + cross-agent memory** · **v67–v69
-learned Lớp B rules + heartbeat + approval từ chat** · **v70–v71 personal assistant
-pong + quick-build crew** · **v72–v74 tốc độ**: spawn-then-drain, grader neo ngày,
-Telegram coordinator-first, tier theo bước, dispatch poke, fan-out ép code ·
+Đã ship tới **v79 = PyPI 0.10.0** (mốc gần: **v62 English identifiers** · **v63 autopilot
++ review theo rủi ro** · **v64–v66 UAT hardening + nhắc đúng-giờ + cross-agent memory** ·
+**v67–v69 learned Lớp B rules + heartbeat + approval từ chat** · **v70–v71 personal
+assistant pong + quick-build crew** · **v72–v74 tốc độ**: spawn-then-drain, grader neo
+ngày, Telegram coordinator-first, tier theo bước, dispatch poke, fan-out ép code ·
 **v75 coordination chủ động**: sentinel 3-path, goal-replan ladder, hybrid collect
-launcher — chuẩn hoá sau brainstorm đối chiếu OpenClaw/Hermes/landscape 2026),
-**2982 BE + 282 FE + 8 e2e tests**, 12 vòng benchmark/e2e sống, CHANGELOG đầy đủ.
+launcher · **v76 đo lường + guardrail**: audit hash-chain, autonomy band, metrics
+honest-data · **v77 sprint mode** code-paced · **v78 phễu định tuyến 6 lớp** + trần
+review tầng task · **v79 model 3 tầng + phanh in-flight + release gate 0.10.0**: delta-UAT
+sống 4/4 hành vi trên model + Telegram thật), **3266 BE + 282 FE + 8 e2e tests**,
+benchmark sprint-vs-team chấm mù 4/5 cặp sprint thắng, CHANGELOG đầy đủ.
 Kiến trúc runtime-tier + moat: xem [system-architecture](system-architecture.md) §3.9.
 Lộ trình + việc tiếp: [project-roadmap.md](project-roadmap.md).
 

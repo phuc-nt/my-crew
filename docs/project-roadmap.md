@@ -1,13 +1,39 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v74 / 0.8.0+). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-08-09.
+> Lộ trình + trạng thái (as-built v79 / 0.10.0). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Cập nhật: 2026-08-16.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v74 (PyPI 0.8.0+).**
-2959 BE + 279 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
-(live daemon, kill-9 resume, fan-out parallelism, UAT đối kháng + 7 vòng benchmark tốc độ sống).
+**Production-usable, single-user autonomy-first. Đã ship tới v79 (PyPI 0.10.0).**
+3266 BE + 282 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
+(live daemon, kill-9 resume, fan-out parallelism, UAT đối kháng, benchmark sprint-vs-team
+chấm mù, release gate delta-UAT sống 4/4 hành vi).
+
+**v76–v79 (arc sprint + phễu định tuyến + release gate — 08-09→08-15, 0.10.0):**
+**v76 đo lường + guardrail**: audit hash-chain (`mpm agent audit <id> verify`), fail-mode
+contract + break-glass env-only (`MYCREW_GATEWAY_FAIL_OPEN=1` — không bao giờ nới Lớp A),
+metrics honest-data (Wilson CI, `team_metrics`), autonomy band per-agent
+trusted/normal/supervised CHỈ đụng cổng review + loop khép kín bất đối xứng (siết tự
+động, nới cần người, cooldown 3 ngày) · **v77 sprint mode**: đề một-người = team task suy
+biến 1 bước `sprint`, code điều nhịp (`runtime/sprint_runner.py`: prefetch → draft →
+coverage check → revise ≤2 vòng, ≤8 truy vấn); tiền tố `sprint:`/`team:` override, 4 ca
+không ép được sprint (ghi-ra-ngoài/shell/nhiều người/dài hơi); benchmark nhanh 3.6–7×,
+rẻ 4.1×, chấm mù 28 vs 8 · **v78 phễu định tuyến 6 lớp** (`agent/sprint_intake.py`): lật
+mặc định sang sprint, tín hiệu CẤU TRÚC đẩy team (>1200 ký tự / >10 thực thể / ≥3 đầu
+việc); `downgrade_to_sprint` sau decompose (0 gọi model thêm); dead-end tự lật team giữ
+quyết định gốc; cột `route_json` log mode/source/reason/signals mọi nhánh; UAT 18 task
+live 13/13 ca định tuyến PASS, đủ 6 lớp có ca sống; sau nghiệm thu: **sprint LUÔN mint
+1 review mọi band** (đóng đường zero-eyes) + **trần review tầng task** (2× bước nội dung,
+sàn 5, chạm trần → stall + escalate); cộng dồn 4/5 cặp benchmark sprint thắng ·
+**v79 release gate + hardening**: model 3 tầng fleet → per-agent → per-role (`role_models`),
+fleet mặc định `deepseek/deepseek-v4-pro-0813`; **phanh in-flight cho trần chi phí** (chạm trần
+halt bước ĐANG chạy — trả nợ "cancel không phải phanh"); harness fullflow in-process
+(8 kịch bản người-dùng-thật, mutation-verified, `docs/fullflow-testing-guide.md`); chuỗi
+fix chất lượng giao việc (terminal giao nguyên văn, review truy số về đầu vào, hết flood
+Telegram, rework thừa kế quyền web); cổng release: delta-UAT sống 4/4 hành vi, 2 phát
+hiện cosmetic sửa trước khi tag (sprint tool-less bỏ máy search; tiêu chí độ tươi không
+loại số cũ khi không có nguồn mới hơn).
 
 **v71–v74 (arc tốc độ + phán đoán — 08-06→08-09):** v71 personal crew quick-build · v72 tick
 spawn-then-drain · v73 grader neo ngày + retry-first coercion + Telegram coordinator-first ·
@@ -89,12 +115,27 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
 
 ## Việc nên làm tiếp (từ UAT + nợ kỹ thuật)
 
+**Định giá lại 2026-08-16 sau 0.10.0** (nguồn: journals v76–v79 mục "Mở / sang sau"):
+1. **Nợ trusted×external_write (ca sống)** — chưa dựng được: phễu đẩy đề gửi-email sang
+   sprint, sprint hardcode `external_write=False`. **Luật thường trực**: chạy lại ca này
+   NGAY trước lần cấp opt-in `team_step_egress` đầu tiên, trước khi agent đó nhận việc thật.
+2. **Lượt tra cứu thêm cho bước sprint** (trả lời cặp C3 — research nhiều dịch vụ) —
+   hướng ĐÃ DUYỆT, chưa triển khai: cần số chi phí trước, YAGNI về hình thức cấp.
+3. **Auto-tune ngưỡng phễu** — cần ≥20 dòng `route_json` có outcome mới chỉnh ngưỡng
+   (1200 ký tự / 10 thực thể / 3 đầu việc) từ dữ liệu thật; UAT tới nay 0 ca route sai.
+4. **Bằng chứng sống `task_review_budget_exhausted`** — mới có unit test; lần đầu
+   escalation này bắn tự nhiên → ghi task_id vào journal.
+5. Band chưa hiện trên kanban card (mới có audit/Telegram/`team_metrics`); theo dõi
+   demote `researcher` — nếu done-rate hồi phục, loop tự gỡ.
+6. Ed25519 ký audit chain + checkpoint ngoài data-dir — chỉ khi có nhu cầu multi-machine.
+
 **Định giá lại 2026-08-04 sau 0.7.0** (retro `plans/reports/retro-260804-1721-*`):
 1. **Chất lượng NỘI DUNG chuỗi handoff/extractor** — điểm yếu số 1 (drift kiểu "Nghị
    định 206", fact vụn theo dòng): cơ chế tròn, óc viết chưa sắc — cần vòng riêng.
 2. **Go-live pilot sales-pm** — checklist + drill sẵn (v58), chờ CEO bấm.
-3. **Soak autopilot + review policy mới** — mới chạy vài giờ, retro metrics đã cài trong
-   `list_team_tasks` để đo dài hạn.
+3. ~~**Soak autopilot + review policy mới**~~ — **đóng v76–v78**: đo lường thành hệ
+   thường trực (`agent_metrics` + Wilson CI + band loop khép kín); review policy được
+   siết thêm bằng band per-agent + trần review tầng task, UAT sống nhiều vòng.
 4. Postgres deferred có chủ đích (SQLite chung đủ cho single-user).
 
 Bên dưới là danh sách tích lũy cũ hơn (ưu tiên giảm dần). Nguồn:
