@@ -3,6 +3,69 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.10.0] — 2026-08-16
+
+Sprint mode and the routing funnel (v76–v79): a one-person brief no longer pays the
+multi-agent tax. The router defaults to a single code-paced agent and only escalates
+to a team on structural signals — measured 3.6–7× faster and ~4× cheaper on the same
+briefs, winning 4 of 5 blind-graded pairs. Cost caps became a real brake (running
+steps halt on breach), autonomy got per-agent bands with a closed metrics loop, and
+the release gate ran live end-to-end: 4/4 delta behaviors verified on real models and
+real Telegram, with both cosmetic findings fixed before tagging.
+
+### Added
+- **Sprint mode** (v77): one-person briefs run as a single code-paced agent —
+  prefetch (code picks queries) → draft (LLM) → coverage check (code) → targeted
+  revise (≤2 rounds). A degenerate team task, so review/clarify/escalate/delivery
+  are inherited, not reimplemented. `sprint:` / `team:` prefixes override the router;
+  external writes, shell, multi-person, and long-running briefs cannot be forced into
+  sprint. Benchmarked 3.6–7× faster, 4.1× cheaper, blind-graded 28 vs 8 on the
+  flagship pair.
+- **Routing funnel, 6 layers** (v78): default is sprint; structural signals push to
+  team (>1200 chars, >10 entities, ≥3 separate asks) — keywords are not trusted.
+  After decompose, a degenerate plan (≤2 steps, 1 person, linear, no shell/egress)
+  is pulled back to sprint at zero extra model calls; a sprint that dead-ends flips
+  to team with the original ruling preserved. Every branch logs `route_json`
+  (mode/source/reason/signals — metrics only, never the brief text).
+- **Three-tier model config** (v79): fleet → per-agent → per-role (`role_models`);
+  fleet default is now `deepseek/deepseek-v4-pro-0813`.
+- **Review budget + in-flight brake** (v78–79): per-task review/rework cap (2× content
+  steps, floor 5) — on breach the task stalls and escalates instead of burning money;
+  the cost cap now halts steps already running (v78 measured cancel leaking ~$0.05:
+  it flipped status but never stopped spawned workers). Sprint always mints exactly
+  one review in every trust band — the zero-eyes path is closed.
+- **Autonomy bands + honest metrics** (v76): per-agent trusted/normal/supervised
+  bands driven by a closed loop over asymmetric metrics (a false "done" costs more
+  than a false stall); audit log hash-chain, gateway fail-mode contract, and
+  break-glass procedure.
+- **Full-flow test harness**: the whole intake→decompose→work→review→aggregate
+  pipeline runs in-process against a scripted LLM; 8 real-user scenarios including
+  clarify, autopilot, and sprint paths, mutation-verified
+  (`docs/fullflow-testing-guide.md`).
+- **Repeatable speed benchmark** for sprint vs team modes (`scripts`-level tooling
+  behind the v77/v78 numbers).
+
+### Changed
+- Web-bound steps must carry a data-freshness acceptance criterion: prefer the newest
+  figures found, note the source's own stated data date when it is old — but never
+  reject old figures when no newer source exists (snippet-compatible on purpose).
+- The terminal step's artifact is delivered verbatim to the CEO — no 500-char
+  summary, no rewrite layer; single-terminal plans deliver the artifact itself.
+- Terminal steps are identified from content-step dependencies only, so a
+  dynamically inserted review row is never mistaken for the deliverable artifact.
+
+### Fixed
+- A tool-less sprint (`needs_web=false`) no longer runs its doomed prefetch and no
+  longer ships a "could not search the web" disclaimer about a lookup it never needed.
+- Peer review traces figures back to the step's actual input instead of grading
+  blind; a passed verdict hands the prior output on untouched (no rework-appendix
+  leaking into user-facing text).
+- Post-completion Telegram flood stopped: done is announced once, direct delivery
+  and the milestone mirror can no longer both fire.
+- Rework steps inherit the web grant of the step they redo.
+- Runtime split after a stuck reassign re-stamps the plan hash with the conditional
+  flags, so confirmed plans stay confirmable.
+
 ## [0.9.0] — 2026-08-09
 
 Speed and proactive coordination (v70–v75): the same multi-agent survey task that took
