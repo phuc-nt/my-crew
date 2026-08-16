@@ -8,7 +8,7 @@
 // (the map existed and was correct, but nothing fed it a value).
 import { expect, test } from 'vitest'
 import { DICT } from '../../i18n/dictionary'
-import { PHASE_LABEL } from './speech-bubble'
+import { PHASE_LABEL } from '../office-shared/phase-labels'
 
 test('PHASE_LABEL covers exactly the backend phase vocabulary', () => {
   expect(PHASE_LABEL).toEqual({

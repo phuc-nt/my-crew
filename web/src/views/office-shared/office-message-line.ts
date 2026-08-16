@@ -1,8 +1,9 @@
 // Shared office-event → one-line text rendering (v15): extracted from OfficeRoom.tsx so
 // the unified office screen's activity feed and the timeline tab render an event
 // IDENTICALLY (one vocabulary, one place to extend). Pure functions — no hooks, no r3f —
-// unit-testable in plain vitest. PHASE_LABEL is re-used from the 3D bubble (same
-// closed-set backend vocabulary, one source of truth).
+// unit-testable in plain vitest. PHASE_LABEL is shared with the 3D bubble via
+// phase-labels.ts (same closed-set backend vocabulary, one source of truth) — importing
+// it from the bubble itself would pull three.js into the eager bundle.
 //
 // v53 i18n: both kindLabel and messageLine take an optional `t` (useLanguage()'s
 // translate fn), defaulting to DICT.vi (same fallback pattern as agent-desk.tsx) for any
@@ -10,7 +11,7 @@
 import { DICT } from '../../i18n/dictionary'
 import type { UiKey } from '../../i18n/dictionary'
 import type { OfficeEventKind, OfficeMessage } from '../../types'
-import { PHASE_LABEL } from '../office-3d/speech-bubble'
+import { PHASE_LABEL } from './phase-labels'
 
 type Translate = (key: UiKey, params?: Record<string, string | number>) => string
 
@@ -31,6 +32,9 @@ const KIND_LABEL_KEY: Record<OfficeEventKind, UiKey> = {
   // v54: Action Gateway outcome bridge — label only; `messageLine`'s `default: return ''`
   // still covers rendering (FE display of this kind is out of scope for this phase).
   external_action: 'officeMessageLine.kindExternalAction',
+  // v80 P4: live in-step activity (tool name + counter only — args/results never
+  // reach the room, see office_event_projection.py's `step_activity` branch).
+  step_activity: 'officeMessageLine.kindStepActivity',
 }
 
 export function kindLabel(kind: OfficeEventKind, t: Translate = defaultT): string {
@@ -114,6 +118,15 @@ export function messageLine(m: OfficeMessage, t: Translate = defaultT): string {
       const detail = b.detail && !tool.includes(b.detail) ? ` ${b.detail}` : ''
       return t('officeMessageLine.externalActionLine', {
         actor: b.actor ?? '', tool, detail, outcome: outcomeLabel,
+      })
+    }
+    case 'step_activity': {
+      // v80 P4: "web_search (3)" while a tool is firing, "đang viết…" while the model
+      // writes. The agent id already shows as the row's author chip, so the line
+      // carries only the activity itself.
+      if (b.phase === 'writing') return t('officeMessageLine.stepActivityWriting')
+      return t('officeMessageLine.stepActivityToolLine', {
+        tool: b.tool ?? '', count: b.count ?? 0,
       })
     }
     default:

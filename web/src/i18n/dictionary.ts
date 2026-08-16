@@ -114,6 +114,9 @@ const vi = {
   'officeMessageLine.externalActionLine': '→ {tool}{detail} · {outcome}',
   'officeMessageLine.outcomeAllow': '✓ cho phép',
   'officeMessageLine.outcomeDeny': '✗ từ chối',
+  'officeMessageLine.kindStepActivity': 'Đang thao tác',
+  'officeMessageLine.stepActivityToolLine': 'đang gọi {tool} ({count})',
+  'officeMessageLine.stepActivityWriting': 'đang viết…',
 
   // artifact-panel.tsx
   'artifactPanel.title': 'Kết quả',
@@ -137,6 +140,13 @@ const vi = {
   'artifactViewer.loading': 'Đang tải…',
   'artifactViewer.errorPrefix': 'Lỗi: {message}',
   'artifactViewer.imageAltFallback': 'hình',
+  'artifactViewer.tabResult': 'Kết quả',
+  'artifactViewer.tabProcess': 'Quá trình',
+  'transcriptTab.loading': 'Đang tải quá trình…',
+  'transcriptTab.empty': 'Bước này chưa có transcript quá trình.',
+  'transcriptTab.loadError': 'không đọc được transcript',
+  'transcriptTab.errorPrefix': 'Lỗi: {message}',
+  'transcriptTab.attempts': 'Có {n} lần thử được ghi — đang xem lần mới nhất.',
 
   // assign-composer.tsx
   'assignComposer.placeholderRoom':
@@ -160,6 +170,8 @@ const vi = {
   'assignComposer.confirmAdjustFailed': 'xác nhận sửa thất bại',
   'assignComposer.confirmFailed': 'xác nhận thất bại',
   'assignComposer.errorPrefix': 'Lỗi: {message}',
+  'assignComposer.modeSprint': 'SPRINT — 1 người làm thẳng, không chia bước',
+  'assignComposer.modeTeam': 'TEAM — chia bước, có review',
 
   // workroom-list.tsx
   'workroomList.ariaLabel': 'Phòng việc',
@@ -302,7 +314,6 @@ const vi = {
   'work.emptyApprovals': 'Không có việc nào chờ duyệt. 🎉',
   'work.reviewAndApprove': 'Xem & duyệt',
   'work.reject': 'Từ chối',
-  'work.assignedTasksTitle': 'Việc đã giao cho từng nhân sự',
   'work.autoApprovedTitle': 'Đã tự duyệt hôm nay ({n})',
   'work.autoApprovedHint': 'Các hành động agent tin cậy đã tự chạy (trong hạn mức bạn đặt) — không cần bạn duyệt.',
   'work.autoApprovedReport': 'báo cáo {kind}',
@@ -393,25 +404,9 @@ const vi = {
   'teamTaskCost.colEngine': 'Engine',
   'teamTaskCost.colCost': 'Chi phí',
   'teamTaskCost.colTokens': 'Token (vào/ra)',
-
-  // views/Tasks.tsx (child of Work)
-  'tasks.title': 'Việc đã giao',
-  'tasks.empty': 'Chưa có việc nào được giao. Giao việc qua khung Trợ lý (chat).',
-  'tasks.colIndex': '#',
-  'tasks.colTask': 'Việc',
-  'tasks.colState': 'Trạng thái',
-  'tasks.colLastRun': 'Lần chạy gần nhất',
-  'tasks.cancel': 'Huỷ',
-  'tasks.watchSummary': 'Theo dõi PR #{number}',
-  'tasks.reportSummary': "Báo cáo định kỳ '{kind}'",
-  'tasks.qaSummary': 'Trả lời định kỳ: {question}',
-  'tasks.stateOpen': 'đang mở',
-  'tasks.stateRunning': 'đang chạy',
-  'tasks.stateDone': 'hoàn tất',
-  'tasks.stateCancelled': 'đã huỷ',
-  'tasks.stateStalled': 'bị treo',
-  'tasks.loadFailed': 'tải thất bại',
-  'tasks.cancelFailed': 'huỷ thất bại',
+  'teamTaskRoute.line': 'Đường đi: {mode} — {reason}',
+  'teamTaskRoute.noReason': 'không ghi lý do',
+  'teamTaskMetrics.line': '⏱ {wall} · {steps} bước ({content} nội dung, {review} review, {rework} làm lại)',
 
   // api/client.ts (friendlyError + auth)
   'api.friendlyServerError': 'Máy chủ đang gặp lỗi, thử lại sau.',
@@ -1090,6 +1085,9 @@ const en = {
   'officeMessageLine.externalActionLine': '→ {tool}{detail} · {outcome}',
   'officeMessageLine.outcomeAllow': '✓ allowed',
   'officeMessageLine.outcomeDeny': '✗ denied',
+  'officeMessageLine.kindStepActivity': 'Working',
+  'officeMessageLine.stepActivityToolLine': 'calling {tool} ({count})',
+  'officeMessageLine.stepActivityWriting': 'writing…',
 
   // artifact-panel.tsx
   'artifactPanel.title': 'Outputs',
@@ -1113,6 +1111,13 @@ const en = {
   'artifactViewer.loading': 'Loading…',
   'artifactViewer.errorPrefix': 'Error: {message}',
   'artifactViewer.imageAltFallback': 'image',
+  'artifactViewer.tabResult': 'Result',
+  'artifactViewer.tabProcess': 'Process',
+  'transcriptTab.loading': 'Loading process…',
+  'transcriptTab.empty': 'No process transcript for this step.',
+  'transcriptTab.loadError': 'could not load the transcript',
+  'transcriptTab.errorPrefix': 'Error: {message}',
+  'transcriptTab.attempts': '{n} recorded attempts — showing the newest.',
 
   // assign-composer.tsx
   'assignComposer.placeholderRoom':
@@ -1136,6 +1141,8 @@ const en = {
   'assignComposer.confirmAdjustFailed': 'confirming the change failed',
   'assignComposer.confirmFailed': 'confirmation failed',
   'assignComposer.errorPrefix': 'Error: {message}',
+  'assignComposer.modeSprint': 'SPRINT — one person, straight run, no step split',
+  'assignComposer.modeTeam': 'TEAM — multi-step with review',
 
   // workroom-list.tsx
   'workroomList.ariaLabel': 'Workrooms',
@@ -1277,7 +1284,6 @@ const en = {
   'work.emptyApprovals': 'Nothing pending approval. 🎉',
   'work.reviewAndApprove': 'Review & approve',
   'work.reject': 'Reject',
-  'work.assignedTasksTitle': 'Tasks assigned to each staffer',
   'work.autoApprovedTitle': 'Auto-approved today ({n})',
   'work.autoApprovedHint': 'Trusted agent actions that ran automatically (within your set limits) — no approval needed.',
   'work.autoApprovedReport': '{kind} report',
@@ -1368,25 +1374,9 @@ const en = {
   'teamTaskCost.colEngine': 'Engine',
   'teamTaskCost.colCost': 'Cost',
   'teamTaskCost.colTokens': 'Tokens (in/out)',
-
-  // views/Tasks.tsx (child of Work)
-  'tasks.title': 'Assigned tasks',
-  'tasks.empty': 'No tasks assigned yet. Assign work through the Assistant chat.',
-  'tasks.colIndex': '#',
-  'tasks.colTask': 'Task',
-  'tasks.colState': 'State',
-  'tasks.colLastRun': 'Last run',
-  'tasks.cancel': 'Cancel',
-  'tasks.watchSummary': 'Watch PR #{number}',
-  'tasks.reportSummary': "Recurring '{kind}' report",
-  'tasks.qaSummary': 'Recurring answer: {question}',
-  'tasks.stateOpen': 'open',
-  'tasks.stateRunning': 'running',
-  'tasks.stateDone': 'done',
-  'tasks.stateCancelled': 'cancelled',
-  'tasks.stateStalled': 'stalled',
-  'tasks.loadFailed': 'load failed',
-  'tasks.cancelFailed': 'cancel failed',
+  'teamTaskRoute.line': 'Route: {mode} — {reason}',
+  'teamTaskRoute.noReason': 'no reason recorded',
+  'teamTaskMetrics.line': '⏱ {wall} · {steps} steps ({content} content, {review} review, {rework} rework)',
 
   // api/client.ts (friendlyError + auth)
   'api.friendlyServerError': 'The server is having trouble, try again later.',

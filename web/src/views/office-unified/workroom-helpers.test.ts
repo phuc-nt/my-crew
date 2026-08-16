@@ -1,9 +1,9 @@
 // v16 pure helpers: roster filter (ring computed over VISIBLE list) + feed status class.
 import { expect, test } from 'vitest'
-import type { OfficeMessage } from '../../types'
+import { DELIVERED_STEP_TYPES, type OfficeMessage } from '../../types'
 import { shouldShowBubble } from '../office-3d/agent-office-state'
 import { visibleDesks } from '../office-3d/office-canvas'
-import { feedStatusClass } from './activity-feed'
+import { feedStatusClass, matchesFilter } from './activity-feed'
 import { maxSeqOf } from './artifact-panel'
 
 function msg(kind: OfficeMessage['kind'], body: OfficeMessage['body']): OfficeMessage {
@@ -35,6 +35,22 @@ test('maxSeqOf picks the highest seq among the given kinds only', () => {
   // ceo (seq 20) is not counted; review (9) wins over handoff (1)
   expect(maxSeqOf(msgs, ['handoff', 'review'])).toBe(9)
   expect(maxSeqOf(msgs, ['assignment'])).toBe(0)
+})
+
+test('a done sprint step counts as delivered work, like work/rework', () => {
+  // Mirror of the server's routes_outputs._DELIVERED_TYPES — sprint used to be
+  // filtered out here, hiding its artifact from the Kết quả column entirely.
+  expect(DELIVERED_STEP_TYPES.has('sprint')).toBe(true)
+  expect(DELIVERED_STEP_TYPES.has('work')).toBe(true)
+  expect(DELIVERED_STEP_TYPES.has('rework')).toBe(true)
+  expect(DELIVERED_STEP_TYPES.has('review')).toBe(false)
+})
+
+test('the Bước filter keeps in-step activity ticks, not just lifecycle events', () => {
+  expect(matchesFilter(msg('step_status', {}), 'step')).toBe(true)
+  expect(matchesFilter(msg('step_activity', { tool: 'web_search', count: 2 }), 'step')).toBe(true)
+  expect(matchesFilter(msg('handoff', {}), 'step')).toBe(false)
+  expect(matchesFilter(msg('step_activity', {}), 'external')).toBe(false)
 })
 
 test('shouldShowBubble: only running/consulting desks speak (v17 Q4)', () => {

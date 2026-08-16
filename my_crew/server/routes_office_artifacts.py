@@ -92,3 +92,50 @@ def get_step_artifact(task_id: str, seq: int) -> dict:
         "attempt": str(artifact.get("attempt") or ""),
         "self_check_failed": bool(artifact.get("self_check_failed", False)),
     }
+
+
+@router.get("/tasks/{task_id}/steps/{seq}/transcript")
+def get_step_transcript(task_id: str, seq: int) -> dict:
+    """v82: the step attempt's process transcript (v80 recorder) — the viewer's
+    "Quá trình" tab. Read-only, parsed JSONL events verbatim (already secret-scrubbed
+    and head-capped at write time).
+
+    Transcripts live under the ACTING agent's isolated data dir
+    (`.data/agents/<assigned_to>/artifacts/team-tasks/<task>/transcripts/`), not the
+    shared team-tasks root — the worker records into its own jail. A step retried
+    several times has several files; the newest (by mtime) is the one shown.
+    404 on: unknown task/seq, malformed actor id, or no transcript file (recorder
+    off / step predates v80) — absence is never a 500."""
+    from my_crew.runtime.agent_paths import agent_data_dir
+    from my_crew.runtime.step_recorder import transcripts_dir
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
+    from my_crew.runtime.transcript_evidence import parse_transcript_events
+
+    store = TeamTaskStore(team_tasks_db_path())
+    try:
+        task = store.get(task_id)
+    finally:
+        store.close()
+    if task is None:
+        raise HTTPException(status_code=404, detail="không tìm thấy việc")
+    step = next((s for s in task.steps if s.seq == seq), None)
+    if step is None:
+        raise HTTPException(status_code=404, detail="bước không thuộc việc này")
+
+    try:
+        files = sorted(
+            transcripts_dir(agent_data_dir(step.assigned_to), task_id)
+            .glob(f"{step.step_id}-*.jsonl"),
+            key=lambda p: p.stat().st_mtime,
+        )
+    except Exception:  # noqa: BLE001 — bad actor id / IO hiccup reads as absent
+        logger.warning("transcript lookup failed for %s/%s", task_id, seq, exc_info=True)
+        files = []
+    if not files:
+        raise HTTPException(status_code=404, detail="bước này chưa có transcript")
+    events = parse_transcript_events(files[-1])
+    if not events:
+        raise HTTPException(status_code=404, detail="bước này chưa có transcript")
+    return {"task_id": task_id, "step_id": step.step_id, "seq": seq,
+            "attempts": len(files), "events": events}

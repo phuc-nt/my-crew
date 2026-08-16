@@ -1,5 +1,5 @@
-// v7 M20 Work page: aggregates pending approvals across agents + approve/reject; embeds the
-// tasks board. Mocked api, no network. Wrapped in a router (uses <Link>).
+// v7 M20 Work page: aggregates pending approvals across agents + approve/reject.
+// Mocked api, no network. Wrapped in a router (uses <Link>).
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, expect, test, vi } from 'vitest'
@@ -28,7 +28,6 @@ beforeEach(() => {
       ? { agent_id: 'hr', pending: [APPROVAL] }
       : { agent_id: 'pm', pending: [] },
   )
-  vi.spyOn(api, 'getTasks').mockResolvedValue({ agents: [] } as never)
   vi.spyOn(api, 'getRuns').mockResolvedValue({ agent_id: 'x', runs: [] } as never)
 })
 

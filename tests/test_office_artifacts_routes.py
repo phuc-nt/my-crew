@@ -81,6 +81,61 @@ def test_artifact_routes_are_not_public():
     assert not any(p.startswith("/api/office") for p in _PUBLIC_PREFIXES)
 
 
+def _write_transcript(tmp_path, agent_id, task_id, step_id, attempt_id, lines):
+    """Mirror the v80 recorder layout: the ACTING agent's isolated data dir."""
+    tdir = tmp_path / "agents" / agent_id / "artifacts" / "team-tasks" / task_id / "transcripts"
+    tdir.mkdir(parents=True, exist_ok=True)
+    path = tdir / f"{step_id}-{attempt_id}.jsonl"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def test_step_transcript_reads_actor_data_dir(client, monkeypatch, tmp_path):
+    """v82: transcript resolves under the ASSIGNED agent's data dir; corrupt JSONL
+    lines are skipped (tolerant parse), event order preserved."""
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path)
+    seqs = _seed(tmp_path, with_artifact=False)
+    _write_transcript(tmp_path, "researcher", "t1", "s1", "att1", [
+        '{"t": "meta", "agent": "researcher", "seq": 0}',
+        "{corrupt line",
+        '{"t": "tool_call", "name": "web_search", "args_head": "q=giá", "seq": 1}',
+    ])
+    r = client.get(f"/api/office/tasks/t1/steps/{seqs['s1']}/transcript")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["step_id"] == "s1" and body["attempts"] == 1
+    assert [e["t"] for e in body["events"]] == ["meta", "tool_call"]
+    assert body["events"][1]["name"] == "web_search"
+
+
+def test_step_transcript_newest_attempt_wins(client, monkeypatch, tmp_path):
+    """A retried step has several transcript files — the newest (mtime) is shown."""
+    import os
+
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path)
+    seqs = _seed(tmp_path, with_artifact=False)
+    old = _write_transcript(tmp_path, "researcher", "t1", "s1", "att1",
+                            ['{"t": "meta", "attempt": "att1"}'])
+    new = _write_transcript(tmp_path, "researcher", "t1", "s1", "att2",
+                            ['{"t": "meta", "attempt": "att2"}'])
+    os.utime(old, (1_000_000, 1_000_000))
+    os.utime(new, (2_000_000, 2_000_000))
+    body = client.get(f"/api/office/tasks/t1/steps/{seqs['s1']}/transcript").json()
+    assert body["attempts"] == 2
+    assert body["events"][0]["attempt"] == "att2"
+
+
+def test_step_transcript_404s_are_clean(client, monkeypatch, tmp_path):
+    """Unknown task / foreign seq / no transcript file — all clean 404s, never 500."""
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path)
+    seqs = _seed(tmp_path, with_artifact=False)
+    assert client.get("/api/office/tasks/khong-co/steps/1/transcript").status_code == 404
+    assert client.get(
+        f"/api/office/tasks/t1/steps/{seqs['s1'] + 99}/transcript").status_code == 404
+    # step exists but no transcript was ever recorded (recorder off / pre-v80 task)
+    assert client.get(f"/api/office/tasks/t1/steps/{seqs['s1']}/transcript").status_code == 404
+
+
 def test_timeout_kill_emits_step_status_failed(monkeypatch, tmp_path):
     """v17 M2 pin: the ticker's timeout path must free the desk via a `step_status
     failed` room event (previously only a milestone → bubble hung forever)."""

@@ -82,8 +82,23 @@ def test_preview_maps_slots_and_auto_confirmed_flag(monkeypatch, client):
     monkeypatch.setattr(assign_mod, "preview_assign_team_task", _fake_preview)
     r = client.post("/api/office/assign/preview", json={"brief": "@content viết bài"})
     assert r.status_code == 200
+    # route_mode "" when the gateway did not route (composer shows no badge then)
     assert r.json() == {"preview_text": "KẾ HOẠCH...", "task_id": "t-1", "plan_hash": "h-1",
-                        "pic_id": "content", "auto_confirmed": True}
+                        "pic_id": "content", "auto_confirmed": True, "route_mode": ""}
+
+
+def test_preview_surfaces_route_mode_for_composer_badge(monkeypatch, client):
+    def _fake_preview(slots):
+        slots["task_id"] = "t-2"
+        slots["plan_hash"] = "h-2"
+        slots["pic_id"] = "content"
+        slots["route_mode"] = "sprint"
+        return "KẾ HOẠCH..."
+
+    monkeypatch.setattr(assign_mod, "preview_assign_team_task", _fake_preview)
+    r = client.post("/api/office/assign/preview", json={"brief": "@content viết bài"})
+    assert r.status_code == 200
+    assert r.json()["route_mode"] == "sprint"
 
 
 def test_preview_validation_error_is_400(monkeypatch, client):

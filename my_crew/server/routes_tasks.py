@@ -9,7 +9,7 @@ the board only VIEWS and CANCELS.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from my_crew.runtime.agent_paths import agent_data_dir
 from my_crew.runtime.registry import load_registry
@@ -41,18 +41,29 @@ def _task_json(task) -> dict:
 
 
 @router.get("")
-def list_all_tasks() -> dict:
-    """Every agent's tasks, grouped by agent — the board's data. Agents with no store are
-    omitted (they have no tasks). Read-only; never raises for a missing store."""
+def list_all_tasks(
+    limit: int = Query(30, ge=1, le=200),
+    agent: str = Query(""),
+    before: int = Query(0, ge=0),
+) -> dict:
+    """Agents' tasks, grouped by agent, paginated per agent — the board's data.
+
+    First page: no params → every agent's newest `limit` tasks (was: full dump of
+    every task ever, the board's page-weight problem). Continuation: `?agent=<id>&
+    before=<task_id>` → ONE group with that agent's tasks older than the cursor.
+    Each group carries `has_more` (fetched limit+1, trimmed). Agents with no store
+    are omitted; a corrupt store skips its agent, never 500s the board."""
     import logging
 
     out: list[dict] = []
     for entry in load_registry():
+        if agent and entry.id != agent:
+            continue
         store = _store_for(entry.id)
         if store is None:
             continue
         try:
-            tasks = store.list_all()
+            tasks = store.list_recent(limit + 1, before_id=before or None)
         except Exception:  # noqa: BLE001 — one corrupt/locked store must not 500 the board
             logging.getLogger(__name__).warning(
                 "tasks board: skipping agent %r (store unreadable)", entry.id, exc_info=True
@@ -60,8 +71,13 @@ def list_all_tasks() -> dict:
             continue
         finally:
             store.close()
+        has_more = len(tasks) > limit
         if tasks:
-            out.append({"agent_id": entry.id, "tasks": [_task_json(t) for t in tasks]})
+            out.append({
+                "agent_id": entry.id,
+                "tasks": [_task_json(t) for t in tasks[:limit]],
+                "has_more": has_more,
+            })
     return {"agents": out}
 
 

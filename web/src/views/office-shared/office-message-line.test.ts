@@ -64,3 +64,18 @@ test('externalActionTone maps allow/deny/other to ok/danger/neutral', () => {
   expect(externalActionTone('pending')).toBe('neutral')
   expect(externalActionTone(undefined)).toBe('neutral')
 })
+
+test('step_activity with a tool renders "đang gọi tool (count)"', () => {
+  const line = messageLine(msg('step_activity', {
+    agent: 'noi-dung', task: 't1', step: 's1',
+    tool: 'web_search', count: 3, phase: 'calling-tool',
+  }))
+  expect(line).toBe('đang gọi web_search (3)')
+})
+
+test('step_activity in the writing phase renders the fixed writing line', () => {
+  const line = messageLine(msg('step_activity', {
+    agent: 'noi-dung', task: 't1', step: 's1', tool: '', count: 0, phase: 'writing',
+  }))
+  expect(line).toBe('đang viết…')
+})

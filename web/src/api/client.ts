@@ -9,6 +9,7 @@
 // React dependency at this layer.
 import { DICT } from '../i18n/dictionary'
 import type { Language } from '../i18n/dictionary'
+import { fetchCached, invalidateCached } from '../lib/api-cache'
 import type {
   AssignPreviewPayload,
   AssignStaffPayload,
@@ -20,6 +21,7 @@ import type {
   UnregisteredProfilesPayload,
   RoomArtifactsPayload,
   StepArtifactPayload,
+  StepTranscriptPayload,
   RoomChatPayload,
   WorkroomsPayload,
   AgentStatus,
@@ -57,13 +59,14 @@ import type {
   TemplateUpgradeResult,
   TeamBoardPayload,
   TeamTaskCostPayload,
+  TeamTaskMetricsPayload,
+  TeamTaskRoutePayload,
   OpsChatCommand,
   OpsChatReply,
   PacksPayload,
   RunsPayload,
   SchedulePayload,
   StaffTemplatesPayload,
-  TasksPayload,
   TeamAlertsPayload,
   TriggerResult,
 } from '../types'
@@ -162,8 +165,20 @@ async function mutate<T>(
   return (await res.json()) as T
 }
 
+// A mutation that changes the roster must invalidate the cached reads over it, or
+// the refresh a view fires right after (Team, Setup, wizard) can be served stale.
+function withRosterInvalidate<T>(p: Promise<T>): Promise<T> {
+  return p.then((v) => {
+    invalidateCached('agents')
+    invalidateCached('assign-staff')
+    return v
+  })
+}
+
 export const api = {
-  getAgents: () => request<AgentSummary[]>('/api/agents'),
+  // Cached (v82): fetched by several components on the same mount — dedupe + short
+  // TTL via lib/api-cache. Agent mutations below invalidate 'agents'.
+  getAgents: () => fetchCached('agents', () => request<AgentSummary[]>('/api/agents')),
   getAgentStatus: (id: string) => request<AgentStatus>(`/api/agents/${id}/status`),
   getRuns: (id: string) => request<RunsPayload>(`/api/runs/${id}`),
   getCost: (id: string) => request<CostPayload>(`/api/cost/${id}`),
@@ -188,15 +203,18 @@ export const api = {
 
   // --- admin (v3 M7): create wizard, team lifecycle, integration health ---
   getPacks: () => request<PacksPayload>('/api/packs'),
-  createAgent: (spec: CreateAgentSpec) => post<CreateAgentResult>('/api/agents/create', spec),
+  createAgent: (spec: CreateAgentSpec) =>
+    withRosterInvalidate(post<CreateAgentResult>('/api/agents/create', spec)),
   setAgentEnabled: (id: string, enabled: boolean) =>
-    mutate<EnabledResult>(`/api/agents/${id}/enabled`, 'PATCH', { enabled }),
-  deleteAgent: (id: string) => mutate<DeleteAgentResult>(`/api/agents/${id}`, 'DELETE'),
+    withRosterInvalidate(mutate<EnabledResult>(`/api/agents/${id}/enabled`, 'PATCH', { enabled })),
+  deleteAgent: (id: string) =>
+    withRosterInvalidate(mutate<DeleteAgentResult>(`/api/agents/${id}`, 'DELETE')),
   // v18: recovery for profiles that exist on disk but fell out of the registry
   getUnregisteredProfiles: () =>
     request<UnregisteredProfilesPayload>('/api/agents/unregistered'),
   registerExistingProfile: (id: string) =>
-    post<{ id: string; registered: boolean }>(`/api/agents/${id}/register`, {}),
+    withRosterInvalidate(
+      post<{ id: string; registered: boolean }>(`/api/agents/${id}/register`, {})),
   getIntegrationHealth: () => request<IntegrationHealthPayload>('/api/health/integrations'),
   // v36 P3: template config version-pin — badge + review-then-apply upgrade.
   getTemplateStatus: () => request<TemplateStatusPayload>('/api/agents/template-status'),
@@ -221,6 +239,10 @@ export const api = {
   // v50: per-step cost + token breakdown for one task (read-only, allowlisted).
   getTeamTaskCost: (taskId: string) =>
     request<TeamTaskCostPayload>(`/api/team-tasks/${encodeURIComponent(taskId)}/cost`),
+  getTeamTaskRoute: (taskId: string) =>
+    request<TeamTaskRoutePayload>(`/api/team-tasks/${encodeURIComponent(taskId)}/route`),
+  getTeamTaskMetrics: (taskId: string) =>
+    request<TeamTaskMetricsPayload>(`/api/team-tasks/${encodeURIComponent(taskId)}/metrics`),
   // v33 P4: clarify — agent questions the CEO answers (buttons or free text).
   getClarifyPending: () => request<ClarifyPendingPayload>('/api/clarify/pending'),
   answerClarify: (id: number, answer: string) =>
@@ -242,7 +264,8 @@ export const api = {
       ...(teamTaskAutoConfirm !== undefined ? { team_task_auto_confirm: teamTaskAutoConfirm } : {}),
     }),
   // v15 office composer — thin wrappers over the assign command's preview/confirm/cancel.
-  getAssignableStaff: () => request<AssignStaffPayload>('/api/office/assign/staff'),
+  getAssignableStaff: () =>
+    fetchCached('assign-staff', () => request<AssignStaffPayload>('/api/office/assign/staff')),
   assignPreview: (brief: string, roomId = '') =>
     post<AssignPreviewPayload>('/api/office/assign/preview', { brief, room_id: roomId }),
   // v16 workrooms
@@ -253,7 +276,9 @@ export const api = {
     post<{ text: string }>(`/api/office/rooms/${roomId}/chat/confirm-adjust`, {
       task_id: taskId, amendment_id: amendmentId,
     }),
-  getCoordinatorHealth: () => request<CoordinatorHealthPayload>('/api/health/coordinator'),
+  getCoordinatorHealth: () =>
+    fetchCached('coordinator-health',
+      () => request<CoordinatorHealthPayload>('/api/health/coordinator')),
   // Dual-lens P3: read-only observability (fleet budget / captures / history search).
   getFleetBudget: () => request<FleetBudgetPayload>('/api/budget'),
   getCaptures: (params?: { task_id?: string; agent?: string; since?: string; limit?: number }) => {
@@ -279,6 +304,8 @@ export const api = {
     request<RoomArtifactsPayload>(`/api/office/rooms/${roomId}/artifacts`),
   getStepArtifact: (taskId: string, seq: number) =>
     request<StepArtifactPayload>(`/api/office/tasks/${taskId}/steps/${seq}/artifact`),
+  getStepTranscript: (taskId: string, seq: number) =>
+    request<StepTranscriptPayload>(`/api/office/tasks/${taskId}/steps/${seq}/transcript`),
   assignConfirm: (taskId: string, planHash: string) =>
     post<{ text: string }>('/api/office/assign/confirm', { task_id: taskId, plan_hash: planHash }),
   assignCancel: (taskId: string) =>
@@ -286,25 +313,23 @@ export const api = {
   getStaffTemplates: () => request<StaffTemplatesPayload>('/api/staff-templates'),
   // v32: one-click create from a template + whole-crew bootstrap (server builds the spec).
   createFromTemplate: (roleId: string, agentId?: string) =>
-    post<CreateFromTemplateResult>('/api/agents/create-from-template', {
-      role_id: roleId,
-      ...(agentId ? { agent_id: agentId } : {}),
-    }),
+    withRosterInvalidate(
+      post<CreateFromTemplateResult>('/api/agents/create-from-template', {
+        role_id: roleId,
+        ...(agentId ? { agent_id: agentId } : {}),
+      })),
   // v71: crewId omitted ⇒ the server's default crew (office), same as pre-v71 clients.
   getCrews: () => request<CrewsPayload>('/api/crews'),
   getCrewPreview: (crewId?: string) =>
     request<CrewPreview>(`/api/crew/preview${crewId ? `?crew_id=${encodeURIComponent(crewId)}` : ''}`),
   createCrew: (crewId?: string) =>
-    post<CrewCreateResult>(`/api/crew/create${crewId ? `?crew_id=${encodeURIComponent(crewId)}` : ''}`),
+    withRosterInvalidate(
+      post<CrewCreateResult>(`/api/crew/create${crewId ? `?crew_id=${encodeURIComponent(crewId)}` : ''}`)),
   // v6 M14b: CEO chat-ops — same engine + shared conversation as the Telegram DM path.
   opsChatAvailable: () => request<OpsChatAvailable>('/api/ops/chat/available'),
   opsChat: (message: string) => post<OpsChatReply>('/api/ops/chat', { message }),
   getOpsChatCommands: () =>
     request<{ commands: OpsChatCommand[] }>('/api/ops/chat/commands'),
-  // v6 M15b: assigned-tasks board.
-  getTasks: () => request<TasksPayload>('/api/tasks'),
-  cancelTask: (agentId: string, taskId: number) =>
-    post<{ status: string }>(`/api/tasks/${encodeURIComponent(agentId)}/${taskId}/cancel`),
   // v6 M16: auth.
   getMe: () => request<{ authenticated: boolean; user?: string; auth?: string }>('/api/me'),
   login: (username: string, password: string) =>

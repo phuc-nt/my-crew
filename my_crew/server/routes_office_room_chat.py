@@ -135,7 +135,8 @@ def post_room_chat(room_id: str, message: str = Body(..., embed=True)) -> dict:
         return {"intent": "new_task", "preview_text": preview_text,
                 "task_id": slots.get("task_id", ""), "plan_hash": slots.get("plan_hash", ""),
                 "pic_id": slots.get("pic_id", ""),
-                "auto_confirmed": bool(slots.get("auto_confirmed"))}
+                "auto_confirmed": bool(slots.get("auto_confirmed")),
+                "route_mode": slots.get("route_mode", "")}
 
     if intent == "adjust":
         tasks = _open_tasks_in_room(room_id)

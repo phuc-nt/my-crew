@@ -135,6 +135,22 @@ class TaskStore:
         rows = self._conn.execute("SELECT * FROM tasks ORDER BY id DESC").fetchall()
         return [self._row_to_task(r) for r in rows]
 
+    def list_recent(self, limit: int = 30, *, before_id: int | None = None) -> list[Task]:
+        """Newest-first page for the /tasks board. Cursor is the task id: ids are
+        AUTOINCREMENT per store, so `id <` is an exact creation-order cursor with none
+        of the skip/duplicate edge cases a timestamp cursor has on identical
+        timestamps. `before_id=None` means the first page."""
+        if before_id is None:
+            rows = self._conn.execute(
+                "SELECT * FROM tasks ORDER BY id DESC LIMIT ?", (int(limit),)
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM tasks WHERE id < ? ORDER BY id DESC LIMIT ?",
+                (int(before_id), int(limit)),
+            ).fetchall()
+        return [self._row_to_task(r) for r in rows]
+
     def append_history(self, task_id: int, entry: HistoryEntry) -> None:
         task = self.get(task_id)
         if task is None:

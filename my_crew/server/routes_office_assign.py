@@ -95,6 +95,8 @@ def post_preview(
         "plan_hash": slots.get("plan_hash", ""),
         "pic_id": slots.get("pic_id", ""),
         "auto_confirmed": bool(slots.get("auto_confirmed")),
+        # v82: routing-funnel outcome ("sprint" | "team") for the composer's mode badge.
+        "route_mode": slots.get("route_mode", ""),
     }
 
 

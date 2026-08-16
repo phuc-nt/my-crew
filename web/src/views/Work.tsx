@@ -1,7 +1,8 @@
-// v7 M20: "Việc" — the one action page the CEO needs daily. Two blocks on one page:
-// "Cần bạn duyệt" (pending Lớp B approvals across ALL agents, two-step confirm → approve/
-// reject) on top, and "Việc đã giao" (the M15b assigned-tasks board) below. No new backend:
-// approvals fan out client-side (usePendingApprovals), tasks reuse the existing board.
+// v7 M20: "Việc" — the one action page the CEO needs daily. "Cần bạn duyệt" (pending
+// Lớp B approvals across ALL agents, two-step confirm → approve/reject) on top, the
+// team-task kanban below. No new backend: approvals fan out client-side
+// (usePendingApprovals). The legacy M15b assigned-tasks board was retired in v82 —
+// it duplicated the kanban; /api/tasks stays for API/CLI access to legacy tasks.
 import { useCallback, useState } from 'react'
 import { api } from '../api/client'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -12,7 +13,6 @@ import { useLanguage } from '../i18n/language-context'
 import { formatDateTime } from '../labels'
 import { useAutoApproved } from '../hooks/use-auto-approved'
 import { type AgentApproval, usePendingApprovals } from '../hooks/use-pending-approvals'
-import { Tasks } from './Tasks'
 import { ClarifySection } from './clarify-section'
 import { TeamTaskKanban } from './team-task-kanban'
 
@@ -88,11 +88,6 @@ export function Work() {
 
       {/* v33 P3: team tasks as read-only kanban lanes — card click opens the workroom. */}
       <TeamTaskKanban />
-
-      <section className="work-tasks">
-        <h3>{t('work.assignedTasksTitle')}</h3>
-        <Tasks />
-      </section>
 
       {autoApproved.length > 0 && (
         <section className="work-auto-approved">

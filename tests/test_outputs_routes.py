@@ -240,3 +240,63 @@ def test_task_cost_projects_steps_and_sums_totals(client):
     # (error could carry a stack trace or internal path — must never leak to the cost view).
     leaked = {"attempt_id", "started_at", "ended_at", "error"} & set(body["steps"][0])
     assert not leaked
+
+
+def test_task_route_unknown_task_returns_empty_fields(client):
+    """v82: unknown task (or one predating route_json) → empty fields, never a 404/500 —
+    absence is a normal state (cost-endpoint discipline)."""
+    body = client.get("/api/team-tasks/nope/route").json()
+    assert body == {"task_id": "nope", "mode": "", "source": "", "reason": ""}
+
+
+def test_task_route_projects_allowlisted_fields(client, tmp_path):
+    """v82: the persisted routing decision surfaces mode/source/reason only — `signals`
+    (raw keyword matches over the brief) stays internal."""
+    _seed_tasks(statuses=("open",))
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+
+    store = TeamTaskStore(team_tasks_db_path())
+    store.set_route("t1", {"mode": "sprint", "source": "heuristic",
+                           "reason": "việc 1 người, không cần review",
+                           "signals": ["draft-only"]})
+    store.close()
+
+    body = client.get("/api/team-tasks/t1/route").json()
+    assert body == {"task_id": "t1", "mode": "sprint", "source": "heuristic",
+                    "reason": "việc 1 người, không cần review"}
+
+
+def test_task_metrics_unknown_task_404s(client):
+    """v82: metrics has no meaningful all-empty shape (unlike /route) — unknown task
+    is a clean 404, and a missing db file must not be created as a side effect."""
+    resp = client.get("/api/team-tasks/nope/metrics")
+    assert resp.status_code == 404
+
+
+def test_task_metrics_projects_store_metrics(client, tmp_path):
+    """v82: wall-clock (created_at → latest last_seen, queue wait included) + step mix
+    + cost, store-only — no per-agent transcript decomposition on this surface."""
+    _seed_tasks(statuses=("open",))
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+
+    store = TeamTaskStore(team_tasks_db_path())
+    store._conn.execute(
+        "UPDATE team_tasks SET created_at='2026-08-16T10:00:00', cost_usd_total=0.5 "
+        "WHERE id='t1'")
+    store._conn.execute(
+        "UPDATE team_steps SET last_seen='2026-08-16T10:03:19' WHERE step_id='t1s2'")
+    store._conn.commit()
+    store.close()
+
+    body = client.get("/api/team-tasks/t1/metrics").json()
+    assert body["task_id"] == "t1"
+    assert body["mode"] == "team"  # no sprint step seeded
+    assert body["wall_clock_seconds"] == 199.0
+    assert body["wall_clock_text"] == "3m19s"
+    assert body["cost_usd"] == 0.5
+    assert body["step_count"] == 2
+    assert body["content_steps"] == 2
+    assert body["review_steps"] == 0 and body["rework_steps"] == 0
+    assert [s["seq"] for s in body["steps"]] == [1, 2]
+    # allowlist: step rows carry no step_id/agent internals on this surface
+    assert set(body["steps"][0]) == {"seq", "step_type", "status", "cost_usd", "seconds"}

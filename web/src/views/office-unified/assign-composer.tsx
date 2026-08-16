@@ -117,7 +117,7 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
             setPhase({ kind: 'preview', data: {
               preview_text: data.preview_text ?? '', task_id: data.task_id ?? '',
               plan_hash: data.plan_hash ?? '', pic_id: data.pic_id ?? '',
-              auto_confirmed: false,
+              auto_confirmed: false, route_mode: data.route_mode ?? '',
             } })
           }
         })
@@ -220,6 +220,14 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
       )}
       {phase.kind === 'preview' && (
         <div className="office-composer-preview">
+          {/* v82: routing-funnel badge — the CEO sees sprint vs team BEFORE confirming. */}
+          {(phase.data.route_mode === 'sprint' || phase.data.route_mode === 'team') && (
+            <span className={`office-mode-badge office-mode-badge-${phase.data.route_mode}`}>
+              {phase.data.route_mode === 'sprint'
+                ? t('assignComposer.modeSprint')
+                : t('assignComposer.modeTeam')}
+            </span>
+          )}
           <pre>{phase.data.preview_text}</pre>
           {webSearchHintNeeded(phase.data.pic_id, staff, webSearchReady) && (
             <p className="office-composer-hint">{t('assignComposer.webSearchNoKey')}</p>

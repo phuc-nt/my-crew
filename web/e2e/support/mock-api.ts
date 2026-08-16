@@ -8,13 +8,27 @@
 // reconnect (~100ms) delivers them "live" — that is how the results-dot test injects
 // a handoff after first render.
 import type { Page } from '@playwright/test'
-import type { OfficeMessage, Workroom } from '../../src/types'
+import type {
+  OfficeMessage,
+  RoomArtifactsPayload,
+  StepArtifactPayload,
+  StepTranscriptPayload,
+  Workroom,
+} from '../../src/types'
 import { agentsFixture, assignStaffFixture, workroomsFixture } from '../fixtures/office-fixtures'
 
 export interface OfficeApiMockOptions {
   workrooms?: Workroom[]
   /** Initial SSE replay per room id ('office' = the overview stream the 3D panel reads). */
   roomEvents?: Record<string, OfficeMessage[]>
+  /** v82: delivered artifacts per room (default: none). */
+  artifacts?: RoomArtifactsPayload
+  /** v82: the one step artifact any /steps/{seq}/artifact hit returns. */
+  stepArtifact?: StepArtifactPayload
+  /** v82: the one process transcript any /steps/{seq}/transcript hit returns (absent → 404). */
+  stepTranscript?: StepTranscriptPayload
+  /** v82: POST /api/office/assign/preview response (composer sprint/team badge). */
+  assignPreview?: Record<string, unknown>
 }
 
 export interface OfficeApiMock {
@@ -63,7 +77,28 @@ export async function mockOfficeApi(
     if (pathname === '/api/schedule/upcoming') return json({ items: [] })
     if (pathname === '/api/health/coordinator')
       return json({ alive: true, last_beat_ago_s: 3, reason: '' })
-    if (/^\/api\/office\/rooms\/[^/]+\/artifacts$/.test(pathname)) return json({ tasks: [] })
+    if (/^\/api\/office\/rooms\/[^/]+\/artifacts$/.test(pathname))
+      return json(opts.artifacts ?? { tasks: [] })
+    if (/^\/api\/office\/tasks\/[^/]+\/steps\/\d+\/artifact$/.test(pathname) && opts.stepArtifact)
+      return json(opts.stepArtifact)
+    if (/^\/api\/office\/tasks\/[^/]+\/steps\/\d+\/transcript$/.test(pathname)) {
+      if (opts.stepTranscript) return json(opts.stepTranscript)
+      return route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'bước này chưa có transcript' }),
+      })
+    }
+    if (pathname === '/api/office/assign/preview' && opts.assignPreview)
+      return json(opts.assignPreview)
+    if (/^\/api\/team-tasks\/[^/]+\/route$/.test(pathname))
+      return json({ task_id: pathname.split('/')[3], mode: '', source: '', reason: '' })
+    if (/^\/api\/team-tasks\/[^/]+\/metrics$/.test(pathname))
+      return route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'không thấy task' }),
+      })
 
     const stream = pathname.match(/^\/api\/office\/rooms\/([^/]+)\/stream$/)
     if (stream) {

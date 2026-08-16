@@ -230,6 +230,51 @@ def test_board_lists_tasks(monkeypatch, tmp_path):
     assert agents[0]["tasks"][0]["kind"] == "watch"
 
 
+def test_board_first_page_trims_to_limit_and_flags_has_more(monkeypatch, tmp_path):
+    from my_crew.runtime.agent_paths import agent_data_dir
+
+    client = _client(monkeypatch, tmp_path)
+    (agent_data_dir("pm")).mkdir(parents=True, exist_ok=True)
+    for n in range(5):
+        _seed(agent_data_dir("pm"), params={"target": "pr", "number": n})
+    r = client.get("/api/tasks", params={"limit": 2})
+    assert r.status_code == 200
+    group = r.json()["agents"][0]
+    assert [t["id"] for t in group["tasks"]] == [5, 4]  # newest first
+    assert group["has_more"] is True
+
+
+def test_board_continuation_pages_older_than_cursor(monkeypatch, tmp_path):
+    from my_crew.runtime.agent_paths import agent_data_dir
+
+    client = _client(monkeypatch, tmp_path, ids=("pm", "hr"))
+    for agent in ("pm", "hr"):
+        (agent_data_dir(agent)).mkdir(parents=True, exist_ok=True)
+        for n in range(3):
+            _seed(agent_data_dir(agent), params={"target": "pr", "number": n})
+    # ?agent= narrows to ONE group; ?before= pages strictly older than the cursor.
+    r = client.get("/api/tasks", params={"limit": 2, "agent": "pm", "before": 3})
+    agents = r.json()["agents"]
+    assert len(agents) == 1 and agents[0]["agent_id"] == "pm"
+    assert [t["id"] for t in agents[0]["tasks"]] == [2, 1]
+    assert agents[0]["has_more"] is False
+
+
+def test_task_store_list_recent_pages_by_id_cursor(tmp_path):
+    s = TaskStore(tmp_path / "tasks.sqlite3")
+    try:
+        for n in range(5):
+            s.create(kind="watch", params={"number": n}, schedule="0 8 * * *")
+        first = s.list_recent(2)
+        assert [t.id for t in first] == [5, 4]
+        second = s.list_recent(2, before_id=first[-1].id)
+        assert [t.id for t in second] == [3, 2]
+        tail = s.list_recent(10, before_id=second[-1].id)
+        assert [t.id for t in tail] == [1]
+    finally:
+        s.close()
+
+
 def test_board_cancel_open_task(monkeypatch, tmp_path):
     from my_crew.runtime.agent_paths import agent_data_dir
 

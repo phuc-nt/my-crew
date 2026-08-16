@@ -11,7 +11,9 @@ import { Button } from '../../components/ui/button'
 import { useFocusTrap } from '../../hooks/use-focus-trap'
 import { DICT } from '../../i18n/dictionary'
 import { useLanguage } from '../../i18n/language-context'
+import { useUiMode } from '../../ui-mode-context'
 import type { StepArtifactPayload } from '../../types'
+import { TranscriptTab } from './transcript-tab'
 
 interface ArtifactViewerProps {
   taskId: string
@@ -34,9 +36,13 @@ export const markdownComponents = {
 
 export function ArtifactViewer({ taskId, seq, stepId, onClose }: ArtifactViewerProps) {
   const { t } = useLanguage()
+  const { isHigh } = useUiMode()
   const [artifact, setArtifact] = useState<StepArtifactPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // v82: "Quá trình" (process transcript) tab — high ui-mode only; the tab bar is not
+  // rendered at all in low mode, so `tab` stays 'result' there.
+  const [tab, setTab] = useState<'result' | 'process'>('result')
   const drawerRef = useRef<HTMLDivElement>(null)
   useFocusTrap(drawerRef)
 
@@ -94,14 +100,42 @@ export function ArtifactViewer({ taskId, seq, stepId, onClose }: ArtifactViewerP
             {t('artifactViewer.selfCheckFailed')}
           </p>
         )}
-        {error && <p className="error">{t('artifactViewer.errorPrefix', { message: error })}</p>}
-        {!artifact && !error && <p className="office-room-status">{t('artifactViewer.loading')}</p>}
-        {artifact && (
-          <div className="artifact-markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-              {artifact.result_text}
-            </ReactMarkdown>
+        {isHigh && (
+          <div className="artifact-tabs" role="tablist">
+            <Button
+              variant="chip"
+              className={tab === 'result' ? 'chip-active' : undefined}
+              role="tab"
+              aria-selected={tab === 'result'}
+              onClick={() => setTab('result')}
+            >
+              {t('artifactViewer.tabResult')}
+            </Button>
+            <Button
+              variant="chip"
+              className={tab === 'process' ? 'chip-active' : undefined}
+              role="tab"
+              aria-selected={tab === 'process'}
+              onClick={() => setTab('process')}
+            >
+              {t('artifactViewer.tabProcess')}
+            </Button>
           </div>
+        )}
+        {tab === 'process' && isHigh ? (
+          <TranscriptTab taskId={taskId} seq={seq} />
+        ) : (
+          <>
+            {error && <p className="error">{t('artifactViewer.errorPrefix', { message: error })}</p>}
+            {!artifact && !error && <p className="office-room-status">{t('artifactViewer.loading')}</p>}
+            {artifact && (
+              <div className="artifact-markdown">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                  {artifact.result_text}
+                </ReactMarkdown>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

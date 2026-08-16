@@ -1,12 +1,12 @@
 // "Kết quả" column (v17): delivered-step catalog for the selected workroom, grouped by
-// task. Only steps that actually HAVE a handoff artifact are listed — done work/rework
-// steps (a review-step's verdict lives in a different file and would always 404,
+// task. Only steps that actually HAVE a handoff artifact are listed — done work/sprint/
+// rework steps (a review-step's verdict lives in a different file and would always 404,
 // red-team M1). Click opens the full-markdown ArtifactViewer.
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import { EmptyState } from '../../components/ui/empty-state'
 import { useLanguage } from '../../i18n/language-context'
-import type { OfficeMessage, RoomArtifactsPayload } from '../../types'
+import { DELIVERED_STEP_TYPES, type OfficeMessage, type RoomArtifactsPayload } from '../../types'
 import { ArtifactViewer } from './artifact-viewer'
 
 // Pure refetch signal (red-team m-refetch): highest seq among the given kinds — the
@@ -48,7 +48,7 @@ export function ArtifactPanel({ activeRoom, roomMessages }: ArtifactPanelProps) 
   const tasks = (data?.tasks ?? []).map((t) => ({
     ...t,
     delivered: t.steps.filter(
-      (s) => s.status === 'done' && (s.step_type === 'work' || s.step_type === 'rework'),
+      (s) => s.status === 'done' && DELIVERED_STEP_TYPES.has(s.step_type),
     ),
   }))
   const hasAny = tasks.some((t) => t.delivered.length > 0)

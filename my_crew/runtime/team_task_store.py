@@ -289,7 +289,9 @@ class TeamTaskStore:
             return None
         cols = [d[0] for d in self._conn.execute("SELECT * FROM team_tasks LIMIT 0").description]
         data = dict(zip(cols, row, strict=True))
-        steps = _steps.steps_for_task(self._conn, task_id)
+        return self._task_from_data(data, _steps.steps_for_task(self._conn, task_id))
+
+    def _task_from_data(self, data: dict, steps: tuple[TeamStep, ...]) -> TeamTask:
         return TeamTask(
             id=data["id"], title=data["title"], original_request=data["original_request"],
             status=data["status"], created_at=data["created_at"], assigned_by=data["assigned_by"],
@@ -371,12 +373,18 @@ class TeamTaskStore:
         the caller is a board that wants the draft column. NEVER a dispatch source —
         see `list_dispatchable`."""
         excluded = ("cancelled",) if include_planning else ("cancelled", "planning")
-        rows = self._conn.execute(
-            f"SELECT id FROM team_tasks WHERE status NOT IN "
+        # Bulk hydration (2 queries total) — the per-id get() loop this replaces was
+        # ~2 queries per task, which at the board's 200-task limit meant ~400 queries
+        # per page load.
+        cur = self._conn.execute(
+            f"SELECT * FROM team_tasks WHERE status NOT IN "
             f"({','.join('?' * len(excluded))}) ORDER BY created_at DESC LIMIT ?",
             (*excluded, int(limit)),
-        ).fetchall()
-        return [t for (task_id,) in rows if (t := self.get(task_id)) is not None]
+        )
+        cols = [d[0] for d in cur.description]
+        datas = [dict(zip(cols, row, strict=True)) for row in cur.fetchall()]
+        steps_by_task = _steps.steps_for_tasks(self._conn, [d["id"] for d in datas])
+        return [self._task_from_data(d, steps_by_task.get(d["id"], ())) for d in datas]
 
     def list_dispatchable(self) -> list[TeamTask]:
         """DISPATCH list — the ONLY task set the coordinator ticker may act on.

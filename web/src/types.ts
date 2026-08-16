@@ -266,7 +266,14 @@ export interface RoomChatPayload {
   pic_id?: string
   amendment_id?: string
   auto_confirmed?: boolean
+  // v82: routing-funnel outcome ('sprint' | 'team') for the composer's mode badge.
+  route_mode?: string
 }
+
+// Step types whose "done" carries a handoff artifact file — mirror of the server's
+// routes_outputs._DELIVERED_TYPES. A type listed here but not there opens a viewer
+// that 404s; one there but not here hides delivered work (sprint was invisible).
+export const DELIVERED_STEP_TYPES: ReadonlySet<string> = new Set(['work', 'sprint', 'rework'])
 
 // v17 artifact viewer
 export interface RoomArtifactStep {
@@ -298,6 +305,22 @@ export interface StepArtifactPayload {
   self_check_failed: boolean
 }
 
+// v82: one parsed transcript event (v80 recorder JSONL line) — `t` is the event kind
+// (meta/tool_call/tool_result/prefetch/llm_request/llm_response/loop_input/outcome);
+// the rest of the fields vary by kind, so they stay an open index.
+export interface StepTranscriptEvent {
+  t: string
+  [key: string]: unknown
+}
+
+export interface StepTranscriptPayload {
+  task_id: string
+  step_id: string
+  seq: number
+  attempts: number
+  events: StepTranscriptEvent[]
+}
+
 export interface CoordinatorHealthPayload {
   alive: boolean
   last_beat_ago_s: number | null
@@ -310,6 +333,9 @@ export interface AssignPreviewPayload {
   plan_hash: string
   pic_id: string
   auto_confirmed: boolean
+  // v82: routing-funnel outcome ('sprint' | 'team'). Optional — a pre-v82 server
+  // omits it and the composer simply renders no mode badge.
+  route_mode?: string
 }
 
 export interface StaffTemplate {
@@ -450,32 +476,6 @@ export interface OpsChatReply {
   agent_id: string
 }
 
-// v6 M15b: assigned-tasks board.
-export interface TaskHistoryEntry {
-  ts: string
-  summary: string
-  cost_usd: number | null
-}
-
-export interface AssignedTask {
-  id: number
-  kind: 'watch' | 'report' | 'qa'
-  params: Record<string, unknown>
-  status: 'open' | 'running' | 'done' | 'cancelled' | 'stalled'
-  created_at: string
-  assigned_by: string
-  history: TaskHistoryEntry[]
-}
-
-export interface AgentTasks {
-  agent_id: string
-  tasks: AssignedTask[]
-}
-
-export interface TasksPayload {
-  agents: AgentTasks[]
-}
-
 // v12 M29: office group-chat room — SSE store-tail. `body` shape depends on `kind`
 // (see src/server/office_event_projection.py's allowlist per kind).
 // M33 adds 'consult': a role-play consultation over a colleague's public persona FILES
@@ -496,6 +496,10 @@ export type OfficeEventKind =
   | 'consult'
   | 'review'
   | 'external_action'
+  // v80 P4: live in-step activity — one event per tool call / LLM request while a step
+  // runs ("content-01 đang gọi web_search (3)"). Ids + tool NAME + counter only; the
+  // tool's args/results never reach the room (office_event_projection.py `step_activity`).
+  | 'step_activity'
 
 export interface OfficeEventBody {
   text?: string
@@ -550,6 +554,14 @@ export interface OfficeEventBody {
   action_type?: string
   outcome?: string
   detail?: string
+  // `step_activity` only (v80 P4): `agent`/`task`/`step` are internal opaque ids
+  // (`tool` above is reused as the tool NAME); `count` is the cumulative tool-call
+  // counter within the attempt; `phase` (shared field above) is 'calling-tool' |
+  // 'writing' for this kind.
+  agent?: string
+  task?: string
+  step?: string
+  count?: number
 }
 
 export interface OfficeMessage {
@@ -693,6 +705,39 @@ export interface TeamTaskCostPayload {
 
 export interface TeamBoardPayload {
   lanes: TeamBoardLane[]
+}
+
+// v82: persisted sprint/team routing decision — fields empty when the task predates
+// route_json or is unknown (the endpoint never 404s).
+export interface TeamTaskRoutePayload {
+  task_id: string
+  mode: string
+  source: string
+  reason: string
+}
+
+// v82: store-side task metrics (wall-clock includes queue wait — the CEO's experienced
+// latency). 404 for unknown tasks, unlike /route.
+export interface TeamTaskMetricStep {
+  seq: number
+  step_type: string
+  status: string
+  cost_usd: number
+  seconds: number | null
+}
+
+export interface TeamTaskMetricsPayload {
+  task_id: string
+  mode: string
+  status: string
+  wall_clock_seconds: number | null
+  wall_clock_text: string
+  cost_usd: number
+  step_count: number
+  content_steps: number
+  review_steps: number
+  rework_steps: number
+  steps: TeamTaskMetricStep[]
 }
 
 // v33 P4: clarify — agent questions awaiting the CEO's answer.

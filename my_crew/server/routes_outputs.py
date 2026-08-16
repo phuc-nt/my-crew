@@ -239,3 +239,61 @@ def team_task_cost(task_id: str) -> dict:
         "total_input_tokens": sum(r.get("input_tokens") or 0 for r in rows),
         "total_output_tokens": sum(r.get("output_tokens") or 0 for r in rows),
     }
+
+
+#: v82: route-decision fields safe to surface — allowlist like `_COST_FIELDS`
+#: (`signals` stays internal: raw keyword matches over the brief, noise for the CEO).
+_ROUTE_FIELDS = ("mode", "source", "reason")
+
+
+@router.get("/team-tasks/{task_id}/route")
+def team_task_route(task_id: str) -> dict:
+    """v82: the persisted sprint/team routing decision for one task (read-only).
+
+    Empty fields — never 404 — when the task is unknown or predates route_json,
+    matching the cost endpoint's discipline (absence is a normal state, not an error).
+    """
+    store = _open_store()
+    try:
+        route = store.get_route(task_id) or {}
+    finally:
+        store.close()
+    return {"task_id": task_id,
+            **{k: str(route.get(k) or "") for k in _ROUTE_FIELDS}}
+
+
+@router.get("/team-tasks/{task_id}/metrics")
+def team_task_metrics(task_id: str) -> dict:
+    """v82: wall-clock + step-mix metrics for one task (read-only, store-only).
+
+    Wraps `bench.task_metrics.load_task_metric` WITHOUT `data_dir`: per-step
+    transcript decomposition would need each step's acting agent's data dir (steps
+    fan out across agents), and the badge/detail surface only needs the store-side
+    numbers. Wall-clock includes queue wait by design — it is the CEO's experienced
+    latency, not pure compute time. 404 when the task is not in the store (unlike
+    /route, there is no meaningful all-empty metric shape).
+    """
+    from my_crew.bench.task_metrics import load_task_metric
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+
+    db_path = team_tasks_db_path()
+    metric = load_task_metric(db_path, task_id) if db_path.exists() else None
+    if metric is None:
+        raise HTTPException(status_code=404, detail="không thấy task")
+    return {
+        "task_id": metric.task_id,
+        "mode": metric.mode,
+        "status": metric.status,
+        "wall_clock_seconds": metric.wall_clock_seconds,
+        "wall_clock_text": metric.wall_clock_text,
+        "cost_usd": metric.cost_usd,
+        "step_count": metric.step_count,
+        "content_steps": metric.content_steps,
+        "review_steps": metric.review_steps,
+        "rework_steps": metric.rework_steps,
+        "steps": [
+            {"seq": s.seq, "step_type": s.step_type, "status": s.status,
+             "cost_usd": s.cost_usd, "seconds": s.seconds}
+            for s in metric.steps
+        ],
+    }

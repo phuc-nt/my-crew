@@ -361,6 +361,33 @@ def steps_for_task(conn: sqlite3.Connection, task_id: str) -> tuple[TeamStep, ..
     return tuple(_row_to_step(dict(zip(cols, r, strict=True))) for r in rows)
 
 
+def steps_for_tasks(
+    conn: sqlite3.Connection, task_ids: list[str],
+) -> dict[str, tuple[TeamStep, ...]]:
+    """Bulk `steps_for_task`: ONE query for many tasks, grouped by task_id.
+
+    Exists for the list surfaces (board/outputs hub) that hydrate hundreds of tasks
+    per request — per-task step queries there were the N+1 that made the board cost
+    ~2 queries per task. A task with no steps is simply absent from the result;
+    callers default to (). Caller must keep len(task_ids) under SQLite's host-param
+    cap (999) — every current caller is bounded far below it by its own LIMIT.
+    """
+    if not task_ids:
+        return {}
+    placeholders = ",".join("?" * len(task_ids))
+    rows = conn.execute(
+        f"SELECT * FROM team_steps WHERE task_id IN ({placeholders}) "
+        f"ORDER BY task_id, seq",
+        tuple(task_ids),
+    ).fetchall()
+    cols = _cols(conn)
+    grouped: dict[str, list[TeamStep]] = {}
+    for r in rows:
+        step = _row_to_step(dict(zip(cols, r, strict=True)))
+        grouped.setdefault(step.task_id, []).append(step)
+    return {task_id: tuple(steps) for task_id, steps in grouped.items()}
+
+
 def get_step_row(conn: sqlite3.Connection, task_id: str, step_id: str) -> dict[str, Any] | None:
     row = conn.execute(
         "SELECT * FROM team_steps WHERE task_id = ? AND step_id = ?", (task_id, step_id),

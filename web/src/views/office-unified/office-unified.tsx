@@ -9,7 +9,7 @@
 //
 // Desk hygiene (v16): desks render only for CURRENT registry staff (rosterIds) — ghost
 // desks from historical events are gone; selecting a room dims everyone not involved.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { api } from '../../api/client'
 import { useLanguage } from '../../i18n/language-context'
@@ -18,7 +18,6 @@ import { useOfficeStream } from '../../hooks/use-office-stream'
 import { useSharedPendingApprovals } from '../../pending-approvals-context'
 import { agentIdsInOrder, deriveAgentDesks, derivePendingCounts } from '../office-3d/agent-office-state'
 import { AgentStatusTable } from '../office-3d/agent-status-table'
-import { OfficeCanvas } from '../office-3d/office-canvas'
 import { use3dFallback } from '../office-3d/use-3d-fallback'
 import { Button } from '../../components/ui/button'
 import { PageHeader } from '../../components/ui/page-header'
@@ -32,6 +31,12 @@ import { DeskInspector } from './desk-inspector'
 import { OfficeHealthStrip } from './office-health-strip'
 import { ReviewDetailTray } from './review-detail-tray'
 import { WorkroomList } from './workroom-list'
+
+// v82 perf: three/@react-three used to load INSIDE this chunk, so the whole office
+// shell (composer, feed, rooms) waited on the 3D bundle before first paint. The canvas
+// is now its own chunk; while it streams in, the lightweight status table stands in —
+// same data, same desk clicks — so the screen is usable immediately.
+const OfficeCanvas = lazy(() => import('../office-3d/office-canvas'))
 
 const OFFICE_ROOM_ID = 'office'
 const PANEL_COLLAPSE_KEY = 'office3dCollapsed'
@@ -270,11 +275,20 @@ export function OfficeUnified() {
                 needsShellAgents={needsShellAgents}
               />
             ) : (
-              <OfficeCanvas
-                agentIds={agentIds} desks={desks} rosterIds={rosterIds} dimmedIds={dimmedIds}
-                onDeskSelect={openDesk} needsShellAgents={needsShellAgents}
-                pendingCounts={pendingCounts}
-              />
+              <Suspense
+                fallback={
+                  <AgentStatusTable
+                    agentIds={agentIds} desks={desks} onDeskSelect={openDesk}
+                    needsShellAgents={needsShellAgents}
+                  />
+                }
+              >
+                <OfficeCanvas
+                  agentIds={agentIds} desks={desks} rosterIds={rosterIds} dimmedIds={dimmedIds}
+                  onDeskSelect={openDesk} needsShellAgents={needsShellAgents}
+                  pendingCounts={pendingCounts}
+                />
+              </Suspense>
             )}
           </div>
         )}

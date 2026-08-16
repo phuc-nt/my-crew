@@ -7,19 +7,7 @@
 import { Html } from '@react-three/drei'
 import { DICT } from '../../i18n/dictionary'
 import type { UiKey } from '../../i18n/dictionary'
-
-//: Closed-set phase tag -> dictionary key. Matches `team_task_graph.py`'s
-//: PHASE_WORK/PHASE_SELF_CHECK/PHASE_REWORK constants — an unrecognized tag (future
-//: phase value not yet wired here) renders nothing rather than the raw code. Exported
-//: so it can be unit-tested directly: drei's <Html> needs a live Fiber/Canvas context
-//: (see office-unified.test.tsx's note), so this component itself cannot render in
-//: jsdom — the key lookup is the part of its logic that can be verified in isolation.
-export const PHASE_LABEL: Record<string, UiKey> = {
-  'dang-lam': 'speechBubble.phaseWork',
-  'tu-soat': 'speechBubble.phaseSelfCheck',
-  'dang-sua': 'speechBubble.phaseRework',
-  'nho-tro-giup': 'speechBubble.phaseNeedHelp',
-}
+import { PHASE_LABEL } from '../office-shared/phase-labels'
 
 interface SpeechBubbleProps {
   position: [number, number, number]

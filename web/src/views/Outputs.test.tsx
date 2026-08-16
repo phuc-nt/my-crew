@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../api/client'
 import { LanguageProvider } from '../i18n/language-context'
+import { UiModeProvider } from '../ui-mode-context'
 import { Outputs } from './Outputs'
 import { TeamTaskKanban } from './team-task-kanban'
 import type { OutputsPayload, TeamBoardPayload } from '../types'
@@ -34,7 +35,9 @@ function renderOutputs() {
   return render(
     <MemoryRouter>
       <LanguageProvider>
-        <Outputs />
+        <UiModeProvider>
+          <Outputs />
+        </UiModeProvider>
       </LanguageProvider>
     </MemoryRouter>,
   )

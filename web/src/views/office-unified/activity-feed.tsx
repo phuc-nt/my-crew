@@ -20,13 +20,17 @@ const FEED_TAIL = 40
 const KIND_ICON: Record<string, string> = {
   ceo: '🗣', assignment: '📋', step_status: '⚙', handoff: '✅',
   milestone: '🚩', consult: '💬', review: '🔍', external_action: '🔗',
+  step_activity: '🛠',
 }
 
 type FeedFilter = 'all' | 'step' | 'external'
 
-const STEP_KINDS = new Set<OfficeMessage['kind']>(['step_status'])
+// "Bước" narrows to everything a step emits about itself: lifecycle transitions AND
+// the v80 in-step activity ticks — excluding the latter made a running sprint look
+// idle under the very filter meant to watch it.
+const STEP_KINDS = new Set<OfficeMessage['kind']>(['step_status', 'step_activity'])
 
-function matchesFilter(m: OfficeMessage, filter: FeedFilter): boolean {
+export function matchesFilter(m: OfficeMessage, filter: FeedFilter): boolean {
   if (filter === 'all') return true
   if (filter === 'step') return STEP_KINDS.has(m.kind)
   return m.kind === 'external_action'

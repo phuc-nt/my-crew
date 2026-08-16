@@ -464,6 +464,14 @@ input, textarea, select { font-size: var(--fs-body); }
 .office-composer-preview pre { white-space: pre-wrap; margin: 0; font-size: var(--fs-sm); }
 .office-composer-hint { margin: var(--space-2) 0 0; font-size: var(--fs-xs);
   color: var(--color-warn); }
+/* v82: routing-funnel badge on the preview card (sprint | team). */
+.office-mode-badge { display: inline-block; margin-bottom: var(--space-2);
+  padding: 0.1rem 0.5rem; border-radius: var(--radius); font-size: var(--fs-2xs);
+  font-weight: 700; letter-spacing: 0.03em; }
+.office-mode-badge-sprint { background: var(--color-accent-bg); color: var(--color-accent);
+  border: 1px solid var(--color-accent-border); }
+.office-mode-badge-team { background: var(--color-surface); color: var(--color-muted);
+  border: 1px solid var(--color-border-strong); }
 .office-composer-actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
 .office-composer-done { border-color: var(--color-ok); }
 .office-composer-reply { border-color: var(--color-accent-border); background: var(--color-accent-bg); }
@@ -547,6 +555,17 @@ input, textarea, select { font-size: var(--fs-body); }
   padding: 0.4rem 0.6rem; }
 .artifact-markdown pre { background: var(--color-surface-2); padding: var(--space-2);
   border-radius: var(--radius); overflow-x: auto; }
+/* v82: Kết quả / Quá trình tab bar + transcript event list (high ui-mode). */
+.artifact-tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); }
+.transcript-events { list-style: none; margin: 0; padding: 0;
+  font-size: var(--fs-sm); }
+.transcript-event { padding: 2px 0; border-bottom: 1px solid var(--color-border);
+  overflow-wrap: anywhere; }
+.transcript-kind { display: inline-block; min-width: 92px; color: var(--color-muted);
+  font-size: var(--fs-2xs); }
+.transcript-kind-tool_call, .transcript-kind-prefetch { color: var(--color-accent); }
+.team-task-route { margin-top: 0; }
+.team-task-metrics { margin-top: 0; }
 @media (max-width: 1100px) {
   .office-artifacts { max-height: 40vh; }
 }
@@ -644,7 +663,7 @@ input, textarea, select { font-size: var(--fs-body); }
 .advanced-bar { display: flex; justify-content: space-between; align-items: center;
   margin-bottom: var(--space-4); }
 .team-actions { display: flex; gap: var(--space-3); margin: var(--space-2) 0 var(--space-4); }
-.work-approvals, .work-tasks { margin-bottom: var(--space-5); }
+.work-approvals { margin-bottom: var(--space-5); }
 .work-approvals .badge { background: var(--color-danger-solid); color: var(--color-on-danger); border-radius: var(--radius-pill);
   padding: 0 var(--space-2); font-size: var(--fs-xs); }
 .approval-list { list-style: none; padding: 0; }
@@ -716,13 +735,6 @@ input, textarea, select { font-size: var(--fs-body); }
 .ops-chat-input { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
 .ops-chat-input input { flex: 1; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius); }
 
-/* v6 M15b: assigned-tasks board */
-.tasks-agent { margin-bottom: var(--space-5); }
-.tasks-agent h3 { margin: 0 0 var(--space-2); }
-.tasks-table { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); }
-.tasks-table th { color: var(--color-subtle); font-weight: 600; }
-.tasks-last { color: var(--color-muted); max-width: 30rem; }
-
 /* v6 M16: login screen + logout */
 .login-screen { display: flex; align-items: center; justify-content: center; min-height: 80vh; }
 .login-box { display: flex; flex-direction: column; gap: 0.85rem; width: 300px; background: var(--color-surface); }
@@ -786,29 +798,29 @@ input, textarea, select { font-size: var(--fs-body); }
   /* (iOS anti-auto-zoom: the base `input,textarea,select` rule already sets 16px — see v37
      note above; no mobile-specific override needed.) */
 
-  /* CEO-facing tables (Team, assigned tasks, approvals) become a stacked card list: each row
-     is a card, each cell shows its column name via data-label (added on the <td> in the views).
+  /* CEO-facing tables (Team, approvals) become a stacked card list: each row is a card,
+     each cell shows its column name via data-label (added on the <td> in the views).
      The empty action <td> (no data-label) just renders its buttons. Advanced-view tables keep
-     their normal table layout inside .table-scroll — only these three classes convert. */
-  .agents-table, .tasks-table, .proposals-table { border: 0; }
-  .agents-table thead, .tasks-table thead, .proposals-table thead { display: none; }
-  .agents-table tr, .tasks-table tr, .proposals-table tr {
+     their normal table layout inside .table-scroll — only these two classes convert. */
+  .agents-table, .proposals-table { border: 0; }
+  .agents-table thead, .proposals-table thead { display: none; }
+  .agents-table tr, .proposals-table tr {
     display: block; border: 1px solid var(--color-border); border-radius: var(--radius);
     box-shadow: var(--shadow-sm); padding: var(--space-2); margin-bottom: var(--space-3);
   }
-  .agents-table td, .tasks-table td, .proposals-table td {
+  .agents-table td, .proposals-table td {
     display: flex; justify-content: space-between; gap: var(--space-3); text-align: right;
     border: 0; border-bottom: 1px solid var(--color-border-soft); padding: 0.4rem 0;
   }
-  .agents-table td:last-child, .tasks-table td:last-child, .proposals-table td:last-child { border-bottom: 0; }
-  .agents-table td::before, .tasks-table td::before, .proposals-table td::before {
+  .agents-table td:last-child, .proposals-table td:last-child { border-bottom: 0; }
+  .agents-table td::before, .proposals-table td::before {
     content: attr(data-label); font-weight: 600; color: var(--color-subtle); text-align: left;
   }
   /* A cell with no column label (the actions cell) shouldn't reserve the label gutter. */
-  .agents-table td:not([data-label]), .tasks-table td:not([data-label]), .proposals-table td:not([data-label]) {
+  .agents-table td:not([data-label]), .proposals-table td:not([data-label]) {
     justify-content: flex-end;
   }
-  .agents-table td:not([data-label])::before, .tasks-table td:not([data-label])::before, .proposals-table td:not([data-label])::before {
+  .agents-table td:not([data-label])::before, .proposals-table td:not([data-label])::before {
     content: none;
   }
 

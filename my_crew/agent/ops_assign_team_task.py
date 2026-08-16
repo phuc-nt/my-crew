@@ -491,6 +491,9 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
     slots["task_id"] = task_id
     slots["plan_hash"] = plan_hash
     slots["pic_id"] = task.pic_id
+    # Which way the funnel routed (sprint | team) — the composer renders it as a badge
+    # so the CEO sees the mode BEFORE confirming, not after the run starts.
+    slots["route_mode"] = str(route.get("mode", ""))
 
     # Room event: the CEO's brief, appended to the (not-yet-dispatchable) task's own
     # room — try/degrade (a failed append must never block the preview/confirm flow).
