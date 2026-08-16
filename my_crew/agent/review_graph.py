@@ -203,11 +203,38 @@ def run_review_step(
     else:
         context = EMPTY
 
+    # v80 P3: review grades the PROCESS too — evidence from the graded attempt's
+    # transcript (resolved by locked_version, the only stable key across rework rows).
+    # Best-effort: any failure here degrades to the pre-P3 blind prompt, never raises.
+    transcript_evidence = None
+    evidence_cap = int(
+        getattr(settings, "review_transcript_evidence_max_chars", 8000) or 0
+    )
+    if evidence_cap > 0:
+        try:
+            from pathlib import Path
+
+            from my_crew.runtime.transcript_evidence import (
+                extract_review_evidence,
+                find_transcript_for_version,
+            )
+
+            transcript_path = find_transcript_for_version(
+                Path(data_dir), review_input.task_id, review_input.locked_version
+            )
+            if transcript_path is not None:
+                transcript_evidence = extract_review_evidence(transcript_path, evidence_cap)
+        except Exception:  # noqa: BLE001 — evidence is observation, never blocks review
+            logger.warning(
+                "review transcript evidence failed for %s (grading without it)",
+                review_input.task_id, exc_info=True,
+            )
+
     llm = LlmClient(settings)
     result = llm.complete(
         build_review_messages(
             result_text=result_text, acceptance=review_input.acceptance, persona=context.persona,
-            handoff=review_input.handoff,
+            handoff=review_input.handoff, transcript_evidence=transcript_evidence,
         ),
         role="review",
     )

@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 from my_crew.config.config_builders_helpers import (
     _d_bool,
     _d_float,  # noqa: F401  (re-exported for the reporting module + tests)
-    _d_int,  # noqa: F401
+    _d_int,
     _d_str_or_none,
 )
 from my_crew.config.config_builders_reporting import (
@@ -161,6 +161,14 @@ def build_settings_from_dict(d: dict[str, Any]) -> Settings:
         brave_api_key=_d_str_or_none(d, "brave_api_key"),
         firecrawl_base_url=_d_str_or_none(d, "firecrawl_base_url"),
         firecrawl_api_key=_d_str_or_none(d, "firecrawl_api_key"),
+        step_transcripts=_d_bool(d, "step_transcripts", True),
+        review_transcript_evidence_max_chars=_d_int(
+            d, "review_transcript_evidence_max_chars", 8000
+        ),
+        step_activity_feed=_d_bool(d, "step_activity_feed", True),
+        reflection_transcript_evidence_max_chars=_d_int(
+            d, "reflection_transcript_evidence_max_chars", 4000
+        ),
     )
 
 
@@ -194,6 +202,14 @@ def build_settings_from_env() -> Settings:
             "brave_api_key": os.getenv("BRAVE_API_KEY"),
             "firecrawl_base_url": os.getenv("FIRECRAWL_BASE_URL"),
             "firecrawl_api_key": os.getenv("FIRECRAWL_API_KEY"),
+            "step_transcripts": os.getenv("STEP_TRANSCRIPTS"),
+            "review_transcript_evidence_max_chars": os.getenv(
+                "REVIEW_TRANSCRIPT_EVIDENCE_MAX_CHARS"
+            ),
+            "step_activity_feed": os.getenv("STEP_ACTIVITY_FEED"),
+            "reflection_transcript_evidence_max_chars": os.getenv(
+                "REFLECTION_TRANSCRIPT_EVIDENCE_MAX_CHARS"
+            ),
             # Tracing is on (env side) when either the V2 flag is truthy OR an API key is
             # present — normalized to a bool so an API-key string (not a true/false word)
             # still enables. Shared helper so the worker/cli settings path and the server

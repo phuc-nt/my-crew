@@ -41,6 +41,8 @@ CLAUDE.md
 
 # Internal working artifacts — not part of the published project
 plans/
+# Runtime task artifacts that land at repo root when a run uses the default data dir
+/artifacts/
 docs/references/
 .dandori-agent
 

@@ -48,6 +48,11 @@ def _short_consult(value: object) -> str:
 #: an unrecognized `kind`.
 _REVIEW_VERDICTS = frozenset({"passed", "needs_rework"})
 
+#: `step_activity`'s `phase` field mirrors `StepRecorder.ACTIVITY_PHASES` — the live
+#: "đang làm gì" feed only ever says a tool fired or the model is writing; the value
+#: set stays closed for the same reason as `verdict` below.
+_ACTIVITY_PHASES = frozenset({"calling-tool", "writing"})
+
 #: `step_status`'s `phase` field is likewise a closed enum — the exact 4 tags the step
 #: graph's `get_stream_writer()` calls emit (`team_task_graph.PHASE_WORK/
 #: PHASE_SELF_CHECK/PHASE_REWORK/PHASE_RECOVER`). A value outside this set is dropped
@@ -59,7 +64,8 @@ _STEP_PHASES = frozenset({"dang-lam", "tu-soat", "dang-sua", "nho-tro-giup"})
 def summarize_office_event(kind: str, body: dict) -> dict:
     """Project a raw office-event body to its non-PII allowlist (drop everything else).
 
-    `kind` one of ceo | assignment | step_status | handoff | milestone | consult | review.
+    `kind` one of ceo | assignment | step_status | step_activity | handoff | milestone |
+    consult | review | external_action.
     Unknown kind -> {} (drop all).
     """
     if kind == "ceo":
@@ -99,6 +105,22 @@ def summarize_office_event(kind: str, body: dict) -> dict:
         if body.get("deep_team"):
             projected["deep_team"] = True
         return projected
+    if kind == "step_activity":
+        # v80 P4: live in-step activity ("content-01 đang gọi web_search (3)"). ONLY
+        # identifiers + a counter — the tool's ARGS and RESULT never reach this event
+        # by construction (see `step_recorder.ACTIVITY_FIELDS`), and the projection
+        # re-enforces that here: `agent`/`task`/`step` are internal opaque ids, `tool`
+        # is a registered tool NAME (not content), `count` is an int, `phase` is a
+        # closed enum (dropped to "" if unrecognized).
+        phase = _short(body.get("phase"))
+        return {
+            "agent": _short(body.get("agent")),
+            "task": _short(body.get("task")),
+            "step": _short(body.get("step")),
+            "tool": _short(body.get("tool")),
+            "count": int(body.get("count") or 0),
+            "phase": phase if phase in _ACTIVITY_PHASES else "",
+        }
     if kind == "handoff":
         return {
             "task_title": _short(body.get("task_title")),
@@ -199,5 +221,6 @@ VALID_KINDS = frozenset(
     {
         "ceo", "assignment", "step_status", "handoff", "milestone", "consult", "review",
         "external_action",  # v54: Action Gateway outcome bridge
+        "step_activity",  # v80 P4: live in-step tool/writing activity (ids + count only)
     }
 )

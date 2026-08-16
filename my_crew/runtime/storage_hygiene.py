@@ -36,6 +36,12 @@ RETENTION_DAYS = {
     # v66: remembered facts in the shared memory store. Persistence is the feature,
     # unbounded growth (and an unboundedly-old poisoned fact) is not.
     "memory_facts": 90,
+    # v80 pi-sessions: per-attempt transcript JSONL + work-order snapshots inside LIVE
+    # task dirs. Unlike artifacts (kept as business history), these are process traces
+    # — big (verbatim LLM messages) and only consumed while an attempt is recent, so
+    # they get a shorter, per-FILE age sweep (the orphan sweep never sees them because
+    # task rows are never deleted).
+    "step_transcripts": 30,
 }
 
 #: The integrity audit is read-only but not free — run it at most once per local day,
@@ -81,7 +87,48 @@ def run_retention_sweep(*, now: datetime | None = None) -> dict[str, int]:
     _sweep_dedup(deleted, now)
     _sweep_artifact_orphans(deleted, now)
     _sweep_memory_facts(deleted, now)
+    _sweep_step_transcripts(deleted, now)
     return deleted
+
+
+def _sweep_step_transcripts(deleted: dict[str, int], now: datetime) -> None:
+    """v80: delete over-age transcript/work-order FILES inside live task artifact dirs.
+
+    Age is per file (mtime), because a long-lived task keeps gaining attempts — the
+    dir stays, only stale attempt traces go. Confined to the two known subdirs
+    (`transcripts/*.jsonl`, `work-orders/*.json`) directly under each task dir; step
+    artifacts (`step-*.json`) are business history and are NOT touched. Symlinks are
+    skipped, mirroring the orphan sweep's posture."""
+    from my_crew.agent.team_task_artifact import team_task_artifacts_root
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    removed = 0
+    try:
+        art_root = team_task_artifacts_root(team_tasks_root())
+        if not art_root.is_dir():
+            deleted["step_transcripts"] = 0
+            return
+        cutoff_ts = (now - timedelta(days=RETENTION_DAYS["step_transcripts"])).timestamp()
+        for task_dir in art_root.iterdir():
+            if not task_dir.is_dir() or task_dir.is_symlink():
+                continue
+            for subdir, pattern in (("transcripts", "*.jsonl"), ("work-orders", "*.json")):
+                trace_dir = task_dir / subdir
+                if not trace_dir.is_dir() or trace_dir.is_symlink():
+                    continue
+                for f in trace_dir.glob(pattern):
+                    try:
+                        if f.is_symlink() or not f.is_file():
+                            continue
+                        if f.stat().st_mtime < cutoff_ts:
+                            f.unlink()
+                            removed += 1
+                    except OSError:
+                        logger.warning("step transcript sweep failed for %s (ignored)",
+                                       f.name, exc_info=True)
+    except Exception:  # noqa: BLE001 — retention is best-effort per store
+        logger.warning("step transcript sweep failed (ignored)", exc_info=True)
+    deleted["step_transcripts"] = removed
 
 
 def _sweep_memory_facts(deleted: dict[str, int], now: datetime) -> None:

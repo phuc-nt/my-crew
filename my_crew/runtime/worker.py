@@ -504,21 +504,52 @@ def _run_team_step_kind(args: list[str], *, agent_id: str, loaded: LoadedProfile
             logger.warning("team-step %s/%s: outcome artifact write failed: %s",
                             task_id, step_id, exc)
 
-    try:
-        # v48: run under the MCP session pool so every call_tool during the step (graph run AND
-        # the in-step review, both under run_team_step) reuses one subprocess per server instead
-        # of spawning per call — mirrors the report/inbox/tasks branches.
-        result = _run_with_mcp_pool(
-            lambda: run_team_step(
-                loaded, settings, task_id=task_id, step_id=step_id, attempt_id=attempt_id,
+    # v80 pi-sessions: one transcript JSONL per attempt, contextvar-scoped to this
+    # step run so the LLM/loop/prefetch hooks record into it. Best-effort: a recorder
+    # failure degrades to no transcript, never a failed step.
+    from my_crew.runtime.step_recorder import open_step_recorder, record_event
+
+    # v80 P4: mirror the recorder's allowlisted activity events (tool name + counter,
+    # never args/results) into the task's office room so the office shows what the
+    # step is DOING between two step_status events. `append_office_event` never
+    # raises; the room is resolved once, outside the per-event hot path.
+    on_activity = None
+    if getattr(settings, "step_activity_feed", True):
+        from my_crew.runtime.office_room_append import append_office_event, room_for_task
+
+        activity_room = room_for_task(task_id)
+
+        def on_activity(activity: dict[str, Any]) -> None:
+            append_office_event(
+                activity_room, author=agent_id, kind="step_activity",
+                body=activity, also_office=True,
             )
-        )
-    except Exception as exc:  # noqa: BLE001 — record the failure, never crash
-        logger.exception("worker %s/team-step %s/%s failed", agent_id, task_id, step_id)
-        _write_outcome("failed", error=str(exc))
-        append_run_event(data_dir, _event(agent_id, "team-step", "internal", "error", None, False))
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
+
+    with open_step_recorder(settings, agent_id=agent_id, task_id=task_id,
+                            step_id=step_id, attempt_id=attempt_id,
+                            on_activity=on_activity):
+        try:
+            # v48: run under the MCP session pool so every call_tool during the step (graph run
+            # AND the in-step review, both under run_team_step) reuses one subprocess per server
+            # instead of spawning per call — mirrors the report/inbox/tasks branches.
+            result = _run_with_mcp_pool(
+                lambda: run_team_step(
+                    loaded, settings, task_id=task_id, step_id=step_id, attempt_id=attempt_id,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 — record the failure, never crash
+            record_event({"t": "outcome", "status": "failed", "error": str(exc)})
+            logger.exception("worker %s/team-step %s/%s failed", agent_id, task_id, step_id)
+            _write_outcome("failed", error=str(exc))
+            append_run_event(
+                data_dir, _event(agent_id, "team-step", "internal", "error", None, False)
+            )
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        record_event({
+            "t": "outcome", "status": result["status"],
+            "pause_reason": str(result.get("pause_reason") or ""),
+        })
 
     status = result["status"]
     if status == STATUS_PAUSED:

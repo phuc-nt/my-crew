@@ -246,6 +246,7 @@ _REVIEW_SYSTEM = (
 
 def build_review_messages(
     *, result_text: str, acceptance: str, persona: str = "", handoff: str = "",
+    transcript_evidence: str | None = None,
 ) -> list[dict[str, str]]:
     """Messages for the peer-review graph's structured LLM call (`review_graph.py`).
 
@@ -269,18 +270,40 @@ def build_review_messages(
     OWN spotlight wrap, separate from the result, so the model has a structural boundary
     between "what was provided" and "what was produced". Blank (a first step, no deps)
     ⇒ omitted and grading is output-only, exactly as before.
+
+    `transcript_evidence` (v80 P3) is the graded attempt's PROCESS extracted from its
+    transcript (tools called, sources actually opened, usage) — lets "số liệu có nguồn"
+    be verified against real tool_results instead of the answer's own claims. Same
+    trust class as `result_text` (tool_results carry web content — untrusted
+    second-order), so it goes through `format_internal_content` too. None (old step,
+    recorder off, cap=0) ⇒ the prompt is byte-identical to pre-P3; the accompanying
+    instruction explicitly forbids penalizing MISSING evidence — only CONTRADICTING
+    evidence counts against the result.
     """
     from datetime import datetime
 
     wrapped_result = format_internal_content(result_text, label="kết quả cần soát")
     wrapped_acceptance = format_internal_content(acceptance, label="tiêu chí chấp nhận")
     wrapped_handoff = format_internal_content(handoff, label="ĐẦU VÀO bước này nhận được")
+    evidence_section = ""
+    if transcript_evidence:
+        wrapped_evidence = format_internal_content(
+            transcript_evidence, label="BẰNG CHỨNG QUÁ TRÌNH (transcript của bước bị chấm)"
+        )
+        evidence_section = (
+            "Bằng chứng quá trình dưới đây liệt kê tool đã gọi, nguồn đã thật sự mở và "
+            "usage của bước bị chấm — dùng nó để KIỂM claim về nguồn: số liệu ghi 'theo "
+            "nguồn X' phải truy được về một tool/nguồn đã mở. Bằng chứng có thể bị cắt "
+            "theo cap — THIẾU bằng chứng KHÔNG phải lỗi và không được trừ điểm vì thiếu; "
+            "chỉ tính khi bằng chứng MÂU THUẪN với kết quả.\n\n" + wrapped_evidence
+        )
     # Same temporal anchor as `build_self_check_messages`: an un-anchored grader fails
     # genuinely fresh dates as "future/fabricated" against its training cutoff.
     today = f"HÔM NAY là {datetime.now().strftime('%d/%m/%Y')} — ngày trong kết quả " \
             "mới hơn kiến thức của bạn KHÔNG phải bằng chứng bịa đặt."
     user = "\n\n".join(
-        p for p in (today, wrapped_acceptance, wrapped_handoff, wrapped_result) if p
+        p for p in (today, wrapped_acceptance, wrapped_handoff, wrapped_result,
+                    evidence_section) if p
     )
     return [
         {"role": "system", "content": prepend_persona(_REVIEW_SYSTEM, persona)},

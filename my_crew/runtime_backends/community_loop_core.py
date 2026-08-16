@@ -14,9 +14,12 @@ helper only accepts the already-invoked `result`.
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import os
 from typing import Any
+
+from my_crew.runtime.step_recorder import head, record_event
 
 logger = logging.getLogger(__name__)
 
@@ -85,29 +88,76 @@ def invoke_capped(
     if usage_handler is not None:
         config["callbacks"] = [usage_handler]
     empty = {"messages": [*messages, AIMessage(content="")]}
+    # Step transcript (v80): loop input + INCREMENTAL tool events per stream chunk, so
+    # the transcript shows the loop's process live, not a post-mortem. Nested deep_team
+    # subagent calls never appear in `messages` and are a documented blind spot.
+    record_event({
+        "t": "loop_input", "recursion_limit": recursion_limit,
+        "messages": [_describe_message(m) for m in messages],
+    })
     # `.stream(values)` instead of `.invoke` so the transcript survives a cap overflow —
     # `invoke` raising GraphRecursionError discards every tool result already fetched.
     # An agent double without `.stream` (tests, minimal fakes) keeps the invoke path.
     if getattr(agent, "stream", None) is None:
         try:
             with _tracing_off():
-                return agent.invoke({"messages": messages}, config=config)
+                result = agent.invoke({"messages": messages}, config=config)
+            _record_new_messages(list(result.get("messages") or [])[len(messages):])
+            return result
         except GraphRecursionError:
             logger.warning("community loop hit recursion_limit=%d; no stream support — "
                            "degrading to an empty result", recursion_limit)
             return empty
     last_state: dict | None = None
+    seen = len(messages)
     try:
         with _tracing_off():
             for state in agent.stream({"messages": messages}, config=config,
                                       stream_mode="values"):
                 last_state = state
+                # values-mode chunks carry the FULL message list — record only the tail.
+                chunk_messages = list(state.get("messages") or [])
+                _record_new_messages(chunk_messages[seen:])
+                seen = max(seen, len(chunk_messages))
         return last_state if last_state is not None else empty
     except GraphRecursionError:
         return _synthesize_from_partial(
             agent, messages, last_state, config=config, recursion_limit=recursion_limit,
             empty=empty,
         )
+
+
+def _describe_message(message: Any) -> dict[str, Any]:
+    """Compact transcript form of a LangChain message: type + content head."""
+    return {
+        "type": type(message).__name__,
+        "content": head(getattr(message, "content", "") or ""),
+    }
+
+
+def _record_new_messages(new_messages: list) -> None:
+    """Record tool activity from freshly-appended loop messages (no-op off-context).
+
+    Only tool traffic is recorded here — an AI turn's `tool_calls` (name + args head)
+    and ToolMessage results (name + content head, capped). The final answer text is
+    NOT duplicated per chunk; `record_loop_result` records the aggregate llm_response.
+    """
+    for message in new_messages:
+        for tool_call in getattr(message, "tool_calls", None) or []:
+            get = tool_call.get if isinstance(tool_call, dict) else (
+                lambda k, _tc=tool_call: getattr(_tc, k, None))
+            try:
+                args_head = head(json.dumps(get("args") or {}, ensure_ascii=False,
+                                            default=str))
+            except Exception:  # noqa: BLE001 — observation never breaks the loop
+                args_head = head(get("args"))
+            record_event({"t": "tool_call", "name": get("name"), "args_head": args_head})
+        if type(message).__name__ == "ToolMessage" or getattr(
+                message, "tool_call_id", None):
+            record_event({
+                "t": "tool_result", "name": getattr(message, "name", None),
+                "content_head": head(getattr(message, "content", "") or ""),
+            })
 
 
 def _synthesize_from_partial(
@@ -147,6 +197,8 @@ def _synthesize_from_partial(
         "community loop hit recursion_limit=%d; synthesizing a final answer from the "
         "%d-message partial transcript", recursion_limit, len(partial),
     )
+    record_event({"t": "loop_note", "note": "recursion_cap_synthesis",
+                  "partial_messages": len(partial)})
     try:
         with _tracing_off():
             return agent.invoke({"messages": [*partial, instruction]},
@@ -201,4 +253,11 @@ def record_loop_result(
     cost = estimate_cost(model_name, in_tok, out_tok)
     if telemetry is not None:
         telemetry.record(input_tokens=in_tok, output_tokens=out_tok, cost_source="estimated")
+    # Step transcript (v80): ONE aggregate llm_response for the whole loop — usage here
+    # is loop-total (incl. deep_team subagent tokens via the handler), not per-exchange.
+    record_event({
+        "t": "llm_response", "aggregate": True, "model": model_name,
+        "content": str(text), "prompt_tokens": in_tok, "completion_tokens": out_tok,
+        "cost_usd": cost,
+    })
     return str(text), cost

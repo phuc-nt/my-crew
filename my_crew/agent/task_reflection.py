@@ -194,13 +194,26 @@ def _task_digest(task: Any, outcome: str, detail: str) -> str:
     return "\n".join(lines)
 
 
-def _build_prompt(digest: str, prior: list[str]) -> str:
-    """The decision rule goes FIRST: a rule buried under the data gets ignored (v66)."""
+def _build_prompt(digest: str, prior: list[str], behavior: str = "") -> str:
+    """The decision rule goes FIRST: a rule buried under the data gets ignored (v66).
+
+    `behavior` (v80 P5) is the transcript-derived PROCESS summary — tool names and
+    counts only, never tool args/results or prefetch queries (those are attacker-
+    influenceable content and this turn writes to durable shared memory; see
+    `_task_digest`'s threat model). Empty ⇒ the prompt is byte-identical to pre-P5.
+    """
     prior_block = ""
     if prior:
         prior_block = (
             "\nBÀI HỌC ĐÃ CÓ (nếu điều rút ra trùng ý, hãy viết lại bản gộp rõ hơn "
             "thay vì thêm dòng mới):\n" + "\n".join(f"- {p}" for p in prior[:10]) + "\n"
+        )
+    behavior_block = ""
+    if behavior:
+        behavior_block = (
+            "\nQUÁ TRÌNH LÀM (đếm từ transcript — chỉ tên tool và số lần, không có "
+            "nội dung; dùng để nhận ra pattern như lặp tool vô ích hay bước không mở "
+            "nguồn nào):\n" + behavior + "\n"
         )
     return (
         "QUY TẮC (đọc trước):\n"
@@ -214,7 +227,8 @@ def _build_prompt(digest: str, prior: list[str]) -> str:
         "Một lần hỏng không đủ để kết luận về người — hãy nói cần mô tả việc rõ hơn "
         "thế nào.\n"
         "5. Viết MỘT câu tiếng Việt, tối đa 200 ký tự. Không giải thích thêm.\n"
-        f"{prior_block}\n"
+        f"{prior_block}"
+        f"{behavior_block}\n"
         "DỮ LIỆU:\n"
         f"{digest}"
     )
@@ -263,7 +277,9 @@ def _reflect_inner(
         return  # no key ⇒ no reflection; the tick's own work already happened
 
     prior = _prior_lessons(store, namespace)
-    prompt = _build_prompt(_task_digest(task, outcome, detail), prior)
+    prompt = _build_prompt(
+        _task_digest(task, outcome, detail), prior, behavior=_behavior_summary(settings, task)
+    )
 
     from my_crew.llm.client import LlmClient
 
@@ -295,6 +311,32 @@ def _reflect_inner(
     # key is ignored rather than breaking them.
     store.put(namespace, key, {"fact": lesson, "ts": ts, "source": SOURCE_REFLECTION})
     logger.info("team-tick: lesson học được từ task %s: %s", task.id, lesson[:120])
+
+
+def _behavior_summary(settings: Any, task: Any) -> str:
+    """Transcript-derived process summary for the reflection prompt (v80 P5).
+
+    Best-effort observation: any failure (no transcripts, unreadable dir, missing
+    setting) degrades to "" and the prompt stays byte-identical to pre-P5. Cap 0
+    turns the feature off entirely.
+    """
+    cap = int(getattr(settings, "reflection_transcript_evidence_max_chars", 4000) or 0)
+    if cap <= 0:
+        return ""
+    try:
+        from pathlib import Path
+
+        from my_crew.runtime.transcript_evidence import extract_task_behavior_summary
+
+        return extract_task_behavior_summary(
+            Path(getattr(settings, "data_dir", "")), task.id, cap
+        ) or ""
+    except Exception:  # noqa: BLE001 — evidence is observation, never blocks reflection
+        logger.warning(
+            "reflection: behavior summary failed for task %s (phản tư không evidence)",
+            getattr(task, "id", "?"), exc_info=True,
+        )
+        return ""
 
 
 def _prior_lessons(store: Any, namespace: tuple[str, str]) -> list[str]:

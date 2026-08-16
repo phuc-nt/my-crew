@@ -141,6 +141,29 @@ class Settings:
     firecrawl_base_url: str | None = None
     firecrawl_api_key: str | None = None
 
+    # v80 pi-sessions: per-attempt step transcript JSONL (the recorder in
+    # `runtime/step_recorder.py`). Default ON — the transcript is the observability
+    # keystone; turn off with STEP_TRANSCRIPTS=false to fall back to pre-v80 opacity.
+    # Transcripts live under `.data/artifacts/team-tasks/<task>/transcripts/` (never
+    # egressed) and are swept after 30 days by storage_hygiene.
+    step_transcripts: bool = True
+    # v80 P3: cap (chars) on transcript-derived process evidence injected into the
+    # peer-review prompt. 0 turns the feature off entirely (review grades blind, as
+    # pre-v80). The cap keeps review cheap-by-default — transcripts run 10–50× the
+    # deliverable's size and must never ride into the prompt whole.
+    review_transcript_evidence_max_chars: int = 8000
+    # v80 P5: cap (chars) on the BEHAVIOR summary (tool names + counts only, never
+    # content) injected into the coordinator's reflection prompt. 0 turns it off —
+    # reflection then looks only at the structural digest, as pre-v80. Smaller than
+    # the review cap on purpose: reflection wants the pattern, not the sources.
+    reflection_transcript_evidence_max_chars: int = 4000
+    # v80 P4: mirror live in-step activity (tool name + counter, NEVER args/results —
+    # the allowlist is hard-coded in `step_recorder.ACTIVITY_FIELDS`) into the task's
+    # office room. Rides the transcript recorder, so it is only effective while
+    # `step_transcripts` is also on. STEP_ACTIVITY_FEED=false returns the office to
+    # the pre-v80 "im lặng giữa hai step_status" behavior.
+    step_activity_feed: bool = True
+
     def effective_model_chain(self) -> tuple[str, ...]:
         """The chain `LlmClient.complete` walks: declared chain, or just the model."""
         return self.model_chain or (self.openrouter_model,)

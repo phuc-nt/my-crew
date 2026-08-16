@@ -102,12 +102,14 @@ def run_team_step(
 
         if step.step_type == "review":
             result = _run_review(
-                loaded, settings, task_id=task_id, step=step, store=store, telemetry=telemetry
+                loaded, settings, task_id=task_id, step=step, store=store,
+                telemetry=telemetry, attempt_id=attempt_id,
             )
         else:
             result = _run_graph(
                 loaded, settings, task_id=task_id, step=step, attempt_id=attempt_id,
                 task_title=task.title, on_node=_touch, telemetry=telemetry,
+                plan_hash=task.plan_hash or "", original_request=task.original_request,
             )
         if result.get("status") == "waiting_clarify":
             # v34 P2: the graph paused on a CEO question. Persist the correlation id;
@@ -370,6 +372,7 @@ def _append_review_event(
 
 def _run_review(
     loaded: Any, settings: Any, *, task_id: str, step, store: Any, telemetry=None,
+    attempt_id: str = "",
 ) -> dict:
     """Dispatch body for `step_type == "review"` (M32) — the reviewer's own worker run.
 
@@ -429,6 +432,15 @@ def _run_review(
         acceptance=content_step.acceptance, step_title=content_step.title,
         handoff=handoff,
     )
+    # v80 P2: review attempts get a work-order too (every attempt does), but replay
+    # refuses them — a review re-run without the exact graded artifact version proves
+    # nothing. `effective_kind` names the review pipeline, not a graph runtime.
+    from my_crew.runtime.step_work_order import write_work_order
+
+    write_work_order(
+        settings, task_id=task_id, step=step, attempt_id=attempt_id,
+        effective_kind="ReviewPipeline",
+    )
     return run_review_step(
         loaded, settings, data_dir=data_dir, review_input=review_input,
         telemetry=telemetry,
@@ -438,6 +450,7 @@ def _run_review(
 def _run_graph(
     loaded: Any, settings: Any, *, task_id: str, step, attempt_id: str = "",
     task_title: str = "", on_node: Callable[[], None] | None = None, telemetry=None,
+    plan_hash: str = "", original_request: str = "",
 ) -> dict:
     """Build + invoke the team_task_graph for one step, checkpointed (v34 P1).
 
@@ -521,6 +534,16 @@ def _run_graph(
     runtime = resolve_step_runtime(loaded, step, prefetched=bool(_prefetch_context))
     effective_kind = type(runtime).__name__
     _is_non_native = effective_kind != "NativeGraphRuntime"
+
+    # v80 P2: freeze this attempt's step-level input NOW — inputs are loaded and the
+    # runtime kind is resolved, the tier has not run yet. Best-effort by contract.
+    from my_crew.runtime.step_work_order import write_work_order
+
+    write_work_order(
+        settings, task_id=task_id, step=step, attempt_id=attempt_id,
+        effective_kind=effective_kind, task_title=task_title, plan_hash=plan_hash,
+        original_request=original_request, guidance=_guidance_with_wake_context(step),
+    )
 
     # `reporting_config` is consumed only by a tool-calling runtime (read toolset); the native
     # runtime ignores it. NativeGraphRuntime.build_task passes **kwargs straight to

@@ -49,11 +49,20 @@ def _patch_everywhere(monkeypatch, name: str, original: Any, replacement: Any) -
     Product code imports these collaborators both at module top and locally
     inside functions; patching only the source module would miss the top-level
     copies. Matching on object identity keeps the sweep surgical.
+
+    A module imported MID-test (e.g. `worker`, first pulled in by the spawn
+    patch) copies the then-active double at its own import time; monkeypatch
+    never touched that attribute, so teardown leaves the stale double behind
+    for the next test. The `_fullflow_double` marker lets the sweep recognize
+    and replace those leftovers too — otherwise test 2's worker silently runs
+    with test 1's cast and data dir.
     """
+    replacement._fullflow_double = True
     for module in list(sys.modules.values()):
         if module is None:
             continue
-        if getattr(module, name, None) is original:
+        current = getattr(module, name, None)
+        if current is original or getattr(current, "_fullflow_double", False):
             monkeypatch.setattr(module, name, replacement, raising=False)
 
 

@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from my_crew.llm.client import LlmResult
+from my_crew.runtime.step_recorder import record_event
 
 #: A rule's `respond` may be a fixed string or a callable receiving the full
 #: prompt text (all message contents joined) and returning the completion.
@@ -51,6 +52,11 @@ class ScriptedLlm:
         role: str | None = None,
     ) -> LlmResult:
         text = "\n".join(str(m.get("content", "")) for m in messages)
+        # The double honors the seam's v80 contract: the real `complete` records
+        # llm_request/llm_response into the step transcript, so full-flow scenarios
+        # must see the same transcript a real run produces (no-op outside a step).
+        record_event({"t": "llm_request", "role": role, "chain": ["scripted"],
+                      "messages": messages})
         for i, rule in enumerate(self._rules):
             if rule.role is not None and rule.role != role:
                 continue
@@ -66,6 +72,9 @@ class ScriptedLlm:
             }
             self.calls.append(record)
             self._trace("llm", **record)
+            record_event({"t": "llm_response", "model": "scripted", "content": content,
+                          "prompt_tokens": 1, "completion_tokens": 1, "cost_usd": 0.0,
+                          "fallback_from": []})
             return LlmResult(
                 content=content, model="scripted", prompt_tokens=1,
                 completion_tokens=1, cost_usd=0.0,

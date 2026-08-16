@@ -25,13 +25,24 @@ _CONTENT_STEP_TYPES = ("work", "sprint", "rework")
 
 @dataclass(frozen=True)
 class StepMetric:
-    """One row of `team_steps`, reduced to what a benchmark compares."""
+    """One row of `team_steps`, reduced to what a benchmark compares.
+
+    The `llm_calls`/`prompt_tokens`/`completion_tokens` fields (v80 P5) come from the
+    step's transcript files, not the store — zero when no transcript exists (recorder
+    off / pre-v80 task). The store's `cost_usd` stays the accounting source of truth;
+    transcript usage only decomposes it. Deep-tier transcripts carry one AGGREGATE
+    `llm_response` per loop, so `llm_calls` is per-attempt granularity there.
+    """
 
     seq: int
     step_type: str
     status: str
     cost_usd: float
     seconds: float | None
+    step_id: str = ""
+    llm_calls: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
 
 @dataclass(frozen=True)
@@ -75,8 +86,38 @@ def _span(start: str | None, end: str | None) -> float | None:
     return (b - a).total_seconds()
 
 
-def load_task_metric(db_path: Path | str, task_id: str) -> TaskMetric | None:
-    """Return measurements for `task_id`, or None when the task is not in this store."""
+def _step_transcript_usage(data_dir: Path, task_id: str, step_id: str) -> dict:
+    """Summed LLM usage over ALL of a step's attempt transcripts (a retried step has
+    one file per attempt; the store's `cost_usd` is likewise cumulative). Empty dict
+    when no transcript parses — best-effort, never raises into the metric load."""
+    from my_crew.runtime.step_recorder import transcripts_dir
+    from my_crew.runtime.transcript_evidence import summarize_transcript_usage
+
+    totals = {"llm_calls": 0, "prompt_tokens": 0, "completion_tokens": 0}
+    try:
+        files = sorted(transcripts_dir(data_dir, task_id).glob(f"{step_id}-*.jsonl"))
+    except (ValueError, OSError):
+        return {}
+    found = False
+    for path in files:
+        usage = summarize_transcript_usage(path)
+        if usage is None:
+            continue
+        found = True
+        for key in totals:
+            totals[key] += int(usage.get(key) or 0)
+    return totals if found else {}
+
+
+def load_task_metric(
+    db_path: Path | str, task_id: str, *, data_dir: Path | None = None
+) -> TaskMetric | None:
+    """Return measurements for `task_id`, or None when the task is not in this store.
+
+    `data_dir` (v80 P5, optional): when given, each step also carries LLM usage
+    decomposed from its attempt transcripts. Omitted ⇒ store-only metrics, exactly
+    the pre-v80 behavior.
+    """
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
@@ -87,23 +128,34 @@ def load_task_metric(db_path: Path | str, task_id: str) -> TaskMetric | None:
         if task is None:
             return None
         rows = conn.execute(
-            "SELECT seq, step_type, status, cost_usd, spawned_at, last_seen "
+            "SELECT seq, step_id, step_type, status, cost_usd, spawned_at, last_seen "
             "FROM team_steps WHERE task_id = ? ORDER BY seq",
             (task_id,),
         ).fetchall()
     finally:
         conn.close()
 
-    steps = [
-        StepMetric(
-            seq=int(r["seq"]),
-            step_type=str(r["step_type"] or ""),
-            status=str(r["status"] or ""),
-            cost_usd=float(r["cost_usd"] or 0.0),
-            seconds=_span(r["spawned_at"], r["last_seen"]),
+    steps = []
+    for r in rows:
+        step_id = str(r["step_id"] or "")
+        usage = (
+            _step_transcript_usage(data_dir, task_id, step_id)
+            if data_dir is not None and step_id
+            else {}
         )
-        for r in rows
-    ]
+        steps.append(
+            StepMetric(
+                seq=int(r["seq"]),
+                step_type=str(r["step_type"] or ""),
+                status=str(r["status"] or ""),
+                cost_usd=float(r["cost_usd"] or 0.0),
+                seconds=_span(r["spawned_at"], r["last_seen"]),
+                step_id=step_id,
+                llm_calls=int(usage.get("llm_calls") or 0),
+                prompt_tokens=int(usage.get("prompt_tokens") or 0),
+                completion_tokens=int(usage.get("completion_tokens") or 0),
+            )
+        )
 
     # The task ends at the LATEST `last_seen`, which is not the highest `seq`: a review
     # row is minted when its work row is dispatched, so on a fanned-out team task the

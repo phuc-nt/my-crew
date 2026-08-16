@@ -24,6 +24,7 @@ from my_crew.config.settings import OPENROUTER_BASE_URL, Settings
 from my_crew.llm.budget_tracker import BudgetTracker
 from my_crew.llm.cost import extract_usage
 from my_crew.llm.fallback_policy import ProviderCallError, should_try_next_model
+from my_crew.runtime.step_recorder import record_event
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +162,10 @@ class LlmClient:
                 list(chain), self._settings.openrouter_model,
             )
         fallback_from: list[str] = []
+        # Step transcript (v80): verbatim request messages — no-op outside a step context.
+        record_event({
+            "t": "llm_request", "role": role, "chain": list(chain), "messages": messages,
+        })
 
         for i, model_name in enumerate(chain):
             self._budget.check_allowed()  # supreme: re-checked before every attempt
@@ -192,6 +197,12 @@ class LlmClient:
                     "FALLBACK: completion served by %r after %s failed",
                     model_name, fallback_from,
                 )
+            record_event({
+                "t": "llm_response", "model": model_name, "content": content,
+                "prompt_tokens": usage.prompt_tokens,
+                "completion_tokens": usage.completion_tokens,
+                "cost_usd": usage.cost_usd, "fallback_from": list(fallback_from),
+            })
             return LlmResult(
                 content=content,
                 model=model_name,
