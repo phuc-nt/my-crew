@@ -43,8 +43,9 @@ from my_crew.runtime.collect_prefetch import NO_SEARCH_CAPABILITY
 logger = logging.getLogger(__name__)
 
 #: Hard ceilings for one sprint step. `MAX_REVISE_ROUNDS` bounds LLM calls at
-#: 1 draft + 2 revises = 3; the search cap covers a 5-entity brief (5 entity queries
-#: + 1 overview) plus one targeted round for whatever came back thin.
+#: 1 draft + 2 revises = 3 regardless of how many searches the budget allows; the
+#: flat query caps below apply when the brief enumerates nothing (see
+#: `sprint_query_budget` for the scaled form an entity list buys).
 MAX_REVISE_ROUNDS = 2
 MAX_TOTAL_QUERIES = 8
 #: Queries issued before the draft. Kept under the total so a revise round always has
@@ -54,6 +55,33 @@ MAX_TOTAL_QUERIES = 8
 #: modules sit side by side and cap different things — a collect step's title-derived
 #: fan-out vs a sprint's per-entity round.
 MAX_SPRINT_PREFETCH_QUERIES = 6
+#: Ceilings the SCALED budget can never exceed, however long the enumeration: they
+#: are what keeps the CEO's per-task cost cap decidable when a brief lists 30 items.
+SCALED_PREFETCH_CAP = 12
+SCALED_TOTAL_CAP = 16
+#: Longest goal (in words) still worth sending verbatim as the overview query. Live
+#: task 647ee49de19d is why: the provider rejected the raw-goal query with HTTP 422,
+#: so a long overview can only come back as a failure sentinel — buying no data and
+#: putting a spurious source-error line into the THIẾU note of a fully-covered report.
+_MAX_OVERVIEW_WORDS = 12
+
+
+def sprint_query_budget(entity_count: int) -> tuple[int, int]:
+    """(prefetch cap, total cap) for a brief enumerating `entity_count` subjects.
+
+    The old budget was flat — 6 prefetch slots whether the brief listed 2 subjects or
+    9 — so a 9-subject brief silently dropped a third of its subjects before the
+    first draft ever ran. Scaled: every subject keeps its own prefetch query plus the
+    overview, and the targeted-round allowance grows with the list (at least 2, one
+    per subject beyond that) so a wide brief can still re-search what came back thin.
+
+    No enumeration means no per-entity fan-out to pay for, so the flat legacy caps
+    apply unchanged — an un-enumerated brief spends exactly what it spent before.
+    """
+    if entity_count <= 0:
+        return MAX_SPRINT_PREFETCH_QUERIES, MAX_TOTAL_QUERIES
+    prefetch = min(entity_count + 1, SCALED_PREFETCH_CAP)
+    return prefetch, min(prefetch + max(2, entity_count), SCALED_TOTAL_CAP)
 
 #: Sentinels `collect_prefetch` writes when a query returned nothing usable. Their
 #: presence in the bundle is a COVERAGE fact (the source failed / has no public data),
@@ -89,8 +117,12 @@ def entity_queries(goal: str, acceptance: str = "") -> list[str]:
     topic = _topic_phrase(goal, entities)
     queries = [f"{topic} {e}".strip() for e in entities]
     # The overview query goes LAST: per-entity results are the load-bearing ones, and
-    # the total cap must never cost an entity its own search.
-    return [*queries, goal][:MAX_SPRINT_PREFETCH_QUERIES]
+    # the total cap must never cost an entity its own search. It is skipped entirely
+    # when the goal is too long to be a search query (see `_MAX_OVERVIEW_WORDS`).
+    if len(goal.split()) <= _MAX_OVERVIEW_WORDS:
+        queries.append(goal)
+    prefetch_cap, _total = sprint_query_budget(len(entities))
+    return queries[:prefetch_cap]
 
 
 def resolve_entities(goal: str, acceptance: str = "") -> list[str]:
@@ -104,16 +136,16 @@ def resolve_entities(goal: str, acceptance: str = "") -> list[str]:
     permanent coverage gaps no draft could ever close, ending in a THIẾU note that told
     the CEO the report was missing data it actually contained.
     """
-    entities = listed_entities(goal)
+    entities = listed_entities(goal, prose=True)
     if entities:
         return entities
     text = (acceptance or "").strip()
     if not text or "\n" in text:
         return []
-    return listed_entities(text)
+    return listed_entities(text, prose=True)
 
 
-def listed_entities(text: str) -> list[str]:
+def listed_entities(text: str, *, prose: bool = False) -> list[str]:
     """The enumeration in `text`, as a list of entity names.
 
     A PARENTHESISED list wins over a colon-led one whenever both are present. The two
@@ -129,13 +161,22 @@ def listed_entities(text: str) -> list[str]:
     Same item-shape rule as `count_enumerated_entities` (which returns only the count);
     this returns the items themselves because sprint mode needs to search for each
     one and later check each one appears in the draft.
+
+    `prose=True` adds a LAST-RESORT branch for lists written in running prose — "của
+    Notion, Figma, Obsidian, Canva và Google Workspace theo tháng" — where neither
+    punctuation anchor exists. It is opt-in because this function is also imported by
+    the intake router and the team decomposer, whose fan-out thresholds were frozen
+    at the v78 acceptance: only the sprint's own resolver may see the prose branch.
     """
     paren = _longest_enumeration(re.finditer(r"\(([^)\n]+)\)", text or ""))
     if paren:
         return paren
-    return _longest_enumeration(
+    colon = _longest_enumeration(
         re.finditer(r":\s*([^.\n:?!]+)", text or ""), stop_at_attributes=True
     )
+    if colon or not prose:
+        return colon
+    return _prose_enumeration(text or "")
 
 
 def _longest_enumeration(matches: Any, *, stop_at_attributes: bool = False) -> list[str]:
@@ -178,6 +219,88 @@ def _before_attribute_lead_in(text: str) -> str:
     return text
 
 
+#: Punctuation stripped off the edges of a prose item's words before judging case.
+_EDGE_PUNCT = " .;–-—\"'“”‘’"
+
+
+def _prose_enumeration(text: str) -> list[str]:
+    """A comma+`và`/`hoặc` list of capitalised names inside running prose, else [].
+
+    This is the shape the C3 benchmark brief used — the subjects follow a preposition
+    ("… của Notion, Figma, Obsidian, Canva và Google Workspace theo tháng") with no
+    colon or parenthesis anywhere near them, so both punctuation branches return []
+    and the sprint used to degrade to one kitchen-sink query.
+
+    Capitalisation is the discriminator that keeps attribute runs out: Vietnamese
+    attributes are lowercase ("giá, tính năng và hỗ trợ"), names are not. The edge
+    items may carry the surrounding sentence — the first is trimmed to its TRAILING
+    capitalised run ("của Notion" → "Notion"), the last to its LEADING run ("Google
+    Workspace theo tháng" → "Google Workspace"). There is deliberately no pre-cut at
+    attribute lead-ins here: real briefs put the attribute clause on either side of
+    the list ("theo tháng hiện nay của Notion, …"), so cutting at the first lead-in
+    would destroy exactly the list this branch exists to find.
+    """
+    best: list[str] = []
+    best_floor = 2
+    for segment in re.split(r"[.\n:;?!()]", text):
+        if "," not in segment:
+            continue
+        # A closing connector is strong evidence of a deliberate list, so two items
+        # suffice. Without one ("… của các công cụ Notion, Figma, Obsidian, Canva,
+        # Google Workspace cho nhóm nội dung" — live task 847cefe9b088, an intake
+        # rephrase that dropped the "và") the commas could be splicing clauses, so
+        # three capitalised items are required before the run counts as a list.
+        floor = 2 if re.search(r"\b(?:và|hoặc)\b", segment) else 3
+        parts = [
+            part
+            for chunk in segment.split(",")
+            for part in re.split(r"\s+(?:và|hoặc)\s+", chunk)
+        ]
+        items = _proper_noun_items(parts)
+        if len(items) >= floor and len(items) > len(best):
+            best, best_floor = items, floor
+    return best if len(best) >= best_floor else []
+
+
+def _proper_noun_items(parts: list[str]) -> list[str]:
+    """`parts` reduced to capitalised names, or [] when they are not a name list.
+
+    Leading parts with no trailing capitalised run are the preceding clause and are
+    skipped; a lowercase run in the MIDDLE means the commas are joining clauses, not
+    names, and rejects the whole run — keeping the survivors would invent search
+    subjects from half a sentence.
+    """
+    items: list[str] = []
+    for index, part in enumerate(parts):
+        words = part.split()
+        if not items:
+            j = len(words)
+            while j and _capitalised_name_word(words[j - 1]):
+                j -= 1
+            words = words[j:]
+            if not words:
+                continue
+        elif index == len(parts) - 1:
+            j = 0
+            while j < len(words) and _capitalised_name_word(words[j]):
+                j += 1
+            words = words[:j]
+            if not words:
+                continue
+        elif not all(_capitalised_name_word(w) for w in words):
+            return []
+        if len(words) > 7 or not words[0].strip(_EDGE_PUNCT)[:1].isupper():
+            return []
+        items.append(" ".join(w.strip(_EDGE_PUNCT) for w in words))
+    return items
+
+
+def _capitalised_name_word(word: str) -> bool:
+    """True for a word that can sit inside a proper name ("Google", "365", "MP3")."""
+    bare = word.strip(_EDGE_PUNCT + ",():")
+    return bool(bare) and (bare[:1].isupper() or bare[:1].isdigit())
+
+
 #: Words that describe the ASSIGNMENT rather than its subject. A search engine is not
 #: being asked to research the act of researching, so these are stripped from the topic:
 #: leaving them in spends the phrase's limited length on the wrong half of the goal.
@@ -188,8 +311,21 @@ def _before_attribute_lead_in(text: str) -> str:
 _TASK_VERBS = (
     "nghiên", "cứu", "so", "sánh", "khảo", "sát", "tổng", "hợp", "tra", "liệt", "kê",
     "tìm", "hiểu", "rà", "soát", "đánh", "phân", "tích", "báo", "cáo", "lập",
+    "tóm", "tắt", "viết", "soạn",
     "research", "survey", "compare", "compile", "summarise", "summarize", "list",
-    "review", "analyse", "analyze", "report",
+    "review", "analyse", "analyze", "report", "write",
+)
+
+#: Words that only describe the deliverable's FORM ("bản tóm tắt ngắn", "bài viết
+#: nhanh") — with the task verbs they make up the head a brief may open with before
+#: naming its subject. Live task 8251ebc8c8c0 is why they must be consumed: the
+#: intake rephrased the C3 brief to "Tóm tắt ngắn về chi phí …", the lead-in break
+#: fired right after the head, and all five entity queries became "Tóm tắt ngắn
+#: <tên>" — summary-request phrases with no costing word, so every result came back
+#: without a single price and the self-check (correctly) refused the draft.
+_HEAD_DESCRIPTORS = (
+    "bản", "bài", "ngắn", "gọn", "nhanh",
+    "brief", "short", "quick", "concise", "summary", "overview",
 )
 
 #: Where the SUBJECT of a goal stops and its per-entity ATTRIBUTES begin. Everything
@@ -218,20 +354,33 @@ def _topic_phrase(goal: str, entities: list[str]) -> str:
     """
     entity_words = {w.lower().strip(",.():;") for e in entities for w in e.split()}
     words: list[str] = []
+    # The leading deliverable head ("Nghiên cứu so sánh", "Tóm tắt ngắn") is consumed
+    # DURING the walk, not stripped afterwards, because the lead-in break must know
+    # whether a subject word has appeared yet. "Tóm tắt ngắn VỀ chi phí …" — that
+    # `về` introduces the SUBJECT, and breaking there hands every query a head with
+    # no noun in it. Only a later run of task verbs is load-bearing vocabulary
+    # ("bảng so sánh" as the deliverable) and is kept.
+    head_stripped = False
+    head_done = False
     for raw in goal.split():
         word = raw.strip(",.():;")
-        # `và`/`and` are list GLUE, not topic words — with the entities stripped out
-        # they would otherwise survive into every query ("So sánh 3 công cụ: và Notion").
-        if not word or word.lower() in entity_words or word.lower() in ("và", "and"):
+        # `và`/`hoặc`/`and`/`or` are list GLUE, not topic words — with the entities
+        # stripped out they would otherwise survive into every query ("So sánh 3 công
+        # cụ: và Notion"). `hoặc` joined the set with the prose branch, which splits
+        # its lists on it exactly as on `và`.
+        if not word or word.lower() in entity_words or word.lower() in ("và", "hoặc", "and", "or"):
             continue
-        if words and word.lower() in _ATTRIBUTE_LEAD_INS:
+        lower = word.lower()
+        if not head_done:
+            if lower in _TASK_VERBS or lower in _HEAD_DESCRIPTORS:
+                head_stripped = True
+                continue
+            head_done = True
+            if head_stripped and lower in _ATTRIBUTE_LEAD_INS:
+                continue  # the lead-in right after the head introduces the subject
+        elif words and lower in _ATTRIBUTE_LEAD_INS:
             break  # the subject ended; the rest is what to report ABOUT it
         words.append(word)
-
-    # Only a LEADING run of task verbs is dropped. A later one is load-bearing vocabulary
-    # ("bảng so sánh" as the deliverable), and stripping it mid-phrase would leave a hole.
-    while words and words[0].lower().strip(",.():;") in _TASK_VERBS:
-        words.pop(0)
     # A bare quantifier ("5 dịch vụ …") counts the very entities the query already names,
     # so it only crowds the phrase out — dropped wherever it sits, not just at the head.
     # A preposition immediately governing it ("của 5 …") goes too: once the number is
@@ -250,12 +399,83 @@ def _topic_phrase(goal: str, entities: list[str]) -> str:
 _QUANTIFIER_GOVERNORS = ("của", "cho", "ở", "tại", "trong", "of", "for", "among")
 
 
+def _attribute_tail(goal: str) -> str:
+    """The goal's attribute clause — everything after the FIRST lead-in that follows
+    at least one subject word. The mirror of `_before_attribute_lead_in`: that helper
+    keeps the subjects, this one keeps what the CEO asked to know ABOUT them."""
+    earliest: int | None = None
+    tail = ""
+    for lead in _ATTRIBUTE_LEAD_INS:
+        m = re.search(
+            rf"\S\s+\b{re.escape(lead)}\b\s+(\S.*)$", goal, flags=re.IGNORECASE | re.DOTALL
+        )
+        if m and (earliest is None or m.start(1) < earliest):
+            earliest = m.start(1)
+            tail = m.group(1)
+    return tail
+
+
+def attribute_angles(goal: str, acceptance: str, entities: list[str]) -> list[str]:
+    """Phrasings a targeted retry can pair with a gap, in priority order.
+
+    The C3 benchmark's second stacked defect: the revise round's query was
+    byte-for-byte the prefetch query whose thin results were ALREADY in the bundle —
+    a guaranteed re-buy of the same answer. The goal's attribute clause and the
+    acceptance lines carry the CEO's own vocabulary for what is being asked about
+    each subject ("giá tháng", "gói miễn phí đủ dùng cho nhóm 5 người"), so retries
+    draw their phrasing from there instead. Each phrase goes through `_topic_phrase`
+    so task verbs, quantifiers and dangling tails are held to the same standard as
+    the prefetch queries.
+    """
+    sources = list(re.split(r"[,;.]", _attribute_tail(goal)))
+    sources += [line.strip().lstrip("-•* \t") for line in (acceptance or "").splitlines()]
+    angles: list[str] = []
+    seen: set[str] = set()
+    for raw in sources:
+        phrase = _topic_phrase(raw.strip(), entities)
+        key = phrase.lower()
+        if len(phrase.split()) >= 2 and key not in seen:
+            seen.add(key)
+            angles.append(phrase)
+    return angles
+
+
+def _fresh_gap_query(
+    gap: str, topic: str, angles: list[str], rotation: int, asked: set[str]
+) -> str | None:
+    """The first phrasing for `gap` not yet sent to a source, else None.
+
+    Candidates in order: the gap paired with each attribute angle — starting at
+    `rotation` so a second doom-guard round leads with a DIFFERENT angle than the
+    round that just came back thin — then the prefetch's own topic+gap form, then the
+    bare gap. `asked` spans the prefetch and every earlier round: a query in it has
+    its answer in the bundle already, so re-sending it buys nothing.
+    """
+    candidates = [f"{gap} {angles[(rotation + i) % len(angles)]}" for i in range(len(angles))]
+    candidates += [f"{topic} {gap}".strip(), gap]
+    for candidate in candidates:
+        if candidate.lower() not in asked:
+            return candidate
+    return None
+
+
 #: Words that cannot END a topic phrase: each one governs the word after it, so cutting
 #: the phrase here strands it ("… tại Việt" for Việt Nam, "… của 5 dịch" for dịch vụ).
 _DANGLING_TAIL_WORDS = (
     "tại", "ở", "của", "cho", "trong", "trên", "với", "và", "các", "những", "một",
     "dịch", "công", "nền", "sản", "thương", "hệ", "ứng", "phần", "gói", "bản",
     "in", "at", "of", "for", "the", "a", "an", "and", "on", "with",
+)
+
+#: The subset of governors whose governed phrase routinely runs LONGER than one word:
+#: prepositions take a full noun phrase ("tại Việt Nam", "của nhóm nhỏ") and classifiers
+#: like "gói"/"bản" name a variant that may span several words ("gói cá nhân"). Compound
+#: first-syllables ("dịch", "công", …) are deliberately NOT here — their head is exactly
+#: one word away, which the one-word grace in `_trimmed_to_whole_phrase` already covers.
+_PHRASE_GOVERNORS = (
+    "tại", "ở", "của", "cho", "trong", "trên", "với",
+    "gói", "bản", "các", "những", "một",
+    "in", "at", "of", "for", "on", "with",
 )
 
 #: How many words a topic phrase may carry. Six is enough to name a subject
@@ -295,6 +515,14 @@ def _trimmed_to_whole_phrase(words: list[str]) -> list[str]:
     kept = words[:_MAX_TOPIC_WORDS]
     if _governs_next(kept[-1], words[_MAX_TOPIC_WORDS]):
         kept.append(words[_MAX_TOPIC_WORDS])
+    elif len(kept) >= 2 and kept[-2].strip(",.():;").lower() in _PHRASE_GOVERNORS:
+        # "… gói | cá nhân": the governed phrase runs PAST the cut, and the boundary
+        # pair itself looks clean to `_governs_next` ("cá" is no known governor), so
+        # only the governor one step back betrays the half-shipped phrase. Live task
+        # 8251ebc8c8c0 hit this as "chi phí hàng tháng gói cá <tên>". Dropping the
+        # half (the dangler sweep below then takes the governor too) beats guessing
+        # where the phrase ends.
+        kept.pop()
     while kept and kept[-1].lower().strip(",.():;") in _DANGLING_TAIL_WORDS:
         kept.pop()
     return kept
@@ -521,6 +749,11 @@ def build_sprint_work(
 
         _beat("sprint_prefetch")
         queries = entity_queries(goal, acceptance) if needs_web else []
+        _prefetch_cap, total_queries_cap = sprint_query_budget(len(entities))
+        angles = attribute_angles(goal, acceptance, entities) if needs_web else []
+        # Every query ever sent, prefetch included: its answer — thin or not — is in
+        # the bundle, so no later round may spend budget re-sending the same string.
+        asked = {q.lower() for q in queries}
         bundle = ""
         used_queries = 0
         if queries:
@@ -550,11 +783,25 @@ def build_sprint_work(
                 # wall and a revise call would only ask the model to invent the gap.
                 logger.info("sprint: no search capability — reporting %d gap(s)", len(gaps))
                 break
-            if used_queries >= MAX_TOTAL_QUERIES:
+            if used_queries >= total_queries_cap:
                 logger.info("sprint: query budget spent with %d gap(s) open", len(gaps))
                 break
-            budget = MAX_TOTAL_QUERIES - used_queries
-            extra_queries = [f"{_topic_phrase(goal, entities)} {g}".strip() for g in gaps][:budget]
+            budget = total_queries_cap - used_queries
+            topic = _topic_phrase(goal, entities)
+            extra_queries: list[str] = []
+            for g in gaps:
+                if len(extra_queries) >= budget:
+                    break
+                fresh = _fresh_gap_query(g, topic, angles, round_no - 1, asked)
+                if fresh is None:
+                    continue
+                asked.add(fresh.lower())
+                extra_queries.append(fresh)
+            if not extra_queries:
+                # Every phrasing for every open gap has been sent already — another
+                # round would re-buy answers that are in the bundle. Stop honest.
+                logger.info("sprint: no unasked query left for %d gap(s)", len(gaps))
+                break
             try:
                 extra = run_prefetch(loaded, settings, extra_queries)
             except Exception:  # noqa: BLE001

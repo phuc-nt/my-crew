@@ -119,6 +119,84 @@ def test_a_parenthetical_aside_is_not_mistaken_for_an_entity_list():
     ]
 
 
+def test_a_prose_enumeration_after_a_preposition_is_recognised_when_asked_for():
+    """The v78 C3 brief lists its five tools after "của" — no colon before the names,
+    no parentheses. Without the prose branch the resolver returned [], the sprint ran
+    ONE kitchen-sink query, saw no coverage gaps, and lost the blind judging 9.5 vs
+    24.5 to the team pipeline on the only pair where that happened."""
+    goal = (
+        "Tìm giá gói cá nhân/nhóm nhỏ (hoặc giá cho 5 người) của Notion, Figma, "
+        "Obsidian, Canva và Google Workspace theo tháng; xác định công cụ nào đang "
+        "có khuyến mãi hoặc gói miễn phí đủ dùng cho nhóm 5 người."
+    )
+    assert listed_entities(goal, prose=True) == [
+        "Notion", "Figma", "Obsidian", "Canva", "Google Workspace",
+    ]
+
+
+def test_the_prose_branch_is_opt_in_so_router_thresholds_stay_frozen():
+    """`listed_entities` is also imported by the intake router and the team
+    decomposer, whose fan-out thresholds were frozen at the v78 acceptance. Only the
+    sprint's own resolver opts into prose recognition; the default must keep
+    returning [] for prose lists or routing behavior silently shifts."""
+    goal = "Tìm giá của Notion, Figma, Obsidian, Canva và Google Workspace theo tháng"
+    assert listed_entities(goal) == []
+    assert listed_entities(goal, prose=True) == [
+        "Notion", "Figma", "Obsidian", "Canva", "Google Workspace",
+    ]
+
+
+def test_a_prose_list_whose_attributes_come_before_the_subjects_still_parses():
+    """The intake rewrites briefs, and its rewrite of the same C3 brief put the
+    attribute clause BEFORE the list — "giá ... theo tháng hiện nay của Notion, ...".
+    So the prose parser must not pre-cut the text at attribute lead-ins the way the
+    colon branch does; it trims non-name words off the edge items instead."""
+    goal = (
+        "Tóm tắt ngắn về chi phí công cụ làm việc cho nhóm nội dung: tra cứu giá gói "
+        "cá nhân hoặc gói nhóm nhỏ theo tháng hiện nay của Notion, Figma, Obsidian, "
+        "Canva và Google Workspace; xác định công cụ nào đang có giảm giá."
+    )
+    assert listed_entities(goal, prose=True) == [
+        "Notion", "Figma", "Obsidian", "Canva", "Google Workspace",
+    ]
+
+
+def test_a_prose_list_without_a_connector_still_counts_at_three_names():
+    """Live task 847cefe9b088: the intake's second rephrase of the same brief dropped
+    the "và" entirely — "của các công cụ Notion, Figma, Obsidian, Canva, Google
+    Workspace cho nhóm nội dung" — and the connector requirement sent the sprint back
+    to one kitchen-sink query. Three capitalised items are enough evidence of a list
+    on their own; the connector only lowers that bar to two."""
+    goal = (
+        "Tóm tắt ngắn chi phí hiện nay của các công cụ Notion, Figma, Obsidian, "
+        "Canva, Google Workspace cho nhóm nội dung"
+    )
+    assert listed_entities(goal, prose=True) == [
+        "Notion", "Figma", "Obsidian", "Canva", "Google Workspace",
+    ]
+
+
+def test_a_two_name_comma_splice_needs_a_connector_to_be_a_list():
+    """Without "và"/"hoặc", two capitalised items are as likely a comma splice joining
+    clauses ("Notion, Figma là hai công cụ…") as a list — the floor stays at three."""
+    assert listed_entities(
+        "Notion, Figma là hai công cụ phổ biến trong nhóm nhỏ", prose=True
+    ) == []
+
+
+def test_a_lowercase_attribute_run_is_never_mistaken_for_a_prose_entity_list():
+    """Vietnamese attributes are lowercase; capitalization is the discriminator that
+    keeps "giá, tính năng và hỗ trợ" from becoming three fake search subjects."""
+    assert listed_entities("Đánh giá công cụ theo giá, tính năng và hỗ trợ", prose=True) == []
+
+
+def test_a_lowercase_middle_item_rejects_the_prose_run_instead_of_being_skipped():
+    """Edge items may carry surrounding prose ("của Notion", "Canva theo tháng") but a
+    lowercase run in the MIDDLE means the commas are joining clauses, not names —
+    keeping the survivors would invent subjects from half a sentence."""
+    assert listed_entities("So sánh Notion, giá hợp lý và Figma nói chung", prose=True) == []
+
+
 def test_entity_queries_gives_each_entity_its_own_topic_prefixed_query():
     """The topic names the SUBJECT ("giá dịch vụ"), not the assignment: "So sánh" is
     what the CEO asked us to do, and a search engine has nothing to say about that."""
@@ -169,13 +247,71 @@ def test_a_task_verb_is_only_stripped_from_the_head_of_the_topic():
     )
 
 
+def test_a_deliverable_head_goal_yields_the_subject_not_the_deliverable():
+    """Regression from live task 8251ebc8c8c0. Intake rephrases briefs into
+    deliverable-head goals ("Tóm tắt ngắn về chi phí…"); the topic used to break at
+    "về" with only head words collected, producing five queries of the form
+    "Tóm tắt ngắn <tên công cụ>" — no price keyword, generic results, drafts that
+    invented numbers, and a correct self-check refusal that stalled the task. The
+    head ("Tóm tắt ngắn") plus its lead-in must be consumed so the topic starts at
+    the actual subject; and the word-limit cut must not strand "gói cá" out of
+    "gói cá nhân" — backing the half-shipped phrase off entirely beats keeping it."""
+    goal = (
+        "Tóm tắt ngắn về chi phí hàng tháng gói cá nhân hoặc gói nhóm nhỏ hiện nay "
+        "của Notion, Figma, Obsidian, Canva và Google Workspace; chỉ ra công cụ nào "
+        "đang có chương trình giảm giá hoặc gói miễn phí đủ dùng cho nhóm khoảng 5 "
+        "người; đưa nhận định ngắn giữa việc đổi công cụ hay giữ nguyên Notion + Figma"
+    )
+    tools = ("Notion", "Figma", "Obsidian", "Canva", "Google Workspace")
+    queries = entity_queries(goal)
+    assert queries == [f"chi phí hàng tháng {tool}" for tool in tools]
+
+
 def test_entity_queries_falls_back_to_the_goal_when_nothing_is_enumerated():
     assert entity_queries("tổng hợp tin tức AI tuần này") == ["tổng hợp tin tức AI tuần này"]
 
 
-def test_entity_queries_never_exceeds_the_prefetch_cap():
-    goal = "Khảo sát: A, B, C, D, E, F, G, H, I"
-    assert len(entity_queries(goal)) == mod.MAX_SPRINT_PREFETCH_QUERIES
+def test_entity_queries_scale_with_the_list_but_never_beyond_the_hard_cap():
+    """The v78 budget was flat — 6 prefetch slots whether the brief listed 2 subjects
+    or 9, so a 9-subject brief silently dropped a third of its subjects before the
+    first draft. The budget now follows the entity count up to a hard ceiling."""
+    nine = "Khảo sát: A1, B2, C3, D4, E5, F6, G7, H8, I9"
+    assert len(entity_queries(nine)) == 10, "9 entity queries + 1 overview"
+    fifteen = "Khảo sát: " + ", ".join(f"Xx{i}" for i in range(15))
+    assert len(entity_queries(fifteen)) == mod.SCALED_PREFETCH_CAP
+
+
+def test_a_long_goal_never_rides_along_as_the_overview_query():
+    """Live task 647ee49de19d: the raw-goal overview query came back HTTP 422. A goal
+    that long can only return a failure sentinel, which then writes a spurious
+    source-error line into the THIẾU note of a report that actually covered
+    everything — so the overview is skipped, not truncated."""
+    goal = (
+        "Tìm giá gói cá nhân/nhóm nhỏ (hoặc giá cho 5 người) của Notion, Figma, "
+        "Obsidian, Canva và Google Workspace theo tháng; xác định công cụ nào đang "
+        "có khuyến mãi hoặc gói miễn phí đủ dùng cho nhóm 5 người."
+    )
+    queries = entity_queries(goal)
+    assert len(queries) == 5, "one query per tool, no overview"
+    assert goal not in queries
+    assert all(len(q.split()) <= 12 for q in queries)
+
+
+def test_sprint_query_budget_keeps_the_legacy_caps_when_nothing_is_enumerated():
+    """No entity list means no per-entity fan-out to pay for — the flat v77 budget
+    stays exactly as it was so un-enumerated briefs spend nothing new."""
+    assert mod.sprint_query_budget(0) == (
+        mod.MAX_SPRINT_PREFETCH_QUERIES, mod.MAX_TOTAL_QUERIES,
+    )
+
+
+def test_sprint_query_budget_scales_with_the_entity_count():
+    assert mod.sprint_query_budget(5) == (6, 11)
+    assert mod.sprint_query_budget(9) == (10, 16)
+
+
+def test_sprint_query_budget_is_capped_no_matter_how_long_the_list():
+    assert mod.sprint_query_budget(30) == (mod.SCALED_PREFETCH_CAP, mod.SCALED_TOTAL_CAP)
 
 
 # --- coverage check ------------------------------------------------------------------
@@ -276,10 +412,59 @@ def test_a_coverage_gap_triggers_one_targeted_search_and_a_revise(llm):
 
     assert len(fake.calls) == 2
     assert len(seen) == 2
-    assert seen[1] == ["dịch vụ Spotify"], "round 2 targets only the gap"
+    # The prefetch already asked "dịch vụ Spotify" and its results are in the bundle —
+    # re-sending the same string re-buys the same thin answer. With no attribute
+    # clause to angle by, the bare subject is the only query left that is new.
+    assert seen[1] == ["Spotify"], "round 2 targets only the gap, with a NEW query"
     assert "Spotify" in text
     assert "PHẦN THIẾU" not in text
     assert cost == pytest.approx(0.02)
+
+
+def test_a_targeted_query_asks_a_new_angle_instead_of_the_query_that_came_back_thin(llm):
+    """C3's second stacked defect: the round-2 query was byte-for-byte the prefetch
+    query whose results were already in the bundle — a guaranteed re-read of the same
+    wall. When the brief carries an attribute clause, the retry angles by it."""
+    fake = llm(["Chỉ có Notion.", "Notion 10 USD. Obsidian 8 USD."])
+    seen: list[list[str]] = []
+
+    def _prefetch(_loaded, _settings, queries):
+        seen.append(list(queries))
+        return "KẾT QUẢ TÌM KIẾM (truy vấn: x):\ndữ liệu"
+
+    _work(_prefetch)("So sánh 2 công cụ: Notion, Obsidian theo giá tháng", "", None)
+
+    flat = [q.lower() for one_round in seen for q in one_round]
+    assert len(set(flat)) == len(flat), "no query is ever sent twice"
+    assert seen[1] == ["Obsidian giá tháng"]
+    assert len(fake.calls) == 2
+
+
+def test_the_second_round_rotates_to_a_different_angle_for_a_persisting_gap(llm):
+    """Round 1 closed one gap, so the pipeline keeps going — and round 2's query for
+    the still-open gap must lead with the NEXT angle, not re-pair the gap with the
+    phrasing whose thin answer round 1 already merged into the bundle."""
+    fake = llm([
+        "Chỉ có Notion.",
+        "Notion có giá. Obsidian có giá.",
+        "Notion, Obsidian và Logseq đều có giá.",
+    ])
+    seen: list[list[str]] = []
+
+    def _prefetch(_loaded, _settings, queries):
+        seen.append(list(queries))
+        return f"KẾT QUẢ TÌM KIẾM (truy vấn: x):\ndữ liệu mới {len(seen)}"
+
+    _work(_prefetch, acceptance="- Liệt kê gói miễn phí của từng công cụ")(
+        "So sánh 3 công cụ: Notion, Obsidian, Logseq theo giá tháng", "", None,
+    )
+
+    flat = [q.lower() for one_round in seen for q in one_round]
+    assert len(seen) == 3, "prefetch + both revise rounds"
+    assert seen[1] == ["Obsidian giá tháng", "Logseq giá tháng"]
+    assert seen[2] == ["Logseq gói miễn phí của từng công cụ"]
+    assert len(set(flat)) == len(flat), "every round asks something new"
+    assert len(fake.calls) == mod.MAX_REVISE_ROUNDS + 1
 
 
 def test_the_revise_round_carries_the_draft_forward_instead_of_re_briefing(llm):
@@ -442,15 +627,6 @@ def test_a_parenthesised_query_survives_into_the_note_with_its_brackets_intact(l
 
 
 def test_prefetch_failure_still_produces_a_draft(llm):
-    """Fail-open, same contract as the launcher: no search is not no work."""
-    def _boom(*_args):
-        raise RuntimeError("search down")
-
-    fake = llm(["Viết theo hiểu biết sẵn có."])
-    text, _ = _work(_boom)("tổng hợp tin tức AI", "", None)
-
-    assert len(fake.calls) == 1
-    assert text.startswith("Viết theo hiểu biết sẵn có.")
     """Fail-open, same contract as the launcher: no search is not no work."""
     def _boom(*_args):
         raise RuntimeError("search down")

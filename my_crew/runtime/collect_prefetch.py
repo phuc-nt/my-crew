@@ -124,6 +124,21 @@ def prefetch_queries(
     nguồn and dữ liệu-không-tồn-tại this module exists to prevent. With the flag, the
     sentinel lines survive so the caller can report the real reason.
     """
+    from my_crew.runtime.step_recorder import record_event
+
+    bundle = _prefetch_queries(loaded, settings, queries, keep_sentinels=keep_sentinels)
+    # Step transcript (v80): one event per launcher run — this funnel covers both the
+    # native collect launcher AND every sprint prefetch/coverage round. No-op off-context.
+    record_event({
+        "t": "prefetch", "queries": [q.strip() for q in queries if q and q.strip()],
+        "bytes": len(bundle), "kept_sentinels": keep_sentinels,
+    })
+    return bundle
+
+
+def _prefetch_queries(
+    loaded: Any, settings: Any, queries: list[str], *, keep_sentinels: bool,
+) -> str:
     if loaded is None or not getattr(loaded, "web_search", False):
         if keep_sentinels:
             return _no_capability_line("Agent chưa được cấp quyền web_search")

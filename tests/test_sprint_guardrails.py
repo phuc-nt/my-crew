@@ -151,6 +151,16 @@ def test_a_sprint_step_is_bounded_at_three_llm_calls():
     assert sprint_runner.MAX_REVISE_ROUNDS == 2
     assert sprint_runner.MAX_TOTAL_QUERIES == 8
     assert sprint_runner.MAX_SPRINT_PREFETCH_QUERIES < sprint_runner.MAX_TOTAL_QUERIES
+    # The scaled budget an entity list buys is hard-capped too: however long the
+    # enumeration, prefetch and total query counts stay decidable for the cost cap.
+    assert sprint_runner.sprint_query_budget(0) == (
+        sprint_runner.MAX_SPRINT_PREFETCH_QUERIES,
+        sprint_runner.MAX_TOTAL_QUERIES,
+    )
+    assert sprint_runner.sprint_query_budget(30) == (
+        sprint_runner.SCALED_PREFETCH_CAP,
+        sprint_runner.SCALED_TOTAL_CAP,
+    )
 
 
 def test_sprint_cost_sums_every_call_the_pipeline_made(monkeypatch):
