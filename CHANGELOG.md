@@ -3,6 +3,54 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.11.0] — 2026-08-18
+
+Observability and engine sovereignty (v80–v86): every team-step attempt now leaves a
+full transcript that review, the office feed, reflection, and the bench all read from
+— and the react work tier runs on a self-owned thin tool loop that matches the
+LangChain baseline's pass-rate at 3.5× fewer prompt tokens, 1.6× faster wall, with
+exact (not estimated) cost. Verified by a 100%-thin stress across 5 hard live briefs:
+blind judge PASS 10/10 answers, and the one real bug it surfaced (malformed provider
+body killing a step) was fixed and pinned by test before this release.
+
+### Added
+- **Thin tool loop** (v86): self-owned tool-calling loop on the OpenAI SDK replaces
+  LangChain `create_agent` as the react-tier default. Typed snake_case tool specs
+  with a generic fallback so no tool in the map is ever dropped; wire rules for
+  reasoning passback, empty-content, and invented-args (drop + echo); guards for
+  truncated and verbatim-repeated tool batches; cost EXACT from OpenRouter usage
+  extras. `loop_engine: langchain` in the profile keeps the old path as an A/B
+  baseline — no profile migration needed.
+- **Step transcripts + replay** (v80): per-attempt JSONL transcript (secret-scrubbed
+  at write, best-effort — never kills a step), work-order artifact, and a
+  `step-replay` CLI to re-run one step outside the pipeline. Four consumers on the
+  same data: review grades process evidence (tools called, sources opened, usage),
+  the office feed shows live step activity through a hard field allowlist,
+  reflection receives tool names + counts only, and the bench decomposes usage
+  per-step while the ledger stays the accounting source of truth.
+- **Source integrity in review** (v83–v85): transcript evidence carries actual page
+  content, and a source label must trace to a page the agent really opened; sprint
+  opens the official pages between prefetch and draft.
+- **Sprint prose lookup v2 + 4-axis release bench** (v81): prose entity extraction
+  with angle rotation and dedup, query budget scaled to the brief; a release
+  benchmark comparing candidate vs released on pass-rate, wall, cost, and tokens.
+- **Tool-error accounting** (v86): five error classes (guard, invented tool, bad
+  args, repeated batch, truncated batch) counted from transcripts — each tool result
+  at most one class — and surfaced in bench task metrics.
+- **Web UI** (v82): lazy data layer, sprint surfaces on the office UI, SSE cold-tail
+  replay and collapsed repeat rows in the activity feed; assigned-tasks board retired.
+
+### Changed
+- Rework steps get fresh search context, the best draft survives retry exhaustion,
+  and an unreachable reassign degrades to a guided retry instead of dead-ending.
+
+### Fixed
+- A provider returning HTTP 200 with a malformed JSON body no longer kills the step:
+  the parse error is retried with backoff, and on exhaustion advances the model
+  fallback chain like any other provider fault.
+- Review evidence is no longer trimmed to tool-result size, and transcript evidence
+  resolves from the graded assignee's agent jail instead of the top-level path.
+
 ## [0.10.0] — 2026-08-16
 
 Sprint mode and the routing funnel (v76–v79): a one-person brief no longer pays the
