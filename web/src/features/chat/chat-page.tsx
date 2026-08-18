@@ -1,4 +1,4 @@
-// The chat hub: conversation list · thread · (context pane arrives in 2b).
+// The chat hub: conversation list · thread · pending pane.
 //
 // Composition over rewrite — the composer is the SAME `AssignComposer` the office screen
 // uses. Its intent flow (preview → confirm, adjust → confirm-adjust, question → reply)
@@ -11,6 +11,7 @@ import { useLanguage } from '../../i18n/language-context'
 import { AssignComposer } from '../../views/office-unified/assign-composer'
 import { OVERVIEW_ROOM_ID } from './chat-state'
 import { ConversationList } from './conversation-list'
+import { PendingPane } from './pending/pending-pane'
 import {
   ASSISTANT_CONVERSATION_ID,
   buildConversations,
@@ -82,6 +83,10 @@ export function ChatPage() {
           <AssignComposer activeRoom={activeId === OVERVIEW_ROOM_ID ? null : activeId} />
         ) : null}
       </div>
+
+      {/* Fleet-wide, not room-scoped: what blocks an agent needs the CEO's attention
+          whichever conversation happens to be open. */}
+      <PendingPane />
     </div>
   )
 }

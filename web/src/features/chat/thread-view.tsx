@@ -38,19 +38,19 @@ export function ThreadView({ roomId, title, onRead }: Props) {
     if (el) el.scrollTop = el.scrollHeight
   }, [thread.items.length])
 
-  const status = errored
-    ? t('activityFeed.disconnected')
-    : connected
-      ? t('activityFeed.connected')
-      : t('activityFeed.connecting')
+  // Chat's heading is the room title, so the stream state is a dot + short label rather
+  // than the office feed's zone title — reusing that wording here read as a second
+  // section heading floating beside the pending pane.
+  const state = errored ? 'off' : connected ? 'on' : 'wait'
+  const status = t(`chat.stream.${state}` as Parameters<typeof t>[0])
 
   return (
     <section className="chat-thread" aria-label={title}>
       <header className="chat-thread-head">
         {/* The full brief lives here (the rows no longer repeat it), clamped to one line
-                  so a 120-char title cannot eat the thread's height; hover shows it whole. */}
-              <h2 className="chat-thread-title" title={title}>{title}</h2>
-        <span className="chat-thread-status">{status}</span>
+            so a 120-char title cannot eat the thread's height; hover shows it whole. */}
+        <h2 className="chat-thread-title" title={title}>{title}</h2>
+        <span className={`chat-thread-status is-${state}`}>{status}</span>
       </header>
 
       <ul className="chat-thread-log" ref={listRef}>

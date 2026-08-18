@@ -972,10 +972,10 @@ input, textarea, select { font-size: var(--fs-body); }
 .clarify-actions input { flex: 1 1 200px; }
 
 /* ── Chat hub (P2) ────────────────────────────────────────────────────────────
-   Two panes on desktop (list · thread+composer); the right context pane joins in
-   2b. Same full-height posture as the office cockpit: the page never scrolls, each
-   zone scrolls internally, so the composer is always on screen. */
-.chat-hub { display: grid; grid-template-columns: 280px minmax(0, 1fr);
+   Three panes on desktop (list · thread+composer · what is waiting on the CEO). Same
+   full-height posture as the office cockpit: the page never scrolls, each zone scrolls
+   internally, so the composer is always on screen. */
+.chat-hub { display: grid; grid-template-columns: 280px minmax(0, 1fr) 300px;
   gap: var(--space-3); align-items: start; }
 .chat-conversations { min-width: 0; }
 .chat-conversation-list { list-style: none; margin: 0; padding: 0;
@@ -1004,7 +1004,12 @@ input, textarea, select { font-size: var(--fs-body); }
 .chat-thread-head { display: flex; justify-content: space-between;
   align-items: baseline; gap: var(--space-3); }
 .chat-thread-title { font-size: var(--fs-h3); margin: 0; }
-.chat-thread-status { font-size: var(--fs-small); color: var(--color-muted); }
+.chat-thread-status { display: inline-flex; align-items: center; gap: 0.35rem;
+  flex: none; font-size: var(--fs-small); color: var(--color-muted); }
+.chat-thread-status::before { content: ''; width: 0.5rem; height: 0.5rem;
+  border-radius: 50%; background: var(--color-muted); }
+.chat-thread-status.is-on::before { background: var(--color-success, #22a06b); }
+.chat-thread-status.is-off::before { background: var(--color-danger, #d64545); }
 .chat-thread-log { list-style: none; margin: var(--space-2) 0 0; padding: 0;
   display: flex; flex-direction: column; gap: var(--space-2);
   overflow-y: auto; max-height: 70vh; min-height: 320px; }
@@ -1037,6 +1042,35 @@ input, textarea, select { font-size: var(--fs-body); }
   display: flex; flex-direction: column; gap: 0.15rem; }
 .chat-activity { font-size: var(--fs-small); color: var(--color-muted); font-style: italic; }
 
+/* The "waiting on you" column: approvals and agent questions, fleet-wide. */
+.chat-pending { min-width: 0; }
+.chat-pane-title { display: flex; align-items: center; gap: var(--space-2);
+  margin: 0 0 var(--space-2); font-size: var(--fs-small); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-muted); }
+.pending-count { min-width: 1.35rem; padding: 0 0.35rem; border-radius: 999px;
+  background: var(--color-primary); color: var(--color-primary-contrast);
+  font-size: var(--fs-small); text-align: center; letter-spacing: 0; }
+.pending-list { list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: var(--space-2); }
+.pending-card { padding: var(--space-2); border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius); background: var(--color-surface); }
+.pending-card.is-expired { opacity: 0.55; }
+.pending-card-head { display: flex; gap: var(--space-2); margin: 0 0 0.25rem;
+  font-size: var(--fs-small); }
+.pending-agent { font-weight: 600; }
+.pending-kind { color: var(--color-subtle); }
+.pending-reason { margin: 0 0 var(--space-2); overflow-wrap: anywhere; }
+.pending-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.pending-input { flex: 1 1 8rem; min-width: 0; }
+.pending-empty { font-size: var(--fs-small); }
+
+/* Below 1100px the pending column would squeeze the thread; it moves under it and the
+   whole hub becomes one column at 900. */
+@media (max-width: 1100px) {
+  .chat-hub { grid-template-columns: 280px minmax(0, 1fr); }
+  .chat-pending { grid-column: 1 / -1; }
+}
+
 @media (max-width: 900px) {
   .chat-hub { grid-template-columns: minmax(0, 1fr); }
   .chat-conversation-list { flex-direction: row; overflow-x: auto; }
@@ -1053,12 +1087,17 @@ input, textarea, select { font-size: var(--fs-body); }
   .app-shell:has(.chat-hub) .app-main { flex: 1; min-height: 0; }
   .app-shell:has(.chat-hub) .chat-hub { height: 100%; align-items: stretch; }
   .app-shell:has(.chat-hub) .chat-conversations { overflow-y: auto; min-height: 0; }
+  .app-shell:has(.chat-hub) .chat-pending { overflow-y: auto; min-height: 0; }
   .app-shell:has(.chat-hub) .chat-main { min-height: 0; }
   .app-shell:has(.chat-hub) .chat-thread { flex: 1 1 0; min-height: 0; }
   /* min-height:0 is load-bearing: without it the log grows to its content and the
      column scrolls the page instead (same trap documented on .office-unified-feed). */
   .app-shell:has(.chat-hub) .chat-thread-log { flex: 1 1 0; min-height: 0;
-    max-height: none; }
+    max-height: none;
+    /* A short room's few messages sit ABOVE the composer, the way a chat client reads,
+       instead of stranded at the top of a 790px column. Once the log overflows, the
+       flex-end packing has no slack left and normal top-down scrolling resumes. */
+    justify-content: flex-end; }
 }
 
 /* A room the reader never opened has no knowable unread count (last_seq is office-wide),
