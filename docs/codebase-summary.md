@@ -225,7 +225,11 @@
 - **ToolCallingRuntime** (`tool_calling_runtime.py` + `react_loop.py` + `read_only_toolset.py` +
   `community_loop_core.py`, v28): tool-calling loop qua `langchain.agents.create_agent` (v28
   migrate từ `langgraph.prebuilt.create_react_agent`, community-standard; KHÔNG `langchain` full —
-  dùng core LangChain + `langchain-openai` pin). **Swaps CHỈ `run_work`** qua `build_team_task_graph(
+  dùng core LangChain + `langchain-openai` pin). **v86: engine mặc định = thin loop tự chủ**
+  (`thin_tool_loop.py` — native tool calls trên OpenAI SDK, typed snake_case specs, wire rules
+  W1-W6, guard length/repeat, cost exact từ usage extras); LangChain path giữ selectable qua
+  `loop_engine: langchain` cho A/B (bench 260818: thin ngang pass-rate, token rẻ 3.5×, wall 1.6×
+  nhanh hơn — `plans/260818-1053-thin-loop-harness-conventions/reports/`). **Swaps CHỈ `run_work`** qua `build_team_task_graph(
   work_override=)` → perceive/self_check/rework/deliver giữ native = **invariant #1 bằng cấu
   trúc** (deliver ghi artifact nội bộ; team-step KHÔNG egress công ty). **v28 DRY**: `community_loop_core.py`
   tách `record_loop_result` (post-invoke tail: text + `sum_usage_metadata` + `estimate_cost` +
@@ -290,7 +294,8 @@
 
 ### v26: Capture telemetry — unified cost + remember-node extension (2026-07-12)
 - **Telemetry store** (`my_crew/runtime/capture_store.py`): `.data/captures.sqlite3` (WAL+busy_timeout, same pattern as team_task_store). 17-column log per team-step attempt (attempt_id, task_id, step_id, agent_id, engine, status, step_type, review_round, cost_usd, cost_source, input_tokens, output_tokens, started_at, ended_at, duration_ms, error, ts). Hook `run_team_step` captures on step end (best-effort log WARNING, never fail). INTERNAL-only state (không qua ActionGateway).
-- **Unified cost** (`my_crew/llm/model_pricing.py`, `my_crew/runtime/step_telemetry.py`): create_agent + deep_agent (LangChain ChatOpenAI) previously returned cost=None → now estimate cost = Σ tokens × per-model price from `config/model_prices.yaml` (operator-editable, placeholder prices minimax/qwen seeded). native keeps OpenRouter exact cost. Column `cost_source` = exact | estimated. StepTelemetry side-channel collector sums usage_metadata (because run_work 2-tuple contract can't grow).
+- **Unified cost** (`my_crew/llm/model_pricing.py`, `my_crew/runtime/step_telemetry.py`): create_agent + deep_agent (LangChain ChatOpenAI) previously returned cost=None → now estimate cost = Σ tokens × per-model price from `config/model_prices.yaml` (operator-editable, placeholder prices minimax/qwen seeded). native keeps OpenRouter exact cost. Column `cost_source` = exact | estimated. (v86: thin loop
+  của react tier cũng exact — chỉ còn `loop_engine: langchain` và deep_agent phải estimate.) StepTelemetry side-channel collector sums usage_metadata (because run_work 2-tuple contract can't grow).
 - **Remember-node extends team-step**: deliver→remember→END (CostedMemoryExtractor extract facts from result_text → MEMORY.md). Gated on delivered + internal + not-dry-run. LLM cost (kiểm tra, kỹ lưỡng) folded into captured step cost (honest total). New modules: `my_crew/runtime/capture_store.py`, `my_crew/llm/model_pricing.py`, `my_crew/runtime/step_telemetry.py`; extend `my_crew/agent/team_task_graph.py` (build_team_step_remember_node), `my_crew/llm/team_task_memory.py` (CostedMemoryExtractor).
 - **NOT in scope**: git-delta, grading/ROI, knowledge-flywheel, UI.
 
