@@ -102,6 +102,27 @@ class TestExtractor:
         # And the page it came from, so the source LABEL is checkable too.
         assert "spotify.com/vn-vi/premium" in text
 
+    def test_page_content_deep_in_the_head_survives_into_evidence(self, tmp_path):
+        """A figure sitting past the first 500 chars of `content_head` must still reach
+        the reviewer.
+
+        Live run ed30096396ea: the fetch event recorded a 2063-char head whose
+        `65.000 ₫` price sat past position 500, but the rendered evidence line was
+        trimmed with the tool-result constant — the block used 1622 of its 8000-char
+        budget while the one figure the review exists to cross-check was cut. The
+        producers already cap `content_head`; re-trimming here to tool-result size
+        defeats the purpose. Only the global cap should bound page content.
+        """
+        head = ("nav nav nav " * 150) + "Premium Individual 65.000 ₫/tháng"
+        events = [
+            {"t": "fetch", "urls": ["https://www.spotify.com/vn-vi/premium/"],
+             "bytes": 18079, "content_head": head},
+        ]
+        text = extract_review_evidence(
+            _write_transcript(tmp_path, "t1", "s1-v1.jsonl", events), 8000
+        )
+        assert "65.000" in text
+
     def test_fetch_content_absent_degrades_to_metadata_line(self, tmp_path):
         """Old transcripts (and a skipped fetch round) have no `content_head` — they must
         still render, without inventing evidence that the page was read."""

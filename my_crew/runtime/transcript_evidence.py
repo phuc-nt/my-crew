@@ -26,6 +26,11 @@ logger = logging.getLogger(__name__)
 #: Per-item trims — nhiều nguồn cùng lọt vào cap tổng thay vì một result nuốt hết.
 _ARGS_CHARS = 200
 _RESULT_CHARS = 500
+#: Nội dung trang (prefetch/fetch) KHÔNG trim về cỡ tool-result: producer đã cap
+#: `content_head` (~2000), và chính con số cần đối chiếu thường nằm sau mớ nav/header
+#: đầu trang (đo sống: `65.000 ₫` ở vị trí >500 trong head 2063 ký tự). Chỉ chặn
+#: transcript lạ/cũ ghi head quá dài; cap tổng `max_chars` vẫn là trần cuối.
+_CONTENT_CHARS = 4000
 _TRUNCATED_MARK = "\n…[bằng chứng bị cắt theo cap]"
 
 
@@ -171,7 +176,7 @@ def _append_content(lines: list[str], event: dict) -> None:
     """
     content = str(event.get("content_head") or "").strip()
     if content:
-        lines.append(f"  → nội dung: {content[:_RESULT_CHARS]}")
+        lines.append(f"  → nội dung: {content[:_CONTENT_CHARS]}")
 
 
 def extract_review_evidence(path: Path, max_chars: int) -> str | None:
