@@ -9,6 +9,7 @@
 // a handoff after first render.
 import type { Page } from '@playwright/test'
 import type {
+  FleetApprovalItem,
   OfficeMessage,
   RoomArtifactsPayload,
   StepArtifactPayload,
@@ -29,6 +30,8 @@ export interface OfficeApiMockOptions {
   stepTranscript?: StepTranscriptPayload
   /** v82: POST /api/office/assign/preview response (composer sprint/team badge). */
   assignPreview?: Record<string, unknown>
+  /** Rows for the fleet approvals index — drives the shell's nav badge count. */
+  pendingApprovals?: FleetApprovalItem[]
 }
 
 export interface OfficeApiMock {
@@ -68,6 +71,12 @@ export async function mockOfficeApi(
     if (pathname === '/api/agents') return json(agentsFixture)
     if (/^\/api\/agents\/[^/]+\/approvals$/.test(pathname))
       return json({ agent_id: pathname.split('/')[3], pending: [] })
+    // Fleet-wide index behind the shell's approvals badge. Served from `opts.pendingApprovals`
+    // so a spec can assert the badge count; empty by default, matching the per-agent route above.
+    if (pathname === '/api/approvals/pending') {
+      const pending = opts.pendingApprovals ?? []
+      return json({ pending, count: pending.length })
+    }
     if (pathname === '/api/clarify/pending') return json({ questions: [] })
     if (pathname === '/api/team/alerts') return json({ alerts: [] })
     if (pathname === '/api/office/assign/staff') return json(assignStaffFixture)

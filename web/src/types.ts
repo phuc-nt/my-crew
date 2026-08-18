@@ -127,6 +127,17 @@ export interface ApprovalItem {
   action: PendingAction
 }
 
+/** One row of the fleet-wide pending index. `agent_id` is what makes the per-agent
+ *  approve/reject URL buildable from a flat, cross-agent list. */
+export interface FleetApprovalItem extends ApprovalItem {
+  agent_id: string
+}
+
+export interface PendingApprovalsIndex {
+  pending: FleetApprovalItem[]
+  count: number
+}
+
 export interface ApprovalsPayload {
   agent_id: string
   pending: ApprovalItem[]
@@ -251,6 +262,9 @@ export interface Workroom {
   task_count: number
   status: 'dang-chay' | 'ket' | 'xong'
   updated_at: string
+  /** Highest event seq in this room. The unread badge is this minus the last seq the
+   *  reader saw. 0 for a room whose task exists but that has no events yet. */
+  last_seq: number
 }
 
 export interface WorkroomsPayload {

@@ -20,6 +20,14 @@ const vi = {
   'nav.activity': 'Hoạt động',
   'nav.chat': 'Trợ lý',
   'nav.settings': 'Cài đặt',
+  // 5-hub IA. Distinct keys from the legacy `nav.*` labels above: the hubs are wider
+  // than the tabs they absorb ("Duyệt" was only the approval queue; "Công việc" is the
+  // board, outputs, approvals, and schedule), so reusing the old label would mis-name them.
+  'hub.chat': 'Trò chuyện',
+  'hub.office': 'Văn phòng',
+  'hub.work': 'Công việc',
+  'hub.team': 'Đội ngũ',
+  'hub.system': 'Hệ thống',
   'nav.advanced.overview': 'Tổng quan',
   'nav.advanced.timeline': 'Dòng thời gian',
   'nav.advanced.cost': 'Chi phí',
@@ -997,6 +1005,11 @@ const en = {
   'nav.activity': 'Activity',
   'nav.chat': 'Assistant',
   'nav.settings': 'Settings',
+  'hub.chat': 'Chat',
+  'hub.office': 'Office',
+  'hub.work': 'Work',
+  'hub.team': 'Team',
+  'hub.system': 'System',
   'nav.advanced.overview': 'Overview',
   'nav.advanced.timeline': 'Timeline',
   'nav.advanced.cost': 'Cost',

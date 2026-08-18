@@ -1,0 +1,35 @@
+// Query key factory, grouped by domain.
+//
+// Keys are built here and nowhere else so the SSE→invalidate bridge can name the
+// same slice a component subscribed to. An inline key literal in a component would
+// be invisible to the bridge and would silently stop updating on live events.
+export const queryKeys = {
+  agents: {
+    all: ['agents'] as const,
+    list: () => [...queryKeys.agents.all, 'list'] as const,
+    status: (agentId: string) => [...queryKeys.agents.all, 'status', agentId] as const,
+  },
+  approvals: {
+    all: ['approvals'] as const,
+    /** Fleet-wide flat index — the queue shown in both the chat pane and the work hub. */
+    pending: () => [...queryKeys.approvals.all, 'pending'] as const,
+  },
+  office: {
+    all: ['office'] as const,
+    workrooms: () => [...queryKeys.office.all, 'workrooms'] as const,
+    room: (roomId: string) => [...queryKeys.office.all, 'room', roomId] as const,
+  },
+  tasks: {
+    all: ['tasks'] as const,
+    board: () => [...queryKeys.tasks.all, 'board'] as const,
+    detail: (taskId: string) => [...queryKeys.tasks.all, 'detail', taskId] as const,
+  },
+  outputs: {
+    all: ['outputs'] as const,
+    list: () => [...queryKeys.outputs.all, 'list'] as const,
+  },
+  clarify: {
+    all: ['clarify'] as const,
+    pending: () => [...queryKeys.clarify.all, 'pending'] as const,
+  },
+} as const

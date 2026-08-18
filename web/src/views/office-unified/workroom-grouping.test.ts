@@ -5,7 +5,7 @@ import type { Workroom } from '../../types'
 import { countByStatus, filterWorkroomGroups, groupWorkrooms } from './workroom-grouping'
 
 function room(id: string, title: string, status: Workroom['status'], updated = 't1'): Workroom {
-  return { room_id: id, title, task_count: 1, status, updated_at: updated }
+  return { room_id: id, title, task_count: 1, status, updated_at: updated, last_seq: 0 }
 }
 
 const WATCH = '[watch:jira-scrum] Có thay đổi'

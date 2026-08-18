@@ -16,8 +16,8 @@ afterEach(() => {
 })
 
 const ROOMS: Workroom[] = [
-  { room_id: 'r1', title: 'Việc 1', task_count: 1, status: 'dang-chay', updated_at: 't' },
-  { room_id: 'r2', title: 'Việc 2', task_count: 1, status: 'xong', updated_at: 't' },
+  { room_id: 'r1', title: 'Việc 1', task_count: 1, status: 'dang-chay', updated_at: 't', last_seq: 0 },
+  { room_id: 'r2', title: 'Việc 2', task_count: 1, status: 'xong', updated_at: 't', last_seq: 0 },
 ]
 
 test('mounting the list with no selected room fetches no cost at all', () => {
@@ -130,8 +130,8 @@ test('v55 search ignores the status filter and matches by substring', () => {
 
 test('v55 recurring runs collapse into a ×N group row and expand on click', () => {
   const watchRooms: Workroom[] = [
-    { room_id: 'w2', title: '[watch] đổi Jira', task_count: 1, status: 'dang-chay', updated_at: 't2' },
-    { room_id: 'w1', title: '[watch] đổi Jira', task_count: 1, status: 'dang-chay', updated_at: 't1' },
+    { room_id: 'w2', title: '[watch] đổi Jira', task_count: 1, status: 'dang-chay', updated_at: 't2', last_seq: 0 },
+    { room_id: 'w1', title: '[watch] đổi Jira', task_count: 1, status: 'dang-chay', updated_at: 't1', last_seq: 0 },
   ]
   const onSelect = vi.fn()
   render(

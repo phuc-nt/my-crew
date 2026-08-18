@@ -54,6 +54,7 @@ import type {
   OfficeRoomsPayload,
   OpsChatAvailable,
   OutputsPayload,
+  PendingApprovalsIndex,
   TemplateStatusPayload,
   TemplateUpgradePreview,
   TemplateUpgradeResult,
@@ -189,6 +190,9 @@ export const api = {
 
   // --- ops (S4): write surfaces — all go through the existing gateway-routed endpoints ---
   getApprovals: (id: string) => request<ApprovalsPayload>(`/api/agents/${id}/approvals`),
+  /** Every agent's pending approvals in one call — replaces fanning out `getApprovals`
+   *  per agent, which was paid once per surface that shows the queue. */
+  getPendingApprovals: () => request<PendingApprovalsIndex>('/api/approvals/pending'),
   approve: (id: string, approvalId: number) =>
     post<ApprovalsPayload>(`/api/agents/${id}/approvals/${approvalId}/approve`),
   reject: (id: string, approvalId: number) =>
