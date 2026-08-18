@@ -12,8 +12,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      # setup-uv stopped publishing floating major/minor tags at v8 (supply-chain
+      # hardening), so this pin is a full version on purpose — bump it deliberately.
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.12"
       - run: uv build
@@ -21,7 +23,7 @@ jobs:
         run: |
           test "$(unzip -l dist/*.whl | grep -c _shipped/)" -ge 60
           test "$(unzip -l dist/*.whl | grep -cE 'static/app/')" -ge 10
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: packages
           path: dist/
@@ -36,12 +38,12 @@ jobs:
       id-token: write  # OIDC — the only credential involved
       contents: write  # the GitHub Release below
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: packages
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           generate_release_notes: true
