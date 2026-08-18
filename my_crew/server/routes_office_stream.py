@@ -57,14 +57,20 @@ async def stream_room(room_id: str, request: Request) -> EventSourceResponse:
     """SSE store-tail for one room: poll `office_room_store.list` ~1s, emit new rows.
 
     Cursor resolution: `Last-Event-ID` header (browser auto-resume) wins over
-    `?since_seq=` (fresh-connect query param) wins over 0 (from the beginning — a room's
-    history is small enough to replay whole on first open).
+    `?since_seq=` (fresh-connect query param) wins over `?tail=N` (cold connect —
+    replay only the LAST N rows) wins over 0 (from the beginning). The aggregated
+    `office` room accumulates every mirrored event forever, so a full replay on first
+    open grows without bound — clients that only need "what's happening now" (the
+    live feed / 3D desks) should pass `tail`.
     """
     since_seq = _initial_cursor(request)
+    if since_seq is None:
+        since_seq = _tail_cursor(room_id, request)
     return EventSourceResponse(_tail(room_id, since_seq, request))
 
 
-def _initial_cursor(request: Request) -> int:
+def _initial_cursor(request: Request) -> int | None:
+    """Explicit cursor from the client, or None when neither channel provided one."""
     last_event_id = request.headers.get("last-event-id")
     if last_event_id is not None:
         try:
@@ -77,7 +83,29 @@ def _initial_cursor(request: Request) -> int:
             return int(raw)
         except ValueError:
             pass
-    return 0
+    return None
+
+
+def _tail_cursor(room_id: str, request: Request) -> int:
+    """Cursor for a cold connect: `?tail=N` skips everything but the last N rows.
+
+    A malformed or non-positive `tail` falls back to full replay (0) — same tolerant
+    posture as `_initial_cursor`, never a 4xx over a cosmetic param.
+    """
+    raw = request.query_params.get("tail")
+    if raw is None:
+        return 0
+    try:
+        n = int(raw)
+    except ValueError:
+        return 0
+    if n <= 0:
+        return 0
+    store = _store()
+    try:
+        return max(0, store.last_seq(room_id) - n)
+    finally:
+        store.close()
 
 
 async def _tail(room_id: str, since_seq: int, request: Request):

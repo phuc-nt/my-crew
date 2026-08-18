@@ -9,7 +9,10 @@
 // `handoff` KIND, not a `step_status` status value.
 import { describe, expect, test } from 'vitest'
 import type { OfficeMessage } from '../../types'
-import { agentIdsInOrder, deriveAgentDesks, derivePendingCounts, shouldShowBubble } from './agent-office-state'
+import {
+  agentIdsInOrder, deriveAgentDesks, derivePendingCounts, idleDeskState, shouldShowBubble,
+  withRosterIds,
+} from './agent-office-state'
 
 function msg(partial: Partial<OfficeMessage> & Pick<OfficeMessage, 'kind' | 'author'>): OfficeMessage {
   return { seq: 1, ts: 't', body: {}, ...partial }
@@ -571,5 +574,27 @@ describe('v54 P4: derivePendingCounts', () => {
     )
     expect(counts.get('agent-a')).toBe(1)
     expect(counts.get('agent-b')).toBe(1)
+  })
+})
+
+// Roster completion (tail-limited stream): every current staff member gets a desk even
+// when the replay window carries no event of theirs.
+describe('withRosterIds + idleDeskState', () => {
+  test('roster members missing from events append after event-derived ids, in roster order', () => {
+    expect(withRosterIds(['hr', 'ops'], ['analyst', 'hr', 'writer'])).toEqual(
+      ['hr', 'ops', 'analyst', 'writer'],
+    )
+  })
+
+  test('a null roster (fetch failed) leaves the event-derived list untouched', () => {
+    expect(withRosterIds(['hr'], null)).toEqual(['hr'])
+  })
+
+  test('idleDeskState is a fresh idle desk each call (no shared picTasks set)', () => {
+    const a = idleDeskState('analyst')
+    const b = idleDeskState('writer')
+    expect(a.state).toBe('idle')
+    a.picTasks.add('t1')
+    expect(b.picTasks.size).toBe(0)
   })
 })

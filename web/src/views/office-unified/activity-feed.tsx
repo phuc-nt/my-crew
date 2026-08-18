@@ -36,6 +36,37 @@ export function matchesFilter(m: OfficeMessage, filter: FeedFilter): boolean {
   return m.kind === 'external_action'
 }
 
+export interface FeedEntry {
+  m: OfficeMessage
+  count: number
+}
+
+// Collapse CONSECUTIVE identical lines (same kind, same agent, same rendered text)
+// into one row with a ×N counter — a retrying gateway can emit the same
+// `telegram:… · skipped` outcome dozens of times in a row, and a wall of identical
+// rows buries the lines that actually carry information. Only adjacent runs collapse;
+// the same text reappearing later stays a separate row (chronology is preserved).
+export function collapseRepeats(
+  messages: OfficeMessage[], line: (m: OfficeMessage) => string,
+): FeedEntry[] {
+  const out: FeedEntry[] = []
+  for (const m of messages) {
+    const prev = out[out.length - 1]
+    const who = m.body.assigned_to ?? m.author
+    if (
+      prev && prev.m.kind === m.kind
+      && (prev.m.body.assigned_to ?? prev.m.author) === who
+      && line(prev.m) === line(m)
+    ) {
+      prev.m = m // keep the latest occurrence — newest seq/ts anchors the row
+      prev.count += 1
+    } else {
+      out.push({ m, count: 1 })
+    }
+  }
+  return out
+}
+
 // Status flavor → CSS suffix (token-colored in App.css). Derived from the same body
 // fields messageLine renders — one vocabulary, presentation-only.
 export function feedStatusClass(m: OfficeMessage): string {
@@ -67,8 +98,12 @@ export function ActivityFeed({ messages, connected, errored, onReviewSelect }: A
   const listRef = useRef<HTMLUListElement>(null)
   const [filter, setFilter] = useState<FeedFilter>('all')
   // Filter narrows the already-tailed, already-seq-merged stream — no re-sort (v17
-  // ordering contract), no re-fetch (props-only component).
-  const tail = messages.slice(-FEED_TAIL).filter((m) => matchesFilter(m, filter))
+  // ordering contract), no re-fetch (props-only component). Adjacent identical lines
+  // then collapse into one ×N row (see collapseRepeats).
+  const tail = collapseRepeats(
+    messages.slice(-FEED_TAIL).filter((m) => matchesFilter(m, filter)),
+    (m) => messageLine(m, t),
+  )
 
   useEffect(() => {
     const el = listRef.current
@@ -107,7 +142,7 @@ export function ActivityFeed({ messages, connected, errored, onReviewSelect }: A
       </div>
       {tail.length === 0 && !errored && <EmptyState>{emptyLabel}</EmptyState>}
       <ul className="office-room-log office-unified-log" ref={listRef}>
-        {tail.map((m) => {
+        {tail.map(({ m, count }) => {
           const who = m.body.assigned_to ?? m.author
           const clickableReview = m.kind === 'review' && onReviewSelect
           const text = <p className="office-room-text">{messageLine(m, t)}</p>
@@ -121,6 +156,7 @@ export function ActivityFeed({ messages, connected, errored, onReviewSelect }: A
                   {text}
                 </button>
               ) : text}
+              {count > 1 && <span className="office-feed-repeat">×{count}</span>}
             </li>
           )
         })}

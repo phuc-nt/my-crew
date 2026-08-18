@@ -58,6 +58,7 @@ const vi = {
 
   // office-unified.tsx
   'office.title': 'Văn phòng',
+  'office.companyUnset': 'Chưa đặt tên công ty — bấm để đặt trong Cài đặt',
   'office.collapse3d': 'Thu gọn không gian 3D',
   'office.expand3d': 'Hiện không gian 3D',
   'office.hintSummary': 'Hướng dẫn nhanh',
@@ -1030,6 +1031,7 @@ const en = {
 
   // office-unified.tsx
   'office.title': 'Office',
+  'office.companyUnset': 'Company name not set — click to set it in Settings',
   'office.collapse3d': 'Collapse 3D view',
   'office.expand3d': 'Show 3D view',
   'office.hintSummary': 'Quick guide',

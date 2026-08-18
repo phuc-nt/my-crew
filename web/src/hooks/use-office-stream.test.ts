@@ -100,6 +100,25 @@ test('a re-mount seeds messages from the room cache and connects with ?since_seq
   expect(second.result.current.messages.map((m) => m.seq)).toEqual([7, 8])
 })
 
+test('coldTail asks the server for the tail on cold connect, but never overrides a warm cursor', async () => {
+  const first = renderHook(() => useOfficeStream('office', 300))
+  const es1 = FakeEventSource.instances[0]
+  expect(es1.url).toBe('/api/office/rooms/office/stream?tail=300') // cold: last N only
+
+  act(() => {
+    es1.onmessage?.({
+      data: JSON.stringify({ seq: 7, ts: 't', author: 'ceo', kind: 'ceo', body: { text: 'go' } }),
+    })
+  })
+  await waitFor(() => expect(first.result.current.messages).toHaveLength(1))
+  first.unmount()
+
+  renderHook(() => useOfficeStream('office', 300))
+  const es2 = FakeEventSource.instances[1]
+  // Warm re-mount: the cache cursor wins — tail must not reappear and re-skip rows.
+  expect(es2.url).toBe('/api/office/rooms/office/stream?since_seq=7')
+})
+
 test('onerror marks the stream disconnected and errored', async () => {
   const { result } = renderHook(() => useOfficeStream('office'))
   const es = FakeEventSource.instances[0]

@@ -11,7 +11,13 @@
 //      module-level cache below keeps each room's messages + last seq across mounts;
 //      a warm re-mount seeds from the cache and connects with `?since_seq=` (the
 //      server-side cursor `routes_office_stream.py` already supports), so only NEW
-//      rows travel the wire. Cold first connect keeps the bare URL (full replay).
+//      rows travel the wire.
+//
+// Cold first connect: bare URL = full replay. Callers watching an unbounded room (the
+// aggregated `office` room mirrors EVERY event forever) pass `coldTail` so the server
+// replays only the last N rows (`?tail=`) — first paint stops scaling with the
+// company's entire history. Per-task workrooms stay full-replay: their history IS the
+// conversation.
 import { useEffect, useRef, useState } from 'react'
 import type { OfficeMessage } from '../types'
 
@@ -37,7 +43,7 @@ export function clearOfficeStreamCache(): void {
   roomCache.clear()
 }
 
-export function useOfficeStream(roomId: string | null): {
+export function useOfficeStream(roomId: string | null, coldTail?: number): {
   messages: OfficeMessage[]
   connected: boolean
   errored: boolean
@@ -57,7 +63,13 @@ export function useOfficeStream(roomId: string | null): {
     setErrored(false)
 
     const base = `/api/office/rooms/${encodeURIComponent(roomId)}/stream`
-    const url = cache.lastSeq > 0 ? `${base}?since_seq=${cache.lastSeq}` : base
+    // Warm re-mount resumes from the cache cursor; a cold connect asks for the tail
+    // only (when the caller set one) instead of the room's whole history.
+    const url = cache.lastSeq > 0
+      ? `${base}?since_seq=${cache.lastSeq}`
+      : coldTail && coldTail > 0
+        ? `${base}?tail=${coldTail}`
+        : base
     const es = new EventSource(url)
     es.onopen = () => setConnected(true)
     es.onmessage = (m) => {
@@ -82,7 +94,7 @@ export function useOfficeStream(roomId: string | null): {
       es.close()
       setConnected(false)
     }
-  }, [roomId])
+  }, [roomId, coldTail])
 
   return { messages, connected, errored }
 }

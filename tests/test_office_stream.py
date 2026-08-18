@@ -7,8 +7,10 @@ Load-bearing:
 - TWO independent generators reading the SAME room both see the SAME rows — no shared
   queue, no 409 (proves the multi-subscriber claim: store-tail, not `stream_run`'s
   single-drain model).
-- `_initial_cursor` resolves `Last-Event-ID` over `?since_seq=` over 0 — a reconnect
-  after N events resumes with NO gap and NO replay of already-seen rows.
+- `_initial_cursor` resolves `Last-Event-ID` over `?since_seq=` over None — a reconnect
+  after N events resumes with NO gap and NO replay of already-seen rows; with no
+  explicit cursor, `?tail=N` replays only the last N rows (cold-connect cap for the
+  unbounded aggregated `office` room), else 0 (full replay).
 - `/api/office/rooms` and the room stream route are gated by auth like every other
   non-public route (NOT in `auth._PUBLIC_PREFIXES`).
 """
@@ -156,13 +158,41 @@ def test_initial_cursor_falls_back_to_since_seq():
     assert ros._initial_cursor(req) == 5
 
 
-def test_initial_cursor_defaults_to_zero():
-    assert ros._initial_cursor(_CursorRequest()) == 0
+def test_initial_cursor_returns_none_without_explicit_cursor():
+    assert ros._initial_cursor(_CursorRequest()) is None
 
 
 def test_initial_cursor_ignores_malformed_header():
     req = _CursorRequest(headers={"last-event-id": "not-a-number"}, query={"since_seq": "3"})
     assert ros._initial_cursor(req) == 3
+
+
+def test_tail_cursor_skips_all_but_last_n_rows(tmp_path):
+    _seed(tmp_path, 5)
+    req = _CursorRequest(query={"tail": "2"})
+    cursor = ros._tail_cursor("t1", req)
+    assert cursor == 3
+    events = asyncio.run(_drain("t1", cursor, _FakeRequest(max_polls=1)))
+    assert [e["seq"] for e in events] == [4, 5]
+
+
+def test_tail_cursor_larger_than_history_replays_whole_room(tmp_path):
+    _seed(tmp_path, 3)
+    assert ros._tail_cursor("t1", _CursorRequest(query={"tail": "50"})) == 0
+
+
+def test_tail_cursor_without_param_or_malformed_is_full_replay(tmp_path):
+    _seed(tmp_path, 3)
+    assert ros._tail_cursor("t1", _CursorRequest()) == 0
+    assert ros._tail_cursor("t1", _CursorRequest(query={"tail": "abc"})) == 0
+    assert ros._tail_cursor("t1", _CursorRequest(query={"tail": "-4"})) == 0
+
+
+def test_explicit_since_seq_wins_over_tail(tmp_path):
+    """A warm re-mount's `since_seq` must never be overridden by a stale `tail` param."""
+    _seed(tmp_path, 5)
+    req = _CursorRequest(query={"since_seq": "1", "tail": "2"})
+    assert ros._initial_cursor(req) == 1  # tail never consulted
 
 
 # --- routes: list_rooms + auth gate -------------------------------------------------

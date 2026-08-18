@@ -141,6 +141,14 @@ class OfficeRoomStore:
             for r in rows
         ]
 
+    def last_seq(self, room_id: str) -> int:
+        """Highest `seq` in `room_id`, 0 when the room has no messages yet — the anchor
+        for tail-only cold connects (`routes_office_stream`'s `?tail=`)."""
+        row = self._conn.execute(
+            "SELECT MAX(seq) FROM messages WHERE room_id = ?", (room_id,)
+        ).fetchone()
+        return int(row[0]) if row and row[0] is not None else 0
+
     def list_rooms(self) -> list[str]:
         """Distinct room ids that have at least one message, oldest-first-seen order."""
         rows = self._conn.execute(

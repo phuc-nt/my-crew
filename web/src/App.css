@@ -517,6 +517,12 @@ input, textarea, select { font-size: var(--fs-body); }
 .office-feed-filters { display: flex; gap: var(--space-2); margin-bottom: var(--space-2); }
 .office-feed-icon { margin-right: 0.35rem; }
 .office-feed-agent { font-weight: 700; font-size: var(--fs-xs); margin-left: 0.4rem; }
+/* ×N counter on a collapsed run of identical feed lines (collapseRepeats). */
+.office-feed-repeat { margin-left: 0.4rem; font-size: var(--fs-2xs); color: var(--color-muted);
+  border: 1px solid var(--color-border); border-radius: 999px; padding: 0 0.4rem; }
+/* Company identity in the office page header — muted next to the h2 title. */
+.office-company-name { font-weight: 400; font-size: var(--fs-sm); color: var(--color-muted); }
+.office-company-unset { margin-left: 0.5rem; text-decoration: underline; }
 .office-feed-ok .office-room-text { color: var(--color-ok); }
 .office-feed-danger .office-room-text { color: var(--color-danger); }
 .office-feed-warn .office-room-text { color: var(--color-warn); }

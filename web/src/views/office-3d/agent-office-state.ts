@@ -117,6 +117,26 @@ function nextState(prev: AgentState, status: string | undefined): AgentState {
 }
 
 // Reduces the full ordered event list into a per-agent desk-state map. Pure function — no
+// A desk that has emitted nothing yet. Exported so the office screen can seed a desk
+// for every CURRENT roster member even when the (tail-limited) stream carries no event
+// of theirs — without this, an agent idle for longer than the tail window would have
+// no desk at all (office-canvas renders nothing for a missing map entry).
+export function idleDeskState(id: string): AgentDeskState {
+  return {
+    id, state: 'idle', taskTitle: null, stepTitle: null, phase: null, attemptId: null,
+    consultWith: null, lastVerdict: null, picTasks: new Set<string>(),
+    concurrentSteps: 0, deepTeamActive: false,
+  }
+}
+
+// Roster-complete desk list: event-derived ids keep their first-seen order (stable desk
+// positions), roster members the stream hasn't mentioned append after in roster order.
+export function withRosterIds(eventIds: string[], rosterIds: string[] | null): string[] {
+  if (!rosterIds) return eventIds
+  const seen = new Set(eventIds)
+  return [...eventIds, ...rosterIds.filter((id) => !seen.has(id))]
+}
+
 // timers, no randomness — so the same event list always yields the same map (a re-render or a
 // reconnect-replay is idempotent).
 export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDeskState> {
@@ -125,11 +145,7 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
   const ensure = (id: string): AgentDeskState => {
     let d = desks.get(id)
     if (!d) {
-      d = {
-        id, state: 'idle', taskTitle: null, stepTitle: null, phase: null, attemptId: null,
-        consultWith: null, lastVerdict: null, picTasks: new Set<string>(),
-        concurrentSteps: 0, deepTeamActive: false,
-      }
+      d = idleDeskState(id)
       desks.set(id, d)
     }
     return d

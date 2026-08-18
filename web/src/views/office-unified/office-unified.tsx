@@ -10,13 +10,15 @@
 // Desk hygiene (v16): desks render only for CURRENT registry staff (rosterIds) — ghost
 // desks from historical events are gone; selecting a room dims everyone not involved.
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api } from '../../api/client'
 import { useLanguage } from '../../i18n/language-context'
 import { useUiMode } from '../../ui-mode-context'
 import { useOfficeStream } from '../../hooks/use-office-stream'
 import { useSharedPendingApprovals } from '../../pending-approvals-context'
-import { agentIdsInOrder, deriveAgentDesks, derivePendingCounts } from '../office-3d/agent-office-state'
+import {
+  agentIdsInOrder, deriveAgentDesks, derivePendingCounts, idleDeskState, withRosterIds,
+} from '../office-3d/agent-office-state'
 import { AgentStatusTable } from '../office-3d/agent-status-table'
 import { use3dFallback } from '../office-3d/use-3d-fallback'
 import { Button } from '../../components/ui/button'
@@ -39,6 +41,12 @@ import { WorkroomList } from './workroom-list'
 const OfficeCanvas = lazy(() => import('../office-3d/office-canvas'))
 
 const OFFICE_ROOM_ID = 'office'
+// Cold-connect tail for the aggregated `office` room: it mirrors EVERY event forever,
+// so a full replay on first open grows without bound (real deployments hit thousands
+// of rows — the CEO watched the feed chew through months of `skipped` noise before
+// showing anything current). 300 comfortably covers the feed tail (40) and gives desk
+// derivation enough recent context; roster seeding below covers agents idle for longer.
+const OFFICE_COLD_TAIL = 300
 const PANEL_COLLAPSE_KEY = 'office3dCollapsed'
 // v54 P4: same cadence action-rail.tsx used for its own (now-removed) self-fetch.
 const CLARIFY_POLL_MS = 30_000
@@ -55,14 +63,20 @@ export function OfficeUnified() {
   })
   const useFallback = use3dFallback()
 
-  // Stream 1: the whole office — feeds the 3D panel (and the feed in toàn-cảnh mode).
-  const office = useOfficeStream(OFFICE_ROOM_ID)
-  // Stream 2: the selected room — feeds the feed/composer context. Same id as stream 1
-  // when no room is selected (see header note on the ≤2-connection budget).
-  const room = useOfficeStream(activeRoom ?? OFFICE_ROOM_ID)
+  // Company identity — the office screen must say WHOSE office this is. Name comes
+  // from company.yaml via /api/company; empty name renders a set-it-up hint instead.
+  const [companyName, setCompanyName] = useState<string | null>(null)
+  useEffect(() => {
+    api.getCompany().then((c) => setCompanyName(c.name)).catch(() => setCompanyName(null))
+  }, [])
 
-  const agentIds = useMemo(() => agentIdsInOrder(office.messages), [office.messages])
-  const desks = useMemo(() => deriveAgentDesks(office.messages), [office.messages])
+  // Stream 1: the whole office — feeds the 3D panel (and the feed in toàn-cảnh mode).
+  // Tail-limited: this room's history is unbounded (see OFFICE_COLD_TAIL).
+  const office = useOfficeStream(OFFICE_ROOM_ID, OFFICE_COLD_TAIL)
+  // Stream 2: the selected room — feeds the feed/composer context. Same id as stream 1
+  // when no room is selected (see header note on the ≤2-connection budget); a per-task
+  // workroom replays whole — its history IS the conversation.
+  const room = useOfficeStream(activeRoom ?? OFFICE_ROOM_ID, activeRoom ? undefined : OFFICE_COLD_TAIL)
 
   // v54 P4: clarify fetch lifted here (was self-contained inside ActionRail) so the ✋
   // pending badge on the 3D desk reads the SAME poll the action rail displays — one
@@ -91,6 +105,21 @@ export function OfficeUnified() {
     api.getAssignableStaff().then((p) => setRosterIds(p.staff.map((s) => s.id)))
       .catch(() => setRosterIds(null))
   }, [])
+
+  // Desk inputs: events drive state, the roster completes coverage — with the stream
+  // tail-limited, a long-idle agent may have no event in the window, but every CURRENT
+  // staff member still deserves an (idle) desk in the office.
+  const agentIds = useMemo(
+    () => withRosterIds(agentIdsInOrder(office.messages), rosterIds),
+    [office.messages, rosterIds],
+  )
+  const desks = useMemo(() => {
+    const map = deriveAgentDesks(office.messages)
+    for (const id of rosterIds ?? []) {
+      if (!map.has(id)) map.set(id, idleDeskState(id))
+    }
+    return map
+  }, [office.messages, rosterIds])
 
   // Dual-lens P1 (high-mode): sandbox-tier (needs_shell) badges come from the board
   // API — the office stream's allowlist does NOT carry tier data and stays untouched.
@@ -238,7 +267,20 @@ export function OfficeUnified() {
           and the composer below span the full width of the layout-A grid. */}
       <div className="office-unified-header">
         <PageHeader
-          title={t('office.title')}
+          title={
+            <>
+              {t('office.title')}
+              {companyName !== null && (
+                companyName
+                  ? <span className="office-company-name"> · {companyName}</span>
+                  : (
+                    <Link className="office-company-name office-company-unset" to="/settings">
+                      {t('office.companyUnset')}
+                    </Link>
+                  )
+              )}
+            </>
+          }
           actions={
             <Button variant="chip" className="office-3d-toggle" onClick={toggleCollapsed}>
               {collapsed ? t('office.expand3d') : t('office.collapse3d')}

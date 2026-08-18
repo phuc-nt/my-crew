@@ -131,6 +131,17 @@ def test_list_rooms_oldest_first_seen(tmp_path):
     store.close()
 
 
+def test_last_seq_tracks_room_max_and_is_zero_when_empty(tmp_path):
+    store = _store(tmp_path)
+    assert store.last_seq("t1") == 0
+    store.append("t1", author="ceo", kind="ceo", body={"text": "a"})
+    s2 = store.append("t2", author="ceo", kind="ceo", body={"text": "other room"})
+    s3 = store.append("t1", author="ceo", kind="ceo", body={"text": "b"})
+    assert store.last_seq("t1") == s3
+    assert store.last_seq("t2") == s2  # per-room, not the global max
+    store.close()
+
+
 def test_seq_is_total_order_across_rooms(tmp_path):
     store = _store(tmp_path)
     s1 = store.append("t1", author="ceo", kind="ceo", body={"text": "a"})

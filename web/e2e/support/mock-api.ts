@@ -57,6 +57,14 @@ export async function mockOfficeApi(
 
     if (pathname === '/api/setup/status') return json({ completed: true })
     if (pathname === '/api/me') return json({ authenticated: true, auth: 'off' })
+    if (pathname === '/api/company')
+      return json({
+        name: 'ACME',
+        coordinator_id: null,
+        team_task_cap_usd: 1,
+        team_task_concurrency: 1,
+        team_task_auto_confirm: false,
+      })
     if (pathname === '/api/agents') return json(agentsFixture)
     if (/^\/api\/agents\/[^/]+\/approvals$/.test(pathname))
       return json({ agent_id: pathname.split('/')[3], pending: [] })

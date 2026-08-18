@@ -71,3 +71,27 @@ test('"Ra ngoài" filter with no external events shows the external empty state'
   fireEvent.click(screen.getByText('Ra ngoài'))
   expect(screen.getByText('Chưa có hành động ra ngoài nào.')).toBeTruthy()
 })
+
+test('a run of identical lines collapses to ONE row with a ×N counter', () => {
+  const skipped = (seq: number) => msg('external_action', {
+    actor: 'admin', tool: 'telegram_send', action_type: 'send', outcome: 'skipped', detail: 'tg:1',
+  }, seq)
+  renderFeed([skipped(1), skipped(2), skipped(3),
+    msg('milestone', { task_title: 'T1', message: 'done' }, 4)])
+
+  // One rendered line for the run, carrying the counter — not three duplicates.
+  expect(screen.getAllByText(/→ telegram_send tg:1/)).toHaveLength(1)
+  expect(screen.getByText('×3')).toBeTruthy()
+  expect(screen.getByText(/T1: done/)).toBeTruthy()
+})
+
+test('the same line reappearing NON-adjacently stays separate (chronology preserved)', () => {
+  const skipped = (seq: number) => msg('external_action', {
+    actor: 'admin', tool: 'telegram_send', action_type: 'send', outcome: 'skipped', detail: 'tg:1',
+  }, seq)
+  renderFeed([skipped(1),
+    msg('milestone', { task_title: 'T1', message: 'done' }, 2), skipped(3)])
+
+  expect(screen.getAllByText(/→ telegram_send tg:1/)).toHaveLength(2)
+  expect(screen.queryByText(/×2/)).toBeNull()
+})
