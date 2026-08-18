@@ -1233,6 +1233,58 @@ input, textarea, select { font-size: var(--fs-body); }
   white-space: pre-wrap;
 }
 
+/* The deliverable is rendered as markdown, so block structure comes from real elements
+   and `pre-wrap` would double every blank line into a visible gap. */
+.chat-row-text.is-markdown { white-space: normal; }
+
+/* Document-page rhythm is wrong inside a bubble: the first/last child sit flush against
+   the bubble's own padding, and headings step down rather than up — a deliverable's `#`
+   is a section marker in a chat row, not a page title. */
+.chat-row-text.is-markdown > :first-child { margin-top: 0; }
+.chat-row-text.is-markdown > :last-child { margin-bottom: 0; }
+.chat-row-text.is-markdown p,
+.chat-row-text.is-markdown ul,
+.chat-row-text.is-markdown ol { margin: 0.5em 0; }
+.chat-row-text.is-markdown h1,
+.chat-row-text.is-markdown h2,
+.chat-row-text.is-markdown h3,
+.chat-row-text.is-markdown h4 {
+  margin: 0.8em 0 0.3em;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.chat-row-text.is-markdown code {
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  background: var(--color-surface-2);
+  font-size: var(--fs-sm);
+}
+.chat-row-text.is-markdown pre {
+  overflow-x: auto;
+  padding: 0.6em;
+  border-radius: 6px;
+  background: var(--color-surface-2);
+}
+.chat-row-text.is-markdown pre code { padding: 0; background: none; }
+/* A real cost table is wider than the bubble; it scrolls inside its own box rather than
+   stretching the column or being clipped. */
+.chat-row-text.is-markdown table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.chat-row-text.is-markdown th,
+.chat-row-text.is-markdown td {
+  padding: 0.3em 0.6em;
+  border: 1px solid var(--color-border);
+  text-align: left;
+  /* Without a floor the browser hands a narrow first column ~1 character and breaks
+     "Notion" down the page (seen on the real cost table). A min-width forces the table
+     past the bubble instead, where the `overflow-x: auto` above lets it scroll. */
+  min-width: 7ch;
+}
+
 /* Real briefs run to ~120 chars. The header carries the whole one (nothing else does),
    but clamped to a single line — two wrapped lines pushed the log down noticeably. */
 .chat-thread-title {

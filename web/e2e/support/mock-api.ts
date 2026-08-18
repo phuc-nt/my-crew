@@ -32,6 +32,16 @@ export interface OfficeApiMockOptions {
   assignPreview?: Record<string, unknown>
   /** Rows for the fleet approvals index — drives the shell's nav badge count. */
   pendingApprovals?: FleetApprovalItem[]
+  /** Agent questions behind the chat hub's pending column. */
+  clarifyQuestions?: unknown[]
+  /** The ops catalog the assistant pane and the palette both read. */
+  opsCommands?: { id: string; description: string; readonly: boolean }[]
+  /** Reply for POST /api/ops/chat. A number instead delays the reply that many ms,
+   *  which is how the "still working" indicator is exercised. */
+  opsReply?: string
+  opsReplyDelayMs?: number
+  /** Hits for GET /api/search — the palette's history source. */
+  searchHits?: { excerpt: string; source: string; ref: string; agent_id: string; ts: string }[]
 }
 
 export interface OfficeApiMock {
@@ -77,7 +87,23 @@ export async function mockOfficeApi(
       const pending = opts.pendingApprovals ?? []
       return json({ pending, count: pending.length })
     }
-    if (pathname === '/api/clarify/pending') return json({ questions: [] })
+    if (pathname === '/api/clarify/pending')
+      return json({ questions: opts.clarifyQuestions ?? [] })
+    if (pathname === '/api/ops/chat/available') return json({ available: true })
+    if (pathname === '/api/ops/chat/commands') return json({ commands: opts.opsCommands ?? [] })
+    if (pathname === '/api/ops/chat' && route.request().method() === 'POST') {
+      // The real engine takes seconds; the delay makes that latency assertable instead
+      // of a race the spec would have to sleep through.
+      if (opts.opsReplyDelayMs) await new Promise((r) => setTimeout(r, opts.opsReplyDelayMs))
+      return json({ reply: opts.opsReply ?? 'Đội hiện có 11 agent', agent_id: 'admin' })
+    }
+    if (pathname === '/api/search') return json({ hits: opts.searchHits ?? [] })
+    // The office health strip reads this and swallows a failure, so an unmocked call was
+    // invisible in the UI — but it logged UNMOCKED on every office run, which is exactly
+    // the signal a genuinely missing route needs to stand out.
+    if (pathname === '/api/budget')
+      return json({ agents: [], total_spent_usd: 0, total_cap_usd: 0, ratio: 0 })
+    if (pathname === '/api/health/integrations') return json({ checks: [], checked_at: 0 })
     if (pathname === '/api/team/alerts') return json({ alerts: [] })
     if (pathname === '/api/office/assign/staff') return json(assignStaffFixture)
     if (pathname === '/api/office/workrooms')
@@ -181,13 +207,21 @@ export function makeOverviewEvents(): OfficeMessage[] {
  * Deterministic long room timeline — enough rows that the feed overflows its frame at
  * 1440×900 (the internal-scroll assertions need scrollHeight > clientHeight).
  */
-export function makeRoomEvents(count: number): OfficeMessage[] {
+/**
+ * A workroom's stream.
+ *
+ * `roomId` stamps `source_room_id` on every event, which the chat thread's reducer uses
+ * to decide what belongs to the room it is showing. Defaults to 't1' — the office specs
+ * read the overview stream, which shows everything regardless — but a chat spec MUST
+ * pass the room it navigates to or the reducer correctly drops every row.
+ */
+export function makeRoomEvents(count: number, roomId = 't1'): OfficeMessage[] {
   const events: OfficeMessage[] = [
     {
       seq: 1,
       ts: '2026-07-31T09:00:00Z',
       author: 'ceo',
-      source_room_id: 't1',
+      source_room_id: roomId,
       kind: 'ceo',
       body: { text: 'Soạn báo cáo tuần cho sếp, deadline thứ Sáu' },
     },
@@ -195,7 +229,7 @@ export function makeRoomEvents(count: number): OfficeMessage[] {
       seq: 2,
       ts: '2026-07-31T09:00:05Z',
       author: 'coordinator',
-      source_room_id: 't1',
+      source_room_id: roomId,
       kind: 'assignment',
       body: { task_title: 'Soạn báo cáo tuần cho sếp', assigned_to: 'tro-ly-pm', step_count: 3 },
     },
@@ -209,7 +243,7 @@ export function makeRoomEvents(count: number): OfficeMessage[] {
         seq,
         ts: '2026-07-01T08:00:00Z',
         author: 'coordinator',
-        source_room_id: 't1',
+        source_room_id: roomId,
         kind: 'handoff',
         body: {
           step_title: 'Bàn giao lần trước',
@@ -223,7 +257,7 @@ export function makeRoomEvents(count: number): OfficeMessage[] {
       seq,
       ts: `2026-07-31T09:${String(Math.min(59, seq)).padStart(2, '0')}:00Z`,
       author: 'coordinator',
-      source_room_id: 't1',
+      source_room_id: roomId,
       kind: 'step_status',
       body: {
         step_title: `Bước ${seq}: tổng hợp mục ${seq}`,

@@ -2,9 +2,12 @@
 // SHARED `office-message-line` module, so a line reads identically in the chat thread,
 // the activity feed, and the timeline. This file only adds what chat needs on top —
 // bubble alignment, the collapsed step block, and the per-kind tone.
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useLanguage } from '../../../i18n/language-context'
 import type { OfficeMessage } from '../../../types'
 import { kindLabel, messageLine } from '../../../views/office-shared/office-message-line'
+import { markdownComponents } from '../../../views/office-unified/artifact-viewer'
 import type { ThreadItem } from '../chat-state'
 import { isClamped, isDeliverable, milestoneText } from './milestone-presentation'
 import { StepBlockCard } from './step-block-card'
@@ -66,10 +69,24 @@ export function MessageRow({ item }: { item: ThreadItem }) {
             <span className="chat-kind">{kindLabel(item.kind, t)}</span>
           </p>
         ) : null}
-        <p className={`chat-row-text${isDeliverable(item.body) ? ' is-result' : ''}${
-          item.kind === 'milestone' && isClamped(item.body) ? ' is-clamped' : ''}`}>
-          {textOf(item, t)}
-        </p>
+        {isDeliverable(item.body) ? (
+          // A `done` milestone IS the deliverable, and on real data those bodies are
+          // markdown documents — headings, bold, GFM pipe tables (measured in room
+          // 847cefe9b088: a cost comparison table). Rendered as plain text they read as
+          // literal `**` and `|---|`. Same renderer and same safety overrides as the
+          // artifact drawer (no raw HTML, no remote <img>), which is already in the entry
+          // bundle via Outputs, so this costs no additional bytes.
+          <div className="chat-row-text is-result is-markdown">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+              {textOf(item, t)}
+            </ReactMarkdown>
+          </div>
+        ) : (
+          <p className={`chat-row-text${
+            item.kind === 'milestone' && isClamped(item.body) ? ' is-clamped' : ''}`}>
+            {textOf(item, t)}
+          </p>
+        )}
         {/* A retrying gateway emits the same line over and over; the reducer folds those
             into one row and this is the only place the count is surfaced. */}
         {(item.repeatCount ?? 1) > 1 && (
