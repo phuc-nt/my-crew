@@ -724,7 +724,7 @@ def _fetch_official_pages(
         firecrawl_available,
     )
     from my_crew.runtime.official_page_pick import pick_official_urls
-    from my_crew.runtime.step_recorder import record_event
+    from my_crew.runtime.step_recorder import head, record_event
 
     if not firecrawl_available(settings):
         record_event({"t": "fetch", "urls": [], "bytes": 0, "skipped": "no-firecrawl"})
@@ -747,7 +747,12 @@ def _fetch_official_pages(
         # Firecrawl to reach. A live run showed this shape before the field was added.
         record_event({"t": "fetch", "urls": urls, "bytes": 0, "skipped": "all-pages-failed"})
         return ""
-    record_event({"t": "fetch", "urls": urls, "bytes": len(fetched)})
+    # `content_head`: reviewer đối chiếu số liệu trong bản giao với NỘI DUNG trang, không
+    # đối chiếu được với byte count. Đây là mắt xích thiếu ở run baseline v84 — bảng giá
+    # bịa qua được review round 0 vì grader chỉ có văn xuôi để chấm.
+    record_event({
+        "t": "fetch", "urls": urls, "bytes": len(fetched), "content_head": head(fetched),
+    })
     return fetched
 
 

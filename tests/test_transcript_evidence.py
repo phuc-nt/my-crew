@@ -76,6 +76,45 @@ class TestExtractor:
         assert len(text) <= 1000
         assert "cắt theo cap" in text
 
+    def test_prefetch_and_fetch_carry_content_not_just_byte_counts(self, tmp_path):
+        """A reviewer cannot check a figure against a byte count.
+
+        The baseline run of the v84 benchmark passed a fabricated price table at review
+        round 0. Its reviewer had no handoff (the sprint step has `deps_json = []`, so
+        `_read_handoff` yields "") and no transcript at all, leaving prose as the only
+        thing to grade. Once a transcript exists, the prefetch/fetch events must carry
+        enough of what the page actually SAID for the "every figure has a source" rule
+        to be checkable — recording only `bytes: 18079` proves a page was opened, not
+        what price was on it.
+        """
+        events = [
+            {"t": "prefetch", "queries": ["giá Spotify Premium"], "bytes": 900,
+             "content_head": "spotify.com/vn-vi/premium — Individual 65.000 ₫/tháng"},
+            {"t": "fetch", "urls": ["https://www.spotify.com/vn-vi/premium/"],
+             "bytes": 18079,
+             "content_head": "Premium Individual 65.000 ₫/tháng cho 1 tài khoản"},
+        ]
+        text = extract_review_evidence(
+            _write_transcript(tmp_path, "t1", "s1-v1.jsonl", events), 8000
+        )
+        # The figure a reviewer must cross-check the deliverable against.
+        assert "65.000" in text
+        # And the page it came from, so the source LABEL is checkable too.
+        assert "spotify.com/vn-vi/premium" in text
+
+    def test_fetch_content_absent_degrades_to_metadata_line(self, tmp_path):
+        """Old transcripts (and a skipped fetch round) have no `content_head` — they must
+        still render, without inventing evidence that the page was read."""
+        events = [
+            {"t": "fetch", "urls": ["https://x.vn/vip"], "bytes": 260},
+            {"t": "fetch", "urls": [], "bytes": 0, "skipped": "no-firecrawl"},
+        ]
+        text = extract_review_evidence(
+            _write_transcript(tmp_path, "t1", "s1-v1.jsonl", events), 8000
+        )
+        assert "x.vn/vip" in text
+        assert "no-firecrawl" in text
+
     def test_missing_file_empty_file_and_cap_zero_are_none(self, tmp_path):
         assert extract_review_evidence(tmp_path / "ghost.jsonl", 8000) is None
         empty = _write_transcript(tmp_path, "t1", "s1-v1.jsonl", [])
@@ -122,6 +161,19 @@ class TestPrompt:
     def test_empty_string_evidence_behaves_like_none(self):
         assert build_review_messages(**self._BASE, transcript_evidence="") == \
             build_review_messages(**self._BASE)
+
+    def test_source_label_must_be_traceable_to_an_opened_page(self):
+        """The `nguon` axis scores the source LABEL, so the label itself needs checking.
+
+        The v84 candidate wrote "trang chính thức" next to figures taken from secondary
+        pages (`zingmp3.vn/vip/upgrade` and `nhaccuatui.com` both returned 0 price
+        tokens). The numbers WERE in its inputs, so this is not fabrication — but calling
+        a reseller blog "official" is exactly what the axis penalizes, and no rule told
+        the grader to check the label against what was actually opened.
+        """
+        system = build_review_messages(**self._BASE)[0]["content"]
+        assert "chính thức" in system
+        assert "thứ cấp" in system
 
 
 # ---- review_graph wiring -----------------------------------------------------

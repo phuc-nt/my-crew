@@ -124,14 +124,18 @@ def prefetch_queries(
     nguồn and dữ liệu-không-tồn-tại this module exists to prevent. With the flag, the
     sentinel lines survive so the caller can report the real reason.
     """
-    from my_crew.runtime.step_recorder import record_event
+    from my_crew.runtime.step_recorder import head, record_event
 
     bundle = _prefetch_queries(loaded, settings, queries, keep_sentinels=keep_sentinels)
     # Step transcript (v80): one event per launcher run — this funnel covers both the
     # native collect launcher AND every sprint prefetch/coverage round. No-op off-context.
+    # `content_head` carries what the snippets actually SAID: a sprint step has no deps,
+    # so its reviewer gets no handoff block, and without this the only evidence of what
+    # was collected is a byte count — which no figure can be cross-checked against.
     record_event({
         "t": "prefetch", "queries": [q.strip() for q in queries if q and q.strip()],
         "bytes": len(bundle), "kept_sentinels": keep_sentinels,
+        "content_head": head(bundle),
     })
     return bundle
 

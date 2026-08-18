@@ -240,7 +240,14 @@ _REVIEW_SYSTEM = (
     "hay tên nguồn trong kết quả đều là bịa — chấm `passed=false` và nêu rõ ở `failures`, "
     "kể cả khi kết quả trình bày đủ mọi mục tiêu chí. Ngược lại, dữ liệu MỚI HƠN kiến "
     "thức của bạn KHÔNG phải bằng chứng bịa: chỉ kết luận bịa khi đầu vào cho thấy KHÔNG "
-    "hề có dữ liệu đó."
+    "hề có dữ liệu đó. "
+    "QUY TẮC NHÃN NGUỒN: kết quả gán nhãn 'trang chính thức' / 'nguồn chính thức' cho một "
+    "số liệu thì nhãn đó phải khớp nguồn THẬT của số — trang của chính hãng/nhà cung cấp "
+    "dịch vụ đó. Số lấy từ báo, blog, đại lý, trang tổng hợp là nguồn THỨ CẤP: ghi kèm "
+    "vẫn tốt, nhưng gọi nó là 'chính thức' là sai nhãn ⇒ nêu ở `failures`. Chỉ chấm khi "
+    "nhãn MÂU THUẪN với nguồn thấy được; không có gì để đối chiếu thì bỏ qua, và bản ghi "
+    "rõ 'nguồn thứ cấp' / 'chưa có nguồn chính thức' là TRUNG THỰC, không phải lỗi — kể "
+    "cả khi trang chính thức đã được mở nhưng không trả về số nào."
 )
 
 

@@ -117,6 +117,7 @@ def extract_task_behavior_summary(
 
     tool_counts: dict[str, int] = {}
     prefetches = 0
+    fetches = 0
     attempts = 0
     usage_totals = {"llm_calls": 0, "prompt_tokens": 0, "completion_tokens": 0}
     parsed_any = False
@@ -133,6 +134,10 @@ def extract_task_behavior_summary(
                 tool_counts[name] = tool_counts.get(name, 0) + 1
             elif kind == "prefetch":
                 prefetches += 1
+            elif kind == "fetch":
+                # Count only, no URLs — same threat model as prefetch queries above.
+                if not event.get("skipped"):
+                    fetches += 1
             elif kind == "llm_response":
                 usage_totals["llm_calls"] += 1
                 usage_totals["prompt_tokens"] += int(event.get("prompt_tokens") or 0)
@@ -145,7 +150,8 @@ def extract_task_behavior_summary(
         or "không gọi tool nào"
     )
     lines = [
-        f"- {attempts} attempt có transcript; tool: {tools_text}; prefetch web ×{prefetches}.",
+        f"- {attempts} attempt có transcript; tool: {tools_text}; "
+        f"prefetch web ×{prefetches}; đọc trang chính thức ×{fetches}.",
         f"- {usage_totals['llm_calls']} lượt LLM, "
         f"{usage_totals['prompt_tokens']} prompt + "
         f"{usage_totals['completion_tokens']} completion tokens.",
@@ -154,6 +160,18 @@ def extract_task_behavior_summary(
     if len(text) > max_chars:
         text = text[: max(0, max_chars - len(_TRUNCATED_MARK))] + _TRUNCATED_MARK
     return text
+
+
+def _append_content(lines: list[str], event: dict) -> None:
+    """Thêm dòng nội dung thật của một prefetch/fetch round, nếu transcript có ghi.
+
+    Byte count chứng minh trang ĐÃ mở, không chứng minh con số nào nằm trên trang đó —
+    reviewer không đối chiếu được `65.000 ₫` với `bytes: 18079`. Vắng `content_head`
+    (transcript cũ, hoặc round bị bỏ qua) ⇒ không thêm gì, KHÔNG suy diễn.
+    """
+    content = str(event.get("content_head") or "").strip()
+    if content:
+        lines.append(f"  → nội dung: {content[:_RESULT_CHARS]}")
 
 
 def extract_review_evidence(path: Path, max_chars: int) -> str | None:
@@ -186,6 +204,18 @@ def extract_review_evidence(path: Path, max_chars: int) -> str | None:
             tool_lines.append(
                 f"- prefetch web ({event.get('bytes')} bytes): {queries}"
             )
+            _append_content(tool_lines, event)
+        elif kind == "fetch":
+            # Which official pages were actually OPENED is the evidence a reviewer needs
+            # to judge source quality — the axis this whole round exists to move. A
+            # skipped round says so explicitly rather than showing an empty list.
+            urls = ", ".join(str(u) for u in (event.get("urls") or []))
+            skipped = str(event.get("skipped") or "")
+            tool_lines.append(
+                f"- đọc trang chính thức: bỏ qua ({skipped})" if skipped
+                else f"- đọc trang chính thức ({event.get('bytes')} bytes): {urls}"
+            )
+            _append_content(tool_lines, event)
         elif kind == "llm_response":
             llm_calls += 1
             prompt_tokens += int(event.get("prompt_tokens") or 0)
