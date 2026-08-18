@@ -91,6 +91,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_visualize.router)
     # M4-S4: JSON ops API (approve/reject/config) — the real gateway-routed write path.
     app.include_router(routes_ops_json.router)
+    app.include_router(routes_ops_json.approvals_router)
     # M7: agent admin (packs list / create wizard / lifecycle / integration health).
     app.include_router(routes_agents_admin.router)
     # Company identity (config-only) + staff-template picker read API.

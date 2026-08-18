@@ -206,3 +206,33 @@ def test_coordinator_health_states(client, monkeypatch, tmp_path):
     os.utime(beat, (old, old))
     body = client.get("/api/health/coordinator").json()
     assert body["alive"] is False and body["reason"] == "stale"
+
+
+def test_workrooms_carry_last_seq_joined_from_the_room_store(tmp_path, monkeypatch):
+    """The conversation list computes its unread badge as `last_seq - last-read-seq`.
+    Team tasks and room events live in two separate SQLite files, so the join has to
+    happen at the route layer — a room with no events yet reports 0, never a missing
+    key, so the client can subtract without a null guard."""
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    from fastapi.testclient import TestClient
+
+    from my_crew.runtime.office_room_store import OfficeRoomStore, office_room_db_path
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.server.app import create_app
+
+    st = TeamTaskStore(team_tasks_db_path())
+    st.create_task(task_id="room-a", title="Việc A", pic_id="content")
+    st.set_plan("room-a", _plan(), "h1")
+    st.create_task(task_id="room-b", title="Việc B", pic_id="content")
+    st.set_plan("room-b", _plan(), "h2")
+    st.close()
+
+    rs = OfficeRoomStore(office_room_db_path(tmp_path))
+    rs.append("room-a", author="ceo", kind="ceo", body={"text": "x"})
+    rs.append("room-a", author="ceo", kind="ceo", body={"text": "y"})
+    rs.close()
+
+    rooms = TestClient(create_app()).get("/api/office/workrooms").json()["rooms"]
+    by_id = {r["room_id"]: r for r in rooms}
+    assert by_id["room-a"]["last_seq"] == 2
+    assert by_id["room-b"]["last_seq"] == 0

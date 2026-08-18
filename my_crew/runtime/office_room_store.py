@@ -51,6 +51,15 @@ class OfficeMessage:
     author: str
     kind: str
     body: dict
+    #: Which room this event ORIGINALLY happened in. Equal to `room_id` for a native
+    #: row; for a mirrored row in the `office` overview room it names the workroom the
+    #: event came from. Deliberately a column, not a body field: most kinds' projected
+    #: bodies carry no room/task linkage at all (`step_status`, `review`, `ceo`,
+    #: `handoff`), so a client reading only the aggregated `office` stream could not
+    #: otherwise attribute an event to its workroom. Keeping it OUT of the body means
+    #: the PII allowlist in `office_event_projection` is untouched and every kind's
+    #: body stays byte-identical to its pre-existing shape.
+    source_room_id: str = ""
 
 
 class OfficeRoomStore:
@@ -83,6 +92,17 @@ class OfficeRoomStore:
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_messages_room_seq ON messages (room_id, seq)"
         )
+        # Additive column for a store created before event provenance existed — same
+        # migrate-free ALTER pattern `team_task_store._create_schema` uses. Rows written
+        # before it default to '' and are reported as their own `room_id` on read, so a
+        # consumer never sees an empty provenance.
+        try:
+            self._conn.execute(
+                "ALTER TABLE messages ADD COLUMN source_room_id TEXT NOT NULL DEFAULT ''"
+            )
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
         from my_crew.runtime.store_schema_meta import ensure_schema_meta
 
         ensure_schema_meta(self._conn)
@@ -116,13 +136,28 @@ class OfficeRoomStore:
         projected = summarize_office_event(kind, body)
         seq = self._insert(room_id, author=author, kind=kind, body=projected)
         if also_office and room_id != OFFICE_ROOM_ID:
-            self._insert(OFFICE_ROOM_ID, author=author, kind=kind, body=projected)
+            # The mirror keeps pointing at the workroom the event actually happened in —
+            # that link is the only way a client reading the aggregated `office` stream
+            # can tell two concurrent tasks' steps apart.
+            self._insert(
+                OFFICE_ROOM_ID, author=author, kind=kind, body=projected, source_room_id=room_id,
+            )
         return seq
 
-    def _insert(self, room_id: str, *, author: str, kind: str, body: dict) -> int:
+    def _insert(
+        self, room_id: str, *, author: str, kind: str, body: dict, source_room_id: str = "",
+    ) -> int:
         cur = self._conn.execute(
-            "INSERT INTO messages (room_id, ts, author, kind, body_json) VALUES (?, ?, ?, ?, ?)",
-            (room_id, self._now(), author, kind, json.dumps(body, ensure_ascii=False)),
+            "INSERT INTO messages (room_id, ts, author, kind, body_json, source_room_id) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                room_id,
+                self._now(),
+                author,
+                kind,
+                json.dumps(body, ensure_ascii=False),
+                source_room_id or room_id,
+            ),
         )
         self._conn.commit()
         return int(cur.lastrowid)
@@ -130,13 +165,21 @@ class OfficeRoomStore:
     def list(self, room_id: str, since_seq: int = 0) -> list[OfficeMessage]:
         """Every message in `room_id` with `seq > since_seq`, oldest first."""
         rows = self._conn.execute(
-            "SELECT seq, room_id, ts, author, kind, body_json FROM messages "
+            "SELECT seq, room_id, ts, author, kind, body_json, source_room_id FROM messages "
             "WHERE room_id = ? AND seq > ? ORDER BY seq",
             (room_id, since_seq),
         ).fetchall()
         return [
             OfficeMessage(
-                seq=r[0], room_id=r[1], ts=r[2], author=r[3], kind=r[4], body=json.loads(r[5]),
+                seq=r[0],
+                room_id=r[1],
+                ts=r[2],
+                author=r[3],
+                kind=r[4],
+                body=json.loads(r[5]),
+                # Rows written before the column existed default to '' — report them as
+                # their own room so a consumer never has to special-case an empty value.
+                source_room_id=r[6] or r[1],
             )
             for r in rows
         ]
@@ -148,6 +191,15 @@ class OfficeRoomStore:
             "SELECT MAX(seq) FROM messages WHERE room_id = ?", (room_id,)
         ).fetchone()
         return int(row[0]) if row and row[0] is not None else 0
+
+    def last_seq_map(self) -> dict[str, int]:
+        """`{room_id: highest seq}` for every room in ONE grouped query — the unread
+        badge on the conversation list needs a cursor per room, and calling `last_seq`
+        per room would be an N+1 scan over a table that holds >100k rows in practice."""
+        rows = self._conn.execute(
+            "SELECT room_id, MAX(seq) FROM messages GROUP BY room_id"
+        ).fetchall()
+        return {r[0]: int(r[1]) for r in rows if r[1] is not None}
 
     def list_rooms(self) -> list[str]:
         """Distinct room ids that have at least one message, oldest-first-seen order."""

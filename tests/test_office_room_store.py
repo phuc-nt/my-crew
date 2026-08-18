@@ -176,3 +176,90 @@ def test_wal_concurrent_writers_do_not_lock(tmp_path):
     store = OfficeRoomStore(db_path)
     assert len(store.list("t1")) == 80
     store.close()
+
+
+# --- source_room_id: room provenance for mirrored events (FE unread per room) ---
+#
+# The `office` room is a MIRROR of every workroom's notable events, but a projected
+# body carries no room linkage for most kinds (`step_status`/`review`/`ceo`/`handoff`
+# have no task/room id in their allowlist) — so a client reading only the aggregated
+# `office` stream cannot tell which workroom an event came from. `source_room_id` is a
+# SCHEMA COLUMN, deliberately not a body field: it stays out of the PII projection
+# allowlist entirely (it is the same opaque internal id as `room_id` itself), and every
+# kind's projected `body` stays byte-identical to its pre-existing shape.
+
+
+def test_mirrored_office_row_records_its_source_room(tmp_path):
+    store = _store(tmp_path)
+    store.append(
+        "t1", author="coordinator", kind="step_status",
+        body={"task_title": "Demo", "step_title": "B1", "status": "started"},
+        also_office=True,
+    )
+    office_rows = store.list(OFFICE_ROOM_ID)
+    assert len(office_rows) == 1
+    # the mirror knows where it came from...
+    assert office_rows[0].source_room_id == "t1"
+    # ...while the body stays exactly what the projection produced (no new body field)
+    assert "source_room_id" not in office_rows[0].body
+
+
+def test_native_row_source_room_is_its_own_room(tmp_path):
+    """A non-mirrored row reports its own room, so a consumer never special-cases."""
+    store = _store(tmp_path)
+    store.append("t1", author="ceo", kind="ceo", body={"text": "hi"})
+    assert store.list("t1")[0].source_room_id == "t1"
+    store.close()
+
+
+def test_mirror_and_source_bodies_stay_identical(tmp_path):
+    """Provenance rides beside the body, never inside it — the pre-existing contract
+    that both rows share one projected body must not regress."""
+    store = _store(tmp_path)
+    store.append(
+        "t1", author="coordinator", kind="milestone",
+        body={"task_title": "Demo", "milestone": "done", "message": "xong"},
+        also_office=True,
+    )
+    assert store.list("t1")[0].body == store.list(OFFICE_ROOM_ID)[0].body
+    store.close()
+
+
+def test_source_room_id_survives_reopen_of_pre_existing_db(tmp_path):
+    """Adopt path: a store file written before this column exists keeps working, and
+    its old rows report their own room_id (no NULL leaking to consumers)."""
+    db_path = tmp_path / "office_room.sqlite3"
+    # simulate a pre-column DB: create the old schema by hand, insert one row
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE messages ("
+        "  seq INTEGER PRIMARY KEY AUTOINCREMENT, room_id TEXT NOT NULL, ts TEXT NOT NULL,"
+        "  author TEXT NOT NULL, kind TEXT NOT NULL, body_json TEXT NOT NULL)"
+    )
+    conn.execute(
+        "INSERT INTO messages (room_id, ts, author, kind, body_json) "
+        "VALUES ('t-old', '2026-01-01T00:00:00+00:00', 'ceo', 'ceo', '{\"text\": \"cũ\"}')"
+    )
+    conn.commit()
+    conn.close()
+
+    store = OfficeRoomStore(db_path)
+    rows = store.list("t-old")
+    assert len(rows) == 1
+    assert rows[0].source_room_id == "t-old"  # falls back to the row's own room
+    store.close()
+
+
+def test_last_seq_map_returns_every_room_in_one_query(tmp_path):
+    """The conversation list needs an unread count per room. Calling `last_seq` once
+    per room is an N+1 against a 127k-row table; one grouped query serves the whole
+    list."""
+    store = _store(tmp_path)
+    store.append("t1", author="ceo", kind="ceo", body={"text": "a"})
+    store.append("t2", author="ceo", kind="ceo", body={"text": "b"})
+    store.append("t1", author="ceo", kind="ceo", body={"text": "c"})
+    assert store.last_seq_map() == {"t1": 3, "t2": 2}
+
+
+def test_last_seq_map_is_empty_for_empty_store(tmp_path):
+    assert _store(tmp_path).last_seq_map() == {}

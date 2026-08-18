@@ -236,3 +236,47 @@ def test_save_memory_md_rejected(monkeypatch, tmp_path):
     _seed_profile(tmp_path, monkeypatch)
     r = _client().post("/api/agents/acme/config/memory", json={"text": "hacked"})
     assert r.status_code == 400
+
+
+# --- flat pending index across the fleet ---
+
+def test_pending_index_flattens_every_agent_and_tags_owner(monkeypatch, tmp_path):
+    """One request for the whole fleet's approval queue. The old client fanned out
+    `GET /api/agents/{id}/approvals` per agent; the queue is shown in two places at
+    once (chat context pane + work hub), so the fan-out was paid twice. Each row
+    carries its `agent_id` because approve/reject are per-agent routes — without the
+    owner on the row the client could not build the action URL."""
+    data_root = _patch(monkeypatch, tmp_path, ids=("acme", "beta"))
+    _seed(data_root, agent_id="acme")
+    _seed(data_root, agent_id="beta")
+    _seed(data_root, agent_id="beta")
+
+    body = _client().get("/api/approvals/pending").json()
+    assert [p["agent_id"] for p in body["pending"]].count("acme") == 1
+    assert [p["agent_id"] for p in body["pending"]].count("beta") == 2
+    assert body["count"] == 3
+    row = body["pending"][0]
+    assert set(row) >= {"agent_id", "id", "reason", "status", "created_at", "action"}
+
+
+def test_pending_index_is_empty_when_no_agent_has_approvals(monkeypatch, tmp_path):
+    _patch(monkeypatch, tmp_path, ids=("acme",))
+    body = _client().get("/api/approvals/pending").json()
+    assert body == {"pending": [], "count": 0}
+
+
+def test_pending_index_skips_an_agent_that_fails_to_load(monkeypatch, tmp_path):
+    """A single broken profile must not blank the whole queue — the other agents'
+    approvals are still actionable, so a per-agent failure is skipped, not fatal."""
+    data_root = _patch(monkeypatch, tmp_path, ids=("acme", "broken"))
+    _seed(data_root, agent_id="acme")
+    import my_crew.server.routes_ops_json as roj
+
+    real = roj.require_agent
+    monkeypatch.setattr(
+        roj, "require_agent",
+        lambda aid: (_ for _ in ()).throw(RuntimeError("boom")) if aid == "broken" else real(aid),
+    )
+    body = _client().get("/api/approvals/pending").json()
+    assert body["count"] == 1
+    assert body["pending"][0]["agent_id"] == "acme"

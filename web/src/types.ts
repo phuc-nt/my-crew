@@ -570,6 +570,10 @@ export interface OfficeMessage {
   author: string
   kind: OfficeEventKind
   body: OfficeEventBody
+  /** Workroom the event originally happened in. Equal to the stream's own room for a
+   *  native row; on the aggregated `office` stream it names the source workroom — most
+   *  projected bodies carry no room/task field, so this is the only attribution. */
+  source_room_id: string
 }
 
 export interface OfficeRoomsPayload {

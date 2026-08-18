@@ -95,14 +95,28 @@ def _open_tasks_in_room(room_id: str):
 
 @router.get("/workrooms")
 def get_workrooms() -> dict:
-    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.office_room_store import OfficeRoomStore, office_room_db_path
+    from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
     from my_crew.runtime.team_task_store import TeamTaskStore
 
     store = TeamTaskStore(team_tasks_db_path())
     try:
-        return {"rooms": store.list_workrooms()}
+        rooms = store.list_workrooms()
     finally:
         store.close()
+
+    # Team tasks and room events live in two separate SQLite files, so the unread
+    # cursor has to be joined here. One grouped query for the whole list; a room with
+    # no events yet reports 0 rather than a missing key, so the client can compute
+    # `last_seq - last_read_seq` without a null guard.
+    room_store = OfficeRoomStore(office_room_db_path(team_tasks_root()))
+    try:
+        last_seqs = room_store.last_seq_map()
+    finally:
+        room_store.close()
+    for room in rooms:
+        room["last_seq"] = last_seqs.get(room["room_id"], 0)
+    return {"rooms": rooms}
 
 
 @router.post("/rooms/{room_id}/chat")

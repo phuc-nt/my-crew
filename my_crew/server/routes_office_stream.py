@@ -131,7 +131,8 @@ async def _tail(room_id: str, since_seq: int, request: Request):
                     "id": str(msg.seq),
                     "data": json.dumps(
                         {"seq": msg.seq, "ts": msg.ts, "author": msg.author,
-                         "kind": msg.kind, "body": msg.body},
+                         "kind": msg.kind, "body": msg.body,
+                         "source_room_id": msg.source_room_id},
                         ensure_ascii=False,
                     ),
                 }

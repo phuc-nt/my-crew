@@ -21,6 +21,11 @@ from my_crew.server.ops_helpers import build_gateway, require_agent
 
 router = APIRouter(prefix="/api/agents", tags=["ops"])
 
+#: Fleet-wide approvals index. Separate router because the per-agent routes above are
+#: all mounted under `/api/agents/{agent_id}` and this one is deliberately NOT scoped to
+#: an agent — it answers "what is waiting on me anywhere".
+approvals_router = APIRouter(prefix="/api/approvals", tags=["ops"])
+
 _EDITABLE_MD = {"soul": "SOUL.md", "project": "PROJECT.md"}
 
 
@@ -46,6 +51,27 @@ def list_approvals(agent_id: str) -> dict:
     """Pending Lớp B approvals (already-redacted actions) for the confirm step."""
     loaded = require_agent(agent_id)
     return {"agent_id": agent_id, "pending": _pending_json(loaded)}
+
+
+@approvals_router.get("/pending")
+def pending_index() -> dict:
+    """Every pending approval across the fleet, each row tagged with its owning agent.
+
+    Approve/reject stay per-agent routes, so `agent_id` on the row is what lets a
+    caller build the action URL. A per-agent load failure is skipped rather than
+    fatal: one broken profile must not blank a queue whose other rows are actionable.
+    """
+    from my_crew.server import agent_views
+
+    pending: list[dict] = []
+    for entry in agent_views.load_registry():
+        try:
+            loaded = require_agent(entry.id)
+            rows = _pending_json(loaded)
+        except Exception:  # unreadable profile / missing store — other agents still count
+            continue
+        pending.extend({"agent_id": entry.id, **row} for row in rows)
+    return {"pending": pending, "count": len(pending)}
 
 
 @router.post("/{agent_id}/approvals/{approval_id}/approve")

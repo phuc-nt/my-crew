@@ -257,3 +257,32 @@ def test_stream_route_wire_bytes_carry_no_event_line(tmp_path):
 
 async def _run_tail_frames(room_id: str, since_seq: int, request) -> list[dict]:
     return [frame async for frame in ros._tail(room_id, since_seq, request)]
+
+
+def test_tail_frame_carries_source_room_for_mirrored_office_rows(tmp_path):
+    """A client watching only the aggregated `office` room sees events from every
+    workroom interleaved. Most projected bodies (`step_status`, `review`, `ceo`,
+    `handoff`) carry no room/task field at all, so without `source_room_id` on the
+    frame there is no way to attribute a step update to the task it belongs to —
+    the conversation list and the office overview both need that attribution."""
+    store = OfficeRoomStore(tmp_path / "office_room.sqlite3")
+    store.append(
+        "task-a",
+        author="coordinator",
+        kind="step_status",
+        body={"task_title": "Demo", "step_title": "B1", "status": "started"},
+        also_office=True,
+    )
+    store.close()
+
+    request = _FakeRequest(max_polls=1)
+    events = asyncio.run(_drain("office", 0, request))
+    assert len(events) == 1
+    assert events[0]["source_room_id"] == "task-a"
+
+
+def test_tail_frame_source_room_for_native_row_is_its_own_room(tmp_path):
+    _seed(tmp_path, 1)
+    request = _FakeRequest(max_polls=1)
+    events = asyncio.run(_drain("t1", 0, request))
+    assert events[0]["source_room_id"] == "t1"
