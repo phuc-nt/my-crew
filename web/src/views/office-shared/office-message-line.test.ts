@@ -5,7 +5,7 @@ import type { OfficeMessage } from '../../types'
 import { externalActionTone, messageLine } from './office-message-line'
 
 function msg(kind: OfficeMessage['kind'], body: OfficeMessage['body']): OfficeMessage {
-  return { seq: 1, ts: 't', author: 'coordinator', kind, body }
+  return { seq: 1, ts: 't', author: 'coordinator', source_room_id: 't1', kind, body }
 }
 
 test('assignment with pic appends the PIC suffix', () => {

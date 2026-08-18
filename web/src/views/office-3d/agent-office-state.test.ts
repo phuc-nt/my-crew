@@ -15,7 +15,7 @@ import {
 } from './agent-office-state'
 
 function msg(partial: Partial<OfficeMessage> & Pick<OfficeMessage, 'kind' | 'author'>): OfficeMessage {
-  return { seq: 1, ts: 't', body: {}, ...partial }
+  return { seq: 1, ts: 't', body: {}, source_room_id: 't1', ...partial }
 }
 
 describe('deriveAgentDesks', () => {

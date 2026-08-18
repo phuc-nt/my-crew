@@ -8,7 +8,7 @@ import type { OfficeMessage } from '../../types'
 import { ActivityFeed } from './activity-feed'
 
 function msg(kind: OfficeMessage['kind'], body: OfficeMessage['body'], seq: number): OfficeMessage {
-  return { seq, ts: 't', author: body.assigned_to ?? body.actor ?? 'coordinator', kind, body }
+  return { seq, ts: 't', author: body.assigned_to ?? body.actor ?? 'coordinator', source_room_id: 't1', kind, body }
 }
 
 const MESSAGES: OfficeMessage[] = [

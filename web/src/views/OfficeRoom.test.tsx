@@ -54,7 +54,7 @@ test('shows an empty-state message when the room has no activity yet', async () 
 test('renders a ceo event with its Vietnamese label', async () => {
   vi.spyOn(api, 'getOfficeRooms').mockResolvedValue({ rooms: ['office'] })
   mockStream([
-    { seq: 1, ts: 't', author: 'ceo', kind: 'ceo', body: { text: 'chuẩn bị demo' } },
+    { seq: 1, ts: 't', author: 'ceo', source_room_id: 't1', kind: 'ceo', body: { text: 'chuẩn bị demo' } },
   ])
   wrap()
   expect(await screen.findByText('CEO giao việc')).toBeInTheDocument()
@@ -65,7 +65,7 @@ test('renders an assignment event', async () => {
   vi.spyOn(api, 'getOfficeRooms').mockResolvedValue({ rooms: ['office'] })
   mockStream([
     {
-      seq: 1, ts: 't', author: 'coordinator', kind: 'assignment',
+      seq: 1, ts: 't', author: 'coordinator', source_room_id: 't1', kind: 'assignment',
       body: { task_title: 'Demo', step_count: 3, summary: 'Phân công: a, b' },
     },
   ])
@@ -78,7 +78,7 @@ test('renders a step_status event', async () => {
   vi.spyOn(api, 'getOfficeRooms').mockResolvedValue({ rooms: ['office'] })
   mockStream([
     {
-      seq: 1, ts: 't', author: 'coordinator', kind: 'step_status',
+      seq: 1, ts: 't', author: 'coordinator', source_room_id: 't1', kind: 'step_status',
       body: { task_title: 'Demo', step_title: 'draft', status: 'started', assigned_to: 'agent-a' },
     },
   ])
@@ -91,7 +91,7 @@ test('renders a step_status event with a phase tag appended', async () => {
   vi.spyOn(api, 'getOfficeRooms').mockResolvedValue({ rooms: ['office'] })
   mockStream([
     {
-      seq: 1, ts: 't', author: 'agent-a', kind: 'step_status',
+      seq: 1, ts: 't', author: 'agent-a', source_room_id: 't1', kind: 'step_status',
       body: {
         task_title: 'Demo', step_title: 'draft', status: 'started', assigned_to: 'agent-a',
         phase: 'tu-soat', attempt_id: 'att-1',
@@ -106,7 +106,7 @@ test('renders a handoff event', async () => {
   vi.spyOn(api, 'getOfficeRooms').mockResolvedValue({ rooms: ['office'] })
   mockStream([
     {
-      seq: 1, ts: 't', author: 'agent-a', kind: 'handoff',
+      seq: 1, ts: 't', author: 'agent-a', source_room_id: 't1', kind: 'handoff',
       body: { task_title: 'Demo', step_title: 'draft', message: 'đã xong bản nháp' },
     },
   ])
@@ -121,7 +121,7 @@ test('renders a milestone event', async () => {
   vi.spyOn(api, 'getOfficeRooms').mockResolvedValue({ rooms: ['office'] })
   mockStream([
     {
-      seq: 1, ts: 't', author: 'coordinator', kind: 'milestone',
+      seq: 1, ts: 't', author: 'coordinator', source_room_id: 't1', kind: 'milestone',
       body: { task_title: 'Demo', milestone: 'done', message: 'hoàn tất' },
     },
   ])

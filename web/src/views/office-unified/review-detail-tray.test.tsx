@@ -14,7 +14,7 @@ import { ReviewDetailTray } from './review-detail-tray'
 afterEach(() => vi.restoreAllMocks())
 
 function reviewMessage(body: OfficeMessage['body'], seq = 1): OfficeMessage {
-  return { seq, ts: 't', author: 'reviewer', kind: 'review', body }
+  return { seq, ts: 't', author: 'reviewer', source_room_id: 't1', kind: 'review', body }
 }
 
 const ROW: CaptureRow = {

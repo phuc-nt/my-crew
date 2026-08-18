@@ -72,7 +72,7 @@ test('renders the 2D fallback table (not Canvas) when prefers-reduced-motion is 
   stubReducedMotion(true)
   mockStream([
     {
-      seq: 1, ts: 't', author: 'coordinator', kind: 'step_status',
+      seq: 1, ts: 't', author: 'coordinator', source_room_id: 't1', kind: 'step_status',
       body: { task_title: 'Demo', step_title: 'draft', status: 'started', assigned_to: 'agent-a' },
     },
   ])
@@ -87,7 +87,7 @@ test('the fallback table reflects a done state from a handoff event', () => {
   stubReducedMotion(true)
   mockStream([
     {
-      seq: 1, ts: 't', author: 'agent-b', kind: 'handoff',
+      seq: 1, ts: 't', author: 'agent-b', source_room_id: 't1', kind: 'handoff',
       body: { task_title: 'Demo', step_title: 'review', message: 'xong', assigned_to: 'agent-b' },
     },
   ])
@@ -106,8 +106,8 @@ test('shows an empty-state hint when no agents have appeared in the stream yet',
 test('milestone/ceo events alone do not create a desk row in the fallback table', () => {
   stubReducedMotion(true)
   mockStream([
-    { seq: 1, ts: 't', author: 'ceo', kind: 'ceo', body: { text: 'bắt đầu' } },
-    { seq: 2, ts: 't', author: 'coordinator', kind: 'milestone', body: { task_title: 'Demo', milestone: 'kickoff' } },
+    { seq: 1, ts: 't', author: 'ceo', source_room_id: 't1', kind: 'ceo', body: { text: 'bắt đầu' } },
+    { seq: 2, ts: 't', author: 'coordinator', source_room_id: 't1', kind: 'milestone', body: { task_title: 'Demo', milestone: 'kickoff' } },
   ])
   renderOffice()
   expect(screen.getAllByText(DICT.vi['agentStatusTable.empty']).length).toBeGreaterThan(0)
@@ -145,7 +145,7 @@ const liveTs = () => new Date(Date.now() + 5_000).toISOString()
 
 function handoffAt(seq: number, ts: string): OfficeMessage {
   return {
-    seq, ts, author: 'noi-dung', kind: 'handoff',
+    seq, ts, author: 'noi-dung', source_room_id: 't1', kind: 'handoff',
     body: { task_title: 'Demo', step_title: 'soạn', message: 'xong', assigned_to: 'noi-dung' },
   }
 }
@@ -198,7 +198,7 @@ test('v56: toàn cảnh never dots — the results tab there is only a pick-a-ro
 test('v55: the FIRST handoff of a brand-new room dots the tab', () => {
   stubReducedMotion(true)
   const step: OfficeMessage = {
-    seq: 1, ts: OLD_TS, author: 'coordinator', kind: 'step_status',
+    seq: 1, ts: OLD_TS, author: 'coordinator', source_room_id: 't1', kind: 'step_status',
     body: { task_title: 'Demo', step_title: 'soạn', status: 'started', assigned_to: 'noi-dung' },
   }
   // A room the CEO just created: no handoff yet, only progress events.
@@ -216,7 +216,7 @@ test('v54 P3: clicking a review feed line opens the detail tray in the right col
   stubReducedMotion(true)
   mockStream([
     {
-      seq: 1, ts: 't', author: 'reviewer', kind: 'review',
+      seq: 1, ts: 't', author: 'reviewer', source_room_id: 't1', kind: 'review',
       body: {
         task_title: 'Ra mắt', step_title: 'soát bản nháp', verdict: 'needs_rework',
         failure_count: 1, assigned_to: 'reviewer',

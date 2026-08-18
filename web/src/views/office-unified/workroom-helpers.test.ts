@@ -7,7 +7,7 @@ import { feedStatusClass, matchesFilter } from './activity-feed'
 import { maxSeqOf } from './artifact-panel'
 
 function msg(kind: OfficeMessage['kind'], body: OfficeMessage['body']): OfficeMessage {
-  return { seq: 1, ts: 't', author: 'x', kind, body }
+  return { seq: 1, ts: 't', author: 'x', source_room_id: 't1', kind, body }
 }
 
 test('visibleDesks filters ghosts and keeps order; null roster = no filtering', () => {
@@ -29,8 +29,8 @@ test('feedStatusClass maps kinds/statuses onto token classes', () => {
 test('maxSeqOf picks the highest seq among the given kinds only', () => {
   const msgs = [
     msg('handoff', {}), // seq 1 (msg helper fixes seq=1)
-    { seq: 9, ts: 't', author: 'x', kind: 'review' as const, body: {} },
-    { seq: 20, ts: 't', author: 'x', kind: 'ceo' as const, body: {} },
+    { seq: 9, ts: 't', author: 'x', source_room_id: 't1', kind: 'review' as const, body: {} },
+    { seq: 20, ts: 't', author: 'x', source_room_id: 't1', kind: 'ceo' as const, body: {} },
   ]
   // ceo (seq 20) is not counted; review (9) wins over handoff (1)
   expect(maxSeqOf(msgs, ['handoff', 'review'])).toBe(9)
