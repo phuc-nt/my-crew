@@ -55,6 +55,20 @@ class TestRecorderCallback:
             ("web-prefetch", 1), ("web_search", 2), ("scrape", 3),
         ]
 
+    def test_the_official_page_fetch_shows_as_activity_without_leaking_urls(self, tmp_path):
+        """Fetch is the pipeline's longest single wait (3 pages × 60s timeout), so a feed
+        that ignores it renders a working step as idle for minutes. The URLs stay out —
+        the allowlist has no field for them."""
+        events: list[dict] = []
+        rec = _recorder(tmp_path, events)
+        rec.record({"t": "fetch", "urls": ["https://www.spotify.com/vn/"], "bytes": 900})
+        rec.close()
+        assert len(events) == 1
+        assert set(events[0]) == set(ACTIVITY_FIELDS)
+        assert events[0]["tool"] == "web-fetch"
+        assert events[0]["phase"] == "calling-tool"
+        assert "spotify" not in json.dumps(events[0]).lower()
+
     def test_llm_request_maps_to_writing_and_other_events_stay_silent(self, tmp_path):
         events: list[dict] = []
         rec = _recorder(tmp_path, events)

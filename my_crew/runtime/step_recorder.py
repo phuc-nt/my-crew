@@ -3,7 +3,8 @@
 Every team-step attempt gets one append-only JSONL file capturing its full process:
 `data_dir/artifacts/team-tasks/<task_id>/transcripts/<step_id>-<attempt_id>.jsonl`.
 Events: `meta`, `llm_request`, `llm_response`, `loop_input`, `tool_call`,
-`tool_result`, `prefetch`, `outcome` — each line one JSON object with `t`, `seq`, `ts`.
+`tool_result`, `prefetch`, `fetch`, `outcome` — each line one JSON object with `t`,
+`seq`, `ts`.
 
 A contextvar carries the recorder so hooks deep in the stack (`LlmClient.complete`,
 `community_loop_core`, `collect_prefetch`) record without threading a parameter through
@@ -120,6 +121,12 @@ class StepRecorder:
         elif kind == "prefetch":
             self._tool_count += 1
             tool, phase = "web-prefetch", "calling-tool"
+        elif kind == "fetch":
+            # The fetch round is the pipeline's longest single wait (up to 3 pages at a
+            # 60s timeout each), so a feed that ignores it shows a live step as idle for
+            # minutes. Tool name only — the allowlist below carries no URLs.
+            self._tool_count += 1
+            tool, phase = "web-fetch", "calling-tool"
         elif kind == "llm_request":
             tool, phase = "", "writing"
         else:

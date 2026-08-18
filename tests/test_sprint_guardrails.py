@@ -330,3 +330,35 @@ def test_sprint_attempts_count_toward_the_metrics_the_band_loop_reads(
     agent = agent_metrics()["agents"]["researcher"]
     assert agent["attempts"] == 7
     assert agent["needs_decision_rate"]["value"] == round(1 / 7, 4)
+
+
+# --- the sprint's rework node keeps a way to look things up --------------------------
+
+
+def _toolless_for(step) -> bool:
+    from my_crew.runtime.team_step_runner import step_is_toolless
+
+    return step_is_toolless(step)
+
+
+def test_a_web_sprint_keeps_a_search_hook_for_its_rework_node():
+    """The sprint pipeline replaces the WORK node and runs its own searches, so the
+    graph's hook is unreachable there. `rework` is a different node — and it was the
+    one starving: asked to close data gaps with no way to look anything up, it blanked
+    the rows it could not defend and stalled the task (f62348234949, 7ebfc0374c5c).
+    A web-shaped sprint must therefore NOT be wired tool-less."""
+    step = SimpleNamespace(step_type="sprint", needs_web=True, intervention_count=0)
+    assert _toolless_for(step) is False
+
+
+def test_a_tool_less_sprint_stays_tool_less():
+    """Intake ruled this step write/reason-only — there is nothing to look up, and a
+    hook here would buy a doomed search plus a disclaimer about it."""
+    step = SimpleNamespace(step_type="sprint", needs_web=False, intervention_count=0)
+    assert _toolless_for(step) is True
+
+
+def test_a_review_step_stays_tool_less():
+    """Grading reads its handoff; the hook's one search per run was pure cost."""
+    step = SimpleNamespace(step_type="review", needs_web=True, intervention_count=0)
+    assert _toolless_for(step) is True

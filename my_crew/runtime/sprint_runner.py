@@ -174,9 +174,20 @@ def listed_entities(text: str, *, prose: bool = False) -> list[str]:
     colon = _longest_enumeration(
         re.finditer(r":\s*([^.\n:?!]+)", text or ""), stop_at_attributes=True
     )
-    if colon or not prose:
+    if not prose:
         return colon
-    return _prose_enumeration(text or "")
+    # An ALL-LOWERCASE colon list is the attribute clause, and the subjects are then
+    # somewhere else in the sentence — the same subjects-beat-attributes ordering the
+    # parenthesised branch above encodes, in the third shape real briefs use: the names
+    # in running prose and the criteria behind a colon ("... gồm Spotify, YouTube Music,
+    # ... trên các tiêu chí: giá gói cá nhân, kho nhạc Việt, chất lượng âm thanh" — live
+    # task 7ebfc0374c5c). Letting the colon win there searched for the three CRITERIA,
+    # found nothing usable about any service, and stalled the task. Capitalisation is
+    # the same discriminator `_prose_enumeration` already relies on, so a colon list of
+    # real names ("Phải có: Spotify, Zing MP3") still wins as before.
+    if colon and any(_capitalised_name_word(item) for item in colon):
+        return colon
+    return _prose_enumeration(text or "") or colon
 
 
 def _longest_enumeration(matches: Any, *, stop_at_attributes: bool = False) -> list[str]:
@@ -266,13 +277,19 @@ def _proper_noun_items(parts: list[str]) -> list[str]:
     """`parts` reduced to capitalised names, or [] when they are not a name list.
 
     Leading parts with no trailing capitalised run are the preceding clause and are
-    skipped; a lowercase run in the MIDDLE means the commas are joining clauses, not
-    names, and rejects the whole run — keeping the survivors would invent search
-    subjects from half a sentence.
+    skipped. A part in the MIDDLE that opens with a capitalised run and then turns
+    lowercase is the list's LAST entity carrying the trailing attribute clause —
+    "Nhaccuatui về giá gói cá nhân, kho nhạc Việt và chất lượng âm thanh" — which
+    lands mid-list (not in the final part) whenever the attributes bring commas of
+    their own. The name is kept and the list ends there. A middle part with NO
+    leading capitalised run means the commas are joining clauses, not names, and
+    rejects the whole run — keeping the survivors would invent search subjects from
+    half a sentence.
     """
     items: list[str] = []
     for index, part in enumerate(parts):
         words = part.split()
+        ends_list = False
         if not items:
             j = len(words)
             while j and _capitalised_name_word(words[j - 1]):
@@ -280,18 +297,23 @@ def _proper_noun_items(parts: list[str]) -> list[str]:
             words = words[j:]
             if not words:
                 continue
-        elif index == len(parts) - 1:
+        elif index == len(parts) - 1 or not all(
+            _capitalised_name_word(w) for w in words
+        ):
             j = 0
             while j < len(words) and _capitalised_name_word(words[j]):
                 j += 1
+            if j == 0 and index < len(parts) - 1:
+                return []
             words = words[:j]
             if not words:
                 continue
-        elif not all(_capitalised_name_word(w) for w in words):
-            return []
+            ends_list = index < len(parts) - 1
         if len(words) > 7 or not words[0].strip(_EDGE_PUNCT)[:1].isupper():
             return []
         items.append(" ".join(w.strip(_EDGE_PUNCT) for w in words))
+        if ends_list:
+            break
     return items
 
 
@@ -677,6 +699,58 @@ def missing_note(gaps: list[str], bundle: str) -> str:
     return "PHẦN THIẾU (do quy trình tự ghi nhận):\n" + "\n".join(lines)
 
 
+def _fetch_official_pages(
+    settings: Any,
+    bundle: str,
+    entities: list[str],
+    *,
+    on_beat: Callable[[], None] | None = None,
+) -> str:
+    """Pick the official URLs out of `bundle` and scrape them; "" when there is nothing
+    to add. Wrapped so a fetch can never fail a step: this round is a bonus on top of
+    the snippet bundle the caller already holds.
+
+    The transcript event is what makes the round verifiable on a live run. A fix that
+    cannot be seen in a transcript can only ever be unit-tested, and this arc already
+    shipped three such fixes that no live run exercised. `skipped` is part of that: with
+    no Firecrawl configured the round still picks URLs and still fetches nothing, so
+    `bytes: 0` alone cannot tell "the capability is absent" from "all pages failed" —
+    and the first is the DEFAULT deployment, so a reader who guesses wrong guesses wrong
+    most of the time.
+    """
+    from my_crew.runtime.official_page_fetch import (
+        MAX_FETCH_PAGES,
+        fetch_official_pages,
+        firecrawl_available,
+    )
+    from my_crew.runtime.official_page_pick import pick_official_urls
+    from my_crew.runtime.step_recorder import record_event
+
+    if not firecrawl_available(settings):
+        record_event({"t": "fetch", "urls": [], "bytes": 0, "skipped": "no-firecrawl"})
+        return ""
+    try:
+        urls = pick_official_urls(bundle, entities, limit=MAX_FETCH_PAGES)
+        fetched = fetch_official_pages(settings, urls, on_beat=on_beat) if urls else ""
+    except Exception:  # noqa: BLE001 — an enhancement round must never fail the step
+        logger.warning("sprint: official-page fetch failed, using snippets", exc_info=True)
+        record_event({"t": "fetch", "urls": [], "bytes": 0, "skipped": "error"})
+        return ""
+    if not urls:
+        record_event({"t": "fetch", "urls": [], "bytes": 0, "skipped": "no-official-url"})
+        return ""
+    if not fetched:
+        # Firecrawl IS configured and URLs WERE picked, yet nothing came back: every page
+        # was blocked, 404, timed out, or returned empty. Without a reason here this is
+        # the one remaining `bytes: 0` with a populated `urls` list — the exact ambiguity
+        # `skipped` exists to remove, surviving on the only path that needs a live
+        # Firecrawl to reach. A live run showed this shape before the field was added.
+        record_event({"t": "fetch", "urls": urls, "bytes": 0, "skipped": "all-pages-failed"})
+        return ""
+    record_event({"t": "fetch", "urls": urls, "bytes": len(fetched)})
+    return fetched
+
+
 def build_sprint_work(
     *,
     loaded: Any,
@@ -687,6 +761,7 @@ def build_sprint_work(
     prefetch: Callable[[Any, Any, list[str]], str] | None = None,
     on_phase: Callable[[str], None] | None = None,
     needs_web: bool = True,
+    retry_round: int = 0,
 ) -> Callable[[str, str, Any], tuple[str, float | None]]:
     """Return a `work_override` callable running the sprint pipeline for one step.
 
@@ -709,6 +784,11 @@ def build_sprint_work(
     note with nothing to look up still ran a doomed prefetch, hit the no-capability
     sentinel, and shipped the CEO a "không thực hiện được tra cứu web" disclaimer
     about a search the task never needed.
+
+    `retry_round` is the step's intervention count — 0 on the first attempt. It shifts
+    the prefetch queries onto attribute angles the earlier attempt never sent, so a
+    retry gathers DIFFERENT evidence instead of re-buying the bundle that already
+    failed its coverage check.
     """
     from my_crew.runtime.collect_prefetch import prefetch_queries
 
@@ -751,6 +831,15 @@ def build_sprint_work(
         queries = entity_queries(goal, acceptance) if needs_web else []
         _prefetch_cap, total_queries_cap = sprint_query_budget(len(entities))
         angles = attribute_angles(goal, acceptance, entities) if needs_web else []
+        if retry_round > 0 and queries and angles:
+            # Retry attempt: lead with an angle the earlier attempts never sent. The
+            # topic+entity form they used is already spent — its results are what the
+            # coordinator judged insufficient — so repeating it wastes the whole
+            # prefetch budget on answers the step has seen.
+            queries = [
+                f"{q} {angles[(retry_round - 1 + i) % len(angles)]}"
+                for i, q in enumerate(queries)
+            ]
         # Every query ever sent, prefetch included: its answer — thin or not — is in
         # the bundle, so no later round may spend budget re-sending the same string.
         asked = {q.lower() for q in queries}
@@ -763,6 +852,18 @@ def build_sprint_work(
             except Exception:  # noqa: BLE001 — same fail-open contract as the launcher
                 logger.warning("sprint: prefetch failed, drafting without it", exc_info=True)
                 bundle = ""
+
+        # Snippets name the vendor's page but rarely carry the figure on it, so the
+        # draft was forced onto resellers — the source quality the blind judge marked
+        # down 3 rounds running. Open the pages the picker vouches for, once, before
+        # drafting. Pure enhancement: no Firecrawl, nothing picked, or a failed scrape
+        # all leave `bundle` exactly as the snippet round built it.
+        if needs_web and bundle:
+            fetched = _fetch_official_pages(
+                settings, bundle, entities, on_beat=lambda: _beat("sprint_fetch")
+            )
+            if fetched:
+                bundle = f"{bundle}\n\n{fetched}"
 
         client = LlmClient(settings)
         messages = _draft_messages(

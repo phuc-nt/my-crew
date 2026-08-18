@@ -11,6 +11,7 @@ failure mode that would make the report untrustworthy.
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -22,6 +23,7 @@ from my_crew.runtime.sprint_runner import (
     entity_queries,
     listed_entities,
     missing_note,
+    resolve_entities,
 )
 
 
@@ -56,13 +58,14 @@ def llm(monkeypatch):
     return _install
 
 
-def _work(prefetch, *, acceptance: str = "", on_phase=None):
+def _work(prefetch, *, acceptance: str = "", on_phase=None, retry_round: int = 0):
     return build_sprint_work(
         loaded=SimpleNamespace(soul="", project="", web_search=True),
         settings=SimpleNamespace(),
         acceptance=acceptance,
         prefetch=prefetch,
         on_phase=on_phase,
+        retry_round=retry_round,
     )
 
 
@@ -188,6 +191,33 @@ def test_a_lowercase_attribute_run_is_never_mistaken_for_a_prose_entity_list():
     """Vietnamese attributes are lowercase; capitalization is the discriminator that
     keeps "giá, tính năng và hỗ trợ" from becoming three fake search subjects."""
     assert listed_entities("Đánh giá công cụ theo giá, tính năng và hỗ trợ", prose=True) == []
+
+
+def test_a_prose_list_whose_attribute_clause_brings_its_own_commas_still_parses():
+    """Live task e577613a962f: the decomposer rewrote the streaming brief without
+    parentheses or a colon — "gồm Spotify, …, Nhaccuatui về giá gói cá nhân, kho
+    nhạc Việt và chất lượng âm thanh". The attribute clause's own commas push the
+    last entity into a MIDDLE part ("Nhaccuatui về giá gói cá nhân"), which the
+    all-capitalised middle rule used to reject wholesale — one kitchen-sink query,
+    three rework rounds, and a blind-judge loss on source quality. A middle part
+    that OPENS with a capitalised run now ends the list there instead."""
+    goal = (
+        "So sánh 5 dịch vụ streaming nhạc tại Việt Nam gồm Spotify, YouTube Music, "
+        "Apple Music, Zing MP3, Nhaccuatui về giá gói cá nhân, kho nhạc Việt và "
+        "chất lượng âm thanh; nêu rõ nguồn cho từng thông tin."
+    )
+    assert listed_entities(goal, prose=True) == [
+        "Spotify", "YouTube Music", "Apple Music", "Zing MP3", "Nhaccuatui",
+    ]
+
+
+def test_a_middle_part_with_no_leading_capitalised_run_still_rejects_the_splice():
+    """The mid-list cut must not weaken the clause-splice guard: a middle part that
+    opens lowercase means the commas join clauses, not names, so the whole run is
+    rejected even though the names collected before it would have met the floor."""
+    assert listed_entities(
+        "So sánh Spotify, YouTube Music, rồi đánh giá Zalo, Momo và Grab", prose=True
+    ) == []
 
 
 def test_a_lowercase_middle_item_rejects_the_prose_run_instead_of_being_skipped():
@@ -708,3 +738,234 @@ def test_a_failed_overview_query_does_not_mask_every_entity():
 def test_a_single_entity_failure_still_suppresses_that_entity():
     bundle = f"{mod._NO_RESULTS} (truy vấn: so sánh giá spotify) không có kết quả"
     assert coverage_gaps("Chỉ nói Netflix.", ["Netflix", "Spotify"], bundle) == []
+
+
+def test_a_subject_list_in_prose_beats_an_attribute_list_behind_a_colon():
+    """Live task 7ebfc0374c5c: the step title named the five services in running prose
+    and put the three CRITERIA behind a colon ("... trên các tiêu chí: giá gói cá
+    nhân, ..."). The colon branch won, so the sprint searched for the criteria, found
+    nothing usable about any service, and the task stalled. Subjects beat attributes
+    here for the same reason the parenthesised branch already outranks the colon."""
+    title = (
+        "So sánh 5 dịch vụ streaming nhạc tại Việt Nam gồm Spotify, YouTube Music, "
+        "Apple Music, Zing MP3, Nhaccuatui trên các tiêu chí: giá gói cá nhân, "
+        "kho nhạc Việt, chất lượng âm thanh. Nêu rõ nguồn cho từng thông tin."
+    )
+    assert resolve_entities(title, "") == [
+        "Spotify", "YouTube Music", "Apple Music", "Zing MP3", "Nhaccuatui",
+    ]
+
+
+def test_a_colon_list_of_real_names_still_wins_over_prose():
+    """The discriminator is capitalisation, not position: a colon that introduces the
+    SUBJECTS ("Phải có: Spotify, Zing MP3") must keep winning as it always has."""
+    assert resolve_entities("Khảo sát thị trường", "Phải có: Spotify, Zing MP3, Nhaccuatui") == [
+        "Spotify", "Zing MP3", "Nhaccuatui",
+    ]
+
+
+def test_a_retry_attempt_does_not_re_send_the_queries_that_already_failed(llm):
+    """A coordinator retry re-runs this deterministic pipeline from scratch, so without
+    a rotation it sends byte-identical queries, gets the bundle that was already judged
+    insufficient, and stalls the same way (live tasks f62348234949, 7ebfc0374c5c)."""
+    seen: list[list[str]] = []
+
+    def _prefetch(_loaded, _settings, queries):
+        seen.append(list(queries))
+        return "KẾT QUẢ TÌM KIẾM (truy vấn: x):\nNetflix 260k, Spotify 59k"
+
+    goal = "So sánh 2 dịch vụ: Netflix, Spotify"
+    acceptance = "- Nêu giá gói cá nhân\n- Nêu chất lượng hình ảnh"
+
+    llm(["Netflix 260k. Spotify 59k."])
+    _work(_prefetch, acceptance=acceptance)(goal, "", None)
+    llm(["Netflix 260k. Spotify 59k."])
+    _work(_prefetch, acceptance=acceptance, retry_round=1)(goal, "", None)
+
+    first, retry = seen[0], seen[1]
+    assert retry != first, "a retry must ask something the failed attempt did not"
+    assert all(q not in first for q in retry)
+    # The subjects are still covered — only the angle changed, so the retry still
+    # searches FOR Netflix and Spotify rather than wandering off the goal.
+    assert any("Netflix" in q for q in retry) and any("Spotify" in q for q in retry)
+
+
+# --- official-page fetch round -------------------------------------------------------
+
+
+def test_without_firecrawl_the_bundle_reaching_the_draft_is_unchanged(llm):
+    """The deployment default. The fetch round must be invisible: the draft sees exactly
+    the snippet bundle prefetch produced, so a deployment that never configures
+    Firecrawl behaves as it did before this round existed."""
+    # Deliberately a bundle the picker WOULD match, so what this asserts is the absent
+    # Firecrawl config skipping the round — not the picker happening to find nothing.
+    bundle = (
+        "KẾT QUẢ TÌM KIẾM (truy vấn: x):\nhttps://www.spotify.com/vn/\nSpotify 59k"
+        "\n\nhttps://zingmp3.vn/vip\nZing MP3"
+    )
+
+    fake = llm(["Spotify 59k."])
+    _work(lambda *_a: bundle)("So sánh 2 dịch vụ: Spotify, Zing MP3", "", None)
+
+    drafted = "\n".join(m["content"] for m in fake.calls[0])
+    assert bundle in drafted
+    assert "TRANG CHÍNH THỨC" not in drafted
+
+
+def test_with_firecrawl_the_official_page_reaches_the_draft(llm, monkeypatch):
+    """The payoff: the price lives on the vendor's page, not in the snippet, so the
+    draft can cite the official source instead of falling back to a reseller."""
+    monkeypatch.setattr(
+        "my_crew.tools.firecrawl_tool.scrape_url",
+        lambda url, config, **_k: SimpleNamespace(
+            url=url, title="Spotify Premium", markdown="Gói cá nhân 59.000đ/tháng",
+            status_code=200,
+        ),
+    )
+    work = build_sprint_work(
+        loaded=SimpleNamespace(soul="", project="", web_search=True),
+        settings=SimpleNamespace(
+            firecrawl_base_url="http://localhost:3002", firecrawl_api_key=None
+        ),
+        prefetch=lambda *_a: (
+            "KẾT QUẢ TÌM KIẾM (truy vấn: x):\nhttps://www.spotify.com/vn/premium/\nSpotify"
+            "\n\nhttps://zingmp3.vn/vip\nZing MP3"
+        ),
+    )
+    fake = llm(["Spotify 59.000đ."])
+    work("So sánh 2 dịch vụ: Spotify, Zing MP3", "", None)
+
+    drafted = "\n".join(m["content"] for m in fake.calls[0])
+    assert "TRANG CHÍNH THỨC" in drafted
+    assert "59.000" in drafted
+
+
+def test_a_reseller_url_in_the_bundle_is_never_fetched(llm, monkeypatch):
+    """Fetching the aggregator would spend the budget re-buying the exact source
+    quality this round exists to replace.
+
+    The entity names are the aggregators themselves, so the host DOES pass the
+    brand-label rule and only the aggregator guard can refuse it. With unrelated
+    entities the label rule alone would refuse these hosts and this test would pass
+    with the guard deleted — verified, and that is what it used to do.
+    """
+    scraped: list[str] = []
+
+    def _scrape(url, config, **_k):
+        scraped.append(url)
+        return SimpleNamespace(url=url, title="t", markdown="nội dung", status_code=200)
+
+    monkeypatch.setattr("my_crew.tools.firecrawl_tool.scrape_url", _scrape)
+    work = build_sprint_work(
+        loaded=SimpleNamespace(soul="", project="", web_search=True),
+        settings=SimpleNamespace(
+            firecrawl_base_url="http://localhost:3002", firecrawl_api_key=None
+        ),
+        prefetch=lambda *_a: (
+            "KẾT QUẢ TÌM KIẾM (truy vấn: x):\n"
+            "https://www.amazon.com/music/\nĐại lý"
+            "\n\nhttps://vi.wikipedia.org/wiki/X\nBách khoa"
+        ),
+    )
+    llm(["Nội dung."])
+    work("So sánh 2 dịch vụ: Amazon Music, Wikipedia", "", None)
+    assert scraped == []
+
+
+def test_a_failing_fetch_still_lets_the_step_draft(llm, monkeypatch):
+    """Firecrawl going down must degrade to today's behaviour, not fail the step."""
+    def _boom(url, config, **_k):
+        raise RuntimeError("firecrawl offline")
+
+    monkeypatch.setattr("my_crew.tools.firecrawl_tool.scrape_url", _boom)
+    work = build_sprint_work(
+        loaded=SimpleNamespace(soul="", project="", web_search=True),
+        settings=SimpleNamespace(
+            firecrawl_base_url="http://localhost:3002", firecrawl_api_key=None
+        ),
+        prefetch=lambda *_a: (
+            "KẾT QUẢ TÌM KIẾM (truy vấn: x):\nhttps://www.spotify.com/vn/\nSpotify 59k"
+            "\n\nhttps://zingmp3.vn/vip\nZing MP3"
+        ),
+    )
+    fake = llm(["Spotify 59k."])
+    text, _cost = work("So sánh 2 dịch vụ: Spotify, Zing MP3", "", None)
+    assert "Spotify 59k." in text
+    assert "TRANG CHÍNH THỨC" not in "\n".join(m["content"] for m in fake.calls[0])
+
+
+def test_a_toolless_step_never_fetches(llm, monkeypatch):
+    """needs_web=False means the whole search machinery stays off; the fetch round is
+    part of that machinery."""
+    scraped: list[str] = []
+    monkeypatch.setattr(
+        "my_crew.tools.firecrawl_tool.scrape_url",
+        lambda url, config, **_k: scraped.append(url),
+    )
+    work = build_sprint_work(
+        loaded=SimpleNamespace(soul="", project="", web_search=True),
+        settings=SimpleNamespace(
+            firecrawl_base_url="http://localhost:3002", firecrawl_api_key=None
+        ),
+        prefetch=lambda *_a: "https://www.spotify.com/vn/",
+        needs_web=False,
+    )
+    llm(["Thư cảm ơn."])
+    work("Viết thư cảm ơn", "", None)
+    assert scraped == []
+
+
+def test_the_fetch_round_records_why_it_fetched_nothing(llm, tmp_path):
+    """A round that fetched nothing must say WHICH nothing. On the default deployment
+    (no Firecrawl) the picker would still find URLs, so `bytes: 0` alone cannot separate
+    "capability absent" from "all pages failed" — and absent is the common case, so a
+    reader guessing from bytes guesses wrong most of the time."""
+    from my_crew.config.config_builders import build_settings_from_dict
+    from my_crew.runtime.step_recorder import open_step_recorder, step_transcript_path
+
+    bundle = "KẾT QUẢ TÌM KIẾM (truy vấn: x):\nhttps://www.spotify.com/vn/\nSpotify 59k"
+    settings = build_settings_from_dict({"data_dir": tmp_path})
+    llm(["Spotify 59k."])
+    with open_step_recorder(settings, agent_id="a1", task_id="t1", step_id="s1",
+                            attempt_id="att1"):
+        _work(lambda *_a: bundle)("So sánh 2 dịch vụ: Spotify, Zing MP3", "", None)
+
+    path = step_transcript_path(tmp_path, "t1", "s1", "att1")
+    events = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    fetches = [e for e in events if e["t"] == "fetch"]
+    assert len(fetches) == 1
+    assert fetches[0]["skipped"] == "no-firecrawl"
+    assert fetches[0]["bytes"] == 0
+
+
+def test_a_round_where_every_page_failed_says_so(llm, tmp_path, monkeypatch):
+    """The gap a live run exposed: with Firecrawl CONFIGURED and URLs picked, a total
+    fetch failure recorded `bytes: 0` with a populated `urls` list and no reason — the
+    one ambiguous shape left, on the only path that needs a live Firecrawl to reach.
+    "All pages failed" and "capability absent" demand different responses (fix the
+    scraper vs configure one), so the transcript has to name which happened."""
+    import my_crew.runtime.official_page_fetch as fetch_mod
+
+    bundle = "KẾT QUẢ TÌM KIẾM (truy vấn: x):\nhttps://www.spotify.com/vn/\nSpotify 59k"
+    monkeypatch.setattr(fetch_mod, "firecrawl_available", lambda _s: True)
+    # Configured but every page comes back empty — the real-world blocked/404/timeout case.
+    monkeypatch.setattr(fetch_mod, "fetch_official_pages",
+                        lambda *_a, **_kw: "", raising=False)
+
+    from my_crew.config.config_builders import build_settings_from_dict
+    from my_crew.runtime.step_recorder import open_step_recorder, step_transcript_path
+
+    settings = build_settings_from_dict({"data_dir": tmp_path})
+    llm(["Spotify 59k."])
+    with open_step_recorder(settings, agent_id="a1", task_id="t2", step_id="s1",
+                            attempt_id="att1"):
+        _work(lambda *_a: bundle)("So sánh 2 dịch vụ: Spotify, Zing MP3", "", None)
+
+    path = step_transcript_path(tmp_path, "t2", "s1", "att1")
+    events = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    fetch = next(e for e in events if e["t"] == "fetch")
+    assert fetch["skipped"] == "all-pages-failed"
+    assert fetch["bytes"] == 0
+    # The URLs stay: WHICH pages failed is the diagnostic value here, unlike the
+    # no-capability path where there is nothing to diagnose.
+    assert fetch["urls"] == ["https://www.spotify.com/vn/"]
