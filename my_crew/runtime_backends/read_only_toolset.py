@@ -26,6 +26,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from my_crew.runtime.content_caps import (
+    ERROR_MSG_CHARS,
+    PAGE_CONTENT_CHARS,
+    cap_with_footer,
+)
+
 if TYPE_CHECKING:
     from my_crew.config.reporting_config import ReportingConfig
 
@@ -35,9 +41,6 @@ logger = logging.getLogger(__name__)
 class ToolPolicyError(RuntimeError):
     """A tool was refused by the policy shim (not a read tool, or classify blocked it)."""
 
-
-#: Cap on the error text fed back to the model — enough to act on, never a traceback dump.
-_ERROR_MSG_MAX_CHARS = 300
 
 #: Common secret-key prefixes (OpenAI/OpenRouter sk-, Slack xox-, GitHub ghp-, GitLab glpat-).
 #: Provider error messages sometimes echo the offending key — scrub before it reaches the model.
@@ -49,7 +52,7 @@ def _short_error_text(exc: BaseException) -> str:
     msg = str(exc).strip() or exc.__class__.__name__
     msg = "".join(ch for ch in msg if ch == "\n" or ord(ch) >= 32)
     msg = _TOKEN_LIKE_RE.sub("***", msg)
-    return msg[:_ERROR_MSG_MAX_CHARS]
+    return msg[:ERROR_MSG_CHARS]
 
 
 def _is_loop_control_exception(exc: BaseException) -> bool:
@@ -129,10 +132,6 @@ def _shim(tool_name: str, fn: Callable[[dict], Any]) -> Callable[[dict], Any]:
     return tool_error_guard(tool_name, _guarded)
 
 
-#: Cap on scraped markdown fed back into the loop (untrusted web content — keep it bounded).
-_SCRAPE_MAX_CHARS = 8000
-
-
 def _firecrawl_tool(settings: Any) -> Callable[[dict], Any] | None:
     """A `web.scrape` callable backed by Firecrawl, or None when Firecrawl is not configured.
 
@@ -160,7 +159,11 @@ def _firecrawl_tool(settings: Any) -> Callable[[dict], Any] | None:
             return f"(bị chặn: {exc})"
         except Exception as exc:  # noqa: BLE001 — scrape best-effort, never crash the loop
             return f"(scrape lỗi: {exc})"
-        md = res.markdown[:_SCRAPE_MAX_CHARS]
+        md = cap_with_footer(
+            res.markdown, PAGE_CONTENT_CHARS,
+            "Cần phần sau: scrape URL của mục/trang con sát nội dung cần, "
+            "hoặc search với từ khoá cụ thể hơn.",
+        )
         return f"# {res.title}\n(nguồn: {res.url})\n\n{md}"
 
     return _scrape

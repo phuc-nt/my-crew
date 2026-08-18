@@ -25,6 +25,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 _KNOWN_KINDS = {"native", "create_agent", "deep_agent"}
+# Engines for the tools tier (kind create_agent): `thin` = the self-owned flat tool loop
+# (thin_tool_loop, default), `langchain` = the LangChain create_agent react loop kept
+# selectable for A/B comparison. Other kinds have exactly one engine, so the key is
+# rejected there rather than silently ignored.
+_KNOWN_LOOP_ENGINES = {"thin", "langchain"}
 # Positive allowlist of sandbox providers (red-team C3). `fake` = test-only (no isolation);
 # `docker` = self-hosted local container (no third-party service, no data egress to a provider).
 # `local`/`localshell` and any unknown provider are REJECTED — they map to host-shell backends
@@ -67,6 +72,7 @@ class AgentRuntimeConfig:
     runtime_loop_limit: int | None = None  # None ⇒ default per kind
     cost_cap_usd: float | None = None  # observability-only (v20.5)
     sandbox: dict | None = None  # deep_agent only
+    loop_engine: str = "thin"  # create_agent only: thin | langchain
 
     def caps(self) -> RuntimeCaps:
         """Resolve effective caps: explicit override wins over the per-kind default."""
@@ -114,12 +120,24 @@ def parse_agent_runtime_config(raw: object) -> AgentRuntimeConfig:
                 f"profile agent_runtime.sandbox.provider {provider!r} không hợp lệ "
                 f"(known: {sorted(_ALLOWED_SANDBOX_PROVIDERS)})."
             )
+    engine = raw.get("loop_engine")
+    if engine is not None:
+        if not isinstance(engine, str) or engine.strip() not in _KNOWN_LOOP_ENGINES:
+            raise RuntimeError(
+                f"profile agent_runtime.loop_engine {engine!r} không hợp lệ "
+                f"(known: {sorted(_KNOWN_LOOP_ENGINES)})."
+            )
+        if kind != "create_agent":
+            raise RuntimeError(
+                f"profile agent_runtime.loop_engine chỉ dùng cho create_agent (kind={kind!r})."
+            )
     return _validated(
         AgentRuntimeConfig(
             kind=kind,
             runtime_loop_limit=loop,
             cost_cap_usd=float(cost) if cost is not None else None,
             sandbox=sandbox,
+            loop_engine=engine.strip() if isinstance(engine, str) else "thin",
         )
     )
 

@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import logging
 
+from my_crew.runtime.content_caps import MERGED_ARTIFACT_CHARS
+
 logger = logging.getLogger(__name__)
 
 #: Appended to the deep_agent system prompt so a research-heavy run writes its report to a file
@@ -243,10 +245,6 @@ def run_deep_agent_work(
         teardown_sandbox(backend)  # C6: best-effort container teardown on the normal path
 
 
-#: Cap on total artifact text appended to the reply — keep the delivered/audited result bounded.
-_ARTIFACT_MERGE_MAX_CHARS = 256_000
-
-
 def _merge_sandbox_artifacts(backend, text: str) -> str:
     """Append `/work/*.md` artifacts the agent wrote to `text` (before teardown), skipping any
     already present in the reply. Best-effort: any failure leaves `text` unchanged — the reply
@@ -257,7 +255,7 @@ def _merge_sandbox_artifacts(backend, text: str) -> str:
         if not names:
             return text
         pieces: list[str] = []
-        budget = _ARTIFACT_MERGE_MAX_CHARS - len(text)
+        budget = MERGED_ARTIFACT_CHARS - len(text)
         for name in names:
             if budget <= 0:
                 break

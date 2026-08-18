@@ -19,11 +19,18 @@ import logging
 import subprocess
 from datetime import UTC
 
+from my_crew.runtime.content_caps import TOOL_RESULT_CHARS, cap_with_footer
+
 logger = logging.getLogger(__name__)
 
 _TIMEOUT_S = 60
-#: Cap on the text handed back to the loop — Google payloads can be large; keep bounded.
-_MAX_CHARS = 6000
+
+#: Google payloads can be large — bound them, and say so when the bound bites.
+_MORE_HINT = "Kết quả dài hơn khung hiển thị — thu hẹp truy vấn hoặc khoảng thời gian để xem đủ."
+
+
+def _bounded_json(data: dict) -> str:
+    return cap_with_footer(json.dumps(data, ensure_ascii=False), TOOL_RESULT_CHARS, _MORE_HINT)
 
 #: The ONLY gws read invocations these tools may make, as fixed argv prefixes. A helper
 #: picks one and appends a json --params it built from a bounded data arg — never an
@@ -73,13 +80,13 @@ def _run(prefix_key: str, params: dict | None = None) -> dict:
 def gmail_triage() -> str:
     """Unread-inbox summary (sender · subject · date). Bounded text for the loop."""
     data = _run("gmail")
-    return json.dumps(data, ensure_ascii=False)[:_MAX_CHARS]
+    return _bounded_json(data)
 
 
 def calendar_agenda() -> str:
     """Upcoming events across the user's calendars. Bounded text."""
     data = _run("calendar")
-    return json.dumps(data, ensure_ascii=False)[:_MAX_CHARS]
+    return _bounded_json(data)
 
 
 def calendar_events_window(query: str = "", days: int = 14) -> list[dict]:
@@ -167,4 +174,4 @@ def drive_list(query: str = "") -> str:
     if q:
         params["q"] = f"name contains '{q.replace(chr(39), '')}'"
     data = _run("drive", params)
-    return json.dumps(data, ensure_ascii=False)[:_MAX_CHARS]
+    return _bounded_json(data)

@@ -28,11 +28,9 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from my_crew.runtime.content_caps import PAGE_CONTENT_CHARS, cap_with_footer
 
-#: Per-page cap on fetched markdown. Matches the tool-loop's `_SCRAPE_MAX_CHARS` so a
-#: page costs the same context here as it does there.
-MAX_FETCH_CHARS = 8000
+logger = logging.getLogger(__name__)
 
 #: Hard ceiling on pages fetched per step regardless of entity count.
 #:
@@ -149,10 +147,17 @@ def fetch_official_pages(
             continue
         # Truncate first, then strip: a marker straddling the cut would otherwise leave a
         # partial `[LỖI NGUỒN TÌM` tail, which no reader matches but which is still noise.
+        # The consumer is a one-shot drafting step with no tools, so the footer's job is
+        # honesty (the page continues past the cut), not a continuation recipe.
+        bounded = cap_with_footer(
+            markdown, PAGE_CONTENT_CHARS,
+            "Trang còn dài hơn phần trích — phần sau KHÔNG có trong ngữ cảnh, "
+            "không suy đoán nội dung thiếu.",
+        )
         results.append(
             SearchResult(
                 title=_strip_control_markers(str(getattr(scraped, "title", "") or url)),
-                snippet=_strip_control_markers(markdown[:MAX_FETCH_CHARS]),
+                snippet=_strip_control_markers(bounded),
                 source=str(getattr(scraped, "url", "") or url),
             )
         )

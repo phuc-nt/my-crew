@@ -97,6 +97,20 @@ class LlmResult:
     fallback_from: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class ToolExchange:
+    """One tool-capable completion: the raw assistant message + accounting.
+
+    `message` is the assistant message as a dict (SDK `model_dump()`), keeping
+    `tool_calls` and any provider reasoning fields (`reasoning`/`reasoning_details`)
+    intact for verbatim passback — a tool loop needs the wire shape, not just text.
+    """
+
+    message: dict
+    finish_reason: str
+    result: LlmResult
+
+
 class LlmClient:
     """Thin OpenRouter wrapper with budget gating and usage accounting."""
 
@@ -216,7 +230,103 @@ class LlmClient:
         # result or re-raises (has_next=False) — exhaustion = the last model's raw error.
         raise AssertionError("unreachable: model chain loop always returns or raises")
 
-    def _call_with_retry(self, messages: list[Message], model_name: str):
+    def complete_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        *,
+        model: str | None = None,
+        role: str | None = None,
+    ) -> ToolExchange:
+        """One tool-capable completion with the same budget/retry/chain semantics as
+        `complete`, returning the raw assistant message + finish_reason.
+
+        Differences from `complete`, both deliberate:
+        - the empty-content fallback only fires when the message ALSO has no
+          tool_calls — a tool-call turn legitimately carries empty text;
+        - the assistant message is returned as a dict (`model_dump()`), preserving
+          `tool_calls` and provider reasoning fields for verbatim passback.
+        """
+        if model:
+            chain: tuple[str, ...] = (model,)
+        elif role:
+            chain = self._settings.model_for_role(role)
+        else:
+            chain = self._settings.effective_model_chain()
+        fallback_from: list[str] = []
+        record_event({
+            "t": "llm_request", "role": role, "chain": list(chain),
+            "tools": [t.get("function", {}).get("name") for t in tools],
+            "messages": messages,
+        })
+
+        for i, model_name in enumerate(chain):
+            self._budget.check_allowed()
+            has_next = i < len(chain) - 1
+            try:
+                response = self._call_with_retry(messages, model_name, tools=tools)
+            except Exception as exc:
+                if has_next and should_try_next_model(exc):
+                    logger.warning(
+                        "FALLBACK: model %r failed (%s: %s); trying %r",
+                        model_name, type(exc).__name__, exc, chain[i + 1],
+                    )
+                    fallback_from.append(model_name)
+                    continue
+                raise
+
+            usage = extract_usage(response)
+            self._budget.record_cost(usage.cost_usd)
+            choice = response.choices[0]
+            raw_msg = choice.message
+            message: dict = (
+                raw_msg.model_dump() if hasattr(raw_msg, "model_dump") else dict(raw_msg)
+            )
+            content = message.get("content") or ""
+            tool_calls = message.get("tool_calls") or []
+            if not content.strip() and not tool_calls and has_next:
+                logger.warning(
+                    "FALLBACK: model %r returned empty content and no tool calls; "
+                    "trying %r", model_name, chain[i + 1],
+                )
+                fallback_from.append(model_name)
+                continue
+            if fallback_from:
+                logger.warning(
+                    "FALLBACK: completion served by %r after %s failed",
+                    model_name, fallback_from,
+                )
+            finish_reason = str(getattr(choice, "finish_reason", "") or "")
+            record_event({
+                "t": "llm_response", "model": model_name, "content": content,
+                "tool_calls": [
+                    {"name": (tc.get("function") or {}).get("name"),
+                     "arguments": (tc.get("function") or {}).get("arguments")}
+                    for tc in tool_calls
+                ],
+                "finish_reason": finish_reason,
+                "prompt_tokens": usage.prompt_tokens,
+                "completion_tokens": usage.completion_tokens,
+                "cost_usd": usage.cost_usd, "fallback_from": list(fallback_from),
+            })
+            return ToolExchange(
+                message=message,
+                finish_reason=finish_reason,
+                result=LlmResult(
+                    content=content,
+                    model=model_name,
+                    prompt_tokens=usage.prompt_tokens,
+                    completion_tokens=usage.completion_tokens,
+                    cost_usd=usage.cost_usd,
+                    fallback_from=tuple(fallback_from),
+                ),
+            )
+
+        raise AssertionError("unreachable: model chain loop always returns or raises")
+
+    def _call_with_retry(
+        self, messages: list[Message], model_name: str, *, tools: list[dict] | None = None,
+    ):
         """Call the API, retrying bounded times on transient errors only.
 
         v44: exponential backoff with full jitter, honoring a server `Retry-After` when present,
@@ -229,12 +339,14 @@ class LlmClient:
         }
         last_exc: Exception | None = None
         total_slept = 0.0
+        extra_kwargs: dict = {"tools": tools} if tools is not None else {}
         for attempt in range(_MAX_RETRIES + 1):
             try:
                 return self._openai().chat.completions.create(
                     model=model_name,
                     messages=messages,
                     extra_headers=headers,
+                    **extra_kwargs,
                 )
             except _RETRYABLE as exc:
                 last_exc = exc

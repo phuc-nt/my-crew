@@ -91,9 +91,9 @@ def test_execute_failure_leaves_text_unchanged():
 
 
 def test_total_size_capped():
-    from my_crew.runtime_backends.deep_agent_loop import _ARTIFACT_MERGE_MAX_CHARS
+    from my_crew.runtime.content_caps import MERGED_ARTIFACT_CHARS
 
-    big = b"y" * (_ARTIFACT_MERGE_MAX_CHARS + 5000)
+    big = b"y" * (MERGED_ARTIFACT_CHARS + 5000)
     be = _FakeBackend({"big.md": big})
     out = _merge(be, "reply")
-    assert len(out) <= _ARTIFACT_MERGE_MAX_CHARS
+    assert len(out) <= MERGED_ARTIFACT_CHARS

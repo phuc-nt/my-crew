@@ -75,6 +75,53 @@ def test_cost_cap_is_observability_only():
     assert c.caps().cost_cap_usd == 4.0
 
 
+def test_loop_engine_defaults_to_thin():
+    assert parse_agent_runtime_config("create_agent").loop_engine == "thin"
+    assert parse_agent_runtime_config({"kind": "create_agent"}).loop_engine == "thin"
+
+
+def test_loop_engine_langchain_selectable():
+    c = parse_agent_runtime_config({"kind": "create_agent", "loop_engine": "langchain"})
+    assert c.loop_engine == "langchain"
+
+
+def test_loop_engine_unknown_rejected():
+    with pytest.raises(RuntimeError, match="loop_engine"):
+        parse_agent_runtime_config({"kind": "create_agent", "loop_engine": "magic"})
+
+
+def test_loop_engine_only_on_create_agent():
+    with pytest.raises(RuntimeError, match="loop_engine"):
+        parse_agent_runtime_config({"kind": "deep_agent", "loop_engine": "thin"})
+
+
+def test_loop_engine_dispatches_to_the_selected_loop(monkeypatch):
+    # The work override runs the thin loop by default and the LangChain react loop
+    # when the profile pins `loop_engine: langchain` (the A/B baseline).
+    import my_crew.runtime_backends.react_loop as react_loop
+    import my_crew.runtime_backends.read_only_toolset as toolset
+    import my_crew.runtime_backends.thin_tool_loop as thin_tool_loop
+    from my_crew.runtime_backends.tool_calling_runtime import ToolCallingRuntime
+
+    monkeypatch.setattr(toolset, "build_read_toolset", lambda *a, **k: {})
+    monkeypatch.setattr(toolset, "assert_read_only", lambda names: None)
+    called: list[str] = []
+    monkeypatch.setattr(
+        react_loop, "run_react_work",
+        lambda **k: called.append("langchain") or ("t", None),
+    )
+    monkeypatch.setattr(
+        thin_tool_loop, "run_thin_loop",
+        lambda **k: called.append("thin") or ("t", None),
+    )
+
+    rt = ToolCallingRuntime()
+    for engine in ("thin", "langchain"):
+        work = rt._make_work_override(None, None, None, 4, loop_engine=engine)
+        assert work("t", "", None) == ("t", None)
+    assert called == ["thin", "langchain"]
+
+
 def test_tool_calling_uses_config_loop_limit():
     # ToolCallingRuntime.build_task threads runtime_config → caps().runtime_loop_limit.
     from my_crew.runtime_backends.tool_calling_runtime import ToolCallingRuntime

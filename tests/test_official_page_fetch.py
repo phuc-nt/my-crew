@@ -106,15 +106,19 @@ def test_the_page_cap_bounds_how_many_are_scraped(monkeypatch):
     assert len(calls) == official_page_fetch.MAX_FETCH_PAGES
 
 
-def test_a_huge_page_is_truncated(monkeypatch):
+def test_a_huge_page_is_truncated_with_an_honest_footer(monkeypatch):
+    from my_crew.runtime.content_caps import PAGE_CONTENT_CHARS
+
     def _fake_scrape(url, config, **kwargs):
-        return _Scraped(url, "T", "x" * (official_page_fetch.MAX_FETCH_CHARS * 3))
+        return _Scraped(url, "T", "x" * (PAGE_CONTENT_CHARS * 3))
 
     monkeypatch.setattr("my_crew.tools.firecrawl_tool.scrape_url", _fake_scrape)
     out = fetch_official_pages(
         _Settings(base_url="http://localhost:3002"), ["https://www.spotify.com/vn/"]
     )
-    assert out.count("x") <= official_page_fetch.MAX_FETCH_CHARS
+    assert out.count("x") <= PAGE_CONTENT_CHARS
+    # v85 lesson: a silent cut reads as "that was the whole page" — the footer says otherwise.
+    assert "(Hiển thị" in out and "ký tự" in out
 
 
 @pytest.mark.parametrize("bad", [None, object()])

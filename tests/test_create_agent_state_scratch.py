@@ -83,15 +83,13 @@ def test_readback_skips_non_md_and_plain_string_shape():
 
 
 def test_readback_capped():
-    from my_crew.runtime_backends.react_loop import (
-        _SCRATCH_MERGE_MAX_CHARS,
-        _merge_state_scratch_artifacts,
-    )
+    from my_crew.runtime.content_caps import MERGED_ARTIFACT_CHARS
+    from my_crew.runtime_backends.react_loop import _merge_state_scratch_artifacts
 
-    big = "y" * (_SCRATCH_MERGE_MAX_CHARS + 5000)
+    big = "y" * (MERGED_ARTIFACT_CHARS + 5000)
     result = {"files": {"big.md": {"content": big, "encoding": "utf-8"}}}
     out = _merge_state_scratch_artifacts(result, "reply")
-    assert len(out) <= _SCRATCH_MERGE_MAX_CHARS
+    assert len(out) <= MERGED_ARTIFACT_CHARS
 
 
 def test_readback_best_effort_on_bad_shape():

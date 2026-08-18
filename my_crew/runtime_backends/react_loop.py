@@ -15,6 +15,8 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from my_crew.runtime.content_caps import MERGED_ARTIFACT_CHARS
+
 logger = logging.getLogger(__name__)
 
 #: Per-tool description so the model passes the RIGHT argument (e.g. a URL for web.scrape, not
@@ -170,10 +172,6 @@ _STATE_SCRATCH_CONTRACT = (
     "hãy ghi bản nháp ra một file .md SỚM rồi tinh chỉnh; kết quả cuối vẫn trả về dưới dạng text."
 )
 
-#: Cap on scratch-file text merged into the reply (bound the delivered/audited result).
-_SCRATCH_MERGE_MAX_CHARS = 256_000
-
-
 def _state_scratch_middleware():
     """Build the StateBackend file-scratch middleware with the `execute` tool STRIPPED.
 
@@ -203,7 +201,7 @@ def _merge_state_scratch_artifacts(result: dict, text: str) -> str:
         if not files:
             return text
         pieces: list[str] = []
-        budget = _SCRATCH_MERGE_MAX_CHARS - len(text)
+        budget = MERGED_ARTIFACT_CHARS - len(text)
         for name, content in files.items():
             if budget <= 0:
                 break

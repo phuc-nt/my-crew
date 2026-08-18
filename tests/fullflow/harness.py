@@ -113,6 +113,12 @@ class FullFlowHarness:
 
         monkeypatch.setattr(LlmClient, "complete", _complete)
 
+        # Same class-level patch for the thin loop's tool-capable seam (v86).
+        def _complete_with_tools(_self, messages, tools, *, model=None, role=None):
+            return scripted.complete_with_tools(messages, tools, model=model, role=role)
+
+        monkeypatch.setattr(LlmClient, "complete_with_tools", _complete_with_tools)
+
         # Telegram HTTP seam: capture instead of urllib; gateway logic stays real.
         import my_crew.actions.telegram_write as telegram_write
 

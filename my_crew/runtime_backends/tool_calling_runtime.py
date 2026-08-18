@@ -50,6 +50,11 @@ class ToolCallingRuntime:
             runtime_config.caps().runtime_loop_limit
             if runtime_config is not None else MAX_LOOP_STEPS
         )
+        # v86: which work-loop engine runs the tools tier — `thin` (self-owned flat loop,
+        # default) or `langchain` (create_agent react loop, kept selectable for A/B).
+        loop_engine = (
+            runtime_config.loop_engine if runtime_config is not None else "thin"
+        )
         # Pop `telemetry` here — build_team_task_graph accepts the param but only its native
         # deps use it; this runtime routes telemetry into its own work loop instead, so it must
         # NOT also ride **kwargs into the graph (double-wire).
@@ -67,12 +72,13 @@ class ToolCallingRuntime:
         kwargs.pop("deep_team", None)
         kwargs.pop("deep_team_max_calls", None)
         work = self._make_work_override(settings, context, config, loop_limit, telemetry,
-                                        academic_search, gws_context, web_search)
+                                        academic_search, gws_context, web_search, loop_engine)
         return build_team_task_graph(work_override=work, **kwargs)
 
     def _make_work_override(self, settings, context, config, loop_limit, telemetry=None,
-                            academic_search=False, gws_context=False, web_search=False):
-        """Build the run_work replacement: a create_agent loop over the read toolset."""
+                            academic_search=False, gws_context=False, web_search=False,
+                            loop_engine="thin"):
+        """Build the run_work replacement: a tool loop over the read toolset."""
         from my_crew.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
 
         def _run_work(title: str, handoff: str, hook) -> tuple[str, float | None]:
@@ -83,9 +89,17 @@ class ToolCallingRuntime:
                                            gws_context=gws_context, web_search=web_search)
             assert_read_only(list(tools_map))  # defense-in-depth: prove no write tool leaked in
 
-            from my_crew.runtime_backends.react_loop import run_react_work
+            if loop_engine == "langchain":
+                from my_crew.runtime_backends.react_loop import run_react_work
 
-            return run_react_work(
+                return run_react_work(
+                    title=title, handoff=handoff, context=context, settings=settings,
+                    tools_map=tools_map, max_steps=loop_limit, telemetry=telemetry,
+                )
+
+            from my_crew.runtime_backends.thin_tool_loop import run_thin_loop
+
+            return run_thin_loop(
                 title=title, handoff=handoff, context=context, settings=settings,
                 tools_map=tools_map, max_steps=loop_limit, telemetry=telemetry,
             )
