@@ -970,3 +970,133 @@ input, textarea, select { font-size: var(--fs-body); }
 .clarify-row { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border); }
 .clarify-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); align-items: center; }
 .clarify-actions input { flex: 1 1 200px; }
+
+/* ── Chat hub (P2) ────────────────────────────────────────────────────────────
+   Two panes on desktop (list · thread+composer); the right context pane joins in
+   2b. Same full-height posture as the office cockpit: the page never scrolls, each
+   zone scrolls internally, so the composer is always on screen. */
+.chat-hub { display: grid; grid-template-columns: 280px minmax(0, 1fr);
+  gap: var(--space-3); align-items: start; }
+.chat-conversations { min-width: 0; }
+.chat-conversation-list { list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: var(--space-1); }
+.chat-conversation { width: 100%; display: grid;
+  grid-template-columns: minmax(0, 1fr) auto; gap: 0 var(--space-2);
+  align-items: center; text-align: left; padding: var(--space-2);
+  background: none; border: 1px solid transparent; border-radius: var(--radius);
+  color: var(--color-text); cursor: pointer;
+  transition: background var(--motion-fast), border-color var(--motion-fast); }
+.chat-conversation:hover { background: var(--color-surface-2); }
+.chat-conversation.is-active { background: var(--color-surface);
+  border-color: var(--color-border); }
+.chat-conversation-title { font-weight: 600; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.chat-conversation-meta { grid-column: 1; font-size: var(--fs-small);
+  color: var(--color-muted); }
+.chat-unread { grid-column: 2; grid-row: 1 / span 2; justify-self: end;
+  min-width: 1.35rem; padding: 0 0.35rem; border-radius: 999px;
+  background: var(--color-primary); color: var(--color-primary-contrast);
+  font-size: var(--fs-small); text-align: center; }
+.chat-conversations-empty { color: var(--color-muted); font-size: var(--fs-small); }
+
+.chat-main { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.chat-thread { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.chat-thread-head { display: flex; justify-content: space-between;
+  align-items: baseline; gap: var(--space-3); }
+.chat-thread-title { font-size: var(--fs-h3); margin: 0; }
+.chat-thread-status { font-size: var(--fs-small); color: var(--color-muted); }
+.chat-thread-log { list-style: none; margin: var(--space-2) 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: var(--space-2);
+  overflow-y: auto; max-height: 70vh; min-height: 320px; }
+.chat-thread-empty { color: var(--color-muted); padding: var(--space-3) 0; }
+
+.chat-row { display: flex; }
+.chat-row.is-own { justify-content: flex-end; }
+.chat-bubble { max-width: min(46rem, 80%); padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-soft); border-radius: var(--radius);
+  background: var(--color-surface); }
+.chat-row.is-own .chat-bubble { background: var(--color-accent-bg);
+  border-color: var(--color-accent-border); }
+.chat-row.is-ok .chat-bubble { border-left: 3px solid var(--color-ok, var(--color-accent)); }
+.chat-row.is-danger .chat-bubble { border-left: 3px solid var(--color-danger);
+  background: var(--color-danger-bg); }
+.chat-row-head { display: flex; gap: var(--space-2); margin: 0 0 0.15rem;
+  font-size: var(--fs-small); }
+.chat-author { font-weight: 600; }
+.chat-kind { color: var(--color-subtle); }
+.chat-row-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-row-time { display: block; margin-top: 0.15rem;
+  font-size: var(--fs-small); color: var(--color-muted); }
+
+.chat-step-block { background: var(--color-surface-2); }
+.chat-step-title { margin: 0; font-weight: 600; }
+.chat-step-current { margin: 0; }
+.chat-step-count { margin: 0; font-size: var(--fs-small); color: var(--color-muted); }
+
+.chat-activities { list-style: none; margin: var(--space-2) 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 0.15rem; }
+.chat-activity { font-size: var(--fs-small); color: var(--color-muted); font-style: italic; }
+
+@media (max-width: 900px) {
+  .chat-hub { grid-template-columns: minmax(0, 1fr); }
+  .chat-conversation-list { flex-direction: row; overflow-x: auto; }
+}
+
+/* Desktop cockpit: same 100dvh treatment the office hub gets, so the thread scrolls
+   inside its column and the composer never leaves the viewport. */
+@media (min-width: 1101px) {
+  .app-shell:has(.chat-hub) { height: 100dvh; max-width: 1600px;
+    display: flex; flex-direction: column; overflow: hidden;
+    padding: var(--space-2) var(--space-3) var(--space-3); }
+  .app-shell:has(.chat-hub) .app-nav-primary { margin: var(--space-2) 0;
+    padding-bottom: var(--space-1); }
+  .app-shell:has(.chat-hub) .app-main { flex: 1; min-height: 0; }
+  .app-shell:has(.chat-hub) .chat-hub { height: 100%; align-items: stretch; }
+  .app-shell:has(.chat-hub) .chat-conversations { overflow-y: auto; min-height: 0; }
+  .app-shell:has(.chat-hub) .chat-main { min-height: 0; }
+  .app-shell:has(.chat-hub) .chat-thread { flex: 1 1 0; min-height: 0; }
+  /* min-height:0 is load-bearing: without it the log grows to its content and the
+     column scrolls the page instead (same trap documented on .office-unified-feed). */
+  .app-shell:has(.chat-hub) .chat-thread-log { flex: 1 1 0; min-height: 0;
+    max-height: none; }
+}
+
+/* A room the reader never opened has no knowable unread count (last_seq is office-wide),
+   so it gets a presence dot instead of a fabricated number. */
+.chat-unread.is-dot {
+  min-width: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  padding: 0;
+  border-radius: 50%;
+}
+
+/* The ×N on a folded run of identical events (a retrying gateway). */
+.chat-row-repeat {
+  margin-left: 0.4rem;
+  font-size: 0.72rem;
+  opacity: 0.6;
+}
+
+/* A `done` milestone carries the task's actual deliverable — an email, a table — so it
+   keeps its line breaks instead of collapsing into one run-on paragraph. */
+.chat-row-text.is-result {
+  white-space: pre-wrap;
+}
+
+/* Real briefs run to ~120 chars. The header carries the whole one (nothing else does),
+   but clamped to a single line — two wrapped lines pushed the log down noticeably. */
+.chat-thread-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A status milestone's message is a backend-truncated 500-char wall; the useful part is
+   its first lines. `done` (the deliverable) is exempt — see milestone-presentation.ts. */
+.chat-row-text.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

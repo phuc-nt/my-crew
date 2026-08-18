@@ -9,6 +9,7 @@ import { AdvancedAgentView } from '../components/AdvancedAgentView'
 import { OfficeUnifiedLazy } from '../routes/office-unified-lazy'
 import { AgentPage } from '../views/AgentPage'
 import { Captures } from '../views/Captures'
+import { ChatPage } from '../features/chat/chat-page'
 import { Chat } from '../views/Chat'
 import { CompanyActivity } from '../views/CompanyActivity'
 import { CompanyDocs } from '../views/CompanyDocs'
@@ -36,7 +37,9 @@ export function AppRoutes() {
         <Route index element={<Navigate to="/chat" replace />} />
 
         {/* --- the 5 hubs --- */}
-        <Route path="chat" element={<Chat />} />
+        {/* The chat hub owns an optional room segment: /chat is the overview thread. */}
+        <Route path="chat" element={<ChatPage />} />
+        <Route path="chat/:roomId" element={<ChatPage />} />
         <Route path="office" element={<OfficeUnifiedLazy />} />
         <Route path="work" element={<Work />} />
         <Route path="team" element={<Team />} />
@@ -44,6 +47,9 @@ export function AppRoutes() {
         <Route path="system" element={<Settings />} />
 
         {/* --- legacy paths, still live at their old URLs until their hub absorbs them --- */}
+        {/* The old assistant view keeps its own path until the chat hub absorbs it as
+           a pane (phase 2b); /chat itself is now the new hub. */}
+        <Route path="assistant" element={<Chat />} />
         <Route path="settings" element={<Settings />} />
         <Route path="connections" element={<Connections />} />
         <Route path="outputs" element={<Outputs />} />
