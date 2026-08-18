@@ -223,6 +223,11 @@ agent_runtime:
     mem_limit: 512m        # container RAM (default 512m, max 4g)
 ```
 
+Từ v86, tier `create_agent` mặc định chạy **thin tool loop tự chủ** (OpenAI SDK) — cùng bộ tool,
+prompt token rẻ ~3.5×, cost báo EXACT (không còn ước lượng). Không cần sửa profile. Đặt
+`loop_engine: langchain` trong block `agent_runtime` của profile để quay lại đường LangChain
+`create_agent` cũ (giữ để so sánh A/B).
+
 **Tuỳ chọn per-team (v44):**
 
 ```yaml

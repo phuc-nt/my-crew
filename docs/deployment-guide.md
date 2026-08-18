@@ -242,6 +242,11 @@ agent_runtime:
     mem_limit: 512m        # container RAM cap (default 512m, max 4g)
 ```
 
+Since v86 the `create_agent` tier runs a self-owned **thin tool loop** (OpenAI SDK) by default —
+same toolset, ~3.5× fewer prompt tokens, exact cost reporting (no estimate). No profile change
+needed. Set `loop_engine: langchain` inside the `agent_runtime` profile block to fall back to
+the LangChain `create_agent` baseline (kept for A/B comparison).
+
 **Per-team options (v44):**
 
 ```yaml

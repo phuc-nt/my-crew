@@ -287,8 +287,10 @@ Tách agent-LOOP khỏi điều phối + an toàn. Backend được chọn PER-S
 `resolve_step_runtime(loaded, step)` (v45 — xem "Định tuyến per-step" cuối §3.9); `resolve_runtime(loaded)`
 (chọn theo `agent_runtime:` của cả agent — native|create_agent|deep_agent; default native, kill-switch
 `RUNTIME_FORCE_NATIVE`) vẫn là nền cho report + fallback. `NativeGraphRuntime` = graph hiện tại byte-identical.
-`ToolCallingRuntime` = tool-calling loop (`create_agent` từ langchain.agents, v28 migrate từ
-`langgraph.prebuilt.create_react_agent`) NHƯNG swaps chỉ `run_work` nên deliver (ghi artifact
+`ToolCallingRuntime` = tool-calling loop; từ v86 mặc định là **thin loop tự chủ** trên OpenAI SDK
+(`thin_tool_loop.py` + `typed_tool_specs.py` — typed specs + generic fallback nên không tool nào bị rớt;
+cost EXACT từ usage extras; profile đặt `loop_engine: langchain` để chạy lại đường `create_agent`
+langchain.agents cũ làm baseline A/B) NHƯNG swaps chỉ `run_work` nên deliver (ghi artifact
 nội bộ) giữ native; toolset positive read-allowlist + classify shim mọi tool + audience-aware.
 **v45**: tier này thêm **file-scratch trong graph-state** (deepagents `StateBackend` +
 `FilesystemMiddleware`, tool `execute` bị STRIP + fail-loud guard → tuyệt đối no-shell, KHÔNG host FS,
@@ -404,9 +406,10 @@ step_id, agent_id, engine, status, step_type, review_round, cost_usd, cost_sourc
 output_tokens, started_at, ended_at, duration_ms, error, ts). WAL+busy_timeout tương tự
 team_task_store. Hook `run_team_step` thu thập lúc step kết thúc (best-effort, log WARNING
 nếu fail, không tắc quy trình). **INTERNAL state — không qua gateway** (`capture_db_path()` trong
-team_task_paths.py). Unified cost across 3 engines: create_agent + deep_agent dùng
-`config/model_prices.yaml` (mô hình đặt giá chỉnh sửa được, ví dụ placeholders minimax/qwen),
-estimate cost = Σ tokens × per-model price, column `cost_source = 'estimated' | 'exact'`.
+team_task_paths.py). Unified cost: thin loop (mặc định tier react từ v86) ghi cost EXACT từ
+usage extras OpenRouter; chỉ còn `loop_engine: langchain` + deep_agent dùng `config/model_prices.yaml`
+(mô hình đặt giá chỉnh sửa được, ví dụ placeholders minimax/qwen), estimate cost = Σ tokens ×
+per-model price, column `cost_source = 'estimated' | 'exact'`.
 Remember-node extends team-step: deliver→remember→END (CostedMemoryExtractor ghi facts vào
 MEMORY.md, gộp cost LLM vào captured step cost), gated on delivered + internal + not-dry-run.
 Modules: `my_crew/runtime/capture_store.py`, `my_crew/llm/model_pricing.py`, `my_crew/runtime/step_telemetry.py`.
