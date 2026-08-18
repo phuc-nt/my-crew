@@ -77,6 +77,9 @@ testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
+    # Starlette's TestClient deprecated its httpx backend; httpx2 is a separate package
+    # that installs alongside httpx, so the openai SDK keeps the httpx it depends on.
+    "httpx2>=2.11.0",
     "pytest>=9.1.1",
     "ruff>=0.15.18",
 ]
