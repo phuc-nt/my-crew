@@ -10,7 +10,7 @@ import { OfficeUnifiedLazy } from '../routes/office-unified-lazy'
 import { AgentPage } from '../views/AgentPage'
 import { Captures } from '../views/Captures'
 import { ChatPage } from '../features/chat/chat-page'
-import { Chat } from '../views/Chat'
+import { ASSISTANT_CONVERSATION_ID } from '../features/chat/conversation-list-state'
 import { CompanyActivity } from '../views/CompanyActivity'
 import { CompanyDocs } from '../views/CompanyDocs'
 import { Config } from '../views/Config'
@@ -47,9 +47,9 @@ export function AppRoutes() {
         <Route path="system" element={<Settings />} />
 
         {/* --- legacy paths, still live at their old URLs until their hub absorbs them --- */}
-        {/* The old assistant view keeps its own path until the chat hub absorbs it as
-           a pane (phase 2b); /chat itself is now the new hub. */}
-        <Route path="assistant" element={<Chat />} />
+        {/* The chat hub owns the assistant conversation now; the old standalone path
+           redirects so any bookmark still lands on it. */}
+        <Route path="assistant" element={<Navigate to={`/chat/${ASSISTANT_CONVERSATION_ID}`} replace />} />
         <Route path="settings" element={<Settings />} />
         <Route path="connections" element={<Connections />} />
         <Route path="outputs" element={<Outputs />} />

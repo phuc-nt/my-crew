@@ -11,6 +11,7 @@ import { useLanguage } from '../../i18n/language-context'
 import { AssignComposer } from '../../views/office-unified/assign-composer'
 import { OVERVIEW_ROOM_ID } from './chat-state'
 import { ConversationList } from './conversation-list'
+import { AssistantThread } from './assistant/assistant-thread'
 import { PendingPane } from './pending/pending-pane'
 import {
   ASSISTANT_CONVERSATION_ID,
@@ -65,16 +66,7 @@ export function ChatPage() {
 
       <div className="chat-main">
         {isAssistant ? (
-          // The ops/assistant thread lands in 2b; until then the row is selectable but
-          // explicitly says so rather than rendering a broken room stream.
-          <section className="chat-thread" aria-label={title}>
-            <header className="chat-thread-head">
-              {/* The full brief lives here (the rows no longer repeat it), clamped to one line
-                  so a 120-char title cannot eat the thread's height; hover shows it whole. */}
-              <h2 className="chat-thread-title" title={title}>{title}</h2>
-            </header>
-            <p className="chat-thread-empty">{t('chat.assistantComingSoon')}</p>
-          </section>
+          <AssistantThread title={title} />
         ) : (
           <ThreadView roomId={activeId} title={title} onRead={onRead} />
         )}

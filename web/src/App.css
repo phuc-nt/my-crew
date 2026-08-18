@@ -1065,6 +1065,32 @@ input, textarea, select { font-size: var(--fs-body); }
 .pending-input { flex: 1 1 8rem; min-width: 0; }
 .pending-empty { font-size: var(--fs-small); }
 
+/* The assistant conversation. Ops replies are plain text blocks (agent lists, cost
+   tables), so the turn keeps its line breaks the way the artifact text does. */
+.ops-thread-log { display: flex; flex-direction: column; gap: var(--space-2); }
+.ops-turn { display: flex; flex-direction: column; gap: 0.15rem; }
+.ops-turn-who { font-size: var(--fs-small); color: var(--color-subtle); }
+.ops-turn-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: inherit; }
+.ops-turn.is-ceo .ops-turn-text { font-weight: 500; }
+
+.ops-thinking { margin: 0; font-size: var(--fs-small); color: var(--color-muted); }
+.ops-composer { flex: none; display: flex; flex-direction: column; gap: var(--space-2);
+  /* Framed like the workrooms' assign composer, so switching between the assistant and
+     a room does not change where the input visually sits. */
+  margin-top: var(--space-2); padding: var(--space-2);
+  border: 1px solid var(--color-border-soft); border-radius: var(--radius); }
+.ops-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+.ops-chip { padding: 0.15rem 0.55rem; border: 1px solid var(--color-border-soft);
+  border-radius: 999px; background: transparent; color: var(--color-text);
+  font-size: var(--fs-small); cursor: pointer; }
+.ops-chip:disabled { opacity: 0.5; cursor: default; }
+.ops-commands { font-size: var(--fs-small); color: var(--color-muted); }
+.ops-commands summary { cursor: pointer; }
+.ops-input-row { display: flex; gap: var(--space-2); }
+.ops-input-row input { flex: 1 1 auto; min-width: 0; }
+.ops-send { flex: none; }
+
 /* The artifact drawer overlays the thread rather than taking a fourth column: it is a
    read-on-demand surface, and a 1440px window has no room for another 300px zone. */
 .chat-thread-artifacts { margin-left: auto; padding: 0.15rem 0.5rem;
