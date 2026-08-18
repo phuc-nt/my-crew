@@ -11,6 +11,7 @@ import { api } from '../api/client'
 import { usePendingApprovals } from '../api/queries/use-approvals-queries'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { Button } from '../components/ui/button'
+import { CommandPalette } from '../features/palette/command-palette'
 import type { UiKey } from '../i18n/dictionary'
 import { useLanguage } from '../i18n/language-context'
 import { useUiMode } from '../ui-mode-context'
@@ -72,6 +73,9 @@ export function AppShell() {
       <main className="app-main">
         <Outlet />
       </main>
+      {/* Shell-level, not per-hub: Cmd+K has to reach the same three sources from
+          wherever the CEO happens to be. Renders null until opened. */}
+      <CommandPalette />
     </div>
   )
 }

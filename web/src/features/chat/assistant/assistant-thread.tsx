@@ -3,7 +3,7 @@
 // Shaped like every other thread in the hub (log above, composer below) so switching
 // between a workroom and the assistant does not change how the pane behaves.
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { useLanguage } from '../../../i18n/language-context'
 import { useOpsChat } from './use-ops-chat'
 
@@ -12,6 +12,20 @@ export function AssistantThread({ title }: { title: string }) {
   const { available, unavailableReason, commands, turns, busy, error, send } = useOpsChat()
   const [draft, setDraft] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
+  const [params, setParams] = useSearchParams()
+
+  // The command palette hands a command over as ?ask=…, which lands in the composer
+  // rather than being sent: an ops command is a sentence the engine parses, and the CEO
+  // usually has to finish it ("tạo agent" → tạo agent gì). The param is consumed on
+  // arrival so a refresh does not re-seed a draft the CEO already cleared.
+  useEffect(() => {
+    const seed = params.get('ask')
+    if (!seed) return
+    setDraft(seed)
+    const next = new URLSearchParams(params)
+    next.delete('ask')
+    setParams(next, { replace: true })
+  }, [params, setParams])
 
   useEffect(() => {
     // Guarded: jsdom has no scrollIntoView.
