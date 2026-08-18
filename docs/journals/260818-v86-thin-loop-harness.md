@@ -7,6 +7,7 @@
 - **Vệ sinh context**: cap hằng số thống nhất + footer continuation, contract tool per-tool ngắn.
 - **Đếm lỗi tool-call** (`transcript_evidence.summarize_tool_errors`): 5 lớp (guard/invented_tool/bad_args/repeat_batch/length_batch), mỗi tool_result đếm tối đa MỘT lớp; bench wiring: `StepMetric` thêm tool_calls/errors/kinds, transcript lookup quét cả jail `agents/*/`, bảng `run-sprint-benchmark tasks` thêm cột rounds/tools/t-err.
 - **Bench live 3+3 run** interleaved, cùng brief, web thật: thin pass-rate 3/3 = langchain 3/3 (blind judge 3 vote), prompt token rẻ **3.5×** (78k vs 278k/run), wall **1.6×** nhanh (76s vs 124s), tool errors 0/45 vs 0/77, chỉ thin có cost exact ($0.060/run). Report: `plans/260818-1053-thin-loop-harness-conventions/reports/bench-thin-vs-langchain.md`.
+- **Stress thin-100%** (follow-up, cùng ngày): 5 brief khó (5-7 thực thể, multi-hop, freshness) × 2 run live — judge PASS 10/10 answer, visa2 chạm trần 16 round cả 2 run nhưng salvage synthesis vẫn PASS 3/3 (trần = cap chi phí, không phải cliff chất lượng). Tìm ra 1 bug thật: OpenRouter 200 + body JSON hỏng → `JSONDecodeError` xuyên thủng retry lẫn model-chain → chết step; fix thêm vào `_RETRYABLE` (`client.py`) + test pin. Report: `plans/reports/bench-260818-1736-thin-stress-hard-briefs-report.md`.
 
 ## Quyết định & vì sao
 | Quyết định | Vì sao | Trade-off |
