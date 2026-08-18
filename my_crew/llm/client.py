@@ -13,6 +13,7 @@ keep chains short (2-3 models).
 
 from __future__ import annotations
 
+import json
 import logging
 import random
 import time
@@ -40,7 +41,10 @@ _RETRY_BACKOFF_S = 1.5  # base for exp: 1.5 · 2^attempt (pre-jitter)
 _RETRY_BACKOFF_CAP_S = 30.0  # per-attempt ceiling (also clamps a hostile Retry-After)
 _RETRY_TOTAL_CAP_S = 75.0  # sum ceiling across all attempts — ≪ 1800s lease
 _RETRY_JITTER_FLOOR = 0.5  # jitter multiplier floor so a wait never collapses to ~0
-_RETRYABLE = (APITimeoutError, APIConnectionError, RateLimitError)
+# json.JSONDecodeError: OpenRouter can 200 with a malformed body (proxy truncation, upstream
+# hiccup); the SDK lets the raw parse error escape. That is a transient provider fault, not a
+# caller bug — retry it, and on exhaustion the ProviderCallError wrapper advances the model chain.
+_RETRYABLE = (APITimeoutError, APIConnectionError, RateLimitError, json.JSONDecodeError)
 
 Message = dict[str, str]
 

@@ -11,8 +11,10 @@ dependencies = [
     "fastapi>=0.136",
     "itsdangerous>=2.2",
     "jinja2>=3.1",
-    # The tools-tier work loop runs `langchain.agents.create_agent` (community-standard tool loop);
-    # the meta-package must be a base dep so it resolves without the optional `deep` extra.
+    # The tools-tier work loop defaults to the self-owned thin loop (OpenAI SDK); langchain stays
+    # a base dep because the A/B baseline (`loop_engine: langchain` → `create_agent`) and the
+    # langgraph orchestration layer (graphs/checkpoint/interrupt) still import it, and it must
+    # resolve without the optional `deep` extra.
     "langchain>=1.3,<1.4",
     "langchain-core>=1.4.8",
     "langchain-mcp-adapters==0.3.0",

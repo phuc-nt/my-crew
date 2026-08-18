@@ -159,6 +159,31 @@ def test_total_wait_cap_stops_early(monkeypatch):
     assert sum(slept) <= c._RETRY_TOTAL_CAP_S  # never overran the budget
 
 
+def test_malformed_body_retries_then_wraps(monkeypatch):
+    """A 200-with-garbage body (raw json.JSONDecodeError from the SDK) is a transient
+    provider fault: it must retry and, on exhaustion, surface as ProviderCallError so
+    the model-chain fallback can advance instead of the whole step dying."""
+    slept = []
+    monkeypatch.setattr(c.time, "sleep", lambda w: slept.append(w))
+    monkeypatch.setattr(c.random, "uniform", lambda a, b: 1.0)
+    cl = _client()
+
+    calls = {"n": 0}
+
+    class _Garbage:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    calls["n"] += 1
+                    c.json.loads("<html>bad gateway</html>")
+
+    monkeypatch.setattr(cl, "_openai", lambda: _Garbage())
+    with pytest.raises(c.ProviderCallError):
+        cl._call_with_retry([{"role": "user", "content": "hi"}], "x/y")
+    assert calls["n"] == c._MAX_RETRIES + 1
+
+
 def test_success_on_retry_returns(monkeypatch):
     monkeypatch.setattr(c.time, "sleep", lambda w: None)
     monkeypatch.setattr(c.random, "uniform", lambda a, b: 1.0)
