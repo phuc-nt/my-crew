@@ -1,14 +1,32 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v79 / 0.10.0). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-08-16.
+> Lộ trình + trạng thái (as-built v85, đã ship tới 0.10.0). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Cập nhật: 2026-08-18.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v79 (PyPI 0.10.0).**
-3266 BE + 282 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng lớn E2E trên browser + LLM + ticker thật
-(live daemon, kill-9 resume, fan-out parallelism, UAT đối kháng, benchmark sprint-vs-team
-chấm mù, release gate delta-UAT sống 4/4 hành vi).
+**Production-usable, single-user autonomy-first. Đã ship tới v79 (PyPI 0.10.0); arc v80–v85
+đã commit trên main, chưa release.** 3465 BE + 284 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng
+lớn E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out parallelism,
+UAT đối kháng, benchmark sprint-vs-team chấm mù, release gate delta-UAT sống 4/4 hành vi).
+
+**v80–v85 (arc quan sát bước + toàn vẹn nguồn — 08-16→08-18, chưa release):** **v80 step
+observability**: transcript JSONL per-attempt trong jail agent (`runtime/step_recorder.py`),
+work-order + replay (`mpm step-replay`), evidence quá trình vào prompt review, reflection
+đọc hành vi tool (threat model chỉ tên + số đếm) · **v81 sprint lookup v2 + release bench**
+(prose entity, xoay góc truy vấn, bench 4 trục so phiên bản) · **v82 web redesign** (lazy
+data layer, sprint surfaces, SSE cold-tail replay) · **v83 benchmark sống vs 0.10.0** (no-subagent,
+blind judge; phát hiện judge v1 thưởng hình thức) · **v84 sprint mở trang chính thức**
+(`official_page_pick/fetch` giữa prefetch và draft, registrable-domain match chống lookalike,
+`_strip_control_markers` chặn marker giả từ thân trang, `_pricing_affinity` chọn đúng TRANG
+không chỉ đúng NHÀ) · **v85 toàn vẹn nguồn**: truy gốc "vì sao review cho qua bảng giá bịa"
+= luật chống bịa có điều kiện mà tiền đề vĩnh viễn FALSE ở bước sprint; `content_head` vào
+event prefetch/fetch để reviewer thấy NỘI DUNG trang; `QUY TẮC NHÃN NGUỒN` (gọi "chính thức"
+số từ báo/đại lý = sai nhãn; ô trống trung thực > ô đầy không truy được); blind judge v2 đếm
+verified/contradicted theo từng số — phán quyết v84 ĐẢO; xác nhận sống 3 run: 2 bug đứt ống
+bằng chứng (transcript nằm jail agent nhưng review glob root chung; nội dung trang bị cắt
+theo hằng tool-result) tìm và sửa qua từng run, run cuối reviewer đối chiếu được giá thật
+trong prompt. Firecrawl render JS trên SPA xác nhận (đảo giả định v84).
 
 **v76–v79 (arc sprint + phễu định tuyến + release gate — 08-09→08-15, 0.10.0):**
 **v76 đo lường + guardrail**: audit hash-chain (`mpm agent audit <id> verify`), fail-mode
