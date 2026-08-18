@@ -98,6 +98,43 @@ def summarize_transcript_usage(path: Path) -> dict | None:
     return usage
 
 
+#: Substring nhận diện một tool_result LỖI, kèm nơi sinh ra chuỗi đó. Bench A/B đếm
+#: các lớp này trên tổng tool_call. Test pin từng marker vào ĐÚNG hằng của producer —
+#: đổi lời văn bên producer sẽ vỡ test thay vì âm thầm đưa counter về 0.
+_TOOL_ERROR_MARKERS = {
+    "guard": "⚠️",                        # read_only_toolset.tool_error_guard
+    "invented_tool": "không tồn tại",      # thin_tool_loop._execute_call (unknown tool)
+    "bad_args": "Call again",              # tool_call_validation.prepare_tool_arguments
+    "repeat_batch": "Y HỆT",               # thin_tool_loop._REPEAT_BATCH_MSG
+    "length_batch": "bị cắt giữa chừng",   # thin_tool_loop._TRUNCATED_BATCH_MSG
+}
+
+
+def summarize_tool_errors(path: Path) -> dict | None:
+    """Đếm lỗi tool-call của một transcript — trục "tool-call error rate" của bench.
+
+    Trả `{tool_calls, tool_errors, kinds}` (kinds chỉ chứa lớp có đếm > 0) hoặc None
+    khi file vắng/rỗng. Mỗi tool_result chỉ tính vào MỘT lớp (lớp đầu khớp) để tổng
+    lỗi không vượt tổng call.
+    """
+    events = parse_transcript_events(path)
+    if not events:
+        return None
+    calls = sum(1 for e in events if e.get("t") == "tool_call")
+    kinds: dict[str, int] = {}
+    errors = 0
+    for event in events:
+        if event.get("t") != "tool_result":
+            continue
+        content = str(event.get("content_head") or "")
+        for kind, marker in _TOOL_ERROR_MARKERS.items():
+            if marker in content:
+                kinds[kind] = kinds.get(kind, 0) + 1
+                errors += 1
+                break
+    return {"tool_calls": calls, "tool_errors": errors, "kinds": kinds}
+
+
 def extract_task_behavior_summary(
     data_dir: Path, task_id: str, max_chars: int
 ) -> str | None:

@@ -20,6 +20,7 @@ from my_crew.runtime.step_recorder import transcripts_dir
 from my_crew.runtime.transcript_evidence import (
     extract_review_evidence,
     find_transcript_for_version,
+    summarize_tool_errors,
 )
 
 
@@ -142,6 +143,91 @@ class TestExtractor:
         assert extract_review_evidence(empty, 8000) is None
         real = _write_transcript(tmp_path, "t1", "s2-v2.jsonl", _EVENTS)
         assert extract_review_evidence(real, 0) is None
+
+
+class TestToolErrors:
+    def test_counts_errors_by_class_over_total_calls(self, tmp_path):
+        events = [
+            {"t": "meta", "agent": "a1"},
+            {"t": "tool_call", "name": "web_search", "args_head": "{}"},
+            {"t": "tool_result", "name": "web_search", "content_head": "SJC 89.5 triệu"},
+            {"t": "tool_call", "name": "web_fetch", "args_head": "{}"},
+            {"t": "tool_result", "name": "web_fetch",
+             "content_head": "⚠️ tool web.scrape lỗi: timeout. Thử lại sau."},
+            {"t": "tool_call", "name": "bash", "args_head": "{}"},
+            {"t": "tool_result", "name": "bash",
+             "content_head": "Tool 'bash' không tồn tại. Công cụ có: web_search."},
+            {"t": "tool_call", "name": "web_search", "args_head": "{}"},
+            {"t": "tool_result", "name": "web_search",
+             "content_head": "Bạn vừa gọi lại Y HỆT loạt công cụ của lượt trước"},
+        ]
+        path = _write_transcript(tmp_path, "t1", "s1-v1.jsonl", events)
+        assert summarize_tool_errors(path) == {
+            "tool_calls": 4,
+            "tool_errors": 3,
+            "kinds": {"guard": 1, "invented_tool": 1, "repeat_batch": 1},
+        }
+
+    def test_one_result_counts_toward_at_most_one_class(self, tmp_path):
+        # A single result carrying two markers must not double-count — otherwise
+        # tool_errors could exceed tool_calls and the rate axis becomes nonsense.
+        events = [
+            {"t": "tool_call", "name": "web_search", "args_head": "{}"},
+            {"t": "tool_result", "name": "web_search",
+             "content_head": "⚠️ tool lỗi. Call again with arguments matching the schema."},
+        ]
+        path = _write_transcript(tmp_path, "t1", "s1-v1.jsonl", events)
+        out = summarize_tool_errors(path)
+        assert out["tool_errors"] == 1
+        assert sum(out["kinds"].values()) == 1
+
+    def test_missing_or_empty_file_is_none(self, tmp_path):
+        assert summarize_tool_errors(tmp_path / "ghost.jsonl") is None
+        empty = _write_transcript(tmp_path, "t1", "s1-v1.jsonl", [])
+        assert summarize_tool_errors(empty) is None
+
+    def test_markers_pin_to_the_strings_producers_emit_today(self):
+        """Marker-not-value (v85): each marker must appear in the ACTUAL text its
+        producer emits, so rewording a message breaks the build loudly instead of
+        silently zeroing the bench counter."""
+        from my_crew.runtime.transcript_evidence import _TOOL_ERROR_MARKERS
+        from my_crew.runtime_backends.read_only_toolset import tool_error_guard
+        from my_crew.runtime_backends.thin_tool_loop import (
+            _REPEAT_BATCH_MSG,
+            _TRUNCATED_BATCH_MSG,
+            _execute_call,
+        )
+        from my_crew.runtime_backends.tool_call_validation import prepare_tool_arguments
+        from my_crew.runtime_backends.typed_tool_specs import build_typed_specs
+
+        assert _TOOL_ERROR_MARKERS["repeat_batch"] in _REPEAT_BATCH_MSG
+        assert _TOOL_ERROR_MARKERS["length_batch"] in _TRUNCATED_BATCH_MSG
+
+        def _boom(args):
+            raise RuntimeError("down")
+
+        guarded = tool_error_guard("web.scrape", _boom)
+        assert _TOOL_ERROR_MARKERS["guard"] in str(guarded({}))
+
+        spec = build_typed_specs({"web.search": lambda a: ""})[0]
+        _, missing_error, _ = prepare_tool_arguments(spec, "{}")  # required `query` absent
+        assert missing_error and _TOOL_ERROR_MARKERS["bad_args"] in missing_error
+
+        def _broken_repair(args):
+            raise ValueError("hook bug")
+
+        broken = spec.__class__(
+            name=spec.name, legacy_name=spec.legacy_name,
+            description=spec.description, parameters=spec.parameters,
+            prepare_arguments=_broken_repair,
+        )
+        _, repair_error, _ = prepare_tool_arguments(broken, "{}")
+        assert repair_error and _TOOL_ERROR_MARKERS["bad_args"] in repair_error
+
+        result = _execute_call(
+            {"id": "c1", "function": {"name": "bash", "arguments": "{}"}}, {}, {}
+        )
+        assert _TOOL_ERROR_MARKERS["invented_tool"] in result["content"]
 
 
 class TestResolve:

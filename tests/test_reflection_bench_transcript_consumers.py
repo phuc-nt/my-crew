@@ -182,3 +182,31 @@ class TestBenchTranscriptUsage:
         metric = load_task_metric(db, "t1")
         assert all(s.llm_calls == 0 for s in metric.steps)
         assert metric.cost_usd == 0.02  # ledger vẫn là nguồn sự thật kế toán
+
+    def test_tool_error_counts_attach_per_step_and_aggregate(self, tmp_path):
+        db = tmp_path / "team_tasks.sqlite3"
+        _seed_bench_db(db)
+        _write_transcript(tmp_path, "t1", "s1-v1.jsonl", _EVENTS + [
+            {"t": "tool_call", "name": "bash", "args_head": "{}"},
+            {"t": "tool_result", "name": "bash",
+             "content_head": "Tool 'bash' không tồn tại. Công cụ có: web_search."},
+        ])
+        metric = load_task_metric(db, "t1", data_dir=tmp_path)
+        s1 = next(s for s in metric.steps if s.step_id == "s1")
+        # _EVENTS has 2 tool_call + 1 clean tool_result; the appended pair is the error
+        assert (s1.tool_calls, s1.tool_errors) == (3, 1)
+        assert s1.tool_error_kinds == {"invented_tool": 1}
+        assert (metric.tool_calls, metric.tool_errors) == (3, 1)
+        assert metric.tool_error_kinds == {"invented_tool": 1}
+        assert metric.llm_calls == 2
+
+    def test_transcripts_in_an_agent_jail_are_found(self, tmp_path):
+        """A spawned worker records into `.data/agents/<id>/` — its steps must not
+        read as zero rounds / zero tool calls in the bench table."""
+        db = tmp_path / "team_tasks.sqlite3"
+        _seed_bench_db(db)
+        _write_transcript(tmp_path / "agents" / "researcher", "t1", "s1-v1.jsonl", _EVENTS)
+        metric = load_task_metric(db, "t1", data_dir=tmp_path)
+        s1 = next(s for s in metric.steps if s.step_id == "s1")
+        assert s1.llm_calls == 2
+        assert s1.tool_calls == 2

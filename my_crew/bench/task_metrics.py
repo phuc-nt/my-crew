@@ -43,6 +43,9 @@ class StepMetric:
     llm_calls: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    tool_calls: int = 0
+    tool_errors: int = 0
+    tool_error_kinds: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -69,6 +72,26 @@ class TaskMetric:
         total = int(round(self.wall_clock_seconds))
         return f"{total // 60}m{total % 60:02d}s"
 
+    @property
+    def llm_calls(self) -> int:
+        return sum(s.llm_calls for s in self.steps)
+
+    @property
+    def tool_calls(self) -> int:
+        return sum(s.tool_calls for s in self.steps)
+
+    @property
+    def tool_errors(self) -> int:
+        return sum(s.tool_errors for s in self.steps)
+
+    @property
+    def tool_error_kinds(self) -> dict:
+        merged: dict[str, int] = {}
+        for step in self.steps:
+            for kind, count in step.tool_error_kinds.items():
+                merged[kind] = merged.get(kind, 0) + count
+        return merged
+
 
 def _parse(stamp: str | None) -> datetime | None:
     if not stamp:
@@ -86,27 +109,52 @@ def _span(start: str | None, end: str | None) -> float | None:
     return (b - a).total_seconds()
 
 
-def _step_transcript_usage(data_dir: Path, task_id: str, step_id: str) -> dict:
-    """Summed LLM usage over ALL of a step's attempt transcripts (a retried step has
-    one file per attempt; the store's `cost_usd` is likewise cumulative). Empty dict
-    when no transcript parses — best-effort, never raises into the metric load."""
+def _step_transcript_files(data_dir: Path, task_id: str, step_id: str) -> list[Path]:
+    """A step's attempt transcripts, looked up like review evidence is: the shared
+    root first, then every agent jail under `<data_dir>/agents/` — a spawned worker
+    records into its OWN data dir, and the bench must not lose those steps."""
     from my_crew.runtime.step_recorder import transcripts_dir
-    from my_crew.runtime.transcript_evidence import summarize_transcript_usage
 
-    totals = {"llm_calls": 0, "prompt_tokens": 0, "completion_tokens": 0}
-    try:
-        files = sorted(transcripts_dir(data_dir, task_id).glob(f"{step_id}-*.jsonl"))
-    except (ValueError, OSError):
-        return {}
-    found = False
-    for path in files:
-        usage = summarize_transcript_usage(path)
-        if usage is None:
+    roots = [data_dir, *sorted((data_dir / "agents").glob("*/"))]
+    files: list[Path] = []
+    for root in roots:
+        try:
+            files.extend(sorted(transcripts_dir(root, task_id).glob(f"{step_id}-*.jsonl")))
+        except (ValueError, OSError):
             continue
-        found = True
-        for key in totals:
-            totals[key] += int(usage.get(key) or 0)
-    return totals if found else {}
+    return files
+
+
+def _step_transcript_usage(data_dir: Path, task_id: str, step_id: str) -> dict:
+    """Summed LLM usage + tool-call error counts over ALL of a step's attempt
+    transcripts (a retried step has one file per attempt; the store's `cost_usd` is
+    likewise cumulative). Empty dict when no transcript parses — best-effort, never
+    raises into the metric load."""
+    from my_crew.runtime.transcript_evidence import (
+        summarize_tool_errors,
+        summarize_transcript_usage,
+    )
+
+    totals = {"llm_calls": 0, "prompt_tokens": 0, "completion_tokens": 0,
+              "tool_calls": 0, "tool_errors": 0}
+    kinds: dict[str, int] = {}
+    found = False
+    for path in _step_transcript_files(data_dir, task_id, step_id):
+        usage = summarize_transcript_usage(path)
+        if usage is not None:
+            found = True
+            for key in ("llm_calls", "prompt_tokens", "completion_tokens"):
+                totals[key] += int(usage.get(key) or 0)
+        errors = summarize_tool_errors(path)
+        if errors is not None:
+            found = True
+            totals["tool_calls"] += int(errors.get("tool_calls") or 0)
+            totals["tool_errors"] += int(errors.get("tool_errors") or 0)
+            for kind, count in (errors.get("kinds") or {}).items():
+                kinds[kind] = kinds.get(kind, 0) + int(count)
+    if not found:
+        return {}
+    return totals | {"kinds": kinds}
 
 
 def load_task_metric(
@@ -154,6 +202,9 @@ def load_task_metric(
                 llm_calls=int(usage.get("llm_calls") or 0),
                 prompt_tokens=int(usage.get("prompt_tokens") or 0),
                 completion_tokens=int(usage.get("completion_tokens") or 0),
+                tool_calls=int(usage.get("tool_calls") or 0),
+                tool_errors=int(usage.get("tool_errors") or 0),
+                tool_error_kinds=dict(usage.get("kinds") or {}),
             )
         )
 

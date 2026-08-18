@@ -127,20 +127,29 @@ def _tasks(args: argparse.Namespace) -> int:
         print(f"store not found: {db}", file=sys.stderr)
         return 2
 
+    data_dir = Path(args.data_dir) if args.data_dir else db.parent
     rows = []
     for label, task_id in (("baseline", args.baseline), ("candidate", args.candidate)):
-        metric = load_task_metric(db, task_id)
+        metric = load_task_metric(db, task_id, data_dir=data_dir)
         if metric is None:
             print(f"{label} task {task_id} not in {db}", file=sys.stderr)
             return 2
         rows.append((label, metric))
 
-    print(f"{'':<11} {'task':<14} {'mode':<7} {'wall':>8} {'cost $':>9} {'steps':>6} {'rework':>7}")
+    print(
+        f"{'':<11} {'task':<14} {'mode':<7} {'wall':>8} {'cost $':>9} {'steps':>6} "
+        f"{'rework':>7} {'rounds':>7} {'tools':>6} {'t-err':>6}"
+    )
     for label, m in rows:
         print(
             f"{label:<11} {m.task_id:<14} {m.mode:<7} {m.wall_clock_text:>8} "
-            f"{m.cost_usd:>9.4f} {m.step_count:>6} {m.rework_steps:>7}"
+            f"{m.cost_usd:>9.4f} {m.step_count:>6} {m.rework_steps:>7} "
+            f"{m.llm_calls:>7} {m.tool_calls:>6} {m.tool_errors:>6}"
         )
+    for label, m in rows:
+        if m.tool_error_kinds:
+            detail = ", ".join(f"{k}×{v}" for k, v in sorted(m.tool_error_kinds.items()))
+            print(f"{label} tool errors: {detail}")
 
     ratios = compare(rows[0][1], rows[1][1])
     speed = ratios["speedup"]
@@ -171,6 +180,10 @@ def main() -> int:
     live.add_argument("--baseline", required=True, help="task id of the slower/reference run")
     live.add_argument("--candidate", required=True, help="task id of the run being judged")
     live.add_argument("--db", default=str(DEFAULT_DB), help=f"store path (default {DEFAULT_DB})")
+    live.add_argument(
+        "--data-dir", default=None,
+        help="data root holding transcripts/ and agents/ jails (default: the db's folder)",
+    )
 
     args = parser.parse_args()
     if args.cmd == "pipeline":
