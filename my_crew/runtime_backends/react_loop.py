@@ -139,13 +139,27 @@ def _tool_capability_contract(tools_map: dict[str, Callable[[dict], Any]]) -> st
     if not tools_map:
         return ""
     names = ", ".join(sorted(n.replace(".", "_") for n in tools_map))
-    return (
+    contract = (
         "\n\nCÔNG CỤ BẠN ĐANG CÓ (gọi trực tiếp, KHÔNG cần xin phép ai): " + names + ". "
         "Bạn làm việc theo VÒNG LẶP: gọi công cụ → đọc kết quả → gọi tiếp nếu chưa đủ, "
         "cho đến khi đủ dữ liệu rồi mới trả lời. TUYỆT ĐỐI không hỏi xin phép tra cứu và "
         "không đề nghị người khác tra hộ — cứ gọi công cụ. Nếu đã thử nhiều từ khoá mà vẫn "
         "không có dữ liệu, hãy nói rõ đã thử gì và thiếu gì, KHÔNG bịa số liệu."
     )
+    if any("web" in n for n in tools_map):
+        # Source-quality bar for runs that CAN browse: the base prompt demands
+        # "ghi rõ nguồn" but says nothing about which source or when it was read, and
+        # a search loop left to itself settles for the first dealer/blog hit. Only
+        # appended when a web-shaped tool is bound — internal search (history/jira)
+        # cannot reach official pages, so it is not scored against that standard.
+        contract += (
+            " CHUẨN NGUỒN khi tra cứu: ưu tiên trang CHÍNH THỨC của chính đối tượng "
+            "(trang chủ, trang giá, thông cáo của dịch vụ/công ty đó) trước nguồn thứ "
+            "cấp như đại lý, báo, blog; với mỗi số liệu ghi rõ domain nguồn và ngày "
+            "truy cập ngay bên cạnh. Nguồn thứ cấp chỉ dùng khi trang chính thức không "
+            "có, và phải ghi chú rõ đó là nguồn thứ cấp."
+        )
+    return contract
 
 
 #: v45: appended to the create_agent system prompt — the in-state scratch equivalent of the

@@ -159,6 +159,14 @@ class TeamStepState(TypedDict, total=False):
     attempt_id: str
     version: str  # == attempt_id (deliver artifact provenance, see module docstring)
     self_check_failed: bool  # True iff rework was exhausted without a passing check
+    # A rework round can REGRESS the draft: the checker demands data this loop cannot
+    # fetch and the model reacts by blanking sourced rows into "Không có dữ liệu"
+    # instead of keeping them and flagging the gap (seen live: sprint step died with
+    # an empty shell while its first draft had prices + sources). self_check tracks
+    # the failing non-blank draft with the fewest failures; on budget exhaustion the
+    # step delivers that best draft instead of the latest one.
+    best_result_text: str
+    best_failure_count: int
     # --- consult (M33, all primitives, reset per attempt by design) ---
     consult_count: int  # how many ask_colleague calls this attempt has made so far
     consult_log: list[str]  # short "asked <id>: <question>" lines, observability-only
@@ -420,6 +428,23 @@ def default_team_task_deps(
     def _run_rework(
         brief: str, prior_output: str, failures: list[str], handoff: str = ""
     ) -> tuple[str, float | None]:
+        # A rework asked for data the attempt never fetched is unanswerable without
+        # looking it up: the model's only remaining moves are to invent the figure or
+        # to blank the rows it cannot defend. Live, it blanked them — a sourced draft
+        # became "Không có dữ liệu" and the task stalled (tasks f62348234949,
+        # 7ebfc0374c5c). The failures name exactly what is missing, so they make a
+        # better query than the brief does, and the hook here is the same one `work`
+        # already holds — no new capability, just applied one node later.
+        if search_hook is not None and failures:
+            query = build_search_query(brief, "\n".join(str(f) for f in failures))
+            try:
+                found = search_hook(query) if query else ""
+            except Exception as exc:  # noqa: BLE001 — search stays best-effort here too
+                logger.warning("team-step rework search failed, continuing: %s", exc)
+                found = ""
+            if found.strip():
+                note = f"KẾT QUẢ TRA CỨU BỔ SUNG (cho phần còn thiếu):\n{found}"
+                handoff = f"{handoff}\n\n{note}" if handoff else note
         try:
             result = _llm().complete(
                 build_rework_messages(
@@ -789,11 +814,29 @@ def _make_team_task_nodes(deps: TeamTaskDeps, *, interrupt_on_clarify: bool = Fa
         # flag HERE (not in a separate node) keeps the two decisions computed from
         # the identical snapshot, so they can never disagree.
         exhausted = (not passed) and rework_count >= max_rework
-        return {
+        out: dict = {
             "self_check_passed": passed, "check_failures": failures,
             "check_confidence": confidence, "check_reasons": reasons,
             "self_check_failed": exhausted,
         }
+        if not passed:
+            # Keep-best across the rework loop: reworks can make the draft worse, and
+            # on exhaustion this state's `result_text` is what deliver hands over — so
+            # the best failing draft must win, not the newest. Blank drafts never
+            # qualify (the empty-result guard grades a blank as ONE failure, which
+            # would otherwise beat any real draft with two). Ties go to the newer
+            # draft: same failure count with more rework applied is the better bet.
+            # The swap happens only on the exhausted check, whose only outgoing route
+            # is deliver — no later rework ever sees a rolled-back result_text.
+            best_count = state.get("best_failure_count", -1)
+            if result_text.strip() and (best_count < 0 or len(failures) <= best_count):
+                out["best_result_text"] = result_text
+                out["best_failure_count"] = len(failures)
+            elif exhausted:
+                best_text = state.get("best_result_text", "")
+                if best_text.strip():
+                    out["result_text"] = best_text
+        return out
 
     def rework(state: TeamStepState) -> dict:
         writer = get_stream_writer()

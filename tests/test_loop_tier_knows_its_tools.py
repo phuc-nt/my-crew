@@ -68,6 +68,25 @@ def test_exhausted_search_must_report_the_gap_not_invent_data():
     assert "KHÔNG bịa" in out
 
 
+def test_a_browsing_tier_is_held_to_the_source_standard():
+    """Blind-judge losses repeated on one axis: the loop settled for dealer/blog hits
+    while the baseline cited official pages with access dates. The contract must set
+    the bar — official pages of the subject entity first, domain + access date next
+    to every figure."""
+    out = _contract("web.search", "web.scrape")
+    assert "CHUẨN NGUỒN" in out
+    assert "CHÍNH THỨC" in out
+    assert "ngày" in out and "truy cập" in out
+    assert "thứ" in out and "cấp" in out  # secondary sources named as the fallback
+
+
+def test_internal_search_is_not_scored_against_the_web_source_standard():
+    """`history.search` can search — but only internal history. It cannot reach an
+    official page, so demanding one would set an unmeetable bar."""
+    out = _contract("history.search", "jira.issues")
+    assert "CHUẨN NGUỒN" not in out
+
+
 def test_the_scratch_clause_no_longer_reads_as_the_whole_toolset():
     """`_STATE_SCRATCH_CONTRACT` opened with "GHI CHÚ CÔNG CỤ: bạn có..." — the only
     tool-shaped sentence in the prompt, listing file scratch alone. That framing actively

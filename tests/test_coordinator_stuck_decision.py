@@ -325,3 +325,58 @@ def test_a_step_awaiting_a_ruling_does_not_let_a_sibling_stall_the_task(tmp_path
 
     assert _dead_end_result(_deps(store), store.get("t1")) is None
     assert store.get("t1").status != "stalled"
+
+
+# --- what the judge is actually shown ------------------------------------------------
+
+
+def _brief_for(tmp_path, artifact_payload: dict) -> str:
+    """Run one tick over a `needs_decision` step and return the brief the judge saw."""
+    from my_crew.agent.team_task_artifact import write_step_artifact
+
+    store = _stuck_store(tmp_path)
+    step = store.get_step("t1", "s1")
+    write_step_artifact(tmp_path, "t1", step.seq, artifact_payload)
+    seen: list[str] = []
+
+    def _judge(brief, step):
+        seen.append(brief)
+        return {"decision": "give_up", "reason": "x"}
+
+    run_one_tick(_deps(store, judge_stuck_step=_judge))
+    assert seen, "judge was never consulted"
+    return seen[0]
+
+
+def test_the_judge_is_shown_the_failures_the_step_graded_itself_on(tmp_path):
+    """The grader already named what was missing and wrote it to the artifact the judge
+    opens. Re-deriving that from the raw output is impossible — absent data leaves no
+    trace in the text — so the list has to be in the brief."""
+    brief = _brief_for(tmp_path, {
+        "status": "needs_decision",
+        "result_text": "Bang so sanh gia cac dich vu.",
+        "self_check_failed": True,
+        "self_check_failures": [
+            "thiếu giá gói cá nhân của Zing MP3",
+            "thiếu link nguồn cho chất lượng âm thanh",
+        ],
+    })
+
+    assert "thiếu giá gói cá nhân của Zing MP3" in brief
+    assert "thiếu link nguồn cho chất lượng âm thanh" in brief
+    # The submitted output still has to be there — the failures supplement it.
+    assert "Bang so sanh gia cac dich vu." in brief
+
+
+def test_a_brief_stays_well_formed_when_the_artifact_has_no_failure_list(tmp_path):
+    """Older artifacts (and any step whose grader returned no reasons) carry no
+    `self_check_failures`; the brief must simply omit the section."""
+    brief = _brief_for(tmp_path, {
+        "status": "needs_decision",
+        "result_text": "ket qua cu",
+        "self_check_failed": True,
+    })
+
+    assert "Bước tự chấm trượt" not in brief
+    assert "ket qua cu" in brief
+    assert "Số lần đã can thiệp:" in brief

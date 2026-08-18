@@ -361,8 +361,14 @@ def make_deliver_room(loaded: Any = None, settings: Any = None):
 
                     # No title prefix when the summary already opens with the task name
                     # — the CEO was reading the full title three times per message.
-                    head = ("✅ HOÀN THÀNH — " if summary.lstrip().startswith("Việc")
-                            else f"✅ Việc '{task.title[:120]}' — HOÀN THÀNH:\n\n")
+                    # A give-up conclusion also flows through here (stuck_decision
+                    # reuses the delivery path for its honest final summary) — that
+                    # message must NOT carry a completion checkmark.
+                    if "KHÔNG LÀM ĐƯỢC" in summary[:160]:
+                        head = "⛔ "
+                    else:
+                        head = ("✅ HOÀN THÀNH — " if summary.lstrip().startswith("Việc")
+                                else f"✅ Việc '{task.title[:120]}' — HOÀN THÀNH:\n\n")
                     try:
                         result = send_telegram_message(
                             with_tail(

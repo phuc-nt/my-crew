@@ -602,20 +602,14 @@ def _run_graph(
         and not getattr(step, "system_inserted", False)
         and getattr(step, "step_type", "work") == "work"
     )
-    # v74: a step routed tool-less (needs_web=False work step / review row, before any
-    # coordinator ruling) skips the native pre-work search hook too — grading and
-    # synthesis read their handoff, and the hook's one search per run was pure cost.
-    # After a ruling (intervention_count > 0) the hook returns with the agent's tier.
-    _step_type = str(getattr(step, "step_type", "work") or "work")
-    _toolless = (_step_type in ("review", "sprint")
-                 or (_step_type == "work"
-                     and not bool(getattr(step, "needs_web", False))
-                     and int(getattr(step, "intervention_count", 0) or 0) == 0))
-    # v77: the sprint pipeline REPLACES the work node — it runs its own searches (via
+    _toolless = step_is_toolless(step)
+    # The sprint pipeline REPLACES the work node — it runs its own searches (via
     # `prefetch_queries`, same gates and audit trail) and never calls the graph's
-    # pre-work hook, which is why `_toolless` counts it above. Everything downstream of
-    # `work` (self_check → rework → deliver → gateway) is untouched, so a sprint step
-    # keeps every guardrail a normal step has.
+    # pre-work hook. Everything downstream of `work` (self_check → rework → deliver →
+    # gateway) is untouched, so a sprint step keeps every guardrail a normal step has.
+    # A web-shaped sprint therefore still gets a hook: `work` cannot reach it (the
+    # override took that node), so the ONLY node that can is `rework` — which is the
+    # node that was starving, asked to close data gaps with no way to look anything up.
     if _is_sprint:
         from my_crew.runtime.sprint_runner import build_sprint_work
 
@@ -626,6 +620,13 @@ def _run_graph(
             # Intake's ruling travels with the step: a write/reason-only sprint runs
             # tool-less — no prefetch, no THIẾU-note about searches it never needed.
             needs_web=bool(getattr(step, "needs_web", True)),
+            # A coordinator retry must not re-buy the answers the failed attempt
+            # already has. The pipeline is deterministic in the goal, so without this
+            # the retry re-sends byte-identical queries, gets the same thin bundle and
+            # dies the same way — measured on live tasks f62348234949 (3 attempts) and
+            # 7ebfc0374c5c (2), both stalled. The count advances the angle rotation so
+            # attempt N leads with phrasings attempt N-1 never sent.
+            retry_round=int(getattr(step, "intervention_count", 0) or 0),
         )
     graph = runtime.build_task(
         settings=settings, context=context, step_title=step.title,
@@ -874,6 +875,36 @@ def _guidance_with_wake_context(step: Any) -> str:
     if not line:
         return stored
     return f"{line}\n{stored}".strip()
+
+
+def step_is_toolless(step: Any) -> bool:
+    """True when this step runs with NO pre-work search hook wired.
+
+    A tool-less step's nodes read their handoff instead of searching, and the hook's
+    one search per run would be pure cost. Three shapes qualify:
+
+    - `review`: grading reads the result it was handed, never the web.
+    - `sprint` with `needs_web=False`: intake ruled it write/reason-only, so there is
+      nothing to look up and a search would only earn a disclaimer about itself.
+    - `work` with `needs_web=False`, before any coordinator ruling. After a ruling
+      (`intervention_count > 0`) the hook returns with the agent's own tier — that is
+      the self-heal contract.
+
+    A `needs_web` sprint is deliberately NOT tool-less even though its `work` node is
+    replaced by the pipeline (which does its own, separately audited searching). The
+    hook it keeps is reachable only from `rework` — the node that was starving: asked
+    to close gaps in data the attempt never fetched, with no way to fetch it, it
+    blanked the rows it could not defend and stalled the task (live f62348234949,
+    7ebfc0374c5c).
+    """
+    step_type = str(getattr(step, "step_type", "work") or "work")
+    if step_type == "review":
+        return True
+    if step_type == "sprint":
+        return not bool(getattr(step, "needs_web", False))
+    return (step_type == "work"
+            and not bool(getattr(step, "needs_web", False))
+            and int(getattr(step, "intervention_count", 0) or 0) == 0)
 
 
 def _resolve_search_hook(loaded: Any, settings: Any) -> Callable[[str], str] | None:

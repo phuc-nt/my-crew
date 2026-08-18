@@ -50,7 +50,7 @@ def _content_hash(steps: list[dict]) -> str:
     ]))
 
 
-def _mk_review_stalled_task(tmp_path, task_id="t1", pic_id="") -> None:
+def _mk_review_stalled_task(tmp_path, task_id="t1", pic_id="", needs_web=False) -> None:
     """One content step (done, needs_review) + one round-2 failed review (done) —
     the exact shape `review_rounds_exhausted` stalls on."""
     store = _open_store(tmp_path)
@@ -59,7 +59,7 @@ def _mk_review_stalled_task(tmp_path, task_id="t1", pic_id="") -> None:
                           assigned_by="ceo", pic_id=pic_id)
         steps = [
             {"step_id": "s1", "title": "draft báo cáo", "assigned_to": "agent-a",
-             "deps": [], "needs_review": True},
+             "deps": [], "needs_review": True, "needs_web": needs_web},
         ]
         store.set_plan(task_id, steps, _content_hash(steps))
         attempt = store.reserve_step(task_id, "s1")
@@ -198,6 +198,22 @@ def test_retry_mints_one_extra_rework_round_with_ceo_note(tmp_path):
     verdict = read_review_verdict_artifact(tmp_path, "t1", 1, 2)
     assert "tập trung phần số liệu quý 2" in verdict["result_text"]
     assert verdict["passed"] is False  # retry does NOT accept — the verdict stands
+
+
+def test_retry_rework_inherits_the_parents_web_declaration(tmp_path):
+    """The minted redo of a live data-collection step must stay marked as one: the
+    `needs_web` declaration is what keeps a later reassign from handing the redo to
+    an agent with no search tool (`_can_do_step` trusts the flag alone)."""
+    _mk_review_stalled_task(tmp_path, needs_web=True)
+
+    run_retry_stalled_step({"task_id": "t1"})
+
+    store = _open_store(tmp_path)
+    try:
+        rework = next(s for s in store.get("t1").steps if s.step_id == "s1-rework-2")
+        assert rework.needs_web is True
+    finally:
+        store.close()
 
 
 def test_retry_refuses_a_double_retry_before_the_round_ran(tmp_path):

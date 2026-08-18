@@ -14,6 +14,7 @@ Load-bearing:
 from __future__ import annotations
 
 from dataclasses import replace
+from types import SimpleNamespace
 
 from my_crew.agent.team_task_artifact import read_step_artifact
 from my_crew.agent.team_task_graph import (
@@ -265,3 +266,91 @@ def test_failed_self_check_persists_its_reasons_in_the_artifact(tmp_path, monkey
     artifact = read_step_artifact(tmp_path, "task-9", 1)
     assert artifact["self_check_failed"] is True
     assert any("thiếu link" in r for r in artifact["self_check_failures"])
+
+
+def test_rework_looks_up_the_data_its_check_says_is_missing(tmp_path, monkeypatch):
+    """The failure this closes: a self-check demanding data the attempt never fetched
+    left `rework` with no way to get it, so the model either invented the figure or
+    blanked the rows it could not defend. Live, it blanked them — a sourced draft
+    became "Không có dữ liệu" and the task stalled (tasks f62348234949, 7ebfc0374c5c).
+    The rework node now runs the SAME search hook `work` already holds, keyed on the
+    failures, which name exactly what is missing."""
+    settings = build_settings_from_dict({"data_dir": tmp_path})
+    replies = ["bản nháp thiếu giá", "bản nháp đã có giá"]
+    seen: list[list[dict[str, str]]] = []
+    checks = {"n": 0}
+
+    class _FakeLlm:
+        def __init__(self, _settings):
+            pass
+
+        def complete(self, messages, **kw):
+            seen.append(list(messages))
+            if kw.get("role") == "review":
+                checks["n"] += 1
+                # Fail the first check (which drives one rework), then pass.
+                content = (
+                    '{"passed": true, "failures": [], "confidence": 0.9}'
+                    if checks["n"] > 1
+                    else '{"passed": false, "failures": ["thiếu giá gói cá nhân"],'
+                         ' "confidence": 0.4}'
+                )
+                return SimpleNamespace(content=content, cost_usd=0.0)
+            return SimpleNamespace(content=replies.pop(0) if replies else "", cost_usd=0.01)
+
+    import my_crew.llm.client as llm_client_mod
+
+    monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)
+
+    queries: list[str] = []
+
+    def hook(query: str) -> str:
+        queries.append(query)
+        return "Spotify 59.000đ/tháng — spotify.com, đọc 2026-08-17"
+
+    deps = default_team_task_deps(
+        settings=settings, step_title="Bảng giá Spotify", data_dir=tmp_path,
+        task_id="task-rw", step_seq=1, search_hook=hook,
+    )
+    graph = build_team_task_graph(deps=deps)
+    graph.invoke({"step_title": "Bảng giá Spotify", "acceptance": "Có giá gói cá nhân"})
+
+    assert len(queries) == 2, "work searched once, rework searched again for the gap"
+    assert "giá gói cá nhân" in queries[1], "the rework query is built from the FAILURES"
+    prompts = ["\n".join(m.get("content", "") for m in call) for call in seen]
+    assert any("spotify.com" in p for p in prompts), \
+        "the found data must reach the rework prompt"
+
+
+def test_rework_without_a_search_hook_still_reworks(tmp_path, monkeypatch):
+    """A tool-less step (review row, needs_web=False work step) has no hook at all —
+    the rework path must stay exactly as it was for those, not raise."""
+    settings = build_settings_from_dict({"data_dir": tmp_path})
+    calls = {"n": 0}
+
+    class _FakeLlm:
+        def __init__(self, _settings):
+            pass
+
+        def complete(self, _messages, **kw):
+            if kw.get("role") == "review":
+                calls["n"] += 1
+                content = '{"passed": true, "failures": [], "confidence": 0.9}' \
+                    if calls["n"] > 1 else \
+                    '{"passed": false, "failures": ["thiếu A"], "confidence": 0.4}'
+                return SimpleNamespace(content=content, cost_usd=0.0)
+            return SimpleNamespace(content="nội dung", cost_usd=0.01)
+
+    import my_crew.llm.client as llm_client_mod
+
+    monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)
+
+    deps = default_team_task_deps(
+        settings=settings, step_title="viết", data_dir=tmp_path,
+        task_id="task-nohook", step_seq=1, search_hook=None,
+    )
+    graph = build_team_task_graph(deps=deps)
+    result = graph.invoke({"step_title": "viết", "acceptance": "phải có A"})
+
+    assert result["rework_count"] == 1
+    assert result["self_check_failed"] is False

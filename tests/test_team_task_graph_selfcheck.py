@@ -8,6 +8,9 @@ Load-bearing:
   `rework_count==2` at delivery, `deliver` receives `self_check_failed=True` — a
   stuck self-check must still deliver (R5: never loop forever), just flagged.
 - pass-immediately: `deliver` runs with no `rework` call at all.
+- keep-best on exhaustion: reworks can REGRESS a draft; when the budget runs out,
+  `deliver` receives the failing non-blank draft with the FEWEST failures, not the
+  latest one. Ties keep the newer draft; a blank draft never qualifies as best.
 - No checkpoint-resume test: this graph compiles with `checkpointer=None` by design
   (Decision B) — a crash mid-attempt is not resumable, the next tick spawns a FRESH
   attempt_id and re-runs from `perceive`, so there is no phantom-resume path to test.
@@ -76,7 +79,8 @@ def test_fail_fail_exhausts_rework_budget_and_delivers_flagged():
     assert result["rework_count"] == 2
     assert result["self_check_failed"] is True
     assert calls["deliver_args"][2] is True
-    # deliver still runs with the LATEST (still-failing) result, not a blank/aborted one
+    # Every round failed with the SAME failure count — a keep-best tie, which goes to
+    # the newest draft: deliver runs with the LATEST result, not a blank/aborted one.
     assert calls["deliver_args"][0] == "draft v0+fix1+fix2"
 
 
@@ -106,3 +110,58 @@ def test_blank_acceptance_skips_check_semantics_but_graph_still_uses_default_dep
 
     assert calls["rework_calls"] == 0
     assert result["self_check_failed"] is False
+
+
+def test_exhaustion_delivers_the_best_draft_when_reworks_regress():
+    """A rework round can make the draft WORSE (live shape: the checker demanded data
+    the loop could not fetch and the model blanked sourced rows instead of flagging
+    the gap). On budget exhaustion, deliver must receive the draft that failed with
+    the FEWEST failures — here the middle one — not the latest."""
+    deps, calls = _make_deps(verdicts=[
+        (False, ["thiếu A", "thiếu B"], 0.3),   # draft v0
+        (False, ["thiếu B"], 0.5),              # draft v0+fix1 — best (1 failure)
+        (False, ["thiếu A", "thiếu B", "thiếu C"], 0.2),  # draft v0+fix1+fix2 regressed
+    ])
+    graph = build_team_task_graph(deps=deps)
+    result = graph.invoke({"step_title": "draft", "acceptance": "phải có A và B"})
+
+    assert calls["rework_calls"] == 2
+    assert result["self_check_failed"] is True
+    assert calls["deliver_args"][2] is True
+    assert calls["deliver_args"][0] == "draft v0+fix1"
+    assert result["result_text"] == "draft v0+fix1"
+
+
+def test_a_blank_rework_never_beats_a_real_draft():
+    """The empty-result guard grades a blank as exactly ONE failure — without the
+    non-blank gate, wiping the table would "improve" on any real draft with two
+    failures. The real first draft is what must ship."""
+    verdicts = [
+        (False, ["thiếu X", "thiếu Y"], 0.4),  # real draft, 2 failures
+        (False, ["bước không trả về nội dung nào (kết quả rỗng)"], 1.0),  # blank, 1
+    ]
+    check_calls = {"n": 0}
+    deliver_args: dict = {}
+
+    def run_self_check(result_text, acceptance):
+        n = check_calls["n"]
+        check_calls["n"] = n + 1
+        return verdicts[min(n, len(verdicts) - 1)]
+
+    def deliver_step(text, version, self_check_failed):
+        deliver_args["v"] = (text, version, self_check_failed)
+        return True, f"[done] {text}"
+
+    deps = TeamTaskDeps(
+        read_handoff=lambda: "",
+        run_work=lambda title, handoff, hook: ("bảng giá có nguồn", 0.01),
+        run_self_check=run_self_check,
+        run_rework=lambda title, prior, failures: ("", 0.02),  # model blanks the draft
+        deliver_step=deliver_step,
+    )
+    graph = build_team_task_graph(deps=deps)
+    result = graph.invoke({"step_title": "draft", "acceptance": "phải có X và Y"})
+
+    assert result["self_check_failed"] is True
+    assert deliver_args["v"][0] == "bảng giá có nguồn"
+    assert deliver_args["v"][2] is True

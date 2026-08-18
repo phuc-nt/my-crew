@@ -181,12 +181,16 @@ def run_retry_stalled_step(slots: dict[str, str]) -> str:
             # first, then the content step's own source deps — a reworker that can see
             # the defect list but not the data cannot fix a data defect.
             retry_deps = [review.step_id] + [d for d in content.deps if d != review.step_id]
+            # The rework inherits the parent's web-lookup declaration (same as
+            # `review_insert._insert_rework_step`): without it the row reads as
+            # needing nothing, and a later reassign could legally hand a live
+            # data-collection redo to an agent with no search tool.
             ctx.store.insert_step(task.id, {
                 "step_id": rework_id, "title": content.title,
                 "assigned_to": content.assigned_to, "deps": retry_deps,
                 "step_type": "rework", "parent_step_id": content.step_id,
                 "review_round": review.review_round,
-            })
+            }, needs_web=content.needs_web)
             ctx.store.reopen_stalled(task.id)
             return (f"Đã mở thêm MỘT vòng sửa cho bước '{content.title}' của việc "
                     f"`{task.id}`" + (" (kèm ghi chú của CEO)." if note else "."))

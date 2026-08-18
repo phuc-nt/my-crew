@@ -602,21 +602,16 @@ def agent_web_capable(agent_id: str) -> bool:
 
 
 def _can_do_step(agent_id: str, step) -> bool:
-    """Whether `agent_id` holds the tools this step needs. Two decidable checks, no
-    model judgment:
+    """Whether `agent_id` holds the tools this step needs — one decidable check, no
+    model judgment: a step declared (v74 `needs_web`) to require live web lookup
+    needs an assignee who can ACTUALLY search, regardless of who holds it now.
 
-    - v74 `needs_web`: a step declared to require live web lookup needs an assignee
-      who can ACTUALLY search — regardless of who holds it now.
-    - Downgrade guard (pre-v74, kept for unflagged steps): if the current assignee can
-      search and the proposed one cannot, the reassign hands the step to someone
-      strictly less able to finish it. That is the shape that bit us in production (a
-      web data-collection step moved from researcher to an agent with no search).
-      One-directional by design: upgrades, lateral moves, and steps whose current
-      holder never had search all pass — this gate only refuses to make things worse.
+    The declaration is the ONLY requirement source. An earlier extra guard also
+    refused any move away from a web-capable holder on UNDECLARED steps, and that
+    misfired live: a synthesis step (needs_web=0, no lookup involved) stuck on the
+    researcher could not be handed to the analyst, so a task at ~90% complete was
+    concluded as a failure instead. Every dynamically-minted rework row now inherits
+    its parent's declaration (`review_insert`, `ops_stalled_task`), so trusting the
+    flag no longer leaves redo rows unprotected.
     """
-    if bool(getattr(step, "needs_web", False)) and not _web_search_enabled(agent_id):
-        return False
-    current = getattr(step, "assigned_to", "") or ""
-    if not current or not _web_search_enabled(current):
-        return True
-    return _web_search_enabled(agent_id)
+    return not bool(getattr(step, "needs_web", False)) or _web_search_enabled(agent_id)

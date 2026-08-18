@@ -74,12 +74,25 @@ def build_stuck_brief(deps: CoordinatorDeps, task: TeamTask, step: TeamStep) -> 
     artifact = read_step_artifact(team_tasks_root(), task.id, step.seq) or {}
     result_text = str(artifact.get("result_text") or "")[:2000]
     body = format_internal_content(result_text, label="ket-qua-buoc") or result_text
+    # The step's own grader already named what was missing, and that list is written to
+    # the artifact this function opens anyway. Leaving it out made the judge re-derive
+    # the diagnosis from the raw output — the one input that cannot show what ISN'T
+    # there — so its guidance came back generic ("làm lại cho đúng tiêu chí") instead of
+    # naming the gap. These are the same failures `rework` is handed, kept unformatted
+    # because they are our grader's words, not fetched content.
+    failures = [str(f) for f in (artifact.get("self_check_failures") or []) if str(f).strip()]
+    failure_block = (
+        "\nBước tự chấm trượt ở những điểm sau:\n"
+        + "\n".join(f"- {f}" for f in failures)
+        if failures else ""
+    )
     return (
         f"Việc: {task.title}\n"
         f"Bước đang kẹt: {step.title}\n"
         f"Người đang làm: {step.assigned_to}\n"
         f"Tiêu chí đạt: {step.acceptance or '(không ghi rõ)'}\n"
-        f"Số lần đã can thiệp: {step.intervention_count}\n"
+        f"Số lần đã can thiệp: {step.intervention_count}"
+        f"{failure_block}\n"
         f"Kết quả bước đã nộp (KHÔNG đạt tiêu chí trên):\n{body or '(trống)'}"
     )
 
@@ -216,11 +229,36 @@ def _reassign(
     # concludes the task honestly ("thiếu công cụ") instead of spending the remaining
     # interventions rotating the step between agents that all lack the same tool.
     if not deps.can_do_step(new_assignee, step):
-        return _give_up(
-            deps, task, step,
-            f"không có người đủ công cụ cho bước '{step.title}' "
-            f"({new_assignee} thiếu công cụ bước này cần)",
+        # Refusing the move is right; ENDING the task on it is not. Live task
+        # c357f5481bf5 stalled exactly here: with `needs_web` declared and only the
+        # researcher holding `web_search`, no reassign target could ever pass this
+        # gate, so the judge spending ruling #2 on one traded away the last real
+        # attempt for a move that was unreachable by construction. Since ruling #1 is
+        # always coerced to retry, that left the capable original holder with a single
+        # guided attempt instead of two. Degrade to the retry this should have been —
+        # `_retry` keeps the step with its current (capable) assignee, and the
+        # intervention cap above still concludes the task once attempts are truly spent.
+        logger.info(
+            "team-tick: unreachable reassign for %s/%s (%s lacks the step's tools) "
+            "degraded to retry_with_guidance",
+            task.id, step.step_id, new_assignee,
         )
+        # The escalation still has to NAME the missing capability: "đổi người không
+        # được" alone tells a CEO nothing they can act on, while "X thiếu công cụ" points
+        # at the two real choices (grant the tool, or accept the gap).
+        deps.escalate(
+            task, step, "stuck",
+            f"Không đổi được người cho bước '{step.title}': {new_assignee} thiếu công cụ "
+            f"bước này cần, nên {step.assigned_to} tự làm lại.",
+        )
+        return _retry(deps, task, step, StuckJudgement(
+            decision="retry_with_guidance",
+            guidance=(judgement.guidance.strip()
+                      or "Không có người khác đủ công cụ cho bước này, nên bạn tự làm "
+                         "lại: đọc kỹ từng tiêu chí nghiệm thu, tra đủ nguồn cho từng "
+                         "mục còn thiếu, và ghi rõ nguồn cho mỗi số liệu."),
+            reason=judgement.reason,
+        ))
     deps.store.reassign_step(task.id, step.step_id, new_assignee)
     if judgement.guidance.strip():
         deps.store.append_step_guidance(task.id, step.step_id, judgement.guidance.strip())

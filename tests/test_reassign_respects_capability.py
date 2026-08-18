@@ -1,4 +1,4 @@
-"""A reassign may not hand a step to an agent strictly less able to finish it.
+"""A reassign may not hand a step to an agent that lacks the tools it DECLARES needing.
 
 `roster_ok` answers "may this agent hold a step at all" — it says nothing about whether
 this particular agent can DO this particular step. Production shape (task d4679e1fbe14):
@@ -6,9 +6,11 @@ a web data-collection step stalled on the researcher was reassigned to an agent 
 `web_search:` flag. That agent is dispatchable and doomed — with no way to look anything
 up its best honest outcome is reporting the gap, and its worst is inventing the figures.
 
-The gate is deliberately one-directional: it refuses capability DOWNGRADES only. Upgrades,
-lateral moves, and steps whose current holder never had search all pass untouched, so the
-coordinator keeps its freedom to move work around for every other reason.
+The step's `needs_web` declaration is the only requirement source. The predicate once
+also refused moving any step away from a web-capable holder, and that misfired live: a
+synthesis step (needs_web=0) stuck on the researcher could not go to the analyst, so a
+nearly-finished task was concluded as a failure. Steps that declare nothing move freely;
+the coordinator keeps its main lever for agents stuck for non-tooling reasons.
 """
 
 from __future__ import annotations
@@ -16,7 +18,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from my_crew.agent.coordinator_graph import CoordinatorDeps, in_memory_retry_tracker
-from my_crew.agent.coordinator_nodes.stuck_decision import decide_stuck_step
+from my_crew.agent.coordinator_nodes.stuck_decision import (
+    MAX_INTERVENTIONS,
+    decide_stuck_step,
+)
 from my_crew.runtime.team_task_steps import TeamStep
 from my_crew.runtime.team_task_store import TeamTask
 
@@ -147,6 +152,20 @@ def test_only_downgrades_are_blocked_not_lateral_moves():
     assert _can_do_step("anyone", _S()) is True
 
 
+def test_a_step_that_declares_no_web_need_moves_off_a_web_capable_holder(monkeypatch):
+    """Live team run: a synthesis step (needs_web=0) stuck on the researcher was
+    refused reassignment to the analyst purely because the researcher COULD search,
+    and the task — with every survey step already done — was concluded as a failure.
+    The declaration is the requirement; who currently holds the step is not."""
+    from types import SimpleNamespace
+
+    import my_crew.runtime.team_tick_runner as ttr
+
+    step = SimpleNamespace(needs_web=False, assigned_to="researcher")
+    monkeypatch.setattr(ttr, "_web_search_enabled", lambda a: a == "researcher")
+    assert ttr._can_do_step("analyst", step) is True
+
+
 def test_first_ruling_reassign_is_coerced_to_retry_with_guidance():
     """Retry-first policy: measured live, the judge chose reassign on the FIRST failure
     5/6 times and it was wrong every time (the original assignee fixed it on retry once
@@ -174,3 +193,40 @@ def test_needs_web_step_requires_a_searching_assignee(monkeypatch):
     monkeypatch.setattr(ttr, "_web_search_enabled", lambda a: a == "capable")
     assert ttr._can_do_step("capable", step) is True
     assert ttr._can_do_step("also-searchless", step) is False
+
+
+def test_a_doomed_reassign_becomes_a_retry_instead_of_ending_the_task():
+    """Live task c357f5481bf5 stalled here, and the loss was an INTERVENTION, not a rule.
+
+    `MAX_INTERVENTIONS` is 2, and ruling #1 is always coerced to retry — so ruling #2 is
+    the only one that may reassign. When the judge spends it proposing an agent that
+    `can_do_step` must refuse, the step is concluded even though the capable original
+    holder never got a second guided attempt. For a `needs_web` brief where only the
+    researcher can search, "change assignee" is never reachable, so `give_up` there
+    trades a real remaining attempt for a move that could not have worked.
+
+    Refusing the move stays correct; ending the task on it does not. The refusal now
+    degrades to `retry_with_guidance` with the capable holder, and only concludes when
+    the interventions are genuinely spent.
+    """
+    store = _Store(interventions=1)  # 2nd ruling — reassign is allowed here
+    result = decide_stuck_step(
+        _deps(store, judgement_target="analyst", can_do=lambda a, _s: a != "analyst"),
+        _Task(), _Step(),
+    )
+    assert store.reassigned == [], "the doomed reassign must still be refused"
+    assert store.failed == [], "a refused reassign must not conclude the task"
+    assert result.action == "stuck_retry"
+
+
+def test_a_doomed_reassign_still_concludes_once_interventions_are_spent():
+    """The degrade-to-retry must not become an infinite loop: at the cap the step is
+    concluded exactly as before, so the anti-loop bound remains the hard gate."""
+    store = _Store(interventions=MAX_INTERVENTIONS)  # this ruling is the last one
+    result = decide_stuck_step(
+        _deps(store, judgement_target="analyst", can_do=lambda a, _s: a != "analyst"),
+        _Task(), _Step(),
+    )
+    assert store.reassigned == []
+    assert store.failed == ["step1"], "at the cap it must still conclude honestly"
+    assert result.action != "stuck_retry"
