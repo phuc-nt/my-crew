@@ -19,6 +19,17 @@ export const queryKeys = {
     workrooms: () => [...queryKeys.office.all, 'workrooms'] as const,
     room: (roomId: string) => [...queryKeys.office.all, 'room', roomId] as const,
   },
+  artifacts: {
+    all: ['artifacts'] as const,
+    /** Every task+step in one room — the drawer's index. */
+    room: (roomId: string) => [...queryKeys.artifacts.all, 'room', roomId] as const,
+    /** One step's produced text. 404s for a step that produced none (e.g. a review). */
+    step: (taskId: string, seq: number) =>
+      [...queryKeys.artifacts.all, 'step', taskId, seq] as const,
+    /** The recorder's raw event log for one step — the 🔬 view. */
+    transcript: (taskId: string, seq: number) =>
+      [...queryKeys.artifacts.all, 'transcript', taskId, seq] as const,
+  },
   tasks: {
     all: ['tasks'] as const,
     board: () => [...queryKeys.tasks.all, 'board'] as const,

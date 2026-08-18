@@ -1,11 +1,19 @@
 // Center pane: one room's conversation. Subscribes to that room's SSE stream and folds
 // it through the pure reducer — this component owns scrolling and the read cursor, and
 // nothing else. Every display rule lives in chat-state.ts.
-import { useEffect, useMemo, useRef } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { useLanguage } from '../../i18n/language-context'
 import { useOfficeStream } from '../../hooks/use-office-stream'
 import { OVERVIEW_ROOM_ID, reduceThread } from './chat-state'
 import { MessageRow } from './messages/message-renderer'
+
+// Read-on-demand surface: the drawer, its query slice and the transcript summariser
+// only load when the CEO opens it. Unlike the 3D office chunk this needs no watchdog or
+// error boundary — a chunk that fails to load leaves the thread and composer fully
+// usable, and closing the drawer is always available.
+const ArtifactDrawer = lazy(() =>
+  import('./artifacts/artifact-drawer').then((m) => ({ default: m.ArtifactDrawer })),
+)
 
 /** The overview room mirrors every event ever written, so a cold connect asks for a tail
  *  instead of the whole company history. A workroom's history IS its conversation. */
@@ -41,6 +49,8 @@ export function ThreadView({ roomId, title, onRead }: Props) {
   // Chat's heading is the room title, so the stream state is a dot + short label rather
   // than the office feed's zone title — reusing that wording here read as a second
   // section heading floating beside the pending pane.
+  const [artifactsOpen, setArtifactsOpen] = useState(false)
+
   const state = errored ? 'off' : connected ? 'on' : 'wait'
   const status = t(`chat.stream.${state}` as Parameters<typeof t>[0])
 
@@ -50,6 +60,14 @@ export function ThreadView({ roomId, title, onRead }: Props) {
         {/* The full brief lives here (the rows no longer repeat it), clamped to one line
             so a 120-char title cannot eat the thread's height; hover shows it whole. */}
         <h2 className="chat-thread-title" title={title}>{title}</h2>
+        <button
+          type="button"
+          className="chat-thread-artifacts"
+          aria-pressed={artifactsOpen}
+          onClick={() => setArtifactsOpen((v) => !v)}
+        >
+          {t('artifacts.open')}
+        </button>
         <span className={`chat-thread-status is-${state}`}>{status}</span>
       </header>
 
@@ -73,6 +91,17 @@ export function ThreadView({ roomId, title, onRead }: Props) {
             </li>
           ))}
         </ul>
+      ) : null}
+      {/* Absolutely positioned against .chat-thread: it covers the message log while the
+          composer below stays reachable, so the CEO can still reply while reading output. */}
+      {artifactsOpen ? (
+        <Suspense fallback={null}>
+          <ArtifactDrawer
+            roomId={roomId}
+            open={artifactsOpen}
+            onClose={() => setArtifactsOpen(false)}
+          />
+        </Suspense>
       ) : null}
     </section>
   )
