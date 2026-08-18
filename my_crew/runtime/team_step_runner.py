@@ -431,6 +431,10 @@ def _run_review(
         review_round=step.review_round, locked_version=locked_version,
         acceptance=content_step.acceptance, step_title=content_step.title,
         handoff=handoff,
+        graded_assignee=(
+            getattr(dep_step if dep_step is not None else content_step, "assigned_to", "")
+            or ""
+        ),
     )
     # v80 P2: review attempts get a work-order too (every attempt does), but replay
     # refuses them — a review re-run without the exact graded artifact version proves

@@ -200,13 +200,14 @@ def _wire_llm(monkeypatch):
     return calls
 
 
-def _seed_review(tmp_path):
+def _seed_review(tmp_path, graded_assignee=""):
     write_step_artifact(tmp_path, "t1", 1, {
         "status": "done", "result_text": "SJC 89.5 triệu", "version": "v1",
     })
     return ReviewStepInput(
         task_id="t1", graded_seq=1, verdict_seq=1, review_round=0,
         locked_version="v1", acceptance="phải có nguồn",
+        graded_assignee=graded_assignee,
     )
 
 
@@ -226,6 +227,45 @@ class TestReviewWiring:
         assert result["status"] == "done"
         user = calls[0][1]["content"]
         assert ("BẰNG CHỨNG QUÁ TRÌNH" in user) is with_transcript
+
+    def test_evidence_is_found_in_the_graded_assignees_agent_jail(
+        self, tmp_path, monkeypatch
+    ):
+        """The worker records transcripts into its OWN data dir (`.data/agents/<id>/`),
+        while review runs against the shared team-tasks root. Live run 805d6b68f76d:
+        the sprint transcript sat in researcher's jail, review round 0 globbed the
+        shared root, found nothing, and silently graded without the evidence block.
+        """
+        import my_crew.runtime.agent_paths as agent_paths_mod
+
+        monkeypatch.setattr(agent_paths_mod, "DATA_DIR", tmp_path)
+        settings = build_settings_from_dict({"data_dir": tmp_path})
+        review_input = _seed_review(tmp_path, graded_assignee="researcher")
+        _write_transcript(
+            tmp_path / "agents" / "researcher", "t1", "s1-v1.jsonl", _EVENTS
+        )
+        calls = _wire_llm(monkeypatch)
+        result = run_review_step(
+            None, settings, data_dir=tmp_path, review_input=review_input
+        )
+        assert result["status"] == "done"
+        assert "BẰNG CHỨNG QUÁ TRÌNH" in calls[0][1]["content"]
+
+    def test_assignee_without_jail_transcript_falls_back_to_the_shared_root(
+        self, tmp_path, monkeypatch
+    ):
+        """In-process runs (fullflow harness, embedded mode) record into the shared
+        root even though the step HAS an assignee — the jail lookup must not cost
+        them their evidence."""
+        import my_crew.runtime.agent_paths as agent_paths_mod
+
+        monkeypatch.setattr(agent_paths_mod, "DATA_DIR", tmp_path)
+        settings = build_settings_from_dict({"data_dir": tmp_path})
+        review_input = _seed_review(tmp_path, graded_assignee="researcher")
+        _write_transcript(tmp_path, "t1", "s1-v1.jsonl", _EVENTS)
+        calls = _wire_llm(monkeypatch)
+        run_review_step(None, settings, data_dir=tmp_path, review_input=review_input)
+        assert "BẰNG CHỨNG QUÁ TRÌNH" in calls[0][1]["content"]
 
     def test_cap_zero_setting_disables_evidence_entirely(self, tmp_path, monkeypatch):
         settings = build_settings_from_dict({

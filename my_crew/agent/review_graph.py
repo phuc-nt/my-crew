@@ -152,6 +152,10 @@ class ReviewStepInput:
     locked_version: str  # graded step's DONE-attempt `attempt_id` (artifact `version`)
     acceptance: str  # the CONTENT step's acceptance criteria (rubric) — never a review/rework row's
     step_title: str = ""  # the CONTENT step's title, for the room message
+    # Who RAN the graded attempt. The worker records its transcript into its own
+    # jail (`.data/agents/<id>/…`), not the shared team-tasks root this graph gets as
+    # `data_dir` — so evidence lookup needs the assignee to find the file at all.
+    graded_assignee: str = ""
     #: What the reviewed step was GIVEN to work from (its deps' result text). Lets the
     #: reviewer check figures against their source instead of grading blind — see
     #: `build_review_messages`. Blank (first step, no deps) ⇒ output-only grading.
@@ -219,9 +223,21 @@ def run_review_step(
                 find_transcript_for_version,
             )
 
-            transcript_path = find_transcript_for_version(
-                Path(data_dir), review_input.task_id, review_input.locked_version
-            )
+            # The worker records into its OWN jail (`.data/agents/<id>/…`), not the
+            # shared root — look there first, keeping the shared root as fallback for
+            # in-process runs that record straight into `data_dir`.
+            transcript_path = None
+            if review_input.graded_assignee:
+                from my_crew.runtime.agent_paths import agent_data_dir
+
+                transcript_path = find_transcript_for_version(
+                    agent_data_dir(review_input.graded_assignee),
+                    review_input.task_id, review_input.locked_version,
+                )
+            if transcript_path is None:
+                transcript_path = find_transcript_for_version(
+                    Path(data_dir), review_input.task_id, review_input.locked_version
+                )
             if transcript_path is not None:
                 transcript_evidence = extract_review_evidence(transcript_path, evidence_cap)
         except Exception:  # noqa: BLE001 — evidence is observation, never blocks review
