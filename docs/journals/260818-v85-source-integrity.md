@@ -1,5 +1,5 @@
 # v85 — Sửa thước đo nguồn: reviewer thấy NỘI DUNG trang, không chỉ byte count
-2026-08-18 · ✅ Done (đo sống, phán quyết đảo) · chưa release
+2026-08-18 · ✅ Done (đo sống 3 run, arc xác nhận end-to-end) · chưa release
 
 ## Làm gì
 - Truy tới gốc **vì sao review round 0 cho qua bảng giá bịa của v84** — bằng cách đọc code,
@@ -48,15 +48,33 @@
   ĐẦU VÀO"* nghe vô hại, nhưng bước `sprint` không deps thì tiền đề vĩnh viễn không thoả —
   luật im lặng, không cảnh báo. Học: mỗi tiền đề trong prompt là một nhánh cần biết ai làm
   cho nó FALSE.
-- **Giả định "Firecrawl không render JS" có vẻ SAI.** `firecrawl-playwright-service-1` đang
-  chạy, và 2 trang official trả full nội dung. Chưa xác nhận trên đúng ca SPA
-  (`zingmp3.vn`, `nhaccuatui.com`) nên chưa đảo lại kết luận v84 — chỉ hạ nó xuống "chưa biết".
+- **Giả định "Firecrawl không render JS" là SAI — đã xác nhận trên đúng ca SPA.**
+  `zingmp3.vn/vip` trả 965 ký tự có giá thật ("Chỉ từ 13.000đ/tháng" Plus, "41.000đ/tháng"
+  Premium); `www.nhaccuatui.com` render nhưng redirect sang trang Google Play. Kết luận v84
+  chính thức bị đảo: fetch official page hoạt động cả trên SPA.
+- **Run sống sau v85 (task 805d6b68f76d) lộ đúng MỘT chỗ đứt ống: review tìm transcript
+  sai thư mục.** Producer đúng (event `fetch` có `content_head` 2063 ký tự chứa `65.000`),
+  nhưng worker ghi transcript vào jail riêng `.data/agents/<id>/…` còn `_run_review` glob
+  root chung → best-effort nuốt lỗi, review lại mù. Học kép: (1) `65.000` xuất hiện trong
+  prompt review là **false positive** — nó nằm trong bảng của chính bài bị chấm, phải grep
+  marker khối (`BẰNG CHỨNG QUÁ TRÌNH`) chứ không grep giá trị; (2) đường ống best-effort
+  degrade im lặng thì phải xác minh bằng run sống, test đơn vị cùng-một-thư-mục không bắt
+  được lệch layout. Fix: `ReviewStepInput.graded_assignee` + lookup jail-first fallback
+  root chung (commit `f179788`), khớp tiền lệ `routes_office_artifacts`.
+- **Run sống #2 (ed30096396ea) xác nhận khối bằng chứng ĐÃ vào prompt review — và lộ bug
+  thứ hai cùng lớp:** `_append_content` cắt `content_head` bằng hằng tool-result 500 ký tự,
+  trong khi `65.000 ₫` nằm sau vị trí 500 của head 2063 ký tự → khối chỉ dùng 1622/8000
+  budget mà con số cần đối chiếu vẫn bị mất. Fix: `_CONTENT_CHARS = 4000` riêng cho nội
+  dung trang (commit `540e7af`). Học: một tiêu chí "grep được giá trong prompt" phải chạy
+  đến CÙNG — mỗi run sống bóc đúng một tầng cắt xén mà unit test cùng-fixture không thấy.
 
 ## Mở / sang sau
 - **Self-check của bước sprint vẫn mù** (bảng phạm vi trong plan): peer review — cửa quyết
   định `passed` — đã có bằng chứng, nhưng self-check thì chưa. Bịt được bằng side-channel
   kiểu `StepTelemetry`; là scope riêng, chưa làm.
-- Chưa có run sống **sau** v85 để xem `content_head` thật sự làm review đổi kết luận trên
-  một task mới — hiện chỉ chứng minh trên dữ liệu cũ + judge.
+- ~~Run sống xác nhận~~ **ĐẠT** ở run #3 (task b1fb6f39cb62, done/delivered, $0.26): khối
+  `BẰNG CHỨNG QUÁ TRÌNH` trong prompt review round 0 chứa nội dung trang official đã mở,
+  `65.000` xuất hiện 4 lần TRONG khối bằng chứng (không phải text bài bị chấm) — reviewer
+  đối chiếu được giá với trang thật. Verdict round 0 passed=True, failures=[].
 - `retry_round > 0` vẫn chưa bắn trên run sống nào (nợ từ v83/v84).
-- Chưa release, chưa commit theo yêu cầu.
+- Đã commit theo arc (`e3eef5b`…`f179788`); chưa release — chờ quyết định người dùng.
