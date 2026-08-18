@@ -12,6 +12,12 @@ export default defineConfig({
   build: {
     outDir: '../my_crew/server/static/app',
     emptyOutDir: true,
+    // The one chunk above the default 500 kB warning is the 3D office (~900 kB, of which
+    // ~2 MB of source is three + @react-three/fiber). It is already behind React.lazy, so
+    // it only downloads for someone who opens /office — splitting it further would just
+    // fragment one view's own dependency. The limit sits just above it so the warning
+    // still fires for anything NEW that grows past that bar.
+    chunkSizeWarningLimit: 950,
   },
   server: {
     proxy: {

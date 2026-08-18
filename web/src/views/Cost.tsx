@@ -1,6 +1,6 @@
 // Cost view: monthly cost-vs-budget chart (last 12 months) + current-month spend/ratio.
 // Monthly-only (decided — no per-run trend). Read-only; consumes /api/cost via the client.
-import { CostChart } from '../components/charts/CostChart'
+import { LazyCostChart } from '../components/charts/lazy-charts'
 import { api } from '../api/client'
 import { useAgentData } from '../hooks/use-agent-data'
 import { useTheme } from '../theme-context'
@@ -31,7 +31,7 @@ export function Cost() {
       {data.series.length === 0 ? (
         <EmptyState>{t('cost.empty')}</EmptyState>
       ) : (
-        <CostChart key={resolved} series={data.series} cap={data.cap} />
+        <LazyCostChart key={resolved} series={data.series} cap={data.cap} />
       )}
     </section>
   )

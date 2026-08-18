@@ -1,7 +1,7 @@
 // Guardrail/Audit view: verdict-breakdown doughnut + recent events table. Shows the
 // Action Gateway at work (allow/deny/pending/…). Read-only; consumes /api/audit.
 import { AuditTable } from '../components/AuditTable'
-import { VerdictChart } from '../components/charts/VerdictChart'
+import { LazyVerdictChart } from '../components/charts/lazy-charts'
 import { api } from '../api/client'
 import { PageHeader } from '../components/ui/page-header'
 import { useAgentData } from '../hooks/use-agent-data'
@@ -25,7 +25,7 @@ export function Guardrail() {
       <p>{t('guardrail.totalDecisions', { n: total })}</p>
       {total > 0 && (
         <div className="chart-box">
-          <VerdictChart key={resolved} counts={data.counts} />
+          <LazyVerdictChart key={resolved} counts={data.counts} />
         </div>
       )}
       <h3>{t('guardrail.recentTitle')}</h3>
