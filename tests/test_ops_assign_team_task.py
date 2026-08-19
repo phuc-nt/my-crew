@@ -191,8 +191,18 @@ def test_escalation_routable_ignores_a_non_admin_agents_route(monkeypatch):
 
 def test_preview_assign_team_task_blocks_with_vietnamese_error_when_unroutable(monkeypatch):
     monkeypatch.setattr(mod, "_escalation_routable", lambda: False)
-    with pytest.raises(ValueError, match="báo cáo sự cố"):
+    with pytest.raises(ValueError, match="chưa giao việc được"):
         mod.preview_assign_team_task({"brief": "chuẩn bị demo"})
+
+
+def test_unroutable_error_names_the_screen_that_fixes_it(monkeypatch):
+    """This block is the first wall a brand-new install hits, so the message has to
+    lead somewhere. Naming the tab keeps it from being a dead end the way the old
+    wording was, which only described `ops_operator_id` and `chat_ids`."""
+    monkeypatch.setattr(mod, "_escalation_routable", lambda: False)
+    with pytest.raises(ValueError) as excinfo:
+        mod.preview_assign_team_task({"brief": "chuẩn bị demo"})
+    assert "Kênh" in str(excinfo.value)
 
 
 def test_preview_assign_team_task_proceeds_past_escalation_gate_when_routable(monkeypatch):

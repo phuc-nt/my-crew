@@ -437,10 +437,12 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
 
     if not _escalation_routable():
         raise ValueError(
-            "chưa có đường báo cáo sự cố (Telegram) — cần MỘT trong hai: (a) agent "
-            "điều phối có ops_operator_id nằm trong chat_ids của chính nó, hoặc (b) "
-            "một agent quản trị (domain admin) đang bật có ops_operator_id hợp lệ để "
-            "mirror phòng làm việc chuyển tin. Thiết lập xong hãy giao việc lại."
+            "Chưa có đường báo tin khi việc gặp sự cố, nên chưa giao việc được. "
+            "Việc giao cho đội chạy nhiều bước và có thể kẹt giữa chừng — nếu không "
+            "có đường báo về, bạn sẽ không biết. Cách thiết lập: mở trang Đội ngũ → "
+            "chọn trưởng phòng điều phối → tab Kênh, dán token bot Telegram rồi bấm "
+            "\"Lấy chat gần đây\" để chọn đúng chat của bạn. Xong quay lại đây "
+            "giao việc lại."
         )
 
     # v77: "sprint:"/"team:" mode prefix strips FIRST (it wraps the whole brief),
