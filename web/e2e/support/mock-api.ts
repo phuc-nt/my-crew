@@ -12,6 +12,7 @@ import type {
   FleetApprovalItem,
   OfficeMessage,
   RoomArtifactsPayload,
+  StaffTemplate,
   StepArtifactPayload,
   StepTranscriptPayload,
   Workroom,
@@ -30,6 +31,10 @@ export interface OfficeApiMockOptions {
   stepTranscript?: StepTranscriptPayload
   /** v82: POST /api/office/assign/preview response (composer sprint/team badge). */
   assignPreview?: Record<string, unknown>
+  /** Staff templates behind the team hub's hire panel (default: one office role). */
+  staffTemplates?: StaffTemplate[]
+  /** Profiles on disk that fell out of the registry — the recovery list (default: none). */
+  unregistered?: { id: string; domain: string }[]
   /** Rows for the fleet approvals index — drives the shell's nav badge count. */
   pendingApprovals?: FleetApprovalItem[]
   /** Agent questions behind the chat hub's pending column. */
@@ -130,6 +135,67 @@ export async function mockOfficeApi(
         pending_approvals: 0,
       })
     }
+    // --- team hub ---
+    if (pathname === '/api/agents/template-status') return json({ agents: [] })
+    if (pathname === '/api/agents/unregistered') return json({ profiles: opts.unregistered ?? [] })
+    if (pathname === '/api/staff-templates')
+      return json({
+        templates: opts.staffTemplates ?? [
+          {
+            role_id: 'qa',
+            role: 'Kiểm định',
+            domain: 'office',
+            reports: [],
+            bindings_hint: [],
+            persona: '',
+            web_search: false,
+            recommended_runtime: 'native',
+            academic_search: false,
+            // A scheduled role, so the gallery's schedule chip is exercised too.
+            schedule: { daily: '08:00' },
+            has_skills: false,
+          },
+        ],
+      })
+    if (pathname === '/api/crews') return json({ crews: [] })
+    // No crew manifest ⇒ the banner does not render at all, which is the default here.
+    if (pathname === '/api/crew/preview')
+      return route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'không có crew manifest' }),
+      })
+
+    // --- agent detail tabs ---
+    // Every tab reads at least one of these; an unmocked call renders that tab's error
+    // path, so the spec would be measuring a failure state instead of the content.
+    if (/^\/api\/runs\/[^/]+$/.test(pathname))
+      return json({ agent_id: pathname.split('/')[3], runs: [] })
+    if (/^\/api\/cost\/[^/]+$/.test(pathname))
+      return json({
+        agent_id: pathname.split('/')[3],
+        series: [],
+        cap: 5,
+        warn_ratio: 0.8,
+        spent_this_month: 0,
+      })
+    if (/^\/api\/audit\/[^/]+$/.test(pathname))
+      return json({ agent_id: pathname.split('/')[3], counts: {}, recent: [] })
+    // Memory carries an ?audience query, so this one matches the prefix, not the whole path.
+    if (/^\/api\/memory\/[^/]+/.test(pathname))
+      return json({ agent_id: pathname.split('/')[3], facts: [], internal_only: false })
+    if (/^\/api\/automation\/[^/]+$/.test(pathname))
+      return json({ agent_id: pathname.split('/')[3], pending: [] })
+    if (pathname === '/api/captures') return json({ captures: [] })
+    if (/^\/api\/agents\/[^/]+\/config$/.test(pathname))
+      return json({
+        agent_id: pathname.split('/')[3],
+        files: { profile: '', soul: '', project: '', memory: '' },
+      })
+    if (/^\/api\/agents\/[^/]+\/knowledge\/[^/]+$/.test(pathname))
+      return json({ doc: pathname.split('/')[5], raw_mode: true, fields: {}, raw: '' })
+    if (/^\/api\/agents\/[^/]+\/skills$/.test(pathname)) return json({ skills: [] })
+    if (/^\/api\/agents\/[^/]+\/company-docs$/.test(pathname)) return json({ docs: [] })
     if (pathname === '/api/health/coordinator')
       return json({ alive: true, last_beat_ago_s: 3, reason: '' })
     if (/^\/api\/office\/rooms\/[^/]+\/artifacts$/.test(pathname))

@@ -39,6 +39,16 @@ export const queryKeys = {
     all: ['outputs'] as const,
     list: () => [...queryKeys.outputs.all, 'list'] as const,
   },
+  team: {
+    all: ['team'] as const,
+    company: () => [...queryKeys.team.all, 'company'] as const,
+    alerts: () => [...queryKeys.team.all, 'alerts'] as const,
+    templates: () => [...queryKeys.team.all, 'templates'] as const,
+    templateStatus: () => [...queryKeys.team.all, 'template-status'] as const,
+    crews: () => [...queryKeys.team.all, 'crews'] as const,
+    crewPreview: (crewId: string) => [...queryKeys.team.all, 'crew-preview', crewId] as const,
+    unregistered: () => [...queryKeys.team.all, 'unregistered'] as const,
+  },
   clarify: {
     all: ['clarify'] as const,
     pending: () => [...queryKeys.clarify.all, 'pending'] as const,
