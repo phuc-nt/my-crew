@@ -55,8 +55,13 @@ export function ChatPage() {
     ? t('chat.assistantRoom')
     : (active?.title ?? t('chat.overviewRoom'))
 
+  // On a phone the hub is two screens, the way a chat app works: the URL alone says
+  // which one is showing (no room → list, room → thread). Keeping it in the URL rather
+  // than component state means Back works and a deep link opens the thread directly.
+  const showsThread = roomId != null
+
   return (
-    <div className="chat-hub">
+    <div className={`chat-hub${showsThread ? ' shows-thread' : ' shows-list'}`}>
       <ConversationList
         conversations={conversations}
         activeId={activeId}
@@ -65,6 +70,13 @@ export function ChatPage() {
       />
 
       <div className="chat-main">
+        <button
+          type="button"
+          className="chat-back"
+          onClick={() => navigate('/chat')}
+        >
+          ← {t('chat.backToList')}
+        </button>
         {isAssistant ? (
           <AssistantThread title={title} />
         ) : (

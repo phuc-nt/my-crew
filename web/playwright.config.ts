@@ -21,6 +21,23 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
+      testIgnore: /mobile-.*\.spec\.ts/,
+    },
+    // A separate project rather than a wider shared viewport: the desktop specs assert
+    // the inline header row and the three-column chat hub, which the phone layout
+    // deliberately replaces. Same mocked API, one viewport apart.
+    // Phone metrics on chromium: `devices['iPhone 14 Pro']` would pull in webkit, which
+    // this suite does not install (the repo only ships the chromium browser).
+    {
+      name: 'mobile',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 3,
+        isMobile: true,
+        hasTouch: true,
+      },
+      testMatch: /mobile-.*\.spec\.ts/,
     },
   ],
   webServer: {

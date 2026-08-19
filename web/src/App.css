@@ -201,6 +201,8 @@ input, textarea, select { font-size: var(--fs-body); }
 .app-header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
 .app-header h1 { font-size: var(--fs-h2); margin: 0; }
 .app-header-actions { display: flex; align-items: center; gap: var(--space-3); }
+/* The ⋯ menu is the mobile presentation of the same controls — see the 640px block. */
+.chrome-overflow { display: none; }
 
 /* Theme switcher — segmented control (v10 M24). */
 .theme-toggle { display: inline-flex; border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill); overflow: hidden; }
@@ -733,6 +735,58 @@ input, textarea, select { font-size: var(--fs-body); }
 /* Advanced-view tables (technical persona) just need to not overflow the whole page. */
 .table-scroll { overflow-x: auto; }
 
+/* v89: the shell as a phone app. Three things move: the chrome controls collapse behind
+   ⋯ (one header row instead of four wrapped ones), the hub nav becomes a fixed bottom tab
+   bar within thumb reach, and the page reserves room for that bar. Desktop keeps the
+   inline header row + top nav — every rule here is inside the 640px query. */
+@media (max-width: 640px) {
+  /* Header: one row. The inline control row is replaced by the ⋯ menu, not hidden and
+     duplicated — only one of the two is ever displayed. */
+  .app-header { flex-wrap: nowrap; align-items: center; gap: var(--space-2); }
+  .app-header h1 { font-size: var(--fs-h3); margin: 0; }
+  .app-header-actions { display: none; }
+  .chrome-overflow { display: block; position: relative; flex: 0 0 auto; }
+  .chrome-overflow-btn {
+    min-height: 44px; min-width: 44px; padding: 0 var(--space-3);
+    font-size: var(--fs-h3); line-height: 1;
+    background: var(--color-surface); color: var(--color-text);
+    border: 1px solid var(--color-border); border-radius: var(--radius);
+  }
+  .chrome-overflow-panel {
+    position: absolute; top: calc(100% + var(--space-2)); right: 0; z-index: 60;
+    display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2);
+    padding: var(--space-3); min-width: 12rem;
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: var(--radius); box-shadow: var(--shadow-md, var(--shadow-sm));
+  }
+
+  /* Hub nav → bottom tab bar. `position: fixed` takes it out of flow, so .app-main gets
+     bottom padding equal to the bar (plus the iOS home-indicator inset) or the last row
+     of every screen sits under it. */
+  .app-nav-primary {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    margin: 0; padding: var(--space-1) var(--space-1) calc(var(--space-1) + env(safe-area-inset-bottom));
+    display: flex; flex-wrap: nowrap; gap: 0; justify-content: space-around;
+    font-size: var(--fs-sm);
+    background: var(--color-surface); border-top: 1px solid var(--color-border);
+    border-bottom: 0; box-shadow: 0 -2px 12px rgb(0 0 0 / 8%);
+  }
+  /* Five Vietnamese labels ("Trò chuyện", "Văn phòng"…) have to share 390px: the tab
+     shrinks its own type rather than letting the labels collide. `min-width: 0` +
+     `overflow: hidden` on the flex item is what actually lets them shrink — without it
+     the text sets the floor and the row overflows into its neighbours. */
+  .app-nav-primary a {
+    flex: 1 1 0; min-width: 0; padding: 0.45rem 0.1rem;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; font-weight: 600; font-size: 0.68rem; letter-spacing: -0.01em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    border-radius: var(--radius);
+  }
+  /* The active pill must not paint over its neighbours' text. */
+  .app-nav-primary a.active { padding: 0.45rem 0.1rem; }
+  .app-main { padding-bottom: calc(3.5rem + env(safe-area-inset-bottom)); }
+}
+
 /* v9 P4: responsive / mobile. Desktop layout above is untouched; everything here is scoped
    under a max-width media query. Goal from plan v7 M20: read + approve on a phone. */
 @media (max-width: 640px) {
@@ -928,6 +982,8 @@ input, textarea, select { font-size: var(--fs-body); }
 .chat-conversations-empty { color: var(--color-muted); font-size: var(--fs-sm); }
 
 .chat-main { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+/* Mobile-only affordance — the 640px block turns it on. */
+.chat-back { display: none; }
 .chat-thread { position: relative; display: flex; flex-direction: column;
   min-width: 0; min-height: 0; }
 .chat-thread-head { display: flex; justify-content: space-between;
@@ -1136,6 +1192,67 @@ input, textarea, select { font-size: var(--fs-body); }
   .app-shell:has(.chat-hub) .chat-thread-log:not(:has(li)):has(.chat-thread-empty),
   .app-shell:has(.chat-hub) .chat-thread-log:has(> .chat-thread-empty:only-child) {
     justify-content: center; }
+}
+
+/* v89: chat as a phone app — two screens, one at a time.
+   Above 640px the hub keeps its side-by-side panes (the .shows-* classes do nothing
+   there); below it, the URL decides which single pane is on screen. The horizontal chip
+   strip the 900px rule produced is dropped: at 390px it wrapped into unreadable stacked
+   text, and a vertical list is what a chat app shows anyway. */
+@media (max-width: 640px) {
+  .chat-hub { display: flex; flex-direction: column; gap: 0;
+    height: calc(100dvh - 9.5rem - env(safe-area-inset-bottom)); }
+  .chat-hub.shows-thread .chat-conversations,
+  .chat-hub.shows-thread .chat-pending { display: none; }
+  .chat-hub.shows-list .chat-main { display: none; }
+
+  /* List screen: full-width rows, back to a column (the 900px rule turned it into a
+     horizontal scroller). */
+  .chat-hub .chat-conversations { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .chat-hub .chat-conversation-list { flex-direction: column; overflow-x: visible; }
+  .chat-hub .chat-conversation { min-height: 56px; padding: var(--space-3) var(--space-2); }
+
+  /* Thread screen: log scrolls, composer pinned under it and always in view. dvh (not
+     vh) so the on-screen keyboard shrinks the log rather than pushing the composer off. */
+  .chat-hub.shows-thread .chat-main { flex: 1 1 auto; min-height: 0; display: flex; }
+  .chat-hub.shows-thread .chat-thread { flex: 1 1 0; min-height: 0; }
+  .chat-hub.shows-thread .chat-thread-log { flex: 1 1 0; min-height: 0; max-height: none;
+    overflow-y: auto; justify-content: flex-end; }
+  .chat-hub.shows-thread .office-composer,
+  .chat-hub.shows-thread .ops-composer { flex: 0 0 auto; }
+
+  /* Room titles are the CEO's raw brief — they must wrap, not extend the column. */
+  .chat-hub .chat-thread-title { white-space: normal; overflow-wrap: anywhere; }
+  /* Markdown tables already scroll in their own box (.chat-row-text.is-markdown table).
+     The only phone-specific need is that cells keep their natural width inside that
+     scroller — the base `width: 100%` otherwise squeezes 5 columns into 390px and
+     renders every cell as a one-word-per-line column. */
+  /* `display: block` + `overflow-x: auto` (the base rule) makes the table its own
+     scroller, but only if it is also told to stay inside the bubble: `width: max-content`
+     would make the scroller as wide as its content, which is the same as not scrolling.
+     So the box is capped at 100% and the CONTENT is what exceeds it. */
+  .chat-hub .chat-row-text.is-markdown table {
+    display: block; width: 100%; max-width: 100%; overflow-x: auto;
+  }
+  .chat-hub .chat-row-text.is-markdown tbody,
+  .chat-hub .chat-row-text.is-markdown thead { display: table; width: max-content; min-width: 100%; }
+  .chat-hub .chat-row-text.is-markdown td,
+  .chat-hub .chat-row-text.is-markdown th { white-space: normal; min-width: 6.5rem; }
+  /* The scroller only contains the wide table if every flex/grid ancestor is allowed to
+     be narrower than its content. A single missing `min-width: 0` anywhere on this chain
+     hands the table's full width back to the page (measured: 1531px of page overflow). */
+  .chat-hub .chat-main,
+  .chat-hub .chat-thread,
+  .chat-hub .chat-thread-log,
+  .chat-hub .chat-thread-log li,
+  .chat-hub .chat-row-text { min-width: 0; max-width: 100%; }
+  .chat-hub .chat-thread-log pre { overflow-x: auto; }
+  .chat-hub .chat-thread-log li { min-width: 0; overflow-wrap: anywhere; }
+
+  .chat-back { display: block; align-self: flex-start; min-height: 44px;
+    padding: 0 var(--space-2); margin-bottom: var(--space-1);
+    background: none; border: 0; color: var(--color-accent, var(--color-text));
+    font-weight: 600; font-size: var(--fs-base); }
 }
 
 /* A room the reader never opened has no knowable unread count (last_seq is office-wide),

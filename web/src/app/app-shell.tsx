@@ -8,6 +8,7 @@
 // agent, so adding a second surface that shows the queue costs nothing.
 import { NavLink, Outlet } from 'react-router'
 import { api } from '../api/client'
+import { ChromeOverflowMenu } from './chrome-overflow-menu'
 import { usePendingApprovals } from '../api/queries/use-approvals-queries'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { Button } from '../components/ui/button'
@@ -42,6 +43,9 @@ export function AppShell() {
     <div className="app-shell">
       <header className="app-header">
         <h1>my-crew</h1>
+        {/* Same four controls, two presentations: inline on desktop, collapsed behind ⋯
+            on a phone. CSS picks one — rendering both keeps the desktop markup (and its
+            tests) untouched while the mobile header stays one row. */}
         <div className="app-header-actions">
           <Button
             variant="chip"
@@ -59,6 +63,7 @@ export function AppShell() {
             {t('chrome.logout')}
           </button>
         </div>
+        <ChromeOverflowMenu onLogout={() => void logout()} />
       </header>
       <nav className="app-nav app-nav-primary">
         {HUBS.map((hub) => (
