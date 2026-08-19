@@ -55,6 +55,13 @@ export const queryKeys = {
     crewPreview: (crewId: string) => [...queryKeys.team.all, 'crew-preview', crewId] as const,
     unregistered: () => [...queryKeys.team.all, 'unregistered'] as const,
   },
+  system: {
+    all: ['system'] as const,
+    /** Fleet-wide spend; the per-agent breakdown lives under the team hub. */
+    budget: () => [...queryKeys.system.all, 'budget'] as const,
+    connections: () => [...queryKeys.system.all, 'connections'] as const,
+    companyDocs: () => [...queryKeys.system.all, 'company-docs'] as const,
+  },
   clarify: {
     all: ['clarify'] as const,
     pending: () => [...queryKeys.clarify.all, 'pending'] as const,

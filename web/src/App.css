@@ -185,10 +185,7 @@ input, textarea, select { font-size: var(--fs-body); }
 /* v53 badge tones — role-split tokens; ALWAYS pill (replaces the 10px-radius drift of
    badge-on/off/trust-* and health-chip). */
 .badge-ok { background: var(--color-ok-bg); color: var(--color-ok); }
-.badge-warn { background: var(--color-warn-bg); color: var(--color-warn); }
 .badge-danger { background: var(--color-danger-bg); color: var(--color-danger); }
-.badge-accent { background: var(--color-accent-bg); color: var(--color-accent); }
-.badge-neutral { background: var(--color-neutral-bg); color: var(--color-subtle); }
 /* v53 input primitive — one field style (screens each had 5px/8px ad-hoc before). */
 .ui-input { padding: var(--space-2); border: 1px solid var(--color-border-strong);
   border-radius: var(--radius); background: var(--color-surface); color: var(--color-text); }
@@ -214,27 +211,21 @@ input, textarea, select { font-size: var(--fs-body); }
 .app-nav a { text-decoration: none; color: var(--color-muted); padding: var(--space-1) var(--space-2); border-radius: var(--radius); transition: background var(--motion-fast), color var(--motion-fast); }
 .app-nav a:hover { background: var(--color-surface-2); }
 .app-nav a.active { background: var(--color-primary); color: var(--color-primary-contrast); }
-.agent-picker { font-size: var(--fs-sm); }
 
 /* v7 M20: CEO-first nav + badge + chips */
 .app-nav-primary { gap: 1.25rem; font-size: var(--fs-h3); }
 .app-nav-primary a { padding: 0.4rem 0.9rem; font-weight: 600; }
 .nav-badge { display: inline-block; margin-left: 0.4rem; background: var(--color-danger-solid); color: var(--color-on-danger);
   border-radius: var(--radius-pill); padding: 0 0.45rem; font-size: var(--fs-2xs); font-weight: 700; }
-.quick-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-2) 0; }
 .chip { border: 1px solid var(--color-border-strong); background: var(--color-surface-2); border-radius: var(--radius-pill);
   padding: 0.3rem 0.8rem; font-size: var(--fs-sm); cursor: pointer; text-decoration: none; color: var(--color-text); transition: background var(--motion-fast); }
 .chip:hover { background: var(--color-neutral-bg); }
-.chip-alert { border-color: var(--color-danger); color: var(--color-danger); background: var(--color-danger-bg); font-weight: 600; }
 .chip-active { background: var(--color-primary); color: var(--color-primary-contrast); border-color: var(--color-primary); }
 
 /* ═══════════════ 5. VIEWS (chronological by feature era) ═══════════════ */
 
 /* Office group-chat room (v12 M29) — a room picker + live timeline, reusing .chip for the
    picker and .ops-chat-* spacing conventions for the log itself. */
-.office-room-layout { display: flex; gap: var(--space-4); align-items: flex-start; }
-.office-room-picker { display: flex; flex-direction: column; gap: var(--space-2); min-width: 160px; }
-.office-room-timeline { flex: 1; min-width: 0; }
 .office-room-status { color: var(--color-muted); font-size: var(--fs-sm); margin: 0 0 var(--space-2); }
 .office-room-log { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-border);
   border-radius: var(--radius); max-height: 60vh; overflow-y: auto; background: var(--color-bg-faint); }
@@ -242,7 +233,6 @@ input, textarea, select { font-size: var(--fs-body); }
 .office-room-entry:last-child { border-bottom: none; }
 .office-room-kind { display: inline-block; font-size: var(--fs-xs); font-weight: 600; color: var(--color-subtle);
   margin-right: var(--space-2); }
-.office-room-author { font-size: var(--fs-2xs); color: var(--color-muted); }
 .office-room-text { margin: 0.2rem 0 0; white-space: pre-wrap; }
 .office-room-milestone .office-room-kind { color: var(--color-primary); }
 
@@ -305,7 +295,6 @@ input, textarea, select { font-size: var(--fs-body); }
 .office-unified-header { grid-area: header; }
 .office-unified-center { grid-area: center; display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 .office-unified-side { grid-area: side; display: flex; flex-direction: column; gap: var(--space-3); }
-.office-rail { grid-area: rail; }
 .office-unified > .office-composer { grid-area: composer; }
 
 /* v15 unified office: canvas left, live feed right, composer below. */
@@ -407,18 +396,12 @@ input, textarea, select { font-size: var(--fs-body); }
 /* v54 P2: action rail (Chờ anh/chị + Sắp chạy). Layout-only classes — cards/buttons/badges
    are the section-3 primitives (.card via Card, .btn/.chip via Button, .badge via <span>).
    (.office-rail's grid-area: rail is set above alongside the other layout-A areas.) */
-.office-rail { display: flex; flex-direction: column; gap: var(--space-4); }
 .office-rail-section h3 { display: flex; align-items: center; gap: var(--space-2);
   margin: 0 0 var(--space-2); font-size: var(--fs-h4); }
-.office-rail-list { display: flex; flex-direction: column; gap: var(--space-2); }
-.office-rail-item { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; overflow-wrap: break-word; }
-.office-rail-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .office-rail-input { flex: 1 1 140px; padding: 0.4rem 0.6rem; border: 1px solid var(--color-border);
   border-radius: var(--radius); background: var(--color-bg); color: var(--color-text); }
-.office-rail-empty { color: var(--color-muted); font-style: italic; font-size: var(--fs-sm); }
 .office-rail-schedule { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
   gap: var(--space-2); font-size: var(--fs-sm); }
-.office-rail-schedule-time { font-weight: 700; color: var(--color-accent); }
 
 .office-composer { margin-top: var(--space-3); }
 .office-composer-row { display: flex; gap: var(--space-2); }
@@ -491,17 +474,12 @@ input, textarea, select { font-size: var(--fs-body); }
   min-width: 200px; max-width: 260px; align-items: stretch; }
 .workroom-item { text-align: left; font-size: var(--fs-sm); }
 .workroom-status { font-weight: 700; }
-.workroom-dang-chay { color: var(--color-warn); }
-.workroom-ket { color: var(--color-danger); }
-.workroom-xong { color: var(--color-ok); }
 .workroom-count { color: var(--color-muted); font-size: var(--fs-xs); }
 /* v54 P3: lazy per-task $ chip — fetched only for the selected room (see workroom-list.tsx). */
 .workroom-cost { display: inline-block; margin-left: var(--space-2); color: var(--color-muted);
   font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 /* v55 cockpit: right-column tabs [Phòng việc | Kết quả] + workroom status filter, search
    and recurring-run grouping. Buttons/chips are the section-3 primitives — layout only. */
-.office-side-tabs { display: flex; gap: var(--space-2); }
-.office-side-body { display: flex; flex-direction: column; gap: var(--space-3); min-height: 0; }
 .office-side-body .workroom-list { max-width: none; }
 .office-side-badge { margin-left: 0.35rem; font-size: var(--fs-2xs); font-weight: 700;
   color: var(--color-ok); }
@@ -572,7 +550,6 @@ input, textarea, select { font-size: var(--fs-body); }
   overflow-wrap: anywhere; }
 .transcript-kind { display: inline-block; min-width: 92px; color: var(--color-muted);
   font-size: var(--fs-2xs); }
-.transcript-kind-tool_call, .transcript-kind-prefetch { color: var(--color-accent); }
 .team-task-route { margin-top: 0; }
 .team-task-metrics { margin-top: 0; }
 @media (max-width: 1100px) {
@@ -587,13 +564,8 @@ input, textarea, select { font-size: var(--fs-body); }
 .office-3d-label-coordinator { color: #2b2b2b; }
 .office-3d-fallback-table { margin-top: var(--space-3); }
 .office-3d-state { font-weight: 600; }
-.office-3d-state-idle { color: var(--color-muted); }
-.office-3d-state-assigned { color: var(--color-accent); }
-.office-3d-state-working { color: var(--color-warn); }
-.office-3d-state-done { color: var(--color-ok); }
 /* 2D fallback table is theme-aware → real danger token (was phantom --color-err → literal
    that never inverted in dark mode). */
-.office-3d-state-error { color: var(--color-danger); font-weight: 700; }
 /* Inside the theme-independent 3D bubble (fixed light colors, see block note above):
    #b00020 = light-theme danger-solid, white text ≥4.5:1 (the old #ef4444 was below AA). */
 .office-3d-bubble-error {
@@ -630,22 +602,6 @@ input, textarea, select { font-size: var(--fs-body); }
 .mode-toggle { font-weight: 600; }
 
 /* Dual-lens P3: header search + captures explorer (v53: tokenized). */
-.header-search { position: relative; }
-.header-search input {
-  width: 180px; border-radius: var(--radius); border: 1px solid var(--color-border);
-  padding: var(--space-1) var(--space-2); font-size: var(--fs-sm);
-}
-.header-search-results {
-  position: absolute; top: 110%; right: 0; width: min(420px, 90vw); max-height: 50vh;
-  overflow-y: auto; background: var(--color-bg);
-  border: 1px solid var(--color-border); border-radius: var(--radius-lg); z-index: 50;
-  list-style: none; margin: 0; padding: var(--space-1); box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
-}
-.header-search-results button {
-  display: block; width: 100%; text-align: left; background: none; border: 0;
-  padding: var(--space-1) var(--space-2); cursor: pointer; font-size: var(--fs-sm);
-}
-.header-search-results button:hover { background: var(--color-surface-2); }
 .captures-filters { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); align-items: center; }
 .captures-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 /* v53: inherits the global th,td padding (one table rhythm app-wide — no per-table override). */
@@ -655,8 +611,6 @@ input, textarea, select { font-size: var(--fs-body); }
 .captures-error { color: var(--color-danger); }
 /* High-mode ("Chế độ nâng cao") secondary nav row — v10 M25. Lighter than the primary row so
    the 4 CEO items stay dominant; sits directly under them. */
-.app-nav-advanced { gap: var(--space-3); font-size: var(--fs-sm); margin-top: calc(-1 * var(--space-2)); }
-.app-nav-advanced a { color: var(--color-muted); padding: 0.3rem 0.7rem; }
 .app-nav-advanced a.active { background: var(--color-surface-2); color: var(--color-text); }
 .mode-toggle-box { margin-bottom: var(--space-5); }
 .mode-toggle { font-weight: 600; cursor: pointer; }
@@ -675,19 +629,13 @@ input, textarea, select { font-size: var(--fs-body); }
 .work-approvals { margin-bottom: var(--space-5); }
 .work-approvals .badge { background: var(--color-danger-solid); color: var(--color-on-danger); border-radius: var(--radius-pill);
   padding: 0 var(--space-2); font-size: var(--fs-xs); }
-.approval-list { list-style: none; padding: 0; }
 .approval-list li { border: 1px solid var(--color-border); border-radius: var(--radius); padding: 0.6rem 0.8rem;
   margin-bottom: var(--space-2); display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); }
-.advanced-links { columns: 2; list-style: none; padding: 0; }
 .danger { color: var(--color-danger); }
 
 
 /* Status / verdict coloring + chart sizing (M4 S3 views). */
 .chart-box { max-width: 420px; margin: var(--space-4) 0; }
-.status-delivered, .verdict-allow { color: var(--color-ok); font-weight: 600; }
-.status-interrupted, .verdict-pending { color: var(--color-pending); font-weight: 600; }
-.status-error, .verdict-deny, .verdict-reject { color: var(--color-danger); font-weight: 600; }
-.verdict-dry_run, .verdict-skipped { color: var(--color-muted); }
 .facts-list { padding-left: 1.2rem; }
 .facts-list li { margin: 0.2rem 0; }
 
@@ -706,8 +654,6 @@ input, textarea, select { font-size: var(--fs-body); }
 .trigger-form { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
 .run-stream ul { font-family: ui-monospace, monospace; font-size: var(--fs-xs); }
 /* Create-agent wizard + Team view (v3 M7). */
-.wizard-steps { display: flex; gap: var(--space-4); list-style: none; padding: 0; font-size: var(--fs-sm); color: var(--color-muted); }
-.wizard-steps .wizard-step-active { color: var(--color-text); font-weight: 600; }
 .wizard-nav { margin-top: var(--space-4); display: flex; gap: var(--space-2); }
 .domain-picker { border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-3); }
 .domain-picker-option { display: block; margin: var(--space-2) 0; }
@@ -738,15 +684,7 @@ input, textarea, select { font-size: var(--fs-body); }
 
 /* v6 M14b: CEO chat-ops box */
 .ops-chat-hint { color: var(--color-muted); font-size: var(--fs-sm); margin: var(--space-1) 0 var(--space-3); }
-.ops-chat-log { border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-3); min-height: 240px; max-height: 55vh; overflow-y: auto; background: var(--color-bg-faint); }
 .ops-chat-empty { color: var(--color-muted); font-style: italic; }
-.ops-chat-turn { margin-bottom: var(--space-3); }
-.ops-chat-who { display: block; font-size: var(--fs-2xs); font-weight: 600; color: var(--color-subtle); margin-bottom: 0.15rem; }
-.ops-chat-ceo .ops-chat-text { background: var(--color-primary); color: var(--color-primary-contrast); }
-.ops-chat-agent .ops-chat-text { background: var(--color-surface); border: 1px solid var(--color-border); }
-.ops-chat-text { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius); white-space: pre-wrap; font-family: inherit; font-size: var(--fs-body); }
-.ops-chat-input { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
-.ops-chat-input input { flex: 1; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius); }
 
 /* v6 M16: login screen + logout */
 .login-screen { display: flex; align-items: center; justify-content: center; min-height: 80vh; }
@@ -780,7 +718,6 @@ input, textarea, select { font-size: var(--fs-body); }
    every roster row two lines tall. `nowrap` on the cell keeps the column honest. */
 .roster-actions { white-space: nowrap; }
 .roster-actions .btn { padding-inline: var(--space-2); }
-.agent-runs { font-size: var(--fs-sm); color: var(--color-muted); }
 .telegram-tab label { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: var(--space-3); font-size: var(--fs-sm); color: var(--color-muted); }
 .telegram-tab input { padding: var(--space-2); border: 1px solid var(--color-border-strong); border-radius: var(--radius); background: var(--color-surface); color: var(--color-text); }
 .telegram-chats { list-style: none; padding: 0; display: flex; gap: 0.4rem; flex-wrap: wrap; }
@@ -842,7 +779,6 @@ input, textarea, select { font-size: var(--fs-body); }
     content: none;
   }
 
-  .approval-list li { flex-direction: column; align-items: stretch; }
 }
 
 /* Motion (v10 M24). Subtle, purposeful: the confirm dialog fades+lifts in so the CEO's eye
@@ -898,10 +834,6 @@ input, textarea, select { font-size: var(--fs-body); }
   margin: 0.5rem 0;
   padding-left: 1.25rem;
 }
-.team-empty-hero {
-  padding: 1rem 0;
-}
-
 /* v33 P1: Connections screen — fixed-catalog cards (status + key form + restart banner). */
 .connection-grid {
   display: grid;
@@ -937,8 +869,6 @@ input, textarea, select { font-size: var(--fs-body); }
 }
 
 /* v33 P2: office header row + collapsible hint + unified zone titles. */
-.office-hint { margin: var(--space-2) 0; }
-.office-hint summary { cursor: pointer; color: var(--color-muted); font-size: var(--fs-sm); }
 .office-hint .ops-chat-hint { margin: var(--space-2) 0 0; }
 .office-zone-title {
   margin: 0 0 var(--space-2);
@@ -950,7 +880,6 @@ input, textarea, select { font-size: var(--fs-body); }
 }
 
 /* v33 P3: outputs hub list + team-task kanban. */
-.outputs-filters { display: flex; gap: var(--space-4); margin: var(--space-2) 0 var(--space-3); font-size: var(--fs-sm); }
 .outputs-list { list-style: none; padding: 0; margin: 0; }
 .outputs-row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3);
   padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border); }
@@ -959,29 +888,16 @@ input, textarea, select { font-size: var(--fs-body); }
 .outputs-open:hover .outputs-title { text-decoration: underline; }
 .outputs-meta { display: flex; gap: var(--space-3); font-size: var(--fs-xs); white-space: nowrap; }
 .outputs-agent { font-weight: 600; color: var(--color-subtle); }
-.team-kanban { margin: var(--space-4) 0; }
-.team-kanban-lanes { display: flex; gap: var(--space-3); overflow-x: auto; align-items: flex-start; }
-.team-kanban-lane { flex: 1 1 0; min-width: 180px; }
 /* v50: the card is now a container div holding the Link + a per-task cost toggle sibling
    (the toggle can't live inside an anchor). Card chrome stays on the div; the Link owns the
    text styling that used to be on the card anchor. */
-.team-kanban-card { margin-bottom: var(--space-2); background: var(--color-bg); }
-.team-kanban-card:hover { border-color: var(--color-border-strong); }
 .team-kanban-card-link { display: flex; flex-direction: column; gap: 0.15rem;
   text-decoration: none; color: var(--color-text); }
-.team-kanban-title { font-size: var(--fs-sm); }
-.team-kanban-meta { display: flex; gap: var(--space-2); font-size: var(--fs-xs); flex-wrap: wrap; }
-.team-kanban-sandbox { font-size: var(--fs-xs); color: var(--color-subtle); }
-.team-kanban-queued { font-size: var(--fs-xs); color: var(--color-warn); }
 .team-task-cost { margin-top: 0.25rem; font-size: var(--fs-xs); }
 .team-task-cost-body { margin-top: 0.25rem; }
 
 /* v33 P4: clarify section on the Duyệt page. */
 .clarify-section { margin-bottom: var(--space-4); }
-.clarify-list { list-style: none; padding: 0; margin: 0; }
-.clarify-row { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border); }
-.clarify-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); align-items: center; }
-.clarify-actions input { flex: 1 1 200px; }
 
 /* ── Chat hub (P2) ────────────────────────────────────────────────────────────
    Three panes on desktop (list · thread+composer · what is waiting on the CEO). Same
@@ -1504,3 +1420,28 @@ input, textarea, select { font-size: var(--fs-body); }
 /* Real step titles are the step's full instruction sentence (measured: 200+ chars), so
    the row clamps to one line and keeps the whole list scannable. */
 .step-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Status colour classes built by string concatenation ──────────────────────
+   Each of these is applied as `${base}-${value}` at runtime, so a grep for the
+   literal class name finds nothing. Keep them; the name never appears in source. */
+.workroom-dang-chay { color: var(--color-warn); }
+.workroom-ket { color: var(--color-danger); }
+.workroom-xong { color: var(--color-ok); }
+.transcript-kind-tool_call, .transcript-kind-prefetch { color: var(--color-accent); }
+.office-3d-state-idle { color: var(--color-muted); }
+.office-3d-state-assigned { color: var(--color-accent); }
+.office-3d-state-working { color: var(--color-warn); }
+.office-3d-state-done { color: var(--color-ok); }
+.office-3d-state-error { color: var(--color-danger); font-weight: 700; }
+.status-delivered, .verdict-allow { color: var(--color-ok); font-weight: 600; }
+.status-interrupted, .verdict-pending { color: var(--color-pending); font-weight: 600; }
+.status-error, .verdict-deny, .verdict-reject { color: var(--color-danger); font-weight: 600; }
+.verdict-dry_run, .verdict-skipped { color: var(--color-muted); }
+
+/* Company identity form. Three short fields that read as one sentence about the company,
+   so they stack rather than fight for a shared row — the cap in particular is a number
+   the reader compares against the Insights total, not something to hunt for inline. */
+.company-identity label { display: flex; flex-direction: column; gap: var(--space-1);
+  max-width: 32rem; margin-bottom: var(--space-3); font-weight: 600; }
+.company-identity label input { font-weight: 400; padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-strong); border-radius: var(--radius); }

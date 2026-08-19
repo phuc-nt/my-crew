@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api/client'
 import { useUiMode } from '../../ui-mode-context'
 import { useOfficeStream } from '../../hooks/use-office-stream'
-import { useSharedPendingApprovals } from '../../pending-approvals-context'
+import { usePendingApprovals } from '../../api/queries/use-approvals-queries'
 import {
   agentIdsInOrder, deriveAgentDesks, derivePendingCounts, idleDeskState, withRosterIds,
 } from './office-3d/agent-office-state'
@@ -79,9 +79,11 @@ export function useOfficeOrchestration(activeRoom: string | null): OfficeOrchest
     const timer = setInterval(reloadClarify, CLARIFY_POLL_MS)
     return () => clearInterval(timer)
   }, [reloadClarify])
-  const { items: approvals } = useSharedPendingApprovals()
+  // The fleet-wide index names the agent as `agent_id`; the desk badge counts per agent,
+  // so map it into the shape the pure deriver expects rather than teaching it two spellings.
+  const { data: approvals } = usePendingApprovals()
   const pendingCounts = useMemo(
-    () => derivePendingCounts(approvals, clarifyQuestions),
+    () => derivePendingCounts((approvals?.pending ?? []).map((a) => ({ agentId: a.agent_id })), clarifyQuestions),
     [approvals, clarifyQuestions],
   )
 

@@ -1,32 +1,15 @@
 // Route table.
 //
-// Phase 1 stands the 5-hub shell up WITHOUT rebuilding any screen: each hub points at
-// the closest existing view, and every legacy path still resolves at its old URL. That
-// keeps bookmarks working and means this phase can be shipped on its own — later phases
-// swap a hub's element and turn its legacy paths into redirects, one hub at a time.
+// Five hubs own every screen: /chat (home), /office, /work, /team, /system. Screens that
+// used to be their own top-level route are now tabs inside a hub, and the pre-redesign
+// URLs below survive as redirects so older links and bookmarks still land somewhere real.
 import { Suspense, lazy } from 'react'
-import { Navigate, Route, Routes } from 'react-router'
-import { AdvancedAgentView } from '../components/AdvancedAgentView'
+import { Navigate, Route, Routes, useParams } from 'react-router'
 import { OfficePageLazy } from '../routes/office-page-lazy'
-import { AgentPage } from '../views/AgentPage'
-import { Captures } from '../views/Captures'
 import { ChatPage } from '../features/chat/chat-page'
 import { TeamPage } from '../features/team/team-page'
 import { ASSISTANT_CONVERSATION_ID } from '../features/chat/conversation-list-state'
-import { CompanyActivity } from '../views/CompanyActivity'
-import { CompanyDocs } from '../views/CompanyDocs'
-import { Config } from '../views/Config'
-import { Connections } from '../views/Connections'
-import { Cost } from '../views/Cost'
-import { CreateAgent } from '../views/CreateAgent'
-import { Guardrail } from '../views/Guardrail'
-import { MemoryAutomation } from '../views/MemoryAuto'
-import { OfficeRoom } from '../views/OfficeRoom'
-import { Outputs } from '../views/Outputs'
-import { Overview } from '../views/Overview'
-import { Settings } from '../views/Settings'
-import { Timeline } from '../views/Timeline'
-import { Trigger } from '../views/Trigger'
+import { SystemPage } from '../features/system/system-page'
 import { WorkPage } from '../features/work/work-page'
 import { AppShell } from './app-shell'
 
@@ -43,6 +26,13 @@ const TaskDetailPage = lazy(() =>
     default: m.TaskDetailPage,
   })),
 )
+
+/** `/agents/:id` carried the agent in the path; keep it rather than dropping to the roster. */
+function AgentRedirect({ tab }: { tab: string }) {
+  const { id } = useParams()
+  if (!id) return <Navigate to="/team" replace />
+  return <Navigate to={`/team/${encodeURIComponent(id)}?tab=${tab}`} replace />
+}
 
 export function AppRoutes() {
   return (
@@ -74,34 +64,36 @@ export function AppRoutes() {
             </Suspense>
           }
         />
-        {/* No system hub yet (phase 6) — settings is its closest existing surface. */}
-        <Route path="system" element={<Settings />} />
+        <Route path="system" element={<SystemPage />} />
 
-        {/* --- legacy paths, still live at their old URLs until their hub absorbs them --- */}
-        {/* The chat hub owns the assistant conversation now; the old standalone path
-           redirects so any bookmark still lands on it. */}
-        <Route path="assistant" element={<Navigate to={`/chat/${ASSISTANT_CONVERSATION_ID}`} replace />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="connections" element={<Connections />} />
-        <Route path="outputs" element={<Outputs />} />
-        <Route path="agents/:id" element={<AgentPage />} />
-        <Route path="create" element={<CreateAgent />} />
-        <Route path="company-docs" element={<CompanyDocs />} />
-        <Route path="company-activity" element={<CompanyActivity />} />
-        <Route path="captures" element={<Captures />} />
-        <Route path="office/timeline" element={<OfficeRoom />} />
-        <Route path="office/3d" element={<Navigate to="/office" replace />} />
-        <Route element={<AdvancedAgentView />}>
-          <Route path="overview" element={<Overview />} />
-          <Route path="timeline" element={<Timeline />} />
-          <Route path="cost" element={<Cost />} />
-          <Route path="memory" element={<MemoryAutomation />} />
-          <Route path="guardrail" element={<Guardrail />} />
-          <Route path="config" element={<Config />} />
-          <Route path="trigger" element={<Trigger />} />
-        </Route>
+        {/* --- legacy paths: every pre-redesign URL still resolves, now as a redirect ---
+           Bookmarks and links printed in old reports must not 404. Each one lands on the
+           hub tab that absorbed it, so the destination is the screen, not just the hub. */}
+        {/* The chat hub owns the assistant conversation now. */}
+        <Route
+          path="assistant"
+          element={<Navigate to={`/chat/${ASSISTANT_CONVERSATION_ID}`} replace />}
+        />
+        <Route path="settings" element={<Navigate to="/system?tab=settings" replace />} />
+        <Route path="connections" element={<Navigate to="/system?tab=connections" replace />} />
+        <Route path="company-docs" element={<Navigate to="/system?tab=company" replace />} />
+        <Route path="captures" element={<Navigate to="/system?tab=audit" replace />} />
+        <Route path="outputs" element={<Navigate to="/work?tab=outputs" replace />} />
+        <Route path="company-activity" element={<Navigate to="/work?tab=activity" replace />} />
         <Route path="approvals" element={<Navigate to="/work" replace />} />
         <Route path="tasks" element={<Navigate to="/work" replace />} />
+        <Route path="create" element={<Navigate to="/team" replace />} />
+        {/* One agent's old routes: the id is in the path, so each keeps its agent. */}
+        <Route path="agents/:id" element={<AgentRedirect tab="profile" />} />
+        <Route path="overview" element={<Navigate to="/team" replace />} />
+        <Route path="timeline" element={<Navigate to="/team" replace />} />
+        <Route path="cost" element={<Navigate to="/team" replace />} />
+        <Route path="memory" element={<Navigate to="/team" replace />} />
+        <Route path="guardrail" element={<Navigate to="/team" replace />} />
+        <Route path="config" element={<Navigate to="/team" replace />} />
+        <Route path="trigger" element={<Navigate to="/team" replace />} />
+        <Route path="office/timeline" element={<Navigate to="/office" replace />} />
+        <Route path="office/3d" element={<Navigate to="/office" replace />} />
 
         {/* Any unknown path lands on the home hub rather than a blank screen. */}
         <Route path="*" element={<Navigate to="/chat" replace />} />

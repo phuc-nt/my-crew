@@ -11,25 +11,26 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../../api/client'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import * as officeStreamHook from '../../hooks/use-office-stream'
 import { DICT } from '../../i18n/dictionary'
 import { LanguageProvider } from '../../i18n/language-context'
-import { PendingApprovalsProvider } from '../../pending-approvals-context'
 import { UiModeProvider } from '../../ui-mode-context'
 import type { OfficeMessage } from '../../types'
 import { OfficePage } from './office-page'
 
 function renderOffice(route = '/office') {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <MemoryRouter initialEntries={[route]}>
-      <LanguageProvider>
-        <UiModeProvider>
-          <PendingApprovalsProvider>
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[route]}>
+        <LanguageProvider>
+          <UiModeProvider>
             <OfficePage />
-          </PendingApprovalsProvider>
-        </UiModeProvider>
-      </LanguageProvider>
-    </MemoryRouter>,
+          </UiModeProvider>
+        </LanguageProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 

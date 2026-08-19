@@ -9,7 +9,10 @@
 // a handoff after first render.
 import type { Page } from '@playwright/test'
 import type {
+  CaptureRow,
+  ConnectionCard,
   FleetApprovalItem,
+  FleetBudgetPayload,
   OfficeMessage,
   OutputItem,
   RoomArtifactsPayload,
@@ -35,6 +38,12 @@ export interface OfficeApiMockOptions {
   stepTranscript?: StepTranscriptPayload
   /** v82: POST /api/office/assign/preview response (composer sprint/team badge). */
   assignPreview?: Record<string, unknown>
+  /** Fleet-wide spend behind the system hub's Insights tab (default: an empty fleet). */
+  fleetBudget?: FleetBudgetPayload
+  /** Connection cards behind the system hub's Connections tab (default: none). */
+  connections?: ConnectionCard[]
+  /** Attempt rows behind the system hub's Audit tab (default: none). */
+  captures?: CaptureRow[]
   /** Staff templates behind the team hub's hire panel (default: one office role). */
   staffTemplates?: StaffTemplate[]
   /** Profiles on disk that fell out of the registry — the recovery list (default: none). */
@@ -119,7 +128,11 @@ export async function mockOfficeApi(
     // invisible in the UI — but it logged UNMOCKED on every office run, which is exactly
     // the signal a genuinely missing route needs to stand out.
     if (pathname === '/api/budget')
-      return json({ agents: [], total_spent_usd: 0, total_cap_usd: 0, ratio: 0 })
+      return json(
+        opts.fleetBudget ?? { agents: [], total_spent_usd: 0, total_cap_usd: 0, ratio: 0 },
+      )
+    if (pathname === '/api/connections')
+      return json({ cards: opts.connections ?? [], needs_restart: false })
     if (pathname === '/api/health/integrations') return json({ checks: [], checked_at: 0 })
     if (pathname === '/api/team/alerts') return json({ alerts: [] })
     if (pathname === '/api/office/assign/staff') return json(assignStaffFixture)
@@ -138,7 +151,7 @@ export async function mockOfficeApi(
     // The outputs tab carries its filters in the query string, so match the path only.
     if (pathname === '/api/outputs') return json({ items: opts.outputs ?? [], truncated: false })
     if (pathname === '/api/company/activity')
-      return json({ items: [], total: 0, truncated: false })
+      return json({ items: [], total: 0, truncated: false, skipped: [] })
     // The desk inspector opens on a click and immediately asks for that agent's status;
     // without this the panel renders its error path and the spec would be measuring a
     // failure state instead of the inspector.
@@ -202,7 +215,7 @@ export async function mockOfficeApi(
       return json({ agent_id: pathname.split('/')[3], facts: [], internal_only: false })
     if (/^\/api\/automation\/[^/]+$/.test(pathname))
       return json({ agent_id: pathname.split('/')[3], pending: [] })
-    if (pathname === '/api/captures') return json({ captures: [] })
+    if (pathname === '/api/captures') return json({ captures: opts.captures ?? [] })
     if (/^\/api\/agents\/[^/]+\/config$/.test(pathname))
       return json({
         agent_id: pathname.split('/')[3],
@@ -211,6 +224,9 @@ export async function mockOfficeApi(
     if (/^\/api\/agents\/[^/]+\/knowledge\/[^/]+$/.test(pathname))
       return json({ doc: pathname.split('/')[5], raw_mode: true, fields: {}, raw: '' })
     if (/^\/api\/agents\/[^/]+\/skills$/.test(pathname)) return json({ skills: [] })
+    // Fleet-level company docs (the system hub's Company tab) — distinct route from the
+    // per-agent one below, which lists the docs a single agent has been granted.
+    if (pathname === '/api/company-docs') return json({ docs: [] })
     if (/^\/api\/agents\/[^/]+\/company-docs$/.test(pathname)) return json({ docs: [] })
     if (pathname === '/api/health/coordinator')
       return json({ alive: true, last_beat_ago_s: 3, reason: '' })

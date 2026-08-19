@@ -13,13 +13,6 @@
 
 const vi = {
   // App chrome
-  'nav.office': 'Văn phòng',
-  'nav.team': 'Đội',
-  'nav.work': 'Duyệt',
-  'nav.outputs': 'Kết quả',
-  'nav.activity': 'Hoạt động',
-  'nav.chat': 'Trợ lý',
-  'nav.settings': 'Cài đặt',
   // 5-hub IA. Distinct keys from the legacy `nav.*` labels above: the hubs are wider
   // than the tabs they absorb ("Duyệt" was only the approval queue; "Công việc" is the
   // board, outputs, approvals, and schedule), so reusing the old label would mis-name them.
@@ -28,16 +21,6 @@ const vi = {
   'hub.work': 'Công việc',
   'hub.team': 'Đội ngũ',
   'hub.system': 'Hệ thống',
-  'nav.advanced.overview': 'Tổng quan',
-  'nav.advanced.timeline': 'Dòng thời gian',
-  'nav.advanced.cost': 'Chi phí',
-  'nav.advanced.memory': 'Bộ nhớ',
-  'nav.advanced.guardrail': 'Guardrail',
-  'nav.advanced.config': 'Cấu hình',
-  'nav.advanced.trigger': 'Chạy tay',
-  'nav.advanced.captures': 'Captures',
-  'nav.advanced.officeLog': 'Nhật ký văn phòng',
-  'nav.advancedLabel': 'Nâng cao',
   'chrome.logout': 'Đăng xuất',
   'chrome.modeHigh': '🔬 Kỹ thuật',
   'chrome.modeLow': '👁 Thường',
@@ -47,15 +30,11 @@ const vi = {
   'palette.placeholder': 'Đi tới, hỏi trợ lý, hoặc tìm trong lịch sử…',
   'palette.empty': 'Không có gì khớp',
   'palette.searching': 'Đang tìm lịch sử…',
-  'chrome.searchPlaceholder': 'tìm lịch sử…',
-  'chrome.searchAria': 'Tìm lịch sử làm việc',
-  'chrome.searchEmpty': 'Không có kết quả',
   'chrome.theme.light': 'Sáng',
   'chrome.theme.dark': 'Tối',
   'chrome.theme.auto': 'Tự động',
 
   // Login
-  'login.title': 'my-crew',
   'login.password': 'Mật khẩu',
   'login.submit': 'Đăng nhập',
   'login.submitting': 'Đang đăng nhập…',
@@ -64,9 +43,6 @@ const vi = {
   'common.loading': 'Đang tải…',
   'common.close': 'Đóng',
   'common.cancel': 'Hủy',
-  'common.save': 'Lưu',
-  'common.confirm': 'Xác nhận',
-  'common.error': 'Lỗi',
 
   // office-unified.tsx
   'office.title': 'Văn phòng',
@@ -74,21 +50,8 @@ const vi = {
   'office.quickAssign': 'Giao việc nhanh',
   'office.collapse3d': 'Thu gọn không gian 3D',
   'office.expand3d': 'Hiện không gian 3D',
-  'office.hintSummary': 'Hướng dẫn nhanh',
-  'office.hintBody':
-    'Bấm một bàn làm việc để mở việc của nhân sự đó; chọn phòng việc bên trái để xem hoạt động và chat; "Toàn cảnh" xem cả đội. Giao việc mới: gõ',
-  'office.hintBodyMention': 'để chỉ định PIC,',
-  'office.hintBodyAllPrefix': '/bỏ trống',
-  'office.hintBodyAll': 'để đội tự chọn.',
 
   // action-rail.tsx (v54 P2)
-  'actionRail.pendingTitle': 'Chờ anh/chị',
-  'actionRail.pendingEmpty': '✓ Không có gì chờ',
-  'actionRail.actFailed': 'Thao tác không thành công — thử lại.',
-  'actionRail.approve': 'Duyệt',
-  'actionRail.reject': 'Từ chối',
-  'actionRail.upcomingTitle': 'Sắp chạy',
-  'actionRail.upcomingEmpty': 'Chưa có lịch trực nào',
 
   // activity-feed.tsx
   'activityFeed.ariaLabel': 'Hoạt động trực tiếp',
@@ -189,18 +152,16 @@ const vi = {
 
   // workroom-list.tsx
   'workroomList.ariaLabel': 'Phòng việc',
-  'workroomList.title': 'Phòng việc',
   'workroomList.overview': 'Toàn cảnh',
   'workroomList.taskCount': '{n} việc',
   // v55 cockpit: status filter + search + recurring-run grouping + side tabs.
+  // Built as `workroomList.filter.${status}` — a literal grep finds only .xong.
   'workroomList.filter.dang-chay': 'Đang chạy',
   'workroomList.filter.ket': 'Kẹt',
   'workroomList.filter.xong': 'Xong',
   'workroomList.searchPlaceholder': 'Tìm phòng việc…',
   'workroomList.emptyFiltered': 'Không có phòng nào khớp — đổi bộ lọc hoặc tìm kiếm.',
   'workroomList.hiddenHint': '{n} nhóm phòng đang ẩn bởi bộ lọc',
-  'officeSide.tabRooms': 'Phòng việc',
-  'officeSide.tabResults': 'Kết quả',
   'assignComposer.labelNew': 'GIAO VIỆC MỚI',
   'assignComposer.labelRoom': 'TRAO ĐỔI TRONG PHÒNG VIỆC',
 
@@ -266,10 +227,6 @@ const vi = {
 
   // Team.tsx
   'team.title': 'Đội',
-  'team.createAgent': '+ Tạo nhân sự ảo',
-  'team.quickCreateFromTemplate': '⚡ Tạo nhanh từ mẫu / cả đội',
-  'team.createCoordinator': '+ Tạo trưởng phòng',
-  'team.creatingCoordinator': 'Đang tạo…',
   'team.docsRepo': '📄 Kho tài liệu',
   'team.hireOpen': '+ Tuyển nhân sự',
   'agentDetail.tabProfile': 'Hồ sơ',
@@ -314,8 +271,6 @@ const vi = {
   'team.resume': 'Bật lại',
   'team.delete': 'Xoá',
   'team.empty': 'Chưa có nhân sự nào.',
-  'team.emptyCreateWholeCrew': '⚡ Tạo cả đội mẫu trong một lần',
-  'team.emptyOrPickRole': ' hoặc chọn từng vai từ mẫu có sẵn.',
   'team.orphansTitle': 'Hồ sơ chưa trong đội ({n})',
   'team.orphansHint':
     'Các hồ sơ này tồn tại trong thư mục profiles/ nhưng chưa được đăng ký vào đội — thêm lại để giao việc được cho họ.',
@@ -342,8 +297,6 @@ const vi = {
   'team.aria.confirmUpgrade': 'Nâng cấp template',
   'team.errorPrefix': 'Lỗi: {message}',
   'team.loadAgentsFailed': 'không tải được danh sách agent',
-  'team.templateNotFound': 'không tìm thấy mẫu "{roleId}"',
-  'team.createCoordinatorFailed': 'tạo trưởng phòng thất bại',
   'team.toggleFailed': 'thao tác thất bại',
   'team.upgradePreviewFailed': 'không xem được nâng cấp',
   'team.upgradeFailed': 'nâng cấp thất bại',
@@ -352,16 +305,11 @@ const vi = {
 
   // Work.tsx
   'work.title': 'Việc',
-  'work.rejectConfirm': 'Bỏ việc này? Agent sẽ không thực hiện.',
   'work.pendingApprovalTitle': 'Cần bạn duyệt',
   'work.loading': 'Đang tải…',
-  'work.emptyApprovals': 'Không có việc nào chờ duyệt. 🎉',
-  'work.reviewAndApprove': 'Xem & duyệt',
-  'work.reject': 'Từ chối',
   'work.autoApprovedTitle': 'Đã tự duyệt hôm nay ({n})',
   'work.autoApprovedHint': 'Các hành động agent tin cậy đã tự chạy (trong hạn mức bạn đặt) — không cần bạn duyệt.',
   'work.autoApprovedReport': 'báo cáo {kind}',
-  'work.opFailed': 'thao tác thất bại',
   'workHub.tabsLabel': 'Góc nhìn công việc',
   'workHub.tabBoard': 'Bảng việc',
   'workHub.tabOutputs': 'Kết quả',
@@ -392,10 +340,6 @@ const vi = {
   'taskDetail.stepSplitValue': '{content} làm · {review} soát · {rework} làm lại',
 
   // Outputs.tsx
-  'outputs.title': 'Kết quả',
-  'outputs.introPrefix': 'Mọi kết quả bàn giao của cả đội — bấm một dòng để đọc, file thì tải về. Xem theo phòng việc tại ',
-  'outputs.introLink': 'Văn phòng',
-  'outputs.introSuffix': '.',
   'outputs.filterAgent': 'Nhân sự',
   'outputs.filterAll': 'tất cả',
   'outputs.filterTime': 'Thời gian',
@@ -441,17 +385,8 @@ const vi = {
   'companyActivity.loadMore': 'Xem thêm',
 
   // clarify-section.tsx
-  'clarify.title': 'Đội đang hỏi bạn',
-  'clarify.hint':
-    'Nhân sự cần bạn làm rõ để tiếp tục việc — bấm một lựa chọn hoặc trả lời chi tiết. Câu trả lời được đưa vào bước tiếp theo của việc đó.',
-  'clarify.asks': ' hỏi: ',
-  'clarify.taskRef': ' · việc {id}',
-  'clarify.freeTextPlaceholder': 'hoặc trả lời chi tiết…',
-  'clarify.send': 'Gửi',
-  'clarify.sendFailed': 'không gửi được câu trả lời',
 
   // team-task-kanban.tsx
-  'teamKanban.title': 'Việc của đội',
   'teamKanban.lanePlanning': 'Chờ xác nhận',
   'teamKanban.laneOpen': 'Sẵn sàng',
   'teamKanban.laneRunning': 'Đang chạy',
@@ -520,27 +455,21 @@ const vi = {
   'chat.quickChipStatus': 'Đội mình đang thế nào?',
   'chat.quickChipCreateAgent': 'Tạo nhân sự ảo mới',
   'chat.quickChipCost': 'Tổng chi phí tháng này?',
-  'chat.createAgentPrefill': 'Tạo nhân sự ảo mới. Hãy hỏi mình từng bước cần thiết.',
   'chat.checking': 'Đang kiểm tra…',
-  'chat.title': 'Trợ lý điều hành',
   'chat.unavailablePrefix': 'Chưa dùng được: {reason}',
   'chat.createViaWizardPrefix': 'Bạn vẫn có thể ',
   'chat.createViaWizardLink': 'tạo nhân sự ảo bằng biểu mẫu →',
-  'chat.hint':
-    'Nhắn tiếng Việt để quản lý đội: tạo agent, bật/tắt, xem trạng thái, xem chi phí. Mọi thay đổi đều được xem trước và cần bạn xác nhận.',
   'chat.commandsSummary': 'Trợ lý làm được gì? ({n} việc)',
   'chat.emptyExample':
     'Ví dụ: "đội mình đang có mấy agent, tốn bao nhiêu?" hoặc "tạo agent mã sales-pm, vai trò quản lý dự án".',
   'chat.who.ceo': 'Bạn',
   'chat.who.agent': 'Trợ lý',
-  'chat.pendingChip': '⚠️ {n} việc chờ duyệt',
   // 5-hub chat hub (P2). Distinct from the legacy `chat.*` assistant keys above: these
   // name the conversation-list/thread surface, not the ops assistant view.
   'chat.conversationsLabel': 'Danh sách hội thoại',
   'chat.loadingRooms': 'Đang tải phòng việc…',
   'chat.assistantRoom': 'Trợ lý',
   'chat.overviewRoom': 'Toàn cảnh',
-  'chat.assistantComingSoon': 'Thread trợ lý sẽ nối ở bước sau.',
   'chat.threadEmpty': 'Chưa có gì trong phòng này. Giao việc bên dưới để bắt đầu.',
   'chat.unreadCount': '{n} tin chưa đọc',
   'chat.thinking': 'Trợ lý đang xử lý…',
@@ -553,9 +482,6 @@ const vi = {
   'artifacts.selfCheckFailed': 'Nhân sự tự kiểm tra chưa đạt.',
   'artifacts.transcriptToggle': 'Nhật ký chi tiết',
   'artifacts.transcriptMeta': '{attempts} lượt · {events} sự kiện · ${cost}',
-  'chat.stream.on': 'trực tiếp',
-  'chat.stream.wait': 'đang nối',
-  'chat.stream.off': 'mất kết nối',
   'chat.unreadUnknown': 'Có tin chưa đọc',
   'pending.paneLabel': 'Việc chờ bạn duyệt',
   'pending.title': 'Chờ bạn',
@@ -583,7 +509,6 @@ const vi = {
   'chat.sendFailed': 'gửi thất bại',
 
   // Settings.tsx
-  'settings.title': 'Cài đặt',
   'settings.assignSectionTitle': 'Giao việc cho đội',
   'settings.autoConfirmLabel': 'Tự xác nhận kế hoạch khi giao việc',
   'settings.autoConfirmHint':
@@ -593,22 +518,9 @@ const vi = {
   'settings.advancedModeLabel': 'Chế độ nâng cao',
   'settings.advancedModeHint':
     'Bật để hiện đầy đủ số liệu vận hành cho người kỹ thuật (dòng thời gian, chi phí, bộ nhớ, guardrail, cấu hình, chạy tay) ngay trên thanh điều hướng. Tắt để giữ giao diện gọn 4 mục.',
-  'settings.connectionsLink': '→ Kết nối & khoá API (xem trạng thái, điền key)',
-  'settings.advancedSectionTitle': 'Nâng cao',
-  'settings.advancedSectionHint': 'Các trang kỹ thuật — bình thường không cần, nhưng vẫn đầy đủ khi bạn muốn xem sâu.',
-  'settings.advanced.overview': 'Tổng quan (biểu đồ)',
-  'settings.advanced.companyDocs': 'Tài liệu công ty',
-  'settings.advanced.createAgent': 'Tạo nhân sự ảo',
-  'settings.advanced.timeline': 'Timeline hoạt động',
-  'settings.advanced.cost': 'Chi phí',
-  'settings.advanced.memory': 'Bộ nhớ & Tự động hoá',
-  'settings.advanced.guardrail': 'Guardrail (rào chắn)',
-  'settings.advanced.config': 'Cấu hình agent',
-  'settings.advanced.trigger': 'Chạy báo cáo thủ công',
   'settings.saveFailed': 'lưu thất bại',
 
   // Connections.tsx
-  'connections.title': 'Kết nối',
   'connections.intro':
     'Trạng thái và khoá API của các dịch vụ công ty dùng. Giá trị đã lưu không bao giờ hiển thị lại — chỉ báo "đã đặt / chưa đặt".',
   'connections.set': ' đã đặt',
@@ -628,15 +540,6 @@ const vi = {
   'connections.loadFailed': 'không tải được danh sách kết nối',
 
   // CreateAgent.tsx + wizard/*
-  'createAgent.title': 'Tạo nhân sự ảo',
-  'createAgent.step.template': 'Mẫu nhân sự',
-  'createAgent.step.domain': 'Loại nhân sự',
-  'createAgent.step.identity': 'Danh tính',
-  'createAgent.step.reports': 'Báo cáo',
-  'createAgent.step.bindings': 'Kết nối',
-  'createAgent.step.review': 'Xem lại',
-  'createAgent.back': 'Quay lại',
-  'createAgent.next': 'Tiếp',
 
   'staffTemplatePicker.runtimeNative': 'suy nghĩ 1 lượt',
   'staffTemplatePicker.runtimeCreateAgent': 'tự dùng công cụ đọc',
@@ -807,9 +710,7 @@ const vi = {
 
   // CompanyDocs.tsx
   'companyDocs.loadError': 'lỗi',
-  'companyDocs.errorPrefix': 'Lỗi: {message}',
   'companyDocs.loading': 'Đang tải…',
-  'companyDocs.title': 'Tài liệu công ty',
   'companyDocs.new': '+ Tài liệu mới',
   'companyDocs.intro':
     'Tài liệu ở đây được tick cho từng agent (trong trang agent → tab Kiến thức) và chỉ đưa vào ngữ cảnh nội bộ — báo cáo gửi ra ngoài không bao giờ chứa nội dung này.',
@@ -827,7 +728,6 @@ const vi = {
 
   // AgentPage.tsx + AgentKnowledgeTab.tsx
   'agentPage.loadError': 'lỗi',
-  'agentPage.errorPrefix': 'Lỗi: {message}',
   'agentPage.orphanHint':
     'Nếu nhân sự này có hồ sơ trên máy nhưng chưa nằm trong đội (ví dụ vừa xoá hoặc chép từ máy khác), vào ',
   'agentPage.orphanHintLink': 'trang Đội',
@@ -843,14 +743,6 @@ const vi = {
   'agentPage.trustAutonomous': 'tự chủ',
   'agentPage.trustGuarded': 'có duyệt',
   'agentPage.pendingApprovals': '{n} việc chờ duyệt',
-  'agentPage.tabActivity': 'Hoạt động',
-  'agentPage.tabTelegram': 'Kênh Telegram',
-  'agentPage.tabKnowledge': 'Kiến thức',
-  'agentPage.costThisMonth': 'Chi phí tháng này:',
-  'agentPage.lastRun': 'Lần chạy gần nhất:',
-  'agentPage.lastRunNone': 'chưa có',
-  'agentPage.runHistory': 'Lịch sử chạy',
-  'agentPage.noRuns': 'Chưa có lần chạy nào.',
   'agentPage.telegramIntro':
     'Tạo bot qua @BotFather (gửi /newbot, đặt tên + ảnh), copy token rồi dán vào đây. Agent sẽ có danh tính Telegram riêng — nhận câu hỏi + lệnh + báo cáo.',
   'agentPage.telegramTokenLabel': 'Bot token (từ BotFather)',
@@ -898,7 +790,6 @@ const vi = {
   'agentKnowledge.skillsSave': 'Lưu kỹ năng',
 
   // Captures.tsx (h2 "Captures" stays EN — only the parenthetical + body translate)
-  'captures.titleSuffix': ' (telemetry từng bước)',
   'captures.hint': 'Mỗi dòng = một lượt chạy bước (attempt): engine, tokens, chi phí (exact/estimated), thời lượng. Nguồn: bảng captures v26 — chỉ đọc.',
   'captures.taskFilterChip': 'Việc: {task}… ✕',
   'captures.agentFilterPlaceholder': 'lọc theo nhân sự (agent id)',
@@ -916,76 +807,37 @@ const vi = {
   'captures.errorPrefix': 'lỗi: {message}',
 
   // Advanced views: Overview/Timeline/Cost/MemoryAuto/Guardrail/Config/Trigger
-  'overview.loading': 'Đang tải…',
-  'overview.errorPrefix': 'Lỗi: {message}',
-  'overview.empty': 'Chưa có nhân sự ảo nào.',
-  'overview.title': 'Tổng quan đội',
-  'overview.colCode': 'Mã',
-  'overview.colName': 'Tên',
-  'overview.colEnabled': 'Bật',
-  'overview.colLastRun': 'Lần chạy gần nhất',
-  'overview.neverRun': 'chưa chạy lần nào',
 
   'timeline.loading': 'Đang tải…',
   'timeline.errorPrefix': 'Lỗi: {message}',
   'timeline.title': 'Dòng thời gian hoạt động',
 
   'cost.loading': 'Đang tải…',
-  'cost.errorPrefix': 'Lỗi: {message}',
   'cost.title': 'Chi phí so với ngân sách',
   'cost.thisMonthPrefix': 'Tháng này: ',
   'cost.capSuffix': ' trên hạn mức ',
   'cost.empty': 'Chưa có lịch sử chi phí.',
 
-  'memoryAuto.title': 'Bộ nhớ & tự động hoá',
   'memoryAuto.rememberedTitle': 'Sự kiện đã ghi nhớ',
   'memoryAuto.loading': 'Đang tải…',
   'memoryAuto.errorPrefix': 'Lỗi: {message}',
   'memoryAuto.proposalsTitle': 'Đề xuất chờ duyệt',
 
-  'guardrail.loading': 'Đang tải…',
-  'guardrail.errorPrefix': 'Lỗi: {message}',
   'guardrail.title': 'Guardrail & nhật ký',
   'guardrail.totalDecisions': '{n} quyết định đã ghi qua rào chắn.',
   'guardrail.recentTitle': 'Sự kiện gần đây',
 
   'config.loading': 'Đang tải…',
   'config.errorPrefix': 'Lỗi: {message}',
-  'config.title': 'Cấu hình — {agent}',
-  'config.readOnlySuffix': ' (chỉ đọc)',
-  'config.saved': 'Đã lưu.',
-  'config.saveFailed': 'lưu thất bại',
-  'config.saving': 'Đang lưu…',
-  'config.save': 'Lưu',
 
   'trigger.title': 'Chạy báo cáo thủ công',
   'trigger.kindLabel': 'Loại:',
   'trigger.audienceLabel': 'Đối tượng:',
   'trigger.dryRun': 'chạy thử (dry-run)',
-  'trigger.running': 'Đang chạy…',
   'trigger.run': 'Chạy',
-  'trigger.runFailed': 'chạy thất bại',
-  'trigger.errorPrefix': 'Lỗi: {message}',
-  'trigger.runTitle': 'Lần chạy {runId} {status}',
-  'trigger.statusDisconnected': '(mất kết nối)',
-  'trigger.statusDone': '(xong)',
-  'trigger.statusRunning': '(đang chạy…)',
   'trigger.streamDisconnected': 'Mất kết nối luồng theo dõi — lần chạy có thể vẫn tiếp tục ở nền.',
-  'trigger.eventDone': 'kết thúc',
 
   // OfficeRoom.tsx (advanced office log)
-  'officeRoom.loadFailed': 'tải thất bại',
-  'officeRoom.title': 'Văn phòng',
-  'officeRoom.hint':
-    'Dòng thời gian hoạt động của cả đội: giao việc, phân công, tiến độ, bàn giao và các cột mốc quan trọng.',
-  'officeRoom.errorPrefix': 'Lỗi: {message}',
-  'officeRoom.roomsAriaLabel': 'Danh sách phòng',
-  'officeRoom.overview': 'Tổng quan',
-  'officeRoom.roomLabel': 'Việc #{room}',
-  'officeRoom.disconnected': 'Mất kết nối luồng — thử tải lại trang.',
-  'officeRoom.connected': 'Đang theo dõi trực tiếp',
-  'officeRoom.connecting': 'Đang kết nối…',
-  'officeRoom.empty': 'Chưa có hoạt động nào trong phòng này.',
 
   // ConfirmDialog.tsx
   'confirmDialog.ariaLabel': 'Duyệt việc {id}',
@@ -1052,7 +904,6 @@ const vi = {
   'scheduleBuilder.dayThu': 'T5',
   'scheduleBuilder.dayFri': 'T6',
   'scheduleBuilder.daySat': 'T7',
-  'usePendingApprovals.loadFailed': 'lỗi',
 
   // coordinator-desk.tsx
   'coordinatorDesk.label': 'trưởng phòng',
@@ -1096,44 +947,52 @@ const vi = {
   'officeLazy.loadFailedHint': 'hoặc xem',
   'officeLazy.reload': 'Tải lại trang',
   'officeLazy.loadingTitle': 'Đang tải văn phòng 3D…',
-  'officeLazy.loadingHint': 'Nếu quá lâu, kiểm tra kết nối mạng hoặc tải lại trang.',
   'officeLazy.tableViewLink': 'nhật ký văn phòng dạng bảng',
   'charts.loading': 'Đang tải biểu đồ…',
   'charts.loadFailed': 'Không tải được biểu đồ — các số liệu bên dưới vẫn đầy đủ.',
-  'advancedAgentView.backToSettings': '← Cài đặt',
   'login.username': 'Tên đăng nhập',
   'login.failed': 'đăng nhập thất bại',
   'costChart.datasetCost': 'Chi phí (USD)',
   'costChart.datasetBudgetCap': 'Ngân sách trần',
   'costChart.ariaLabel': 'Chi phí hằng tháng so với ngân sách trần',
   'verdictChart.ariaLabel': 'Phân bố kết quả kiểm duyệt guardrail',
+  // System hub (v88 P6): the 5 tabs that absorbed /settings, /connections, /company-docs
+  // and /captures. "Số liệu" is fleet-wide only — per-agent cost lives on the agent page.
+  'systemHub.title': 'Hệ thống',
+  'systemHub.tabsLabel': 'Mục hệ thống',
+  'systemHub.tabSettings': 'Cài đặt',
+  'systemHub.tabConnections': 'Kết nối',
+  'systemHub.tabCompany': 'Công ty',
+  'systemHub.tabInsights': 'Số liệu',
+  'systemHub.tabAudit': 'Nhật ký kiểm tra',
+  'systemInsights.budgetTitle': 'Chi tiêu toàn đội',
+  'systemInsights.budgetHint': 'Bấm vào một nhân sự để xem chi tiết chi phí của riêng họ.',
+  'systemInsights.colAgent': 'Nhân sự',
+  'systemInsights.colSpent': 'Đã dùng',
+  'systemInsights.colCap': 'Hạn mức',
+  'systemInsights.colRatio': 'Tỷ lệ',
+  'systemInsights.total': 'Tổng: {spent} / {cap} ({pct}%)',
+  'systemInsights.loadError': 'Không tải được số liệu chi tiêu.',
+  'systemInsights.empty': 'Chưa có dữ liệu chi tiêu.',
+  'systemCompany.identityTitle': 'Danh tính công ty',
+  'systemCompany.docsTitle': 'Tài liệu công ty',
+  'systemCompany.configHint': 'Sửa file cấu hình của từng nhân sự ở tab 🔬 Nâng cao trên trang nhân sự đó.',
+  'systemCompany.nameLabel': 'Tên công ty',
+  'systemCompany.coordinatorLabel': 'Điều phối viên',
+  'systemCompany.capLabel': 'Hạn mức chi tiêu (USD/tháng)',
+  'systemCompany.save': 'Lưu',
+  'systemCompany.saving': 'Đang lưu…',
+  'systemCompany.saved': 'Đã lưu',
 } as const
 
 export type UiKey = keyof typeof vi
 
 const en = {
-  'nav.office': 'Office',
-  'nav.team': 'Team',
-  'nav.work': 'Approvals',
-  'nav.outputs': 'Outputs',
-  'nav.activity': 'Activity',
-  'nav.chat': 'Assistant',
-  'nav.settings': 'Settings',
   'hub.chat': 'Chat',
   'hub.office': 'Office',
   'hub.work': 'Work',
   'hub.team': 'Team',
   'hub.system': 'System',
-  'nav.advanced.overview': 'Overview',
-  'nav.advanced.timeline': 'Timeline',
-  'nav.advanced.cost': 'Cost',
-  'nav.advanced.memory': 'Memory',
-  'nav.advanced.guardrail': 'Guardrail',
-  'nav.advanced.config': 'Config',
-  'nav.advanced.trigger': 'Manual run',
-  'nav.advanced.captures': 'Captures',
-  'nav.advanced.officeLog': 'Office log',
-  'nav.advancedLabel': 'Advanced',
   'chrome.logout': 'Log out',
   'chrome.modeHigh': '🔬 Technical',
   'chrome.modeLow': '👁 Normal',
@@ -1143,14 +1002,10 @@ const en = {
   'palette.placeholder': 'Go to, ask the assistant, or search history…',
   'palette.empty': 'Nothing matches',
   'palette.searching': 'Searching history…',
-  'chrome.searchPlaceholder': 'search history…',
-  'chrome.searchAria': 'Search work history',
-  'chrome.searchEmpty': 'No results',
   'chrome.theme.light': 'Light',
   'chrome.theme.dark': 'Dark',
   'chrome.theme.auto': 'Auto',
 
-  'login.title': 'my-crew',
   'login.password': 'Password',
   'login.submit': 'Log in',
   'login.submitting': 'Logging in…',
@@ -1158,9 +1013,6 @@ const en = {
   'common.loading': 'Loading…',
   'common.close': 'Close',
   'common.cancel': 'Cancel',
-  'common.save': 'Save',
-  'common.confirm': 'Confirm',
-  'common.error': 'Error',
 
   // office-unified.tsx
   'office.title': 'Office',
@@ -1168,21 +1020,8 @@ const en = {
   'office.quickAssign': 'Quick assign',
   'office.collapse3d': 'Collapse 3D view',
   'office.expand3d': 'Show 3D view',
-  'office.hintSummary': 'Quick guide',
-  'office.hintBody':
-    'Click a desk to open that staffer\'s task; pick a room on the left to see its activity and chat; "Overview" shows the whole team. New task: type',
-  'office.hintBodyMention': 'to set a PIC,',
-  'office.hintBodyAllPrefix': '/blank',
-  'office.hintBodyAll': 'to let the team pick.',
 
   // action-rail.tsx (v54 P2)
-  'actionRail.pendingTitle': 'Waiting on you',
-  'actionRail.pendingEmpty': '✓ Nothing pending',
-  'actionRail.actFailed': 'Action failed — try again.',
-  'actionRail.approve': 'Approve',
-  'actionRail.reject': 'Reject',
-  'actionRail.upcomingTitle': 'Coming up',
-  'actionRail.upcomingEmpty': 'No schedule yet',
 
   // activity-feed.tsx
   'activityFeed.ariaLabel': 'Live activity',
@@ -1282,7 +1121,6 @@ const en = {
 
   // workroom-list.tsx
   'workroomList.ariaLabel': 'Workrooms',
-  'workroomList.title': 'Workrooms',
   'workroomList.overview': 'Overview',
   'workroomList.taskCount': '{n} tasks',
   'workroomList.filter.dang-chay': 'Running',
@@ -1291,8 +1129,6 @@ const en = {
   'workroomList.searchPlaceholder': 'Search workrooms…',
   'workroomList.emptyFiltered': 'No rooms match — adjust the filters or search.',
   'workroomList.hiddenHint': '{n} room groups hidden by filters',
-  'officeSide.tabRooms': 'Workrooms',
-  'officeSide.tabResults': 'Results',
   'assignComposer.labelNew': 'NEW ASSIGNMENT',
   'assignComposer.labelRoom': 'CHAT IN WORKROOM',
 
@@ -1358,10 +1194,6 @@ const en = {
 
   // Team.tsx
   'team.title': 'Team',
-  'team.createAgent': '+ Create virtual staff',
-  'team.quickCreateFromTemplate': '⚡ Quick create from template / whole crew',
-  'team.createCoordinator': '+ Create coordinator',
-  'team.creatingCoordinator': 'Creating…',
   'team.docsRepo': '📄 Docs repository',
   'team.hireOpen': '+ Hire staff',
   'agentDetail.tabProfile': 'Profile',
@@ -1406,8 +1238,6 @@ const en = {
   'team.resume': 'Resume',
   'team.delete': 'Delete',
   'team.empty': 'No staff yet.',
-  'team.emptyCreateWholeCrew': '⚡ Create the whole default crew at once',
-  'team.emptyOrPickRole': ' or pick a role from an existing template.',
   'team.orphansTitle': 'Profiles not in the team ({n})',
   'team.orphansHint':
     'These profiles exist under profiles/ but are not registered to the team yet — add them back to assign work.',
@@ -1434,8 +1264,6 @@ const en = {
   'team.aria.confirmUpgrade': 'Upgrade template',
   'team.errorPrefix': 'Error: {message}',
   'team.loadAgentsFailed': 'could not load the agent list',
-  'team.templateNotFound': 'template "{roleId}" not found',
-  'team.createCoordinatorFailed': 'creating the coordinator failed',
   'team.toggleFailed': 'action failed',
   'team.upgradePreviewFailed': 'could not preview the upgrade',
   'team.upgradeFailed': 'upgrade failed',
@@ -1444,16 +1272,11 @@ const en = {
 
   // Work.tsx
   'work.title': 'Approvals',
-  'work.rejectConfirm': 'Drop this task? The agent will not act on it.',
   'work.pendingApprovalTitle': 'Needs your approval',
   'work.loading': 'Loading…',
-  'work.emptyApprovals': 'Nothing pending approval. 🎉',
-  'work.reviewAndApprove': 'Review & approve',
-  'work.reject': 'Reject',
   'work.autoApprovedTitle': 'Auto-approved today ({n})',
   'work.autoApprovedHint': 'Trusted agent actions that ran automatically (within your set limits) — no approval needed.',
   'work.autoApprovedReport': '{kind} report',
-  'work.opFailed': 'action failed',
   'workHub.tabsLabel': 'Work views',
   'workHub.tabBoard': 'Board',
   'workHub.tabOutputs': 'Outputs',
@@ -1484,10 +1307,6 @@ const en = {
   'taskDetail.stepSplitValue': '{content} content \u00b7 {review} review \u00b7 {rework} rework',
 
   // Outputs.tsx
-  'outputs.title': 'Outputs',
-  'outputs.introPrefix': 'Every delivered output across the team — click a row to read, or download a file. View by workroom at ',
-  'outputs.introLink': 'Office',
-  'outputs.introSuffix': '.',
   'outputs.filterAgent': 'Staff',
   'outputs.filterAll': 'all',
   'outputs.filterTime': 'Time range',
@@ -1533,17 +1352,8 @@ const en = {
   'companyActivity.loadMore': 'Load more',
 
   // clarify-section.tsx
-  'clarify.title': 'The team is asking you',
-  'clarify.hint':
-    'Staff need your input to keep going — click an option or answer freely. Your answer feeds into the task\'s next step.',
-  'clarify.asks': ' asks: ',
-  'clarify.taskRef': ' · task {id}',
-  'clarify.freeTextPlaceholder': 'or answer freely…',
-  'clarify.send': 'Send',
-  'clarify.sendFailed': 'could not send the answer',
 
   // team-task-kanban.tsx
-  'teamKanban.title': 'Team tasks',
   'teamKanban.lanePlanning': 'Awaiting confirmation',
   'teamKanban.laneOpen': 'Ready',
   'teamKanban.laneRunning': 'Running',
@@ -1612,25 +1422,19 @@ const en = {
   'chat.quickChipStatus': "How's the team doing?",
   'chat.quickChipCreateAgent': 'Create a new virtual staffer',
   'chat.quickChipCost': "What's total cost this month?",
-  'chat.createAgentPrefill': "Create a new virtual staffer. Walk me through each step needed.",
   'chat.checking': 'Checking…',
-  'chat.title': 'Executive assistant',
   'chat.unavailablePrefix': 'Not available: {reason}',
   'chat.createViaWizardPrefix': 'You can still ',
   'chat.createViaWizardLink': 'create a virtual staffer using the form →',
-  'chat.hint':
-    'Message the assistant to manage the team: create agents, enable/disable, check status, view cost. Every change is previewed and needs your confirmation.',
   'chat.commandsSummary': 'What can the assistant do? ({n} things)',
   'chat.emptyExample':
     'Example: "how many agents do we have, how much are we spending?" or "create agent sales-pm, role project manager".',
   'chat.who.ceo': 'You',
   'chat.who.agent': 'Assistant',
-  'chat.pendingChip': '⚠️ {n} pending approvals',
   'chat.conversationsLabel': 'Conversations',
   'chat.loadingRooms': 'Loading workrooms…',
   'chat.assistantRoom': 'Assistant',
   'chat.overviewRoom': 'Overview',
-  'chat.assistantComingSoon': 'The assistant thread lands in a later step.',
   'chat.threadEmpty': 'Nothing here yet. Assign work below to start.',
   'chat.unreadCount': '{n} unread',
   'chat.thinking': 'Assistant is working…',
@@ -1643,9 +1447,6 @@ const en = {
   'artifacts.selfCheckFailed': 'The agent’s self-check did not pass.',
   'artifacts.transcriptToggle': 'Detailed transcript',
   'artifacts.transcriptMeta': '{attempts} attempts · {events} events · ${cost}',
-  'chat.stream.on': 'live',
-  'chat.stream.wait': 'connecting',
-  'chat.stream.off': 'disconnected',
   'chat.unreadUnknown': 'Has unread messages',
   'pending.paneLabel': 'Waiting for your decision',
   'pending.title': 'Waiting on you',
@@ -1673,7 +1474,6 @@ const en = {
   'chat.sendFailed': 'send failed',
 
   // Settings.tsx
-  'settings.title': 'Settings',
   'settings.assignSectionTitle': 'Assigning work to the team',
   'settings.autoConfirmLabel': 'Auto-confirm plans when assigning work',
   'settings.autoConfirmHint':
@@ -1683,22 +1483,9 @@ const en = {
   'settings.advancedModeLabel': 'Advanced mode',
   'settings.advancedModeHint':
     'Turn on to show full operational metrics for technical users (timeline, cost, memory, guardrail, config, manual run) right in the nav. Turn off to keep a compact 4-item nav.',
-  'settings.connectionsLink': '→ Connections & API keys (view status, fill in keys)',
-  'settings.advancedSectionTitle': 'Advanced',
-  'settings.advancedSectionHint': "Technical pages — not needed day to day, but here when you want to dig deeper.",
-  'settings.advanced.overview': 'Overview (charts)',
-  'settings.advanced.companyDocs': 'Company docs',
-  'settings.advanced.createAgent': 'Create virtual staffer',
-  'settings.advanced.timeline': 'Activity timeline',
-  'settings.advanced.cost': 'Cost',
-  'settings.advanced.memory': 'Memory & automation',
-  'settings.advanced.guardrail': 'Guardrail',
-  'settings.advanced.config': 'Agent config',
-  'settings.advanced.trigger': 'Run report manually',
   'settings.saveFailed': 'save failed',
 
   // Connections.tsx
-  'connections.title': 'Connections',
   'connections.intro':
     "Status and API keys for the services the company uses. Saved values are never shown again — only \"set / not set\".",
   'connections.set': ' set',
@@ -1718,15 +1505,6 @@ const en = {
   'connections.loadFailed': 'could not load connections list',
 
   // CreateAgent.tsx + wizard/*
-  'createAgent.title': 'Create virtual staffer',
-  'createAgent.step.template': 'Staff template',
-  'createAgent.step.domain': 'Staffer type',
-  'createAgent.step.identity': 'Identity',
-  'createAgent.step.reports': 'Reports',
-  'createAgent.step.bindings': 'Connections',
-  'createAgent.step.review': 'Review',
-  'createAgent.back': 'Back',
-  'createAgent.next': 'Next',
 
   'staffTemplatePicker.runtimeNative': 'single-turn reasoning',
   'staffTemplatePicker.runtimeCreateAgent': 'self-directed tool reading',
@@ -1897,9 +1675,7 @@ const en = {
 
   // CompanyDocs.tsx
   'companyDocs.loadError': 'error',
-  'companyDocs.errorPrefix': 'Error: {message}',
   'companyDocs.loading': 'Loading…',
-  'companyDocs.title': 'Company docs',
   'companyDocs.new': '+ New doc',
   'companyDocs.intro':
     "Docs here are checked per agent (in the agent page → Knowledge tab) and only ever go into internal context — reports sent outside never contain this content.",
@@ -1917,7 +1693,6 @@ const en = {
 
   // AgentPage.tsx + AgentKnowledgeTab.tsx
   'agentPage.loadError': 'error',
-  'agentPage.errorPrefix': 'Error: {message}',
   'agentPage.orphanHint':
     'If this staffer has a profile on disk but is not yet on the team (e.g. just deleted, or copied from another machine), go to ',
   'agentPage.orphanHintLink': 'the Team page',
@@ -1933,14 +1708,6 @@ const en = {
   'agentPage.trustAutonomous': 'autonomous',
   'agentPage.trustGuarded': 'guarded',
   'agentPage.pendingApprovals': '{n} pending approvals',
-  'agentPage.tabActivity': 'Activity',
-  'agentPage.tabTelegram': 'Telegram channel',
-  'agentPage.tabKnowledge': 'Knowledge',
-  'agentPage.costThisMonth': 'Cost this month:',
-  'agentPage.lastRun': 'Last run:',
-  'agentPage.lastRunNone': 'none yet',
-  'agentPage.runHistory': 'Run history',
-  'agentPage.noRuns': 'No runs yet.',
   'agentPage.telegramIntro':
     "Create a bot via @BotFather (send /newbot, set name + photo), copy the token and paste it here. The agent gets its own Telegram identity — receiving questions, commands, and reports.",
   'agentPage.telegramTokenLabel': 'Bot token (from BotFather)',
@@ -1988,7 +1755,6 @@ const en = {
   'agentKnowledge.skillsSave': 'Save skills',
 
   // Captures.tsx (h2 "Captures" stays EN — only the parenthetical + body translate)
-  'captures.titleSuffix': ' (per-step telemetry)',
   'captures.hint': 'Each row = one step run (attempt): engine, tokens, cost (exact/estimated), duration. Source: the captures table v26 — read-only.',
   'captures.taskFilterChip': 'Task: {task}… ✕',
   'captures.agentFilterPlaceholder': 'filter by agent id',
@@ -2006,76 +1772,37 @@ const en = {
   'captures.errorPrefix': 'error: {message}',
 
   // Advanced views: Overview/Timeline/Cost/MemoryAuto/Guardrail/Config/Trigger
-  'overview.loading': 'Loading…',
-  'overview.errorPrefix': 'Error: {message}',
-  'overview.empty': 'No virtual staffers yet.',
-  'overview.title': 'Team overview',
-  'overview.colCode': 'Id',
-  'overview.colName': 'Name',
-  'overview.colEnabled': 'Enabled',
-  'overview.colLastRun': 'Last run',
-  'overview.neverRun': 'never run',
 
   'timeline.loading': 'Loading…',
   'timeline.errorPrefix': 'Error: {message}',
   'timeline.title': 'Activity timeline',
 
   'cost.loading': 'Loading…',
-  'cost.errorPrefix': 'Error: {message}',
   'cost.title': 'Cost vs budget',
   'cost.thisMonthPrefix': 'This month: ',
   'cost.capSuffix': ' out of cap ',
   'cost.empty': 'No cost history yet.',
 
-  'memoryAuto.title': 'Memory & automation',
   'memoryAuto.rememberedTitle': 'Remembered events',
   'memoryAuto.loading': 'Loading…',
   'memoryAuto.errorPrefix': 'Error: {message}',
   'memoryAuto.proposalsTitle': 'Pending proposals',
 
-  'guardrail.loading': 'Loading…',
-  'guardrail.errorPrefix': 'Error: {message}',
   'guardrail.title': 'Guardrail & log',
   'guardrail.totalDecisions': '{n} decisions logged through the guardrail.',
   'guardrail.recentTitle': 'Recent events',
 
   'config.loading': 'Loading…',
   'config.errorPrefix': 'Error: {message}',
-  'config.title': 'Config — {agent}',
-  'config.readOnlySuffix': ' (read-only)',
-  'config.saved': 'Saved.',
-  'config.saveFailed': 'save failed',
-  'config.saving': 'Saving…',
-  'config.save': 'Save',
 
   'trigger.title': 'Run report manually',
   'trigger.kindLabel': 'Kind:',
   'trigger.audienceLabel': 'Audience:',
   'trigger.dryRun': 'dry-run',
-  'trigger.running': 'Running…',
   'trigger.run': 'Run',
-  'trigger.runFailed': 'run failed',
-  'trigger.errorPrefix': 'Error: {message}',
-  'trigger.runTitle': 'Run {runId} {status}',
-  'trigger.statusDisconnected': '(disconnected)',
-  'trigger.statusDone': '(done)',
-  'trigger.statusRunning': '(running…)',
   'trigger.streamDisconnected': 'Watch stream disconnected — the run may still continue in the background.',
-  'trigger.eventDone': 'finished',
 
   // OfficeRoom.tsx (advanced office log)
-  'officeRoom.loadFailed': 'load failed',
-  'officeRoom.title': 'Office',
-  'officeRoom.hint':
-    "The whole team's activity timeline: assignments, work, progress, handoffs, and key milestones.",
-  'officeRoom.errorPrefix': 'Error: {message}',
-  'officeRoom.roomsAriaLabel': 'Room list',
-  'officeRoom.overview': 'Overview',
-  'officeRoom.roomLabel': 'Task #{room}',
-  'officeRoom.disconnected': 'Stream disconnected — try reloading the page.',
-  'officeRoom.connected': 'Watching live',
-  'officeRoom.connecting': 'Connecting…',
-  'officeRoom.empty': 'No activity in this room yet.',
 
   // ConfirmDialog.tsx
   'confirmDialog.ariaLabel': 'Approve task {id}',
@@ -2142,7 +1869,6 @@ const en = {
   'scheduleBuilder.dayThu': 'Th',
   'scheduleBuilder.dayFri': 'Fr',
   'scheduleBuilder.daySat': 'Sa',
-  'usePendingApprovals.loadFailed': 'error',
 
   // coordinator-desk.tsx
   'coordinatorDesk.label': 'coordinator',
@@ -2186,17 +1912,41 @@ const en = {
   'officeLazy.loadFailedHint': 'or view',
   'officeLazy.reload': 'Reload page',
   'officeLazy.loadingTitle': 'Loading the 3D office…',
-  'officeLazy.loadingHint': 'If this takes too long, check your network or reload the page.',
   'officeLazy.tableViewLink': 'the office log in table form',
   'charts.loading': 'Loading the chart…',
   'charts.loadFailed': 'Could not load the chart — the figures below are unaffected.',
-  'advancedAgentView.backToSettings': '← Settings',
   'login.username': 'Username',
   'login.failed': 'login failed',
   'costChart.datasetCost': 'Cost (USD)',
   'costChart.datasetBudgetCap': 'Budget cap',
   'costChart.ariaLabel': 'Monthly cost vs. budget cap',
   'verdictChart.ariaLabel': 'Guardrail review outcome distribution',
+  // System hub (v88 P6).
+  'systemHub.title': 'System',
+  'systemHub.tabsLabel': 'System sections',
+  'systemHub.tabSettings': 'Settings',
+  'systemHub.tabConnections': 'Connections',
+  'systemHub.tabCompany': 'Company',
+  'systemHub.tabInsights': 'Insights',
+  'systemHub.tabAudit': 'Audit log',
+  'systemInsights.budgetTitle': 'Fleet spend',
+  'systemInsights.budgetHint': 'Open an agent to see its own cost breakdown.',
+  'systemInsights.colAgent': 'Agent',
+  'systemInsights.colSpent': 'Spent',
+  'systemInsights.colCap': 'Cap',
+  'systemInsights.colRatio': 'Ratio',
+  'systemInsights.total': 'Total: {spent} / {cap} ({pct}%)',
+  'systemInsights.loadError': 'Could not load spend data.',
+  'systemInsights.empty': 'No spend data yet.',
+  'systemCompany.identityTitle': 'Company identity',
+  'systemCompany.docsTitle': 'Company documents',
+  'systemCompany.configHint': 'Edit an agent\'s own config files from the 🔬 Advanced tab on its page.',
+  'systemCompany.nameLabel': 'Company name',
+  'systemCompany.coordinatorLabel': 'Coordinator',
+  'systemCompany.capLabel': 'Spend cap (USD/month)',
+  'systemCompany.save': 'Save',
+  'systemCompany.saving': 'Saving…',
+  'systemCompany.saved': 'Saved',
 } as const satisfies Record<UiKey, string>
 
 export const DICT = { vi, en } as const
