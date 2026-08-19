@@ -166,6 +166,42 @@ def test_list_survives_a_broken_profile(monkeypatch, settings_factory):
     assert body["broken"]["trust_mode"] == "guarded"
 
 
+def test_syntactically_broken_yaml_degrades_like_any_other_bad_profile(
+    monkeypatch, settings_factory
+):
+    # A profile.yaml that will not even parse raises yaml.YAMLError, not RuntimeError.
+    # Both routes must degrade it the same way a semantically bad profile degrades —
+    # a file the user mistyped is the likeliest broken profile there is, and a 500
+    # here takes down the whole roster plus the detail pane.
+    import yaml
+
+    s = settings_factory()
+    from my_crew.runtime.registry import RegistryEntry
+
+    entries = (RegistryEntry("good", True), RegistryEntry("unparsable", True))
+    monkeypatch.setattr(agent_views, "load_registry", lambda: entries)
+    monkeypatch.setattr(agent_views, "read_last_run_event", lambda i: None)
+
+    def _load(i, **k):
+        if i == "unparsable":
+            raise yaml.parser.ParserError(None, None, "expected ',' or ']'", None)
+        return _profile(s, name="Good")
+
+    monkeypatch.setattr(agent_views, "load_profile", _load)
+    client = _client()
+
+    r = client.get("/api/agents")
+    assert r.status_code == 200
+    body = {a["id"]: a for a in r.json()}
+    assert body["unparsable"]["name"] == "unparsable"
+    assert body["unparsable"]["enabled"] is False
+    assert body["unparsable"]["trust_mode"] == "guarded"
+
+    r = client.get("/api/agents/unparsable/status")
+    assert r.status_code == 200
+    assert r.json()["profile_error"]
+
+
 def test_list_no_api_key_needed(monkeypatch, settings_factory):
     # graph is never built, so a no-key settings still serves the list.
     s = settings_factory(api_key=None)

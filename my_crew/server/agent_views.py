@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import logging
 
+import yaml
+
 from my_crew.actions.approval_store import ApprovalStore
 from my_crew.llm.budget_tracker import BudgetTracker
 from my_crew.profile.loader import load_profile
@@ -98,7 +100,7 @@ def list_agents() -> list[dict]:
             # v30: EFFECTIVE trust mode (yaml override merged over env/default) — the FE
             # must never re-derive this from raw yaml.
             trust_mode = loaded.settings.trust_mode
-        except (FileNotFoundError, RuntimeError) as exc:
+        except (FileNotFoundError, RuntimeError, yaml.YAMLError) as exc:
             # The `name` is rendered as-is in the roster, so it must stay a NAME. The
             # exception text carries the absolute profile path, which a first-time user
             # sees as a wall of filesystem detail where a staff member should be; the
@@ -130,7 +132,7 @@ def agent_status(agent_id: str) -> dict:
         raise UnknownAgentError(agent_id)
     try:
         loaded = load_profile(agent_id, data_dir=agent_data_dir(agent_id))
-    except (FileNotFoundError, RuntimeError) as exc:
+    except (FileNotFoundError, RuntimeError, yaml.YAMLError) as exc:
         # Registered but unloadable is neither "unknown" (404) nor a server fault (500):
         # it is a state the roster can render, and the list view already degrades the
         # same way. A 500 here made a fresh install's detail pane fail outright.
