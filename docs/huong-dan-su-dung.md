@@ -503,6 +503,34 @@ hồ sơ/cấu hình/chạy tay từng nhân sự ở **Đội ngũ → chọn n
 
 Tắt lại để về giao diện gọn. Chế độ này chỉ đổi *độ chi tiết hiển thị*, không đổi quyền hạn.
 
+## B.8a. Đổi mật khẩu đăng nhập
+
+Vào **Hệ thống → Cài đặt → "Đổi mật khẩu đăng nhập"**.
+
+1. Nhập mật khẩu hiện tại.
+2. Nhập mật khẩu mới (tối thiểu 6 ký tự, phải khác mật khẩu cũ).
+3. Nhập lại để xác nhận, rồi bấm **Đổi mật khẩu**.
+
+**Mọi phiên đăng nhập đều bị đá ra, kể cả phiên của bạn.** Đổi mật khẩu đồng thời xoay
+luôn khoá ký phiên của server, nên mọi trình duyệt đang đăng nhập — của bạn và của bất kỳ
+ai khác — đều phải đăng nhập lại. Đây là chủ ý: nếu bạn đổi mật khẩu vì nghi có người khác
+biết nó, mà phiên của họ vẫn sống thì việc đổi chẳng bảo vệ được gì.
+
+Sau khi đổi xong, màn hình đưa ra nút **Về màn đăng nhập**.
+
+Ô này chỉ hiện khi đã bật đăng nhập. Bản cài chưa đặt mật khẩu thì không có gì để đổi nên
+ô bị ẩn.
+
+## B.8b. Hủy bản nháp trên bảng Công việc
+
+Vào **Công việc → Bảng**, cột **Chờ xác nhận**.
+
+Bản nháp là kế hoạch bạn đã xem trước nhưng chưa bấm xác nhận. Nó nằm cùng bảng với việc
+thật và nhìn y hệt, nên thẻ có thêm nút **Hủy nháp** để dọn đi. Trước đây chỉ màn giao việc
+đang mở mới hủy được nó — bỏ dở màn đó là thẻ nằm lại không có cách nào xoá.
+
+Thẻ ở các cột khác không có nút này: chúng là việc thật, không phải nháp.
+
 ## B.9. Chế độ demo (công ty mẫu, sẵn sàng cho khách xem)
 
 Cần cho khách/đồng nghiệp xem sản phẩm mà không lộ dữ liệu thật? Bật **demo mode**:

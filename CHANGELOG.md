@@ -31,6 +31,25 @@ cold-start fixes an audit of a first-run install surfaced.
 - **Event provenance and read cursors**: office events carry `source_room_id`, and
   the workroom list joins each room's `last_seq` so a client can compute unread
   without a second round trip.
+- **Operator escalation over email and webhook**: escalation tries Telegram, then SMTP
+  (`OPERATOR_EMAIL`), then a webhook (`OPERATOR_WEBHOOK_URL`), and stops at the first
+  channel that delivers. An agent with no channel configured is skipped rather than
+  treated as a failure, so the caller keeps walking its list of agents instead of
+  giving up on the first silent one. Measured on a real fleet before this change,
+  7 of 11 agents could not be reached at all.
+- **Web password change** from System → Settings. Changing the password also rotates
+  `WEB_SESSION_SECRET`, which signs out every session including the one making the
+  change — the point of changing a password you think someone else knows. Minimum
+  6 characters, and it must differ from the current one.
+- **Discarding a draft from the task board**: a previewed-but-unconfirmed plan can now
+  be dismissed from its card in the planning column. Previously the only way to cancel
+  one was the assign screen that created it, so a draft abandoned there was stranded.
+- **Cold-start smoke script**: `scripts/cold-start-smoke.sh` builds the wheel, installs
+  it into a clean environment, seeds an empty home, and serves it; `--browser` adds a
+  real-browser pass over the login screen. It replaces the partial install check in CI.
+- **Fleet-wide approvals ordering**: `GET /api/approvals/pending` returns oldest first
+  across all agents. It previously followed the registry walk, which sorted by agent
+  name — meaningless for a view whose only question is what has been waiting longest.
 
 ### Changed
 - Advanced mode ("Chế độ nâng cao") no longer unlocks separate technical routes —

@@ -501,28 +501,34 @@ The header (next to the theme toggle) shows a **VN / EN** chip. Click to switch 
 
 Your choice is saved in browser storage, so the dashboard remembers your preference next time you visit.
 
----
+### Change Web Password
 
-## Demo Mode (Safe Preview for Visitors)
+**System → Settings → "Change login password"**.
 
-To show the product to stakeholders without exposing real data:
+1. Enter the current password.
+2. Enter the new one (at least 6 characters, and different from the current one).
+3. Confirm it, then press **Change password**.
 
-```bash
-scripts/demo-mode.sh on
-# → generates demo company + 6 template agents + sample running task
-# → http://127.0.0.1:8765 still works; can assign real tasks with LLM key
+**Every session is signed out, including yours.** Changing the password also rotates the
+server's session secret, so every browser that was logged in — yours and anyone else's —
+has to sign in again. That is deliberate: if you are changing the password because someone
+else may know it, a change that left their session alive would not protect anything.
 
-scripts/demo-mode.sh off
-# → restores your real data (byte-identical, verified)
-```
+The screen then offers **Back to sign in**.
 
-Real data is moved to `.demo-backup/` while demo is active. Demo agents have `dry_run: true` so they don't write externally.
+This only appears when login is enabled. On an install with no password set, there is
+nothing to change and the box stays hidden.
 
-> Tip: Turn off demo before committing code (registry.yaml changes during demo).
+### Discard a Draft Task
 
----
+**Work → Board**, in the **Awaiting confirmation** column.
 
-## Common Tasks
+A draft is a plan you previewed but never confirmed. It sits on the board looking like
+real work, so the card carries a **Discard draft** button to clear it. Previously the only
+way to cancel one was the assign screen that created it — walk away from that screen and
+the card was stranded.
+
+Cards in any other column do not show the button: they are real work, not drafts.
 
 ### Disable an Agent Temporarily
 

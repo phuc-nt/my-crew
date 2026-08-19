@@ -27,8 +27,9 @@ Fill these **in the browser Setup Wizard** (never via terminal). Required:
 Optional:
 
 - **Tavily or Brave** (web search): only if using the research agent.
-- **SMTP**: only if exporting reports to email (`.xlsx` attachments).
+- **SMTP**: only if exporting reports to email (`.xlsx` attachments) or operator escalation via email.
 - **Telegram**: only if enabling mobile command/alerts per agent.
+- **Operator channels**: `OPERATOR_EMAIL` (SMTP recipient) and `OPERATOR_WEBHOOK_URL` (endpoint that receives a POST). Escalation tries Telegram, then email, then webhook, and stops at the first that delivers. Set at least one of these if the operator does not use Telegram — otherwise escalation has no way to reach anyone.
 
 ### 3 MCP Servers
 

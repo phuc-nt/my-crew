@@ -546,6 +546,11 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 | **Multi-agent** | Single agent hardcoded | Multiple agents via registry.yaml (enabled/disabled) |
 | **Default profile** | N/A | `profiles/default/` = v1 replica (empty MD, yaml from .env.example) |
 | **Thread safety** | `thread_id` = kind + audience | `thread_id` = agent_id + kind + audience (checkpoint isolation) |
+| **[v90] Operator channels** | `my_crew/runtime/operator_channels.py::send_via_channels()` — multi-route escalation (Telegram → SMTP → Webhook) từng bước. Config `OPERATOR_EMAIL`/`OPERATOR_WEBHOOK_URL` qua ENV (KHÔNG `company.yaml` vì save_company dựng lại từ dict cứng). Trả 3 trạng thái: True (gửi được), False (lỗi), None (không có kênh, tiếp tục). |
+| **[v90] Change password endpoint** | `my_crew/server/routes_auth_password.py::POST /api/auth/change-password` — xoay `WEB_SESSION_SECRET` sau đổi mật khẩu nên MỌI phiên bị đá ra (an toàn). UI: `web/src/features/system/change-password-box.tsx` (tab Cài đặt Hub Hệ thống). Tối thiểu 6 ký tự, khác mật khẩu cũ. |
+| **[v90] Cancel draft on board** | `web/src/features/work/board/task-card.tsx` — nút "Hủy nháp" trên thẻ ở cột `planning`, gọi `api.assignCancel(task_id)` rồi invalidate `queryKeys.tasks.board()`. Không xoá lạc quan: bảng vẽ lại từ backend nên nháp vừa được xác nhận thì thẻ vẫn còn. |
+| **[v90] Cold-start smoke script** | `scripts/cold-start-smoke.sh [--browser]` — dựng wheel, soi `_shipped/` + bundle FE trong zip, cài vào môi trường sạch, seed home rỗng, `serve` rồi kiểm `/health` + thẻ script trên trang chủ. `--browser` thêm màn đăng nhập thật qua Playwright. Thay job cài-một-phần trong CI. |
+| **[v90] Approvals ordering** | `GET /api/approvals/pending` — sort `(created_at, agent_id, id)` nên cũ-nhất-trước toàn fleet; trước đây theo vòng duyệt registry tức xếp theo tên agent. `agent_id, id` là tie-break cho các dòng trùng mốc thời gian. |
 
 ## Testing
 
@@ -621,8 +626,7 @@ gần nhất: `agent-desk` 900 kB (94% `three`+r3f, chỉ sau `/office`) · `cha
 **Cổng.** vitest 344/344 (47 file) · playwright 28/28 · `npx tsc -b` sạch · BE 3538 passed,
 1 skipped.
 
-**Còn nợ.** Đổi mật khẩu khi auth bật chưa làm được — `api/client.ts` không có endpoint, cần BE
-trước.
+**Đổi mật khẩu web (v90).** Endpoint `POST /api/auth/change-password` (`my_crew/server/routes_auth_password.py`) ghi phía BE. Giao diện ở tab Cài đặt Hub Hệ thống (`web/src/features/system/change-password-box.tsx`). Thiết kế: đổi mật khẩu xoay luôn `WEB_SESSION_SECRET` nên **mọi phiên đăng nhập bị đá ra** (kể cả phiên hiện tại) — đây là chủ ý để cưỡng chế login lại an toàn. UI nút "Về màn đăng nhập". Tối thiểu 6 ký tự, phải khác mật khẩu cũ.
 
 ## Deferred
 

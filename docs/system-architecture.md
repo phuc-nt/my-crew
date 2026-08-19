@@ -259,6 +259,36 @@ Lớp B = phụ thuộc `safety.trust_mode` per-agent:
 **v46 — Actor attribution**: mỗi `AuditEntry` ghi field `actor` (agent `profile_id` hoặc `""` cho lệnh CLI) — 1 choke point `_record` stamp actor trên MỌI outcome branch (allow/deny/dry/dedup). `approvals.actor` (sqlite ALTER migrate-free) cho phép query filter "ai duyệt gì".
 **v50 — UI surface**: AuditTable column "Ai thực hiện" render `actor` (or "—" nếu rỗng); CompanyActivity tag "[bởi {actor}]" khi actor≠log-owner (điều phối).
 
+### 3.6b Operator channels (v90)
+
+**Seam báo vận hành đa đường**: `my_crew/runtime/operator_channels.py::send_via_channels()`
+thử lần lượt Telegram → SMTP → Webhook, dừng ở kênh đầu tiên gửi được. **Vì sao**: escalation
+trước đây chỉ biết Telegram; đo trên fleet thật thấy **7/11 agent không có kênh nào**, tức
+người vận hành không dùng Telegram thì không có đường báo nào cả.
+
+**Hợp đồng 3 trạng thái** — điểm mấu chốt của seam này:
+
+| Trả về | Nghĩa | Caller làm gì |
+|---|---|---|
+| `True` | một kênh đã gửi được | dừng |
+| `False` | có kênh nhưng gửi hỏng | dừng, coi như thất bại |
+| `None` | agent này **không cấu hình kênh nào** | **đi tiếp** sang agent kế trong danh sách |
+
+`None` tách khỏi `False` vì caller (`operator_notify._try_send`) duyệt một danh sách agent
+theo thứ tự điều phối → dự phòng → admin. Gặp agent câm phải đi tiếp; gộp chung với lỗi gửi
+sẽ dừng cả vòng duyệt ngay ở agent đầu tiên không có kênh.
+
+**Cấu hình bằng biến môi trường, KHÔNG phải `company.yaml`**: `OPERATOR_EMAIL` (người nhận
+SMTP) và `OPERATOR_WEBHOOK_URL` (endpoint nhận POST). Lý do không dùng yaml: `save_company`
+dựng lại file từ một dict cứng, nên mọi key viết tay sẽ bị nuốt ở lần lưu kế tiếp.
+
+`send_plain_email` đặt trong `my_crew/actions/email_write.py` chứ không tách module mới —
+guard `test_smtplib_imported_only_in_email_write` giữ `smtplib` chỉ có một nhà.
+
+Consumer đi qua seam này: `operator_notify._try_send`, `team_tick_collaborators._escalate_direct`,
+`ops_alert_runner.run_ops_alerts`. Trạng thái kênh đọc được ở mục `operator_push` của
+`integration_health` (hiển thị trong hub Đội ngũ).
+
 ### 3.7 Domain packs (`domain-packs/`)
 Kiến trúc pluggable: `pm-pack` (mặc định), `hr-pack`, `office-pack`, `admin-pack`,
 `personal-pack` (v57 — thư ký riêng: catalog M12 set_reminder/send_email/create_event…,

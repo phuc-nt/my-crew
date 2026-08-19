@@ -29,8 +29,9 @@
 Tùy chọn:
 
 - **Tavily hoặc Brave** (web search): chỉ nếu dùng vai trò Nghiên cứu.
-- **SMTP**: chỉ nếu xuất báo cáo qua email.
+- **SMTP**: chỉ nếu xuất báo cáo qua email hoặc escalation cho vận hành.
 - **Telegram**: chỉ nếu bật mobile command/alert cho agent.
+- **Kênh báo vận hành**: `OPERATOR_EMAIL` (địa chỉ nhận qua SMTP) và `OPERATOR_WEBHOOK_URL` (endpoint nhận POST). Escalation thử Telegram → email → webhook, dừng ở kênh đầu tiên gửi được. Nếu người vận hành không dùng Telegram thì phải đặt ít nhất một trong hai, không thì escalation không có đường báo tới ai.
 
 ### 3 MCP Server
 
