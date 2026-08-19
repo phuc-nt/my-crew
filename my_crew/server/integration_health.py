@@ -94,6 +94,7 @@ def _run_checks() -> list[dict]:
     checks.append(_docker_check())  # v47: proactive deep_agent-sandbox daemon probe
     checks.append(_websearch_flag_check())
     checks.append(_smtp_check())
+    checks.append(_operator_push_check())
 
     gws = shutil.which("gws")
     checks.append(
@@ -150,6 +151,38 @@ def _smtp_check() -> dict:
     return _check(
         "smtp", "Email (SMTP)", ok, detail,
         "Điền SMTP_HOST/PORT/USER/PASSWORD ở trang Kết nối (thẻ Email) để bật gửi email",
+    )
+
+
+def _operator_push_check() -> dict:
+    """Can the fleet reach a human at all when something goes wrong?
+
+    Escalations and health alerts push over Telegram, email, or a webhook. With none of
+    them configured they still land in the office room — but a notice nobody is told
+    about is one the operator finds by chance, so this reports not-ok rather than
+    staying quiet about it. Env presence only; no value is read or shown.
+    """
+    from my_crew.runtime.operator_channels import (
+        OPERATOR_EMAIL_ENV,
+        OPERATOR_WEBHOOK_URL_ENV,
+    )
+
+    names: list[str] = []
+    # Telegram lives per-agent (a profile binding), not in env, so a fleet-wide probe
+    # cannot see it here; the agent-level view in the roster covers that side.
+    if os.getenv("SMTP_HOST") and os.getenv(OPERATOR_EMAIL_ENV):
+        names.append("email")
+    if os.getenv(OPERATOR_WEBHOOK_URL_ENV):
+        names.append("webhook")
+    ok = bool(names)
+    detail = (
+        "kênh báo ngoài Telegram: " + ", ".join(names) if ok
+        else "chưa có kênh báo nào ngoài Telegram (agent không gắn Telegram sẽ không đẩy được)"
+    )
+    return _check(
+        "operator_push", "Kênh báo vận hành", ok, detail,
+        f"Đặt {OPERATOR_WEBHOOK_URL_ENV} (Discord/Slack/ntfy) hoặc SMTP_HOST + "
+        f"{OPERATOR_EMAIL_ENV} trong .env để nhận cảnh báo khi không dùng Telegram",
     )
 
 

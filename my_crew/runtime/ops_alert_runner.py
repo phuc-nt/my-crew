@@ -37,15 +37,14 @@ def run_ops_alerts(loaded, settings, *, now: datetime | None = None) -> dict:
     alert storm when the service was down overnight)."""
     from pathlib import Path
 
-    from my_crew.actions.action_gateway import ActionGateway
     from my_crew.actions.dedup_store import DedupStore
-    from my_crew.actions.telegram_write import send_telegram_message
     from my_crew.runtime.agent_state_reader import team_alerts
+    from my_crew.runtime.operator_channels import channels_for, send_via_channels
 
-    telegram = loaded.config.telegram
-    operator = getattr(telegram, "ops_operator_id", "") if telegram else ""
-    if not telegram or not operator:
-        # No CEO DM configured on this agent — nothing to push to. Not an error.
+    # Any configured push channel will do — Telegram, email, or webhook. Checking for
+    # a Telegram binding specifically used to short-circuit the whole tick, which meant
+    # an operator reachable only by email was told nothing at all.
+    if not channels_for(loaded):
         return {"status": "no_operator", "checked": 0, "cost_usd": None, "delivered": False}
 
     now = now or datetime.now(UTC)
@@ -62,10 +61,6 @@ def run_ops_alerts(loaded, settings, *, now: datetime | None = None) -> dict:
     # same (agent, kind) is pushed at most once per local day. Claimed BEFORE sending so a
     # crash mid-send doesn't re-notify — acceptable: a missed push resurfaces tomorrow.
     dedup = DedupStore(Path(settings.data_dir) / "dedup.db")
-    gateway = ActionGateway(
-        settings, external_channels=loaded.config.slack_external_channels,
-        actor=getattr(loaded, "profile_id", ""),  # v46
-    )
     try:
         fresh = [a for a in alerts
                  if dedup.claim(f"ops-alert:{a['agent_id']}:{a['kind']}:{local_date}")]
@@ -75,20 +70,18 @@ def run_ops_alerts(loaded, settings, *, now: datetime | None = None) -> dict:
         # Distinct push key so the combined send is never gateway-deduped away (the
         # per-alert claims above already guaranteed freshness).
         push_key = "|".join(sorted(f"{a['agent_id']}:{a['kind']}" for a in fresh))
-        result = send_telegram_message(
+        delivered = bool(send_via_channels(
             _format(fresh),
-            gateway=gateway,
-            telegram=telegram,
-            chat_id=operator,
+            loaded=loaded,
+            settings=settings,
             dedup_hint=f"ops-alerts-push:{local_date}:{push_key}",
             rationale="CEO-observability: agent health alert",
-        )
-        delivered = result.status in ("executed", "pending_approval")
-        return {"status": "delivered" if delivered else result.status,
+            subject="my-crew: cảnh báo sức khoẻ nhân sự",
+        ))
+        return {"status": "delivered" if delivered else "not_delivered",
                 "checked": len(alerts), "cost_usd": None, "delivered": delivered}
     finally:
         dedup.close()
-        gateway.close()
 
 
 def _format(alerts: list[dict]) -> str:

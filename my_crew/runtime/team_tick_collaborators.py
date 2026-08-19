@@ -449,40 +449,25 @@ def make_escalate(loaded: Any, settings: Any):
     def _escalate_direct(
         task: TeamTask, step: TeamStep | None, event_kind: str, message: str,
     ) -> bool:
-        """Low-latency send straight to the assigning chat. Returns whether the CEO can
+        """Low-latency send straight to the operator. Returns whether the CEO can
         be assumed to have this message already — the mirror reads that to decide
         whether the digest would be a duplicate. False on every degrade path (no
-        binding, gateway/network error), which keeps the mirror as the fallback."""
+        channel configured, gateway/network error), which keeps the mirror as the
+        fallback. Channel choice lives in `operator_notify`: Telegram when bound,
+        otherwise email or webhook, so an operator who does not use Telegram still
+        gets pushed instead of having to go look in the web app."""
         try:
-            from my_crew.actions.action_gateway import ActionGateway
-            from my_crew.actions.telegram_write import send_telegram_message
+            from my_crew.runtime.operator_channels import send_via_channels
 
-            telegram = getattr(loaded.config, "telegram", None)
-            operator = getattr(telegram, "ops_operator_id", "") if telegram else ""
-            if not telegram or not operator:
-                logger.info(
-                    "team-tick: escalate(%s) for task %s has no coordinator Telegram "
-                    "binding — delivered via the room milestone mirror only",
-                    event_kind, task.id,
-                )
-                return False
-            gateway = ActionGateway(
-                settings, external_channels=loaded.config.slack_external_channels,
-                actor=getattr(loaded, "profile_id", ""),  # v46
-            )
-            try:
-                step_id = step.step_id if step is not None else ""
-                result = send_telegram_message(
-                    message,
-                    gateway=gateway,
-                    telegram=telegram,
-                    chat_id=operator,
-                    dedup_hint=f"team-tick:{task.id}:{step_id}:{event_kind}",
-                    rationale=f"team task escalation: {event_kind}",
-                )
-                return result.status in ("executed", "pending_approval")
-            finally:
-                gateway.close()
+            step_id = step.step_id if step is not None else ""
+            return bool(send_via_channels(
+                message,
+                loaded=loaded,
+                settings=settings,
+                dedup_hint=f"team-tick:{task.id}:{step_id}:{event_kind}",
+                rationale=f"team task escalation: {event_kind}",
+                subject=f"my-crew: {event_kind} — {task.title}",
+            ))
         except Exception:  # noqa: BLE001 — escalation must never crash the ticker
             logger.exception(
                 "team-tick: escalate(%s) failed for task %s (continuing — task state "

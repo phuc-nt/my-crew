@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 Handler = Callable[[dict[str, Any]], str]
 
-_SMTP_PASSWORD_ENV = "SMTP_PASSWORD"
+SMTP_PASSWORD_ENV = "SMTP_PASSWORD"
 _XLSX_SUBTYPE = "vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
@@ -71,7 +71,7 @@ def make_email_handler(smtp: SmtpConfig, artifact_root: Path | None = None) -> H
         to = _recipients(action.get("to"))
         if not to:
             raise ValueError("email_send has no recipient at send time.")
-        password = os.environ.get(_SMTP_PASSWORD_ENV, "")
+        password = os.environ.get(SMTP_PASSWORD_ENV, "")
 
         msg = EmailMessage()
         msg["From"] = smtp.from_addr
@@ -95,6 +95,34 @@ def make_email_handler(smtp: SmtpConfig, artifact_root: Path | None = None) -> H
         return f"emailed {len(to)} recipient(s)"
 
     return _handler
+
+
+def send_plain_email(
+    smtp: SmtpConfig, *, to: list[str], subject: str, body: str, timeout: float = 30.0
+) -> None:
+    """Send one plain-text email directly, outside the gateway.
+
+    For INTERNAL notices to the fleet's own operator (escalations, health alerts) —
+    not for outbound company mail, which must stay a Lớp B action so it can be audited
+    and approved. An operator notice cannot queue for approval and still do its job:
+    the person who would approve it is the person waiting to be told.
+
+    Lives here, beside the gateway handler, so `smtplib` keeps exactly one home in the
+    codebase (`test_smtplib_imported_only_in_email_write` enforces that). The password
+    is read from env at send time, never held in a config object or written to a log.
+    """
+    msg = EmailMessage()
+    msg["From"] = smtp.from_addr
+    msg["To"] = ", ".join(to)
+    msg["Subject"] = subject
+    msg.set_content(body)
+    password = os.environ.get(SMTP_PASSWORD_ENV, "")
+    with smtplib.SMTP(smtp.smtp_host, smtp.smtp_port, timeout=timeout) as server:
+        if smtp.use_tls:
+            server.starttls()
+        if smtp.smtp_user and password:
+            server.login(smtp.smtp_user, password)
+        server.send_message(msg)
 
 
 def _dedup_key(to: str, report_date: str) -> str:
