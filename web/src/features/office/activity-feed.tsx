@@ -11,8 +11,8 @@ import { Button } from '../../components/ui/button'
 import { EmptyState } from '../../components/ui/empty-state'
 import { useLanguage } from '../../i18n/language-context'
 import type { OfficeMessage } from '../../types'
-import { agentColor } from '../../features/office/office-3d/desk-colors'
-import { externalActionTone, kindLabel, messageLine } from '../office-shared/office-message-line'
+import { agentColor } from './office-3d/desk-colors'
+import { externalActionTone, kindLabel, messageLine } from '../../views/office-shared/office-message-line'
 
 //: The feed shows the tail only — full history lives in the timeline tab.
 const FEED_TAIL = 40

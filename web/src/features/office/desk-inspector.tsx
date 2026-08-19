@@ -10,8 +10,8 @@ import { api } from '../../api/client'
 import { Button } from '../../components/ui/button'
 import { useLanguage } from '../../i18n/language-context'
 import { formatCost } from '../../labels'
-import type { AgentDeskState } from '../../features/office/office-3d/agent-office-state'
-import { deskTooltipText } from '../../features/office/office-3d/agent-desk'
+import type { AgentDeskState } from './office-3d/agent-office-state'
+import { deskTooltipText } from './office-3d/agent-desk'
 import type { AgentStatus, TeamTaskCostPayload } from '../../types'
 
 interface DeskInspectorProps {
@@ -52,6 +52,18 @@ export function DeskInspector({ agentId, desk, onClose }: DeskInspectorProps) {
         <p>
           {deskTooltipText(desk, t)}
           {desk.phase ? t('deskInspector.phase', { phase: desk.phase }) : ''}
+        </p>
+      )}
+      {/* What the desk is doing RIGHT NOW, from `step_activity` telemetry. Absent
+          whenever the desk is between tool calls, so the line disappearing IS the
+          signal that the step moved on — never a stale "calling…" left on screen. */}
+      {desk?.activity && (
+        <p className="desk-inspector-activity" data-testid="desk-activity">
+          {desk.activity.phase === 'writing' || !desk.activity.tool
+            ? t('deskInspector.activityWriting')
+            : t('deskInspector.activityTool', {
+                tool: desk.activity.tool, count: desk.activity.count,
+              })}
         </p>
       )}
       {status && (

@@ -118,6 +118,18 @@ export async function mockOfficeApi(
         total_output_tokens: 500,
       })
     if (pathname === '/api/schedule/upcoming') return json({ items: [] })
+    // The desk inspector opens on a click and immediately asks for that agent's status;
+    // without this the panel renders its error path and the spec would be measuring a
+    // failure state instead of the inspector.
+    const agentStatus = pathname.match(/^\/api\/agents\/([^/]+)\/status$/)
+    if (agentStatus) {
+      const id = decodeURIComponent(agentStatus[1])
+      return json({
+        id, name: id, enabled: true, last_run: null,
+        budget: { spent: 0, cap: 5, ratio: 0 },
+        pending_approvals: 0,
+      })
+    }
     if (pathname === '/api/health/coordinator')
       return json({ alive: true, last_beat_ago_s: 3, reason: '' })
     if (/^\/api\/office\/rooms\/[^/]+\/artifacts$/.test(pathname))

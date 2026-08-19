@@ -71,6 +71,7 @@ const vi = {
   // office-unified.tsx
   'office.title': 'Văn phòng',
   'office.companyUnset': 'Chưa đặt tên công ty — bấm để đặt trong Cài đặt',
+  'office.quickAssign': 'Giao việc nhanh',
   'office.collapse3d': 'Thu gọn không gian 3D',
   'office.expand3d': 'Hiện không gian 3D',
   'office.hintSummary': 'Hướng dẫn nhanh',
@@ -216,6 +217,8 @@ const vi = {
   'deskInspector.picTask': 'Việc đang PIC',
   'deskInspector.taskCost': 'Chi phí việc này',
   'deskInspector.stepsCount': '{n} bước',
+  'deskInspector.activityTool': 'Đang gọi {tool} (lần {count})',
+  'deskInspector.activityWriting': 'Đang soạn kết quả',
   'deskInspector.agentPage': 'Trang nhân sự',
   'deskInspector.taskCaptures': 'Captures việc này',
 
@@ -1097,6 +1100,7 @@ const en = {
   // office-unified.tsx
   'office.title': 'Office',
   'office.companyUnset': 'Company name not set — click to set it in Settings',
+  'office.quickAssign': 'Quick assign',
   'office.collapse3d': 'Collapse 3D view',
   'office.expand3d': 'Show 3D view',
   'office.hintSummary': 'Quick guide',
@@ -1240,6 +1244,8 @@ const en = {
   'deskInspector.picTask': 'PIC of task',
   'deskInspector.taskCost': 'Cost of this task',
   'deskInspector.stepsCount': '{n} steps',
+  'deskInspector.activityTool': 'Calling {tool} (call {count})',
+  'deskInspector.activityWriting': 'Writing the result',
   'deskInspector.agentPage': 'Agent page',
   'deskInspector.taskCaptures': 'Captures for this task',
 

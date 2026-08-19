@@ -7,7 +7,7 @@ import { api } from '../../api/client'
 import { DICT } from '../../i18n/dictionary'
 import { LanguageProvider } from '../../i18n/language-context'
 import { UiModeProvider, useUiMode } from '../../ui-mode-context'
-import { DeskInspector } from './desk-inspector'
+import { DeskInspector } from '../../features/office/desk-inspector'
 import { OfficeHealthStrip } from './office-health-strip'
 
 afterEach(() => {

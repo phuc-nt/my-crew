@@ -3,7 +3,7 @@ import { expect, test } from 'vitest'
 import { DELIVERED_STEP_TYPES, type OfficeMessage } from '../../types'
 import { shouldShowBubble } from '../../features/office/office-3d/agent-office-state'
 import { visibleDesks } from '../../features/office/office-3d/office-canvas'
-import { feedStatusClass, matchesFilter } from './activity-feed'
+import { feedStatusClass, matchesFilter } from '../../features/office/activity-feed'
 import { maxSeqOf } from './artifact-panel'
 
 function msg(kind: OfficeMessage['kind'], body: OfficeMessage['body']): OfficeMessage {

@@ -6,7 +6,7 @@
 // swap a hub's element and turn its legacy paths into redirects, one hub at a time.
 import { Navigate, Route, Routes } from 'react-router'
 import { AdvancedAgentView } from '../components/AdvancedAgentView'
-import { OfficeUnifiedLazy } from '../routes/office-unified-lazy'
+import { OfficePageLazy } from '../routes/office-page-lazy'
 import { AgentPage } from '../views/AgentPage'
 import { Captures } from '../views/Captures'
 import { ChatPage } from '../features/chat/chat-page'
@@ -40,7 +40,7 @@ export function AppRoutes() {
         {/* The chat hub owns an optional room segment: /chat is the overview thread. */}
         <Route path="chat" element={<ChatPage />} />
         <Route path="chat/:roomId" element={<ChatPage />} />
-        <Route path="office" element={<OfficeUnifiedLazy />} />
+        <Route path="office" element={<OfficePageLazy />} />
         <Route path="work" element={<Work />} />
         <Route path="team" element={<Team />} />
         {/* No system hub yet (phase 6) — settings is its closest existing surface. */}

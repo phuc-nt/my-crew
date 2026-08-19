@@ -69,7 +69,11 @@ export function OfficeCanvas({
   // and 15 still fit. Same-count fleets get a stable camera (no jumpiness).
   const radius = ringRadius(visible.length)
   const camY = radius * 1.55
-  const camZ = radius * 2.1
+  // 2.5 not 2.1: the ring spans ±radius in z, so the NEAR desks project lowest in frame.
+  // At the old distance they fell below the canvas bottom edge — the back row read fine
+  // while the front row was sliced in half, which looked like a clipping bug rather than
+  // a framing one. Pulling back fits the whole ring at the panel's real aspect ratio.
+  const camZ = radius * 2.5
   return (
     <div className="office-3d-canvas-wrap">
       <Canvas shadows camera={{ position: [0, camY, camZ], fov: 42 }}>

@@ -367,18 +367,21 @@ input, textarea, select { font-size: var(--fs-body); }
   /* The 3D panel SHARES the center column rather than claiming a fixed slice: it may
      shrink to 140px so the feed always keeps a usable window on a short laptop screen
      (at 577px viewport the old fixed 200px left the feed 2px tall — measured in UAT). */
-  /* The canvas panel and its wrapper BOTH take the 34vh basis: the wrapper's height comes
+  /* The canvas panel and its wrapper BOTH take a flex basis: the wrapper's height comes
      from its content otherwise (the r3f canvas reports its own small intrinsic size), which
-     collapsed the 3D office to ~150px regardless of the panel's max-height. `flex: 0 1`
-     lets it give the space back on a short screen; the feed (`flex: 2 1 0`) keeps the rest
-     and stays the larger panel. */
+     collapsed the 3D office to ~150px regardless of the panel's max-height.
+     The floor is the LARGER panel here (`flex: 2` vs the feed's `1`) — the office is now an
+     observation deck, not a working surface: giao việc moved to the chat hub, so the feed
+     is a passive ticker. At 900px tall the old 34vh basis clipped the back row of desks off
+     the bottom of the scene while the feed sat mostly empty. `min-height: 0` on both keeps
+     each panel scrolling/shrinking inside the column instead of growing the page. */
   .app-shell:has(.office-unified) .office-unified-main { display: flex; min-height: 0;
-    flex: 0 1 34vh; }
+    flex: 2 1 0; }
   .app-shell:has(.office-unified) .office-3d-canvas-wrap { height: auto; min-height: 140px;
     max-height: none; flex: 1 1 auto; }
-  .app-shell:has(.office-unified) .office-unified-feed { flex: 2 1 0; }
-  /* Below this the cockpit has no room for both panels — the feed wins (the 3D office is
-     ambience; the feed is the working surface). The CEO can also collapse 3D manually. */
+  .app-shell:has(.office-unified) .office-unified-feed { flex: 1 1 0; min-height: 0; }
+  /* Below this the scene has no room to read — the floor drops to a strip and the feed
+     takes what it leaves. The CEO can also collapse 3D manually. */
   @media (max-height: 700px) {
     .app-shell:has(.office-unified) .office-3d-canvas-wrap { max-height: 26vh; min-height: 120px; }
   }
@@ -1396,3 +1399,24 @@ input, textarea, select { font-size: var(--fs-body); }
   font-size: var(--fs-sm);
   color: var(--color-muted);
 }
+
+/* Quick-assign dialog on the office deck. A backdrop rather than the inspector's corner
+   card: giao việc is a modal act — it wants the whole screen's attention and returns the
+   CEO to exactly where they were. `overflow-y` on the panel because the composer grows
+   with its preview, which on a short laptop screen would otherwise run off the bottom. */
+.office-modal-backdrop {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--space-3); background: rgb(0 0 0 / 0.45);
+}
+.office-modal-panel {
+  width: min(680px, 100%); max-height: 90vh; overflow-y: auto;
+  background: var(--color-bg); box-shadow: 0 12px 40px rgb(0 0 0 / 0.28);
+}
+.office-modal-head {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: var(--space-2);
+}
+/* The live tool-call line in the desk inspector — quieter than the state line above it,
+   because it changes every few seconds and must not pull the eye away from the state. */
+.desk-inspector-activity { color: var(--color-muted); font-size: var(--fs-sm); }
