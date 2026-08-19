@@ -7,7 +7,7 @@ import { api } from '../../api/client'
 import { EmptyState } from '../../components/ui/empty-state'
 import { useLanguage } from '../../i18n/language-context'
 import { DELIVERED_STEP_TYPES, type OfficeMessage, type RoomArtifactsPayload } from '../../types'
-import { ArtifactViewer } from './artifact-viewer'
+import { ArtifactViewer } from '../shared/artifact-viewer'
 
 // Pure refetch signal (red-team m-refetch): highest seq among the given kinds — the
 // caller refetches when this grows. NOT shared state with workroom-list's own signal.

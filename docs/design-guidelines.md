@@ -205,9 +205,9 @@ duyệt giờ là một query cache mà `/work` sở hữu, `/office` giữ đú
 - **×N** khi ≥2 bước chạy song song.
 - **Bóng mờ trong suốt** khi bước deep_team đang chạy (event step mang cờ `deep_team`).
 
-## 6. Code Organization — Feature-Based Modules (v87)
+## 6. Code Organization — Feature-Based Modules (v88)
 
-**From `/views/` to `/features/`**: Post-redesign, component hierarchy changes from view-centric to hub-centric. Each hub gets a top-level folder:
+**From `/views/` to `/features/`**: component hierarchy is hub-centric, not view-centric. Each hub gets a top-level folder:
 
 ```
 web/src/features/
@@ -216,8 +216,13 @@ web/src/features/
 ├── work/          # Work hub: approvals queue, kanban board, task detail, outputs, schedule
 ├── team/          # Team hub: roster, agent detail with 8 tabs, hire panel
 ├── system/        # System hub: settings, connections, company, insights, audit
-└── palette/       # Shared: colors, tokens, theme utilities (not a hub)
+├── shared/        # Used by more than one hub: assign composer, artifact viewer,
+│                  #   transcript tab, coordinator health banner, office message line
+└── palette/       # Command palette (Cmd+K) — not a hub
 ```
+
+`web/src/views/` keeps only the pre-auth doors (Login, Setup) — they mount outside the
+hub shell, so they belong to no hub.
 
 **Lazy loading** — expensive subtrees load on demand:
 - Agent detail page: 8-tab component (charts, editor, telegram config) → lazy chunk
@@ -226,8 +231,8 @@ web/src/features/
 
 **Data layer** (`web/src/api/queries/`):
 - `query-keys.ts` — single factory for React Query cache key generation; gates SSE→invalidate bridge
-- Per-hub files: `use-chat-queries.ts`, `use-office-queries.ts`, `use-work-queries.ts`, `use-team-queries.ts`, `use-system-queries.ts`
-- Global: `use-agents-queries.ts`, `use-approvals-queries.ts`, `use-artifact-queries.ts`
+- Per-hub files: `use-office-queries.ts`, `use-work-queries.ts`, `use-team-queries.ts`, `use-system-queries.ts`, `use-agent-detail-queries.ts`
+- Global: `use-agents-queries.ts`, `use-approvals-queries.ts`, `use-artifact-queries.ts`, `use-clarify-queries.ts`, `use-auto-approved-query.ts`
 - SSE bridge: `sse-invalidation-bridge.ts` — listens to office events, invalidates affected cache keys
 
 **API client** (`web/src/api/client.ts`): Thin HTTP wrapper, no caching logic (TanStack Query owns that).

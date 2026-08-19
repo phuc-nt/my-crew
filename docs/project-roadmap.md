@@ -1,14 +1,32 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v85, đã ship tới 0.10.0). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-08-18.
+> Lộ trình + trạng thái (as-built v88, đã ship tới 0.11.0). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Cập nhật: 2026-08-19.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v79 (PyPI 0.10.0); arc v80–v85
-đã commit trên main, chưa release.** 3465 BE + 284 FE + 8 e2e test, ruff/tsc sạch. Mọi vòng
+**Production-usable, single-user autonomy-first. Đã ship tới v85 (PyPI 0.11.0); arc v86–v88
+đã commit trên main, chưa release.** 3542 BE + 344 FE + 33 e2e test, ruff/tsc sạch. Mọi vòng
 lớn E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out parallelism,
 UAT đối kháng, benchmark sprint-vs-team chấm mù, release gate delta-UAT sống 4/4 hành vi).
+
+**v86–v88 (arc vòng lặp gọn + dọn dẹp + redesign web — 08-18→08-19, chưa release):**
+**v86 thin tool loop** (`runtime_backends/thin_tool_loop.py`): vòng tool-calling tự chủ
+trên OpenAI SDK thay `langchain.agents.create_agent` ở tier react, cờ `loop_engine:
+thin|langchain` giữ A/B; bench live 3+3 interleaved — pass-rate hòa 3/3, prompt token rẻ
+3.5×, wall nhanh 1.6×, chỉ thin có cost exact; stress 5 brief khó × 2 run PASS 10/10 và
+tìm ra bug thật (OpenRouter 200 + body JSON hỏng xuyên thủng retry → thêm vào `_RETRYABLE`)
+· **v87 dọn sau release**: CI thoát Node 20 (6 action, 3 workflow), `httpx2` vào dev group
+hết warning suite, `chart.js` rời entry qua lazy chunk (777→504 kB), xóa tag arc-số cũ
+· **v88 redesign toàn bộ web FE**: ~20 route phẳng → **5 hub** (`/chat` HOME, `/office`,
+`/work`, `/team`, `/system`), mỗi màn cũ thành tab có URL riêng (`?tab=`); chat làm màn nhà
+theo lối app chat nhưng khai thác BE (giao việc + duyệt + artifact ngay trong luồng); tầng
+dữ liệu sang TanStack Query với `query-keys.ts` là factory key duy nhất cho cầu
+SSE→invalidate; code theo `features/<hub>/`; 21 redirect giữ mọi URL cũ sống; entry
+540→476 kB. Đóng arc: audit cold-start (một máy trắng) tìm ra nút "Bật lại" chỉ lật cổng
+registry mà bỏ cổng profile — template tạo agent `enabled: false` cố ý nên tuyển người đầu
+tiên không thể bật bằng UI; và chặn giao việc do rào escalation viết bằng từ vựng backend,
+không chỉ ra màn nào sửa được. Cả hai sửa, giữ nguyên rào an toàn.
 
 **v80–v85 (arc quan sát bước + toàn vẹn nguồn — 08-16→08-18, chưa release):** **v80 step
 observability**: transcript JSONL per-attempt trong jail agent (`runtime/step_recorder.py`),
@@ -133,6 +151,18 @@ v43 deep_team in-sandbox · v44 benchmark-hardening · v45 tier-0 routing (no-sh
 
 ## Việc nên làm tiếp (từ UAT + nợ kỹ thuật)
 
+**Định giá lại 2026-08-19 sau audit cold-start v88** (nguồn:
+`plans/260819-1010-mobile-chat-polish-arc-closeout/reports/phase-02-*`):
+1. **Rào escalation ép một kênh duy nhất** — giao việc đội bị chặn tới khi có đường
+   báo tin về CEO, mà đường duy nhất hiện nay là Telegram. User không dùng Telegram
+   thì cold-start vẫn cụt. Rào đúng, cần thêm đường thay thế (SMTP đã có sẵn, hoặc
+   chỉ cần báo trong app) chứ không nới rào.
+2. **Bảng việc hiện task ở hai cột cùng lúc** khi có preview draft bị bỏ dở — bản nháp
+   chưa xác nhận nằm mãi ở "Chờ xác nhận". Cần dọn nháp quá hạn hoặc phân biệt rõ nháp
+   với việc thật trên bảng.
+3. **Chưa có test cold-start tự động** — audit v88 chạy tay bằng `MY_CREW_HOME` sandbox.
+   Ba lỗi tìm được đều là "chỉ hiện trên máy trắng"; suite hiện tại không bao giờ thấy.
+
 **Định giá lại 2026-08-16 sau 0.10.0** (nguồn: journals v76–v79 mục "Mở / sang sau"):
 1. **Nợ trusted×external_write (ca sống)** — chưa dựng được: phễu đẩy đề gửi-email sang
    sprint, sprint hardcode `external_write=False`. **Luật thường trực**: chạy lại ca này
@@ -164,8 +194,8 @@ Bên dưới là danh sách tích lũy cũ hơn (ưu tiên giảm dần). Nguồ
 ### Go-live có kiểm soát (checklist + drill XONG v58 — chờ CEO quyết pilot)
 Xem `docs/go-live-checklist.md` (kiểm kê fleet thật + lộ trình 2 nấc + drill kill-switch
 đã chạy, bug env-bị-profile-đè đã vá). Còn lại là quyết định vận hành:
-- [ ] **Tắt DRY_RUN, chạy thật**: `trust_mode: guarded` (mọi Lớp B chờ duyệt tại action
-  rail v54) → nâng dần autonomous cho hành động ổn định. Đây là giá trị cốt lõi chưa
+- [ ] **Tắt DRY_RUN, chạy thật**: `trust_mode: guarded` (mọi Lớp B chờ duyệt ở hàng
+  duyệt — hub Công việc, badge trên nav) → nâng dần autonomous cho hành động ổn định. Đây là giá trị cốt lõi chưa
   thu hoạch — trust-ladder (v30) + rail (v54) build sẵn để phục vụ chính bước này.
   Trước khi bật: brainstorm checklist riêng (soi audit hằng ngày, budget cap, kill-switch drill).
 

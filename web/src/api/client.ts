@@ -51,7 +51,6 @@ import type {
   KnowledgePayload,
   MemoryPayload,
   SkillsPayload,
-  OfficeRoomsPayload,
   OpsChatAvailable,
   OutputsPayload,
   PendingApprovalsIndex,
@@ -189,9 +188,8 @@ export const api = {
   getAudit: (id: string) => request<AuditPayload>(`/api/audit/${id}`),
 
   // --- ops (S4): write surfaces — all go through the existing gateway-routed endpoints ---
-  getApprovals: (id: string) => request<ApprovalsPayload>(`/api/agents/${id}/approvals`),
-  /** Every agent's pending approvals in one call — replaces fanning out `getApprovals`
-   *  per agent, which was paid once per surface that shows the queue. */
+  /** Every agent's pending approvals in one call. The queue is shown on more than
+   *  one surface, so a per-agent fan-out was paid once per surface. */
   getPendingApprovals: () => request<PendingApprovalsIndex>('/api/approvals/pending'),
   approve: (id: string, approvalId: number) =>
     post<ApprovalsPayload>(`/api/agents/${id}/approvals/${approvalId}/approve`),
@@ -378,8 +376,6 @@ export const api = {
     ),
   // v7 M19: company-docs library + per-agent opt-in.
   listCompanyDocs: () => request<{ docs: CompanyDoc[] }>('/api/company-docs'),
-  getCompanyDoc: (slug: string) =>
-    request<CompanyDoc>(`/api/company-docs/${encodeURIComponent(slug)}`),
   createCompanyDoc: (title: string, body: string, updated: string) =>
     post<CompanyDoc>('/api/company-docs', { title, body, updated }),
   updateCompanyDoc: (slug: string, title: string, body: string, updated: string) =>
@@ -393,9 +389,6 @@ export const api = {
       `/api/agents/${encodeURIComponent(agentId)}/company-docs`,
       { slugs },
     ),
-  // v12 M29: office group-chat room — the room list; the timeline itself streams via
-  // raw EventSource (see hooks/use-office-stream.ts), not this request() helper.
-  getOfficeRooms: () => request<OfficeRoomsPayload>('/api/office/rooms'),
   // v31 P1: fleet-wide activity timeline (audit + runs + team-step captures, allowlisted).
   getCompanyActivity: (params?: {
     limit?: number

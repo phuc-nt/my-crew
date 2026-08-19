@@ -1,4 +1,4 @@
-# Hướng dẫn sử dụng — my-crew (v79 / 0.10.0)
+# Hướng dẫn sử dụng — my-crew (as-built v88; bản đã phát hành gần nhất 0.11.0)
 
 Trợ lý ảo tự động làm công việc quản lý dự án (PM / Scrum Master): đọc Jira · GitHub · Confluence ·
 Slack, phân tích, rồi *tự hành động* (viết báo cáo, cảnh báo rủi ro, theo dõi OKR) như một PM thật.
@@ -125,24 +125,27 @@ Không cần kỹ thuật. Mọi thứ qua **web** (trình duyệt) và **Telegr
 
 Mở web ở địa chỉ máy chạy (mặc định `http://127.0.0.1:8765`), đăng nhập bằng mật khẩu đã đặt.
 
-## B.1. Bốn khu vực chính
+## B.1. Năm khu vực chính (v88)
 
-Thanh điều hướng có 4 mục (giao diện gọn, CEO-first):
+Thanh điều hướng có 5 hub:
 
-| Mục | Để làm gì |
+| Hub | Để làm gì |
 |---|---|
-| **Văn phòng** | MÀN CHÍNH (mở app vào thẳng đây): giao việc, theo dõi đội làm realtime, xem kết quả bàn giao — theo từng phòng việc. |
-| **Đội** | Nhân sự ảo: trạng thái, ngân sách, tạm dừng/bật/xoá/tạo mới. |
-| **Duyệt** | Hàng đợi việc cần bạn **phê duyệt** (badge số) + bảng việc lẻ đã giao cho từng nhân sự. |
-| **Trợ lý** | Chat quản trị: hỏi tình hình, tạo nhân sự bằng hội thoại, lệnh vận hành lẻ. |
-| **Cài đặt** | Sức khỏe hệ thống, giao diện, chế độ nâng cao, tự-xác-nhận giao việc. |
+| **Trò chuyện** | MÀN CHÍNH (mở app vào thẳng đây): nhắn để giao việc và trao đổi với nhân sự như một app chat; việc cần bạn duyệt cũng hiện ngay trong luồng. |
+| **Văn phòng** | Văn phòng 3D: thấy ai đang làm gì theo thời gian thực, bấm vào bàn để mở phòng việc. |
+| **Công việc** | Bảng việc (chờ duyệt / đang chạy / xong), kết quả bàn giao, lịch sắp chạy, hoạt động công ty. Badge trên nút = số việc đang chờ bạn duyệt. |
+| **Đội ngũ** | Nhân sự ảo: trạng thái, ngân sách, tạm dừng/bật/xoá/tạo mới; bấm một người để vào hồ sơ, kênh, cấu hình, chạy tay. |
+| **Hệ thống** | Cài đặt, kết nối, tài liệu công ty, số liệu, nhật ký kiểm tra. |
+
+> URL cũ (`/approvals`, `/tasks`, `/captures`, `/settings`, `/overview`…) vẫn dùng được
+> — chúng tự chuyển hướng sang đúng hub/tab mới.
 
 ## B.2. Tạo một nhân sự ảo mới
 
 > **Lưu ý (v18):** danh sách đội (`registry.yaml`) là dữ liệu CỦA BẠN — không nằm trong
 > git, không bao giờ bị lệnh git làm mất. Lần chạy đầu hệ thống tự tạo từ mẫu
 > `registry.example.yaml`. Nếu có hồ sơ nhân sự tồn tại trên máy mà chưa vào đội,
-> trang **Đội** sẽ hiện mục "Hồ sơ chưa trong đội" — bấm "Thêm vào đội" là xong
+> hub **Đội ngũ** sẽ hiện mục "Hồ sơ chưa trong đội" — bấm "Thêm vào đội" là xong
 > (nhân sự nhận việc được ngay, lịch báo cáo cũng tự kích hoạt).
 
 Vào **Đội** → bấm **"+ Tạo nhân sự ảo"**. Có 2 đường:
@@ -151,7 +154,7 @@ Vào **Đội** → bấm **"+ Tạo nhân sự ảo"**. Có 2 đường:
 
 Trang wizard hiện **bộ template nhân sự có sẵn** (6 vai trò: Trưởng phòng, Nghiên cứu, Nội dung, Phân tích, Kiểm định, PM-Coordinator). Mỗi template mang **tool gắn sẵn** (web search, academic search, lịch báo cáo mặc định, skills). Chọn card template → bấm **"Tạo ngay"** → xác nhận → nhân sự **được tạo NGAY** (chỉ 2 click, không qua form):
 
-- Nhân sự mới sẽ **TẮT** theo mặc định. Điền token `.env` cho vai trò (nếu cần) rồi bấm **bật** ở trang **Đội**.
+- Nhân sự mới sẽ **TẮT** theo mặc định. Điền token `.env` cho vai trò (nếu cần) rồi bấm **bật** ở hub **Đội ngũ**.
 - Wizard **tuỳ-chỉnh** (chọn "Tạo tuỳ chỉnh") vẫn nguyên: full form nếu muốn đổi tên, báo cáo, hoặc cấu hình riêng.
 - **(v36) Skill của template nạp TRỰC TIẾP lúc chạy**, không copy một lần lúc tạo — sửa skill trong
   file template thì **mọi nhân sự cùng vai nhận ngay**, không cần xoá-tạo lại. (Nhân sự tạo từ
@@ -159,7 +162,7 @@ Trang wizard hiện **bộ template nhân sự có sẵn** (6 vai trò: Trưởn
 
 ### B.2b. Tạo cả đội — tạo crew (v32, ≤3 click; v71 hỗ trợ chọn crew)
 
-Ở trang **Đội**, nút **"+ Tạo cả đội"** tạo nhanh một crew — mặc định là **crew hành chính** (trưởng phòng + 4 nhân sự Nghiên cứu/Nội dung/Phân tích/Kiểm định):
+Ở hub **Đội ngũ**, nút **"+ Tạo cả đội"** tạo nhanh một crew — mặc định là **crew hành chính** (trưởng phòng + 4 nhân sự Nghiên cứu/Nội dung/Phân tích/Kiểm định):
 
 1. Bấm nút → hệ thống hiện **chip chọn crew** (nếu có >1 crew). Chọn crew mong muốn:
    - **Office** — đội hành chính mặc định (trưởng phòng + 4 chuyên gia)
@@ -177,7 +180,7 @@ Nhân sự ảo có thể thuộc nhiều "chuyên môn" (pack): PM, HR, Office�
 ### B.2d. Nâng cấp cấu hình khi template có bản mới (v36)
 
 Khi bạn (hoặc bản cập nhật hệ thống) cải tiến **cấu hình** của một template (báo cáo/lịch/tool)
-và tăng số phiên bản, trang **Đội** hiện huy hiệu **"⬆ bản mới vN"** cạnh tên các nhân sự đang
+và tăng số phiên bản, hub **Đội ngũ** hiện huy hiệu **"⬆ bản mới vN"** cạnh tên các nhân sự đang
 dùng template đó. Bấm huy hiệu → hộp thoại hiện:
 
 - **Sẽ áp**: những trường chưa bị bạn tự chỉnh (an toàn cập nhật theo template mới).
@@ -341,11 +344,12 @@ sàn** sau mỗi lượt kiểm định chéo — xanh = đạt, cam = cần s�
 - huy hiệu **🔒** trên bàn/phòng có bước chạy sandbox Docker (deep_agent);
 - bấm một bàn → **ngăn Chi tiết**: bước + pha hiện tại, engine, chi phí việc này,
   link trang nhân sự + Captures của việc;
-- **Captures** (nav Nâng cao): bảng telemetry từng lượt chạy bước — engine, tokens,
-  chi phí (exact/estimated), thời lượng, lỗi; lọc theo việc/nhân sự;
+- **Nhật ký kiểm tra** (hub **Hệ thống**, tab cùng tên — trước đây gọi "Captures"):
+  bảng telemetry từng lượt chạy bước — engine, tokens, chi phí (exact/estimated),
+  thời lượng, lỗi; lọc theo việc/nhân sự;
 - **ô tìm lịch sử** trên header (tìm toàn văn việc đã làm; bấm kết quả nhảy tới phòng).
 
-![Chế độ Kỹ thuật — dải sức khỏe (nhịp điều phối + kết nối + chip ngân sách), nav Nâng cao, ô tìm lịch sử (v53)](images/v53-van-phong-ky-thuat.png)
+![Chế độ Kỹ thuật — dải sức khỏe (nhịp điều phối + kết nối + chip ngân sách), ô tìm lịch sử (v53)](images/v53-van-phong-ky-thuat.png)
 
 ![Captures — telemetry từng lượt chạy bước: engine, tokens, chi phí exact/estimated, thời lượng (v53)](images/v53-captures-explorer.png)
 
@@ -408,11 +412,11 @@ Chỉ 3 lệnh này cho phép; email (gmail) không qua đây (dùng `email_send
 
 ## B.5d. Bật Academic Search (v31)
 
-Ở trang **Đội** → chọn agent Nghiên cứu → tab "Cài đặt" → ghim `academic_search: true` trong profile YAML. Lần tới agent có thể tìm paper qua OpenAlex (keyless, trả kết quả không API key).
+Ở hub **Đội ngũ** → chọn agent Nghiên cứu → tab "Cài đặt" → ghim `academic_search: true` trong profile YAML. Lần tới agent có thể tìm paper qua OpenAlex (keyless, trả kết quả không API key).
 
 ## B.5e. Khai Watcher (v31)
 
-Ở trang **Đội** → chọn agent → profile YAML, thêm block:
+Ở hub **Đội ngũ** → chọn agent → profile YAML, thêm block:
 ```yaml
 watchers:
   - source: jira          # hoặc github, sheets
@@ -471,7 +475,7 @@ Trên bảng kanban (tab **Duyệt** hoặc xem chi tiết việc):
 
 ## B.6. Tạo agent với tính năng in-sandbox (deep_team — v50)
 
-Khi tạo agent ở trang **Đội** hoặc wizard, nếu bạn chọn **runtime = "Deep Agent"** (chạy trong Docker sandbox), wizard hiện thêm **tùy chọn "Điều phối trợ lý con"** — bật lên cho phép agent giao việc con TRONG hộp cát (chia ngữ cảnh lớn cho ≤3 trợ lý nhỏ chuyên môn, không cần tạo agent thật).
+Khi tạo agent ở hub **Đội ngũ** hoặc wizard, nếu bạn chọn **runtime = "Deep Agent"** (chạy trong Docker sandbox), wizard hiện thêm **tùy chọn "Điều phối trợ lý con"** — bật lên cho phép agent giao việc con TRONG hộp cát (chia ngữ cảnh lớn cho ≤3 trợ lý nhỏ chuyên môn, không cần tạo agent thật).
 
 Cài đặt mặc định: `deep_team: false` (agent chạy độc lập). Bật `deep_team: true` + đặt `deep_team_max_calls` (mặc định 3 lần) nếu muốn sử dụng tính năng này.
 
@@ -482,21 +486,22 @@ nhớ cho lần sau.
 
 ## B.8. Chế độ nâng cao (khi cần xem sâu)
 
-Vào **Cài đặt → Chế độ hiển thị** → bật **"Chế độ nâng cao"**. Thanh điều hướng hiện thêm các trang kỹ
-thuật (tất cả tiếng Việt):
+Vào **Hệ thống → Cài đặt** → bật **"Chế độ nâng cao"** (hoặc bấm nút chế độ trên
+header). Từ v88 chế độ này **không thêm trang mới** nữa — thanh điều hướng luôn là 5
+hub. Nó mở thêm **chi tiết kỹ thuật ngay trong hub đang xem**:
 
-| Trang | Nội dung |
+| Chỗ hiện thêm | Nội dung |
 |---|---|
-| **Tổng quan** | Bảng toàn bộ agent + trạng thái. |
-| **Dòng thời gian** | Lịch sử các lần chạy. |
-| **Chi phí** | Biểu đồ chi phí so với ngân sách. |
-| **Bộ nhớ** | Điều trợ lý đã ghi nhớ + đề xuất chờ duyệt. |
-| **Guardrail** | Nhật ký cửa kiểm soát: việc nào cho chạy / bị chặn / chờ duyệt. |
-| **Cấu hình** | Chỉnh hồ sơ agent (danh tính, ngữ cảnh dự án). |
-| **Chạy tay** | Chạy một báo cáo ngay, chọn loại + đối tượng (nội bộ / đối ngoại). |
-| **Văn phòng** | Dòng thời gian công việc đội + 3D wireframe office (nếu bật v12). |
+| **Văn phòng** | Dải sức khỏe: nhịp tim điều phối, kết nối ✓/✗, chip ngân sách đội. |
+| **Đội ngũ** | Cột trạng thái kỹ thuật trong bảng nhân sự. |
+| **Kết quả việc** | Tab "Quá trình" trong ô xem kết quả: transcript từng lượt chạy. |
 
-Tắt lại để về giao diện gọn 4 mục. Chế độ này chỉ đổi *độ chi tiết hiển thị*, không đổi quyền hạn.
+Những trang kỹ thuật cũ (Tổng quan, Dòng thời gian, Chi phí, Bộ nhớ, Guardrail, Cấu
+hình, Chạy tay) nay là **tab bên trong hub**: số liệu + nhật ký kiểm tra ở **Hệ thống**,
+hồ sơ/cấu hình/chạy tay từng nhân sự ở **Đội ngũ → chọn nhân sự**. URL cũ vẫn vào được
+— chúng tự chuyển hướng sang chỗ mới.
+
+Tắt lại để về giao diện gọn. Chế độ này chỉ đổi *độ chi tiết hiển thị*, không đổi quyền hạn.
 
 ## B.9. Chế độ demo (công ty mẫu, sẵn sàng cho khách xem)
 

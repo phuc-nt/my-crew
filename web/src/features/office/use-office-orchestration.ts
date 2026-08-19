@@ -1,6 +1,6 @@
 // Everything the office page knows, minus the layout.
 //
-// The old screen (views/office-unified/office-unified.tsx) held all of this inline —
+// The old screen (the pre-v88 unified office screen) held all of this inline —
 // nine useState and ten useEffect wrapped around the JSX — so the data flow could only
 // be read by reading the markup. It moves here unchanged in behavior: the same two
 // EventSource budget, the same guarded refetch signals, the same resolve-time gates.

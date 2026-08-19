@@ -452,12 +452,18 @@ cho mọi URL cũ (`/settings`, `/cost`, `/agents/:id`…); `/agents/:id` giữ 
 ```
 web/src/features/
 ├── chat/     # màn nhà: danh sách hội thoại, composer, thread
-├── office/   # sàn bàn làm việc + 3D (office-3d/), activity feed, quick assign
+├── office/   # sàn bàn làm việc + 3D (office-3d/), activity feed, quick assign,
+│             #   workroom list, review tray, health strip, artifact panel
 ├── work/     # board, hàng đợi duyệt, task detail, outputs, company activity
 ├── team/     # roster, agent detail (agent-detail/), hire panel
 ├── system/   # settings, connections, company, insights, audit
+├── shared/   # dùng bởi >1 hub: assign-composer, artifact-viewer, transcript-tab,
+│             #   coordinator-health-banner, office-message-line, phase-labels
 └── palette/  # command palette (không phải hub)
 ```
+
+`web/src/views/` chỉ còn cửa trước auth (`Login`, `Setup`, `setup-company-step`) — nó
+mount ngoài shell nên không thuộc hub nào.
 
 Cổng vào vẫn là `main.tsx` → `App.tsx` (chỉ là cửa setup/login, cố ý giữ mỏng) →
 `app/app-providers.tsx` (chỉ còn query client) → `app/app-routes.tsx` → `app/app-shell.tsx`.

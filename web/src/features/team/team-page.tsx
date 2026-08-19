@@ -9,7 +9,7 @@ import { IntegrationHealthPanel } from '../../components/IntegrationHealthPanel'
 import { Button } from '../../components/ui/button'
 import { PageHeader } from '../../components/ui/page-header'
 import { useLanguage } from '../../i18n/language-context'
-import { CoordinatorHealthBanner } from '../../views/office-unified/coordinator-health-banner'
+import { CoordinatorHealthBanner } from '../shared/coordinator-health-banner'
 
 import { OrphanList } from './orphan-list'
 import { RosterTable } from './roster-table'

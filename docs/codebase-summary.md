@@ -583,8 +583,9 @@ hub + dọn dẹp.
 top-level cũ giờ là **tab có URL riêng** (`?tab=`), nên deep link mount đúng tab khi cold load.
 SPA phục vụ tại `/`, **không** phải `/app/`.
 
-**Cấu trúc.** `web/src/features/{chat,office,work,team,system,palette}/` thay `views/` phẳng
-(`palette/` là command palette, không phải hub). Bảng route: `web/src/app/app-routes.tsx`.
+**Cấu trúc.** `web/src/features/{chat,office,work,team,system,shared,palette}/` thay `views/`
+phẳng (`shared/` = component dùng bởi >1 hub; `palette/` là command palette, không phải hub).
+`views/` chỉ còn cửa trước auth (Login/Setup). Bảng route: `web/src/app/app-routes.tsx`.
 
 **Tầng dữ liệu** (`web/src/api/queries/`). TanStack Query thay các hook fetch rời và 2 global
 context (`AgentProvider`, `PendingApprovalsProvider`) — agent nằm ở route, approvals là 1 query

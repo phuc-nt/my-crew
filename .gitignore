@@ -48,7 +48,7 @@ docs/references/
 
 # Frontend (M4): ignore deps + the in-web build cache, but COMMIT the served dist
 # at my_crew/server/static/app/ (the "FastAPI serves static, zero Node step" property).
-web/node_modules/
+node_modules/
 web/dist/
 
 # MCP servers installed from npm by the installer (P4) into a repo-local prefix —

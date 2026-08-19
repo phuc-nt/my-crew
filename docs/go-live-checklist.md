@@ -1,8 +1,8 @@
 # Go-live có kiểm soát — checklist vận hành
 
 > Lập 2026-08-03 (v58 P5) từ kiểm kê fleet THẬT + drill kill-switch thật. Soát lại
-> 2026-08-16 (0.10.0). Người quyết định bật: CEO. Tài liệu này là quy trình, không
-> phải công tắc — không flag nào tự đổi.
+> 2026-08-19 (v88, web 5-hub). Người quyết định bật: CEO. Tài liệu này là quy trình,
+> không phải công tắc — không flag nào tự đổi.
 
 ## 1. Hiện trạng fleet (kiểm kê lại 2026-08-16)
 
@@ -23,18 +23,21 @@ không ghi giá trị ở đây).
 
 1. **Nấc guarded**: sửa profile agent —
    `safety: {dry_run: false, trust_mode: guarded}` → restart `com.mpm.service`.
-   Mọi Lớp B (post Slack, comment Jira, tạo trang Confluence, gửi mail) **xếp hàng ở
-   action rail** (cockpit, cột phải) — CEO duyệt từng cái bằng 1 bấm. Chạy ≥3–5 ngày,
-   đọc mỗi hành động trước khi duyệt.
+   Mọi Lớp B (post Slack, comment Jira, tạo trang Confluence, gửi mail) **xếp hàng
+   chờ duyệt** — hàng này hiện ở hub **Công việc** (số chờ duyệt hiện luôn trên nút
+   Công việc ở thanh điều hướng) và ở khung chờ duyệt trong hub **Trò chuyện**; CEO
+   duyệt từng cái bằng 1 bấm. Chạy ≥3–5 ngày, đọc mỗi hành động trước khi duyệt.
 2. **Nấc autonomous**: hành động nào duyệt mãi thấy nhàm (luôn đúng) → đổi
    `trust_mode: autonomous` (chạy thẳng + audit) — có thể giữ guarded riêng cho loại
    nhạy cảm bằng cách cấu hình `auto_approve` grants thay vì flip cả agent.
 
 ## 3. Nghi thức soi hằng ngày (khi có agent live mới)
 
-- **Audit**: `uv run my-crew agent audit <id> | tail -30` hoặc UI trang Đội → Audit
-  (cột actor v46). Soi: hành động lạ? rationale `trust_mode=autonomous` có hợp lý?
-- **Chi phí**: `/api/budget` hoặc trang Đội — cap mỗi agent hiện $50/tháng
+- **Audit**: `uv run my-crew agent audit <id> | tail -30` hoặc UI **Hệ thống → Nhật
+  ký kiểm tra** (cột actor v46). Soi: hành động lạ? rationale `trust_mode=autonomous`
+  có hợp lý?
+- **Chi phí**: `/api/budget`, cột chi phí trong bảng nhân sự hub **Đội ngũ**, hoặc
+  **Hệ thống → Số liệu** — cap mỗi agent hiện $50/tháng
   (`budget.monthly_usd`); pilot nên hạ còn $10 để phanh sớm. Trần per-task
   `team_task_cap_usd` trong `company.yaml` (mặc định $2) — từ 0.10.0 chạm trần là
   halt cả bước ĐANG chạy, không chỉ chặn bước mới; ngân sách soát/sửa per-task

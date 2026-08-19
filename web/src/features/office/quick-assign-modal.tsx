@@ -7,7 +7,7 @@
 import { useEffect, useRef } from 'react'
 import { Button } from '../../components/ui/button'
 import { useLanguage } from '../../i18n/language-context'
-import { AssignComposer } from '../../views/office-unified/assign-composer'
+import { AssignComposer } from '../shared/assign-composer'
 
 interface QuickAssignModalProps {
   activeRoom: string | null

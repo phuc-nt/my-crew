@@ -590,9 +590,6 @@ export interface OfficeMessage {
   source_room_id: string
 }
 
-export interface OfficeRoomsPayload {
-  rooms: string[]
-}
 
 // v31 P1: fleet-wide activity timeline ("Hoạt động công ty") — one merged, allowlisted
 // item per audit decision / worker run / team-step attempt across every registry agent.

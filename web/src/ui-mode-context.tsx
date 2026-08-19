@@ -1,7 +1,8 @@
-// UI density mode (v10 M25): low (default, CEO-first 4-item nav) vs high ("Chế độ nâng cao",
-// unlocks the technical views + denser tables). Persisted to localStorage['ui-mode']. This is a
-// VIEW-LAYER preference only — it changes nav density, never permissions. The advanced routes
-// stay reachable by direct URL in low mode; auth + the Action Gateway are the real boundaries.
+// UI density mode: low (default, CEO-first) vs high ("Chế độ nâng cao"). Persisted to
+// localStorage['ui-mode']. Since the 5-hub shell, high mode no longer unlocks separate
+// technical routes — every hub is always reachable — it reveals the technical detail
+// inside a hub (office health strip, roster status column, artifact process tab).
+// VIEW-LAYER only: auth + the Action Gateway are the real boundaries, never this flag.
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 

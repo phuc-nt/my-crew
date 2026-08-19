@@ -7,7 +7,7 @@
 import { Html } from '@react-three/drei'
 import { DICT } from '../../../i18n/dictionary'
 import type { UiKey } from '../../../i18n/dictionary'
-import { PHASE_LABEL } from '../../../views/office-shared/phase-labels'
+import { PHASE_LABEL } from '../../shared/phase-labels'
 
 interface SpeechBubbleProps {
   position: [number, number, number]
