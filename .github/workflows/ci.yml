@@ -64,7 +64,14 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
 
-  wheel:
+  # Cold start from the real wheel. The suite runs against the source tree, so a
+  # packaging break — a dropped force-include, a stale committed frontend bundle —
+  # is invisible to every other job here and fails only on a user's machine.
+  #
+  # This job used to stop at `--version` + `agent list`. The script goes further and
+  # serves over HTTP, which is where a missing frontend bundle actually shows up, then
+  # loads the login screen in real chromium.
+  cold-start:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -73,15 +80,13 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.12"
-      - run: uv build
-      # The wheel must carry the shipped resources and the FE bundle — a wheel
-      # without them installs a my-crew that cannot seed a fresh home.
-      - name: verify wheel contents
-        run: |
-          test "$(unzip -l dist/*.whl | grep -c _shipped/)" -ge 60
-          test "$(unzip -l dist/*.whl | grep -cE 'static/app/')" -ge 10
-      - name: smoke-install from the wheel
-        run: |
-          python -m venv /tmp/v && /tmp/v/bin/pip -q install dist/*.whl
-          MY_CREW_HOME=/tmp/crew-home /tmp/v/bin/my-crew --version
-          MY_CREW_HOME=/tmp/crew-home /tmp/v/bin/my-crew agent list
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx playwright install --with-deps chromium
+        working-directory: web
+      - run: scripts/cold-start-smoke.sh --browser

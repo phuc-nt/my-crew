@@ -70,6 +70,12 @@ say "4/6 home trống tự seed"
 [[ -f "$MY_CREW_HOME/registry.yaml" ]] || fail "registry.yaml không được tạo"
 printf 'registry + profile đã seed\n'
 
+# Cổng bận thì server chết ngay và log chỉ nói "server chết" — nói thẳng lý do ra đây
+# rẻ hơn nhiều so với đi mò lúc CI đỏ.
+if command -v lsof >/dev/null 2>&1 && lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+  fail "cổng $PORT đang bận — đặt COLD_START_PORT sang cổng khác"
+fi
+
 say "5/6 serve --web-only"
 "$BIN" serve --web-only >"$WORK/serve.log" 2>&1 &
 SERVER_PID=$!
