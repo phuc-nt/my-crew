@@ -60,6 +60,12 @@ def pending_index() -> dict:
     Approve/reject stay per-agent routes, so `agent_id` on the row is what lets a
     caller build the action URL. A per-agent load failure is skipped rather than
     fatal: one broken profile must not blank a queue whose other rows are actionable.
+
+    Rows come back OLDEST FIRST across the whole fleet. Grouping by the registry walk
+    put every row of the alphabetically-first agent on top, so a request left hanging
+    since yesterday sat below rows that arrived minutes ago — and the reader works down
+    from the top. `(agent_id, id)` breaks ties so reloading the page never shuffles
+    rows that share a timestamp.
     """
     from my_crew.server import agent_views
 
@@ -71,6 +77,7 @@ def pending_index() -> dict:
         except Exception:  # unreadable profile / missing store — other agents still count
             continue
         pending.extend({"agent_id": entry.id, **row} for row in rows)
+    pending.sort(key=lambda row: (row["created_at"], row["agent_id"], row["id"]))
     return {"pending": pending, "count": len(pending)}
 
 

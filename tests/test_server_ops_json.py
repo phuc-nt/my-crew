@@ -265,6 +265,61 @@ def test_pending_index_is_empty_when_no_agent_has_approvals(monkeypatch, tmp_pat
     assert body == {"pending": [], "count": 0}
 
 
+def _backdate(data_root, agent_id, approval_id, stamp):
+    """Đặt thẳng `created_at` cho một dòng chờ duyệt.
+
+    Enqueue liên tiếp trong cùng một test có thể rơi vào cùng micro-giây, nên không thể
+    dựa vào thứ tự gọi để dựng một hàng chờ có mốc thời gian khác nhau rõ ràng.
+    """
+    store = ApprovalStore(data_root / "agents" / agent_id / "approvals.db")
+    try:
+        store._conn.execute(
+            "UPDATE approvals SET created_at = ? WHERE id = ?", (stamp, approval_id)
+        )
+        store._conn.commit()
+    finally:
+        store.close()
+
+
+def test_pending_index_is_ordered_oldest_first_across_agents(monkeypatch, tmp_path):
+    """Việc chờ lâu nhất đứng đầu, bất kể nó thuộc agent nào.
+
+    Trước đây index gom theo vòng lặp registry, nên toàn bộ hàng chờ của agent đầu bảng
+    chữ cái luôn đứng trên — một yêu cầu duyệt treo từ hôm qua bị đẩy xuống dưới mấy yêu
+    cầu vừa vào của agent khác. Người duyệt đọc từ trên xuống, nên thứ tự Ở ĐÂY quyết
+    định cái gì bị bỏ quên.
+    """
+    data_root = _patch(monkeypatch, tmp_path, ids=("acme", "beta"))
+    # Cố ý xếp ngược: agent đầu bảng chữ cái giữ dòng MỚI nhất.
+    a1 = _seed(data_root, agent_id="acme")
+    b1 = _seed(data_root, agent_id="beta")
+    b2 = _seed(data_root, agent_id="beta")
+    _backdate(data_root, "acme", a1, "2026-08-19T12:00:00+00:00")
+    _backdate(data_root, "beta", b1, "2026-08-18T09:00:00+00:00")
+    _backdate(data_root, "beta", b2, "2026-08-19T08:00:00+00:00")
+
+    rows = _client().get("/api/approvals/pending").json()["pending"]
+    assert [r["created_at"] for r in rows] == sorted(r["created_at"] for r in rows)
+    assert [(r["agent_id"], r["created_at"][:10]) for r in rows] == [
+        ("beta", "2026-08-18"),
+        ("beta", "2026-08-19"),
+        ("acme", "2026-08-19"),
+    ]
+
+
+def test_pending_index_orders_same_timestamp_rows_stably(monkeypatch, tmp_path):
+    """Cùng mốc thời gian thì xếp theo agent rồi theo id — nạp lại trang không nhảy dòng."""
+    data_root = _patch(monkeypatch, tmp_path, ids=("acme", "beta"))
+    same = "2026-08-19T10:00:00+00:00"
+    for agent in ("beta", "acme"):
+        for _ in range(2):
+            _backdate(data_root, agent, _seed(data_root, agent_id=agent), same)
+
+    rows = _client().get("/api/approvals/pending").json()["pending"]
+    seen = [(r["agent_id"], r["id"]) for r in rows]
+    assert seen == sorted(seen)
+
+
 def test_pending_index_skips_an_agent_that_fails_to_load(monkeypatch, tmp_path):
     """A single broken profile must not blank the whole queue — the other agents'
     approvals are still actionable, so a per-agent failure is skipped, not fatal."""
