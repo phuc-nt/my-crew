@@ -1,8 +1,8 @@
 // v16 pure helpers: roster filter (ring computed over VISIBLE list) + feed status class.
 import { expect, test } from 'vitest'
 import { DELIVERED_STEP_TYPES, type OfficeMessage } from '../../types'
-import { shouldShowBubble } from '../office-3d/agent-office-state'
-import { visibleDesks } from '../office-3d/office-canvas'
+import { shouldShowBubble } from '../../features/office/office-3d/agent-office-state'
+import { visibleDesks } from '../../features/office/office-3d/office-canvas'
 import { feedStatusClass, matchesFilter } from './activity-feed'
 import { maxSeqOf } from './artifact-panel'
 
@@ -57,7 +57,7 @@ test('shouldShowBubble: only running/consulting desks speak (v17 Q4)', () => {
   const base = {
     id: 'a', taskTitle: 'T', stepTitle: 'S', phase: null, attemptId: null,
     consultWith: null, lastVerdict: null, picTasks: new Set<string>(),
-    concurrentSteps: 0, deepTeamActive: false,
+    concurrentSteps: 0, deepTeamActive: false, activity: null,
   }
   expect(shouldShowBubble({ ...base, state: 'working' })).toBe(true)
   expect(shouldShowBubble({ ...base, state: 'assigned' })).toBe(true)

@@ -1,11 +1,11 @@
 // 2D fallback for the 3D office scene: a plain table (agent / trạng thái / công việc), rendered
 // instead of the Canvas when prefers-reduced-motion is set or the UA looks mobile (see
 // use-3d-fallback.ts). No animation — just the same derived desk-state map as a static list.
-import { EmptyState } from '../../components/ui/empty-state'
-import { DICT } from '../../i18n/dictionary'
-import { useLanguage } from '../../i18n/language-context'
-import type { UiKey } from '../../i18n/dictionary'
-import type { AgentDeskState, AgentState } from './agent-office-state'
+import { EmptyState } from './ui/empty-state'
+import { DICT } from '../i18n/dictionary'
+import { useLanguage } from '../i18n/language-context'
+import type { UiKey } from '../i18n/dictionary'
+import type { AgentDeskState, AgentState } from '../features/office/office-3d/agent-office-state'
 
 const STATE_LABEL_KEY: Record<AgentState, UiKey> = {
   idle: 'agentStatusTable.stateIdle',

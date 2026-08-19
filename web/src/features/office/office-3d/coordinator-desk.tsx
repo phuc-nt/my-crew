@@ -2,8 +2,8 @@
 // machine: the coordinator is always "present"). v32 solid look: warm round table on
 // the rug, visually distinct from the staff desks at a glance.
 import { Html } from '@react-three/drei'
-import type { UiKey } from '../../i18n/dictionary'
-import { DICT } from '../../i18n/dictionary'
+import type { UiKey } from '../../../i18n/dictionary'
+import { DICT } from '../../../i18n/dictionary'
 import { DeskStatusBadges } from './desk-badges'
 import { officeTheme } from './desk-colors'
 

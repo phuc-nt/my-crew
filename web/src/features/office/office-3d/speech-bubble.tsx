@@ -5,9 +5,9 @@
 // frame: long titles are truncated with "…" (CSS ellipsis per line) so bubbles never stretch
 // across the scene or overlap their neighbours' desks.
 import { Html } from '@react-three/drei'
-import { DICT } from '../../i18n/dictionary'
-import type { UiKey } from '../../i18n/dictionary'
-import { PHASE_LABEL } from '../office-shared/phase-labels'
+import { DICT } from '../../../i18n/dictionary'
+import type { UiKey } from '../../../i18n/dictionary'
+import { PHASE_LABEL } from '../../../views/office-shared/phase-labels'
 
 interface SpeechBubbleProps {
   position: [number, number, number]

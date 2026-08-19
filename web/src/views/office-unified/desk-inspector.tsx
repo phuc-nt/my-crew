@@ -10,8 +10,8 @@ import { api } from '../../api/client'
 import { Button } from '../../components/ui/button'
 import { useLanguage } from '../../i18n/language-context'
 import { formatCost } from '../../labels'
-import type { AgentDeskState } from '../office-3d/agent-office-state'
-import { deskTooltipText } from '../office-3d/agent-desk'
+import type { AgentDeskState } from '../../features/office/office-3d/agent-office-state'
+import { deskTooltipText } from '../../features/office/office-3d/agent-desk'
 import type { AgentStatus, TeamTaskCostPayload } from '../../types'
 
 interface DeskInspectorProps {

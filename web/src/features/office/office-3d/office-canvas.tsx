@@ -6,7 +6,7 @@
 import { OrbitControls } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useEffect, useState } from 'react'
-import { useLanguage } from '../../i18n/language-context'
+import { useLanguage } from '../../../i18n/language-context'
 import { AgentDesk } from './agent-desk'
 import type { AgentDeskState } from './agent-office-state'
 import { CoordinatorDesk } from './coordinator-desk'

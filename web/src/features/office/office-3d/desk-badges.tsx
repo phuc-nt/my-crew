@@ -7,8 +7,8 @@
 // desk tooltip/label already use); the deep_team ghost is ONE static translucent mesh
 // (reuses the avatar's own capsule+sphere geometry, opacity ~0.35, no useFrame).
 import { Html } from '@react-three/drei'
-import type { UiKey } from '../../i18n/dictionary'
-import { DICT } from '../../i18n/dictionary'
+import type { UiKey } from '../../../i18n/dictionary'
+import { DICT } from '../../../i18n/dictionary'
 
 interface DeskStatusBadgesProps {
   position: [number, number, number]

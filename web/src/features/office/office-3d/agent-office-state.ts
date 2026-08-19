@@ -26,7 +26,7 @@
 // `step_status` event's `status` is only ever `started` (ticker, dispatch) or `failed` (worker,
 // terminal); a completed step is signaled by the `handoff` KIND, not a `step_status` status
 // value — there is no `completed`/`done`/`in_progress` status string in production.
-import type { OfficeMessage } from '../../types'
+import type { OfficeMessage } from '../../../types'
 
 export type AgentState = 'idle' | 'assigned' | 'working' | 'done' | 'error'
 
@@ -40,6 +40,22 @@ export interface DeskVerdict {
   // Event timestamp (OfficeMessage.ts) — the RENDER layer uses it to fade the flash by
   // age, so a reconnect-replay of old events never re-flashes (reducer stays pure).
   ts: string
+}
+
+/**
+ * What a working desk is doing RIGHT NOW, from `step_activity` (v80 P4).
+ *
+ * Telemetry, not state: it never moves the state machine, and it is cleared by the same
+ * terminal events that end the step. `tool` is a registered tool NAME and `count` an int
+ * — the projection guarantees no args or results ever reach this event
+ * (office_event_projection.py, `step_recorder.ACTIVITY_FIELDS`). `phase` is the closed
+ * pair 'calling-tool' | 'writing' (dropped to '' server-side if unrecognized), so the
+ * render layer can distinguish "on the phone" from "at the keyboard" without parsing.
+ */
+export interface DeskActivity {
+  tool: string
+  count: number
+  phase: string
 }
 
 export interface AgentDeskState {
@@ -89,6 +105,9 @@ export interface AgentDeskState {
   // the zombie-attempt guard above clears the stale phase) or a terminal event resolves
   // this desk's work.
   deepTeamActive: boolean
+  // Live in-step activity, or null when the desk is not mid-tool-call. Replaced (never
+  // accumulated) by each new `step_activity`, and cleared by any terminal event.
+  activity: DeskActivity | null
 }
 
 function nextState(prev: AgentState, status: string | undefined): AgentState {
@@ -125,7 +144,7 @@ export function idleDeskState(id: string): AgentDeskState {
   return {
     id, state: 'idle', taskTitle: null, stepTitle: null, phase: null, attemptId: null,
     consultWith: null, lastVerdict: null, picTasks: new Set<string>(),
-    concurrentSteps: 0, deepTeamActive: false,
+    concurrentSteps: 0, deepTeamActive: false, activity: null,
   }
 }
 
@@ -197,6 +216,7 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
           d.attemptId = null
           d.phase = null // a fresh dispatch invalidates the previous attempt's phase text
           d.deepTeamActive = false // the new attempt's own phase event will re-set this
+          d.activity = null // a fresh dispatch invalidates the old attempt's telemetry
         } else if (incomingAttempt && d.attemptId && incomingAttempt !== d.attemptId) {
           break // stale attempt's phase event — drop
         } else if (incomingAttempt) {
@@ -210,6 +230,7 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
           // must release the step here or the desk would show as working forever.
           d.concurrentSteps = Math.max(0, d.concurrentSteps - 1)
           d.deepTeamActive = false
+          d.activity = null // the step is over — nothing is being called or written
         }
         // v54 P1/P4: deep_team rides the PHASE event (carries attempt_id), never the
         // bare dispatch — only set it while it belongs to the desk's CURRENT attempt.
@@ -222,6 +243,24 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
         d.state = nextState(d.state === 'idle' ? 'assigned' : d.state, m.body.status)
         break
       }
+      case 'step_activity': {
+        // Telemetry from the WORKER itself, so the agent is in `body.agent` — every other
+        // kind here is ticker-authored and keys off `assigned_to`. Deliberately does NOT
+        // call ensure(): desks exist because work was dispatched to them, and a stray or
+        // replayed activity event must not conjure one. Touches nothing but `activity` —
+        // no state, no attemptId, no consult — so late-arriving telemetry can never move
+        // the state machine backwards.
+        const agentId = m.body.agent
+        if (!agentId) break
+        const d = desks.get(agentId)
+        if (!d) break
+        d.activity = {
+          tool: m.body.tool ?? '',
+          count: m.body.count ?? 0,
+          phase: m.body.phase ?? '',
+        }
+        break
+      }
       case 'handoff': {
         const assignedTo = m.body.assigned_to ?? m.author
         const d = ensure(assignedTo)
@@ -230,6 +269,7 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
         // step_status's "started"/"failed" pair) — same floor-at-0 posture as failed.
         d.concurrentSteps = Math.max(0, d.concurrentSteps - 1)
         d.deepTeamActive = false
+        d.activity = null
         d.taskTitle = m.body.task_title ?? d.taskTitle
         d.stepTitle = m.body.step_title ?? d.stepTitle
         // A handoff marks the step as delivered to the next person — the desk shows "done"
@@ -257,6 +297,7 @@ export function deriveAgentDesks(messages: OfficeMessage[]): Map<string, AgentDe
         // v54 P4: a review-step's verdict is its own terminal, same accounting as handoff.
         d.concurrentSteps = Math.max(0, d.concurrentSteps - 1)
         d.deepTeamActive = false
+        d.activity = null
         d.taskTitle = m.body.task_title ?? d.taskTitle
         d.stepTitle = m.body.step_title ?? d.stepTitle
         d.state = 'done'

@@ -8,7 +8,7 @@
 // `done`/`in_progress` status string in production — a completed step is signaled by the
 // `handoff` KIND, not a `step_status` status value.
 import { describe, expect, test } from 'vitest'
-import type { OfficeMessage } from '../../types'
+import type { OfficeMessage } from '../../../types'
 import {
   agentIdsInOrder, deriveAgentDesks, derivePendingCounts, idleDeskState, shouldShowBubble,
   withRosterIds,
@@ -42,6 +42,7 @@ describe('deriveAgentDesks', () => {
       picTasks: new Set(),
       concurrentSteps: 1,
       deepTeamActive: false,
+      activity: null,
     })
     expect(desks.has('coordinator')).toBe(false)
   })
@@ -100,6 +101,7 @@ describe('deriveAgentDesks', () => {
       picTasks: new Set(),
       concurrentSteps: 0,
       deepTeamActive: false,
+      activity: null,
     })
   })
 
@@ -596,5 +598,69 @@ describe('withRosterIds + idleDeskState', () => {
     expect(a.state).toBe('idle')
     a.picTasks.add('t1')
     expect(b.picTasks.size).toBe(0)
+  })
+})
+
+// `step_activity` (v80 P4) is the only kind whose body names its agent as `agent` rather
+// than `assigned_to` — it comes from the worker itself, not the dispatching ticker (see
+// worker.py's on_activity → append_office_event(author=agent_id)). It is telemetry: it
+// says what a working desk is DOING right now, and must never move the state machine.
+describe('deriveAgentDesks — step_activity', () => {
+  const dispatch = () =>
+    msg({
+      kind: 'step_status', author: 'coordinator',
+      body: { task_title: 'Demo', step_title: 'draft', status: 'started', assigned_to: 'agent-a' },
+    })
+
+  test('records the live tool call on the working desk without changing its state', () => {
+    const desks = deriveAgentDesks([
+      dispatch(),
+      msg({
+        kind: 'step_activity', author: 'agent-a',
+        body: { agent: 'agent-a', task: 't1', step: 's1', tool: 'web_search', count: 3, phase: 'calling-tool' },
+      }),
+    ])
+    const d = desks.get('agent-a')!
+    expect(d.state).toBe('working') // telemetry never drives the state machine
+    expect(d.activity).toEqual({ tool: 'web_search', count: 3, phase: 'calling-tool' })
+  })
+
+  test('a later activity event replaces the earlier one rather than accumulating', () => {
+    const desks = deriveAgentDesks([
+      dispatch(),
+      msg({
+        kind: 'step_activity', author: 'agent-a',
+        body: { agent: 'agent-a', tool: 'web_search', count: 1, phase: 'calling-tool' },
+      }),
+      msg({
+        kind: 'step_activity', author: 'agent-a',
+        body: { agent: 'agent-a', tool: '', count: 0, phase: 'writing' },
+      }),
+    ])
+    expect(desks.get('agent-a')!.activity).toEqual({ tool: '', count: 0, phase: 'writing' })
+  })
+
+  test('a terminal event clears the activity — the desk is no longer doing anything', () => {
+    const desks = deriveAgentDesks([
+      dispatch(),
+      msg({
+        kind: 'step_activity', author: 'agent-a',
+        body: { agent: 'agent-a', tool: 'web_search', count: 3, phase: 'calling-tool' },
+      }),
+      msg({ kind: 'handoff', author: 'agent-a', body: { assigned_to: 'agent-a', step_title: 'draft' } }),
+    ])
+    expect(desks.get('agent-a')!.activity).toBeNull()
+  })
+
+  test('activity for an unknown agent does not conjure a desk', () => {
+    // Desks exist for agents the stream has actually dispatched work to; a stray
+    // activity event must not create one (same posture as a body missing assigned_to).
+    const desks = deriveAgentDesks([
+      msg({
+        kind: 'step_activity', author: 'ghost',
+        body: { agent: 'ghost', tool: 'web_search', count: 1, phase: 'calling-tool' },
+      }),
+    ])
+    expect(desks.has('ghost')).toBe(false)
   })
 })

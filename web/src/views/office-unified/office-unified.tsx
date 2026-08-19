@@ -18,9 +18,9 @@ import { useOfficeStream } from '../../hooks/use-office-stream'
 import { useSharedPendingApprovals } from '../../pending-approvals-context'
 import {
   agentIdsInOrder, deriveAgentDesks, derivePendingCounts, idleDeskState, withRosterIds,
-} from '../office-3d/agent-office-state'
-import { AgentStatusTable } from '../office-3d/agent-status-table'
-import { use3dFallback } from '../office-3d/use-3d-fallback'
+} from '../../features/office/office-3d/agent-office-state'
+import { AgentStatusTable } from '../../components/agent-status-table'
+import { use3dFallback } from '../../features/office/office-3d/use-3d-fallback'
 import { Button } from '../../components/ui/button'
 import { PageHeader } from '../../components/ui/page-header'
 import type { ClarifyQuestion, OfficeMessage, TeamBoardLane, Workroom } from '../../types'
@@ -38,7 +38,7 @@ import { WorkroomList } from './workroom-list'
 // shell (composer, feed, rooms) waited on the 3D bundle before first paint. The canvas
 // is now its own chunk; while it streams in, the lightweight status table stands in —
 // same data, same desk clicks — so the screen is usable immediately.
-const OfficeCanvas = lazy(() => import('../office-3d/office-canvas'))
+const OfficeCanvas = lazy(() => import('../../features/office/office-3d/office-canvas'))
 
 const OFFICE_ROOM_ID = 'office'
 // Cold-connect tail for the aggregated `office` room: it mirrors EVERY event forever,
