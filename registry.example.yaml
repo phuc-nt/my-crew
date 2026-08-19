@@ -2,12 +2,14 @@
 # user data, gitignored since v18). IDs only (no secrets); path = profiles/<id>/.
 # enabled: false ⇒ the service skips the agent. An agent also needs profile.yaml
 # enabled: true to run (registry is the master switch, the profile is a second gate).
+#
+# Only ids whose profile is actually SEEDED belong here — `home_seed.py` copies the
+# shipped `default` profile and nothing else, so registering anything more would give
+# a first-time user a roster row that can never load.
+#
+# The CEO chat-ops box (and fleet-watch alerts) turn on when an agent with domain
+# "admin" + telegram.ops_operator_id exists; both look the agent up by domain, so
+# hiring one through the UI is enough — no registry template entry is needed.
 agents:
   - id: default
-    enabled: true
-  # Admin ops agent (domain: admin + telegram.ops_operator_id in its profile). Registering it
-  # here is what turns the CEO chat-ops box ON (web /api/ops/chat/available finds the single
-  # admin agent) and lets it fleet-watch. The web server itself never polls Telegram — that
-  # happens only when the worker (src/runtime/service.py) runs against this registry.
-  - id: admin
     enabled: true

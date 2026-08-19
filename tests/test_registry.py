@@ -27,16 +27,28 @@ def test_enabled_false_preserved(tmp_path):
     assert load_registry(p) == (RegistryEntry(id="beta", enabled=False),)
 
 
-def test_example_registry_template_loads():
-    # v18: registry.yaml is user data; the COMMITTED artifact is the example template a
-    # fresh checkout bootstraps from — it must parse to default + admin (registering
-    # admin is what turns the CEO chat-ops box on).
+def test_example_registry_template_only_registers_seeded_profiles():
+    # registry.yaml is user data; the COMMITTED artifact is the example template a fresh
+    # checkout bootstraps from. It may only name ids whose profile is actually seeded —
+    # `home_seed` copies `default` and nothing else, so any extra entry would give a
+    # first-time user a roster row whose profile can never load. (Chat-ops finds its
+    # admin agent by domain, so it needs no entry here.)
     from my_crew.runtime.registry import _EXAMPLE_PATH
 
-    assert load_registry(_EXAMPLE_PATH) == (
-        RegistryEntry(id="default", enabled=True),
-        RegistryEntry(id="admin", enabled=True),
-    )
+    assert load_registry(_EXAMPLE_PATH) == (RegistryEntry(id="default", enabled=True),)
+
+
+def test_example_registry_matches_what_home_seed_actually_copies():
+    """The template and the seeder must agree, or a fresh install gets a broken row.
+
+    This is the seam that shipped an `admin` entry with no seeded profile: the roster
+    then rendered a phantom agent whose name was a raw FileNotFoundError. Asserting the
+    two sides against each other fails the moment they drift again.
+    """
+    from my_crew.config.home_seed import _SEED_PROFILE_DIRS
+    from my_crew.runtime.registry import _EXAMPLE_PATH
+
+    assert {e.id for e in load_registry(_EXAMPLE_PATH)} <= set(_SEED_PROFILE_DIRS)
 
 
 def test_missing_file_raises(tmp_path):

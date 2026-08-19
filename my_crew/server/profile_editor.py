@@ -18,14 +18,17 @@ from pathlib import Path
 
 import yaml
 
-from my_crew.profile.loader import _PROFILES_DIR
+from my_crew.profile import loader as _loader
 from my_crew.runtime.agent_paths import _validate_agent_id, agent_data_dir
 
 _EDITABLE_MD = {"SOUL.md", "PROJECT.md"}  # MEMORY.md is agent-written, read-only here
 
 
 def _profile_dir(agent_id: str) -> Path:
-    return _PROFILES_DIR / _validate_agent_id(agent_id)
+    # Read through the module rather than binding the value at import: the loader owns
+    # where profiles live, and reading it late keeps this editor pointed at the same
+    # directory the loader resolves (including a relocated MY_CREW_HOME).
+    return _loader._PROFILES_DIR / _validate_agent_id(agent_id)
 
 
 def read_profile_files(agent_id: str) -> dict[str, str]:
@@ -60,6 +63,27 @@ def save_profile_yaml(agent_id: str, new_text: str) -> None:
 
     _parse_inbox(doc.get("inbox"), config)
     _atomic_write(_profile_dir(agent_id) / "profile.yaml", new_text)
+
+
+def set_profile_enabled(agent_id: str, enabled: bool) -> bool:
+    """Flip profile.yaml's own `enabled` gate, reusing the validated save path.
+
+    Templates create agents with `enabled: false` on purpose (tokens go into .env
+    first). Resuming from the roster has to clear that gate too, otherwise the
+    registry says on, the profile still says off, and the only way out is
+    hand-editing YAML. Returns False when there is no profile to flip.
+    """
+    path = _profile_dir(agent_id) / "profile.yaml"
+    if not path.exists():
+        return False
+    doc = yaml.safe_load(_read(path))
+    if not isinstance(doc, dict):
+        return False
+    if bool(doc.get("enabled")) == enabled:
+        return True
+    doc["enabled"] = enabled
+    save_profile_yaml(agent_id, yaml.safe_dump(doc, allow_unicode=True, sort_keys=False))
+    return True
 
 
 def save_markdown(agent_id: str, filename: str, new_text: str) -> None:

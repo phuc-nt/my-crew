@@ -10,12 +10,16 @@ network I/O beyond reading local per-agent files (+ profile.yaml / .env via load
 
 from __future__ import annotations
 
+import logging
+
 from my_crew.actions.approval_store import ApprovalStore
 from my_crew.llm.budget_tracker import BudgetTracker
 from my_crew.profile.loader import load_profile
 from my_crew.runtime.agent_paths import agent_data_dir
 from my_crew.runtime.registry import load_registry
 from my_crew.runtime.run_event import read_last_run_event
+
+logger = logging.getLogger(__name__)
 
 
 class UnknownAgentError(LookupError):
@@ -95,7 +99,12 @@ def list_agents() -> list[dict]:
             # must never re-derive this from raw yaml.
             trust_mode = loaded.settings.trust_mode
         except (FileNotFoundError, RuntimeError) as exc:
-            name, prof_enabled, report_kinds = f"<error: {exc}>", False, []
+            # The `name` is rendered as-is in the roster, so it must stay a NAME. The
+            # exception text carries the absolute profile path, which a first-time user
+            # sees as a wall of filesystem detail where a staff member should be; the
+            # real message stays in the log for whoever is actually debugging.
+            logger.warning("agent %r has an unloadable profile: %s", entry.id, exc)
+            name, prof_enabled, report_kinds = entry.id, False, []
             trust_mode = "guarded"  # broken profile: show the conservative mode
         out.append(
             {
@@ -119,7 +128,23 @@ def agent_status(agent_id: str) -> dict:
     reg = _registry_enabled()  # one registry read; also the membership check
     if agent_id not in reg:
         raise UnknownAgentError(agent_id)
-    loaded = load_profile(agent_id, data_dir=agent_data_dir(agent_id))
+    try:
+        loaded = load_profile(agent_id, data_dir=agent_data_dir(agent_id))
+    except (FileNotFoundError, RuntimeError) as exc:
+        # Registered but unloadable is neither "unknown" (404) nor a server fault (500):
+        # it is a state the roster can render, and the list view already degrades the
+        # same way. A 500 here made a fresh install's detail pane fail outright.
+        logger.warning("agent %r has an unloadable profile: %s", agent_id, exc)
+        return {
+            "id": agent_id,
+            "name": agent_id,
+            "enabled": False,
+            "last_run": _public_last_run(agent_id),
+            "budget": {"spent": 0.0, "cap": 0.0, "ratio": 0.0},
+            "pending_approvals": 0,
+            "trust_mode": "guarded",
+            "profile_error": str(exc),
+        }
     enabled = bool(reg[agent_id] and loaded.enabled)
 
     spent = BudgetTracker(loaded.settings).spent_this_month()

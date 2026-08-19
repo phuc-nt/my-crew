@@ -44,7 +44,7 @@ def tmp_world(tmp_path, monkeypatch):
     monkeypatch.setattr(registry_edit, "_REGISTRY_PATH", registry)
     monkeypatch.setattr("my_crew.runtime.registry._REGISTRY_PATH", registry)
     monkeypatch.setattr("my_crew.runtime.company._COMPANY_PATH", company)
-    monkeypatch.setattr("my_crew.server.profile_editor._PROFILES_DIR", profiles)
+    monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", profiles)
     monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", profiles)
     monkeypatch.setattr("my_crew.packs.registry._PROFILES_DIR", profiles, raising=False)
     monkeypatch.setattr("my_crew.server.routes_company._TEMPLATES_DIR", templates)

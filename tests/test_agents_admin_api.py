@@ -17,6 +17,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 from fastapi.testclient import TestClient
 
 from my_crew.runtime import registry_edit
@@ -315,6 +316,37 @@ def test_patch_enabled_reports_effective_state(client, tmp_world):
     client.post("/api/agents/create", json=_GOOD_SPEC)
     res = client.patch("/api/agents/hr-team/enabled", json={"enabled": True})
     assert res.json()["effective_enabled"] is True
+
+
+def test_patch_enabled_clears_the_create_time_profile_gate(client, tmp_world):
+    """Resume must turn a template hire on for real.
+
+    Template creates land with profile `enabled: false` so tokens go into .env first,
+    and Resume on the roster is the documented way to undo that. If it flipped only the
+    registry the agent would stay off with no UI path to fix it.
+    """
+    _, profiles = tmp_world
+    client.post("/api/agents/create", json=_GOOD_SPEC)
+    profile = profiles / "hr-team" / "profile.yaml"
+    doc = yaml.safe_load(profile.read_text(encoding="utf-8"))
+    doc["enabled"] = False
+    profile.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+    res = client.patch("/api/agents/hr-team/enabled", json={"enabled": True})
+
+    assert res.json()["effective_enabled"] is True
+    assert yaml.safe_load(profile.read_text(encoding="utf-8"))["enabled"] is True
+
+
+def test_patch_disabled_leaves_the_profile_gate_alone(client, tmp_world):
+    """Pause is the registry switch only, so a later resume restores what was paused."""
+    _, profiles = tmp_world
+    client.post("/api/agents/create", json=_GOOD_SPEC)
+    profile = profiles / "hr-team" / "profile.yaml"
+
+    client.patch("/api/agents/hr-team/enabled", json={"enabled": False})
+
+    assert yaml.safe_load(profile.read_text(encoding="utf-8"))["enabled"] is True
 
 
 def test_append_registry_no_trailing_newline_stays_valid(tmp_world):

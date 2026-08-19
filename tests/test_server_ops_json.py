@@ -171,7 +171,7 @@ def _seed_profile(tmp_path, monkeypatch, yaml_text="name: acme\nenabled: true\n"
     (pdir / "SOUL.md").write_text("soul")
     (pdir / "PROJECT.md").write_text("project")
     (pdir / "MEMORY.md").write_text("memory")
-    monkeypatch.setattr("my_crew.server.profile_editor._PROFILES_DIR", tmp_path / "profiles")
+    monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", tmp_path / "profiles")
     return pdir
 
 

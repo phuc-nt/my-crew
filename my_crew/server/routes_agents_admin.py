@@ -13,6 +13,9 @@ deleted — it is the v1 backward-compat safety net (disable it instead).
 
 from __future__ import annotations
 
+import logging
+
+import yaml
 from fastapi import APIRouter, Body, HTTPException, Request
 
 from my_crew.runtime.registry_edit import (
@@ -21,7 +24,9 @@ from my_crew.runtime.registry_edit import (
     remove_registry_entry,
     set_registry_enabled,
 )
-from my_crew.server import agent_create, integration_health
+from my_crew.server import agent_create, integration_health, profile_editor
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["admin"])
 
@@ -113,11 +118,24 @@ def patch_agent_enabled(agent_id: str, enabled: bool = Body(..., embed=True)) ->
     `effective_enabled` = registry AND profile.yaml `enabled` — the value the service
     gate actually uses. A resume that the profile still vetoes must not look successful
     to the operator, so the response says which gate is holding the agent down.
+
+    Resuming also clears the profile gate. Template hires are created with
+    `enabled: false` so tokens land in .env first, and Resume is the step that is
+    meant to undo that; leaving the profile gate set would make the button a no-op
+    whose only remedy is hand-editing YAML. Pause touches the registry alone, so a
+    resume after it restores exactly the state the operator paused from.
     """
     try:
         set_registry_enabled(None, agent_id, enabled)
     except UnknownRegistryAgentError:
         raise HTTPException(status_code=404, detail=f"unknown agent {agent_id!r}") from None
+    if enabled:
+        try:
+            profile_editor.set_profile_enabled(agent_id, True)
+        except (ValueError, RuntimeError, yaml.YAMLError) as exc:
+            # A profile too broken to rewrite still leaves the registry flipped; the
+            # response's effective_enabled reports the veto rather than 500-ing here.
+            logger.warning("could not clear profile gate for %r: %s", agent_id, exc)
     return {
         "agent_id": agent_id,
         "enabled": enabled,

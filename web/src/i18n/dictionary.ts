@@ -168,7 +168,7 @@ const vi = {
 
   // coordinator-health-banner.tsx
   'coordinatorHealth.noCoordinator':
-    'Chưa cấu hình trưởng phòng (điều phối viên) — vào Cài đặt / Setup để chọn, đội chưa thể nhận việc.',
+    'Chưa cấu hình trưởng phòng (điều phối viên) — chọn ở Hệ thống → Công ty, đội chưa thể nhận việc.',
   'coordinatorHealth.deadPrefix': 'Bộ điều phối chưa chạy — việc đã giao sẽ KHÔNG tiến triển. Khởi động bằng:',
   'coordinatorHealth.deadSuffix': '(hoặc cài dịch vụ nền theo mục A.2 của hướng dẫn).',
 
@@ -256,7 +256,8 @@ const vi = {
   'advancedTab.filesTitle': 'Tệp cấu hình',
   'team.hireClose': 'Đóng bảng tuyển',
   'team.companyCoordinator': 'Trưởng phòng điều phối: {id}',
-  'team.companyNoCoordinator': 'Chưa có trưởng phòng — tạo "truong-phong" từ mẫu để đội tự phối hợp.',
+  'team.companyNoCoordinator':
+    'Chưa chọn trưởng phòng điều phối — tuyển mẫu "Trưởng phòng (Điều phối đội)" ở bảng tuyển bên dưới, rồi chọn agent đó làm trưởng phòng ở Hệ thống → Công ty.',
   'team.colCode': 'Mã',
   'team.colName': 'Tên',
   'team.colState': 'Trạng thái',
@@ -1137,7 +1138,7 @@ const en = {
 
   // coordinator-health-banner.tsx
   'coordinatorHealth.noCoordinator':
-    'No coordinator configured yet — go to Settings / Setup to pick one; the team cannot take on work yet.',
+    'No coordinator configured yet — pick one under System → Company; the team cannot take on work yet.',
   'coordinatorHealth.deadPrefix': 'The coordinator is not running — assigned work will NOT progress. Start it with:',
   'coordinatorHealth.deadSuffix': '(or install it as a background service per guide section A.2).',
 
@@ -1225,7 +1226,8 @@ const en = {
   'advancedTab.filesTitle': 'Config files',
   'team.hireClose': 'Close hiring panel',
   'team.companyCoordinator': 'Coordinator: {id}',
-  'team.companyNoCoordinator': 'No coordinator yet — create "truong-phong" from a template so the team can coordinate itself.',
+  'team.companyNoCoordinator':
+    'No coordinator chosen yet — hire the "Coordinator" template in the panel below, then pick that agent as coordinator under System → Company.',
   'team.colCode': 'ID',
   'team.colName': 'Name',
   'team.colState': 'State',

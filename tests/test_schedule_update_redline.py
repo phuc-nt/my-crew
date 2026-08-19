@@ -146,7 +146,7 @@ def agent_env(tmp_path, monkeypatch):
     profiles = tmp_path / "profiles"
     data_root = tmp_path / ".data"
     monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", profiles)
-    monkeypatch.setattr("my_crew.server.profile_editor._PROFILES_DIR", profiles)
+    monkeypatch.setattr("my_crew.profile.loader._PROFILES_DIR", profiles)
     monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", data_root)
     # No CEO notice in unit tests (no registry here) — patch to a no-op recorder.
     notices = []

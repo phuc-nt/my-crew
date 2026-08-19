@@ -158,7 +158,10 @@ def test_list_survives_a_broken_profile(monkeypatch, settings_factory):
     body = {a["id"]: a for a in r.json()}
     assert body["good"]["name"] == "Good"
     assert body["broken"]["enabled"] is False
-    assert body["broken"]["name"].startswith("<error:")
+    # The name field is rendered as-is in the roster, so a broken profile falls back to
+    # the agent's id. It used to carry the exception text — which put an absolute
+    # filesystem path where a staff member's name belongs on a fresh install.
+    assert body["broken"]["name"] == "broken"
     # a broken profile must surface the conservative mode, not crash the field
     assert body["broken"]["trust_mode"] == "guarded"
 
