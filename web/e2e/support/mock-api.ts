@@ -11,10 +11,14 @@ import type { Page } from '@playwright/test'
 import type {
   FleetApprovalItem,
   OfficeMessage,
+  OutputItem,
   RoomArtifactsPayload,
+  ScheduleItem,
   StaffTemplate,
   StepArtifactPayload,
   StepTranscriptPayload,
+  TeamBoardLane,
+  TeamTaskMetricsPayload,
   Workroom,
 } from '../../src/types'
 import { agentsFixture, assignStaffFixture, workroomsFixture } from '../fixtures/office-fixtures'
@@ -45,6 +49,14 @@ export interface OfficeApiMockOptions {
    *  which is how the "still working" indicator is exercised. */
   opsReply?: string
   opsReplyDelayMs?: number
+  /** Lanes for the work hub's task board (default: none — the board renders empty). */
+  boardLanes?: TeamBoardLane[]
+  /** Rows for the outputs list (default: none). */
+  outputs?: OutputItem[]
+  /** Next cron fires behind the work hub's schedule tab (default: none). */
+  scheduleItems?: ScheduleItem[]
+  /** Per-task metrics; absent → the endpoint 404s, which is a real pre-v82 task. */
+  taskMetrics?: TeamTaskMetricsPayload
   /** Hits for GET /api/search — the palette's history source. */
   searchHits?: { excerpt: string; source: string; ref: string; agent_id: string; ts: string }[]
 }
@@ -113,7 +125,7 @@ export async function mockOfficeApi(
     if (pathname === '/api/office/assign/staff') return json(assignStaffFixture)
     if (pathname === '/api/office/workrooms')
       return json({ rooms: opts.workrooms ?? workroomsFixture })
-    if (pathname === '/api/team-tasks/board') return json({ lanes: [] })
+    if (pathname === '/api/team-tasks/board') return json({ lanes: opts.boardLanes ?? [] })
     if (/^\/api\/team-tasks\/[^/]+\/cost$/.test(pathname))
       return json({
         task_id: pathname.split('/')[3],
@@ -122,7 +134,11 @@ export async function mockOfficeApi(
         total_input_tokens: 1000,
         total_output_tokens: 500,
       })
-    if (pathname === '/api/schedule/upcoming') return json({ items: [] })
+    if (pathname === '/api/schedule/upcoming') return json({ items: opts.scheduleItems ?? [] })
+    // The outputs tab carries its filters in the query string, so match the path only.
+    if (pathname === '/api/outputs') return json({ items: opts.outputs ?? [], truncated: false })
+    if (pathname === '/api/company/activity')
+      return json({ items: [], total: 0, truncated: false })
     // The desk inspector opens on a click and immediately asks for that agent's status;
     // without this the panel renders its error path and the spec would be measuring a
     // failure state instead of the inspector.
@@ -215,7 +231,9 @@ export async function mockOfficeApi(
     if (/^\/api\/team-tasks\/[^/]+\/route$/.test(pathname))
       return json({ task_id: pathname.split('/')[3], mode: '', source: '', reason: '' })
     if (/^\/api\/team-tasks\/[^/]+\/metrics$/.test(pathname))
-      return route.fulfill({
+      return opts.taskMetrics
+        ? json(opts.taskMetrics)
+        : route.fulfill({
         status: 404,
         contentType: 'application/json',
         body: JSON.stringify({ detail: 'không thấy task' }),

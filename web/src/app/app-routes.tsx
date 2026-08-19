@@ -27,13 +27,21 @@ import { Overview } from '../views/Overview'
 import { Settings } from '../views/Settings'
 import { Timeline } from '../views/Timeline'
 import { Trigger } from '../views/Trigger'
-import { Work } from '../views/Work'
+import { WorkPage } from '../features/work/work-page'
 import { AppShell } from './app-shell'
 
 // One agent's eight tabs pull in charts, config editors and the Telegram panel — a heavy
 // tree that only matters once someone opens a specific agent, so it loads on demand.
 const AgentDetailPage = lazy(() =>
   import('../features/team/agent-detail/agent-detail-page').then((m) => ({ default: m.AgentDetailPage })),
+)
+
+// One task's steps each carry an artifact + transcript renderer; that whole tree only
+// matters once someone opens a specific task, so it loads on demand.
+const TaskDetailPage = lazy(() =>
+  import('../features/work/task-detail/task-detail-page').then((m) => ({
+    default: m.TaskDetailPage,
+  })),
 )
 
 export function AppRoutes() {
@@ -48,7 +56,15 @@ export function AppRoutes() {
         <Route path="chat" element={<ChatPage />} />
         <Route path="chat/:roomId" element={<ChatPage />} />
         <Route path="office" element={<OfficePageLazy />} />
-        <Route path="work" element={<Work />} />
+        <Route path="work" element={<WorkPage />} />
+        <Route
+          path="work/task/:room"
+          element={
+            <Suspense fallback={null}>
+              <TaskDetailPage />
+            </Suspense>
+          }
+        />
         <Route path="team" element={<TeamPage />} />
         <Route
           path="team/:id"

@@ -1429,3 +1429,78 @@ input, textarea, select { font-size: var(--fs-body); }
 /* The live tool-call line in the desk inspector — quieter than the state line above it,
    because it changes every few seconds and must not pull the eye away from the state. */
 .desk-inspector-activity { color: var(--color-muted); font-size: var(--fs-sm); }
+
+/* --- work hub: board, task detail, schedule --- */
+.board-filters { display: flex; gap: var(--space-4); align-items: center; flex-wrap: wrap;
+  margin-bottom: var(--space-3); font-size: var(--fs-sm); }
+.board-lanes { display: flex; gap: var(--space-3); overflow-x: auto; align-items: flex-start; }
+.board-lane { flex: 1 1 0; min-width: 200px; }
+.board-lane-title { font-size: var(--fs-sm); font-weight: 600; margin: 0 0 var(--space-2); }
+.board-lane-cards { list-style: none; margin: 0; padding: 0; }
+.task-card { margin-bottom: var(--space-2); border: 1px solid var(--color-border);
+  border-radius: 6px; background: var(--color-surface); }
+.task-card:hover { border-color: var(--color-border-strong); }
+.task-card-link { display: flex; flex-direction: column; gap: 0.2rem;
+  padding: var(--space-2); text-decoration: none; color: var(--color-text); }
+.task-card-title { font-size: var(--fs-sm); }
+.task-card-meta { display: flex; gap: var(--space-2); font-size: var(--fs-xs); flex-wrap: wrap; }
+.task-card-pic { font-weight: 600; color: var(--color-subtle); }
+/* The step bar is decoration over a count that is already written out beside it, so it
+   carries no text of its own and stays aria-hidden. */
+.task-card-bar { display: block; height: 3px; border-radius: 2px; background: var(--color-surface-2); }
+.task-card-bar-fill { display: block; height: 100%; border-radius: 2px; background: var(--color-ok); }
+.task-card-badges { display: flex; gap: var(--space-2); flex-wrap: wrap; font-size: var(--fs-xs); }
+.task-badge.queued { color: var(--color-warn); }
+.task-badge.sandbox { color: var(--color-subtle); }
+
+.task-detail-head { margin-bottom: var(--space-4); }
+.task-detail-links { display: flex; gap: var(--space-3); font-size: var(--fs-sm); }
+.task-detail-task { margin-bottom: var(--space-5); }
+.task-detail-title { margin: 0 0 var(--space-1); font-size: var(--fs-h3); }
+/* A definition list reads as a table without being one, so the funnel stays legible
+   when it wraps on a phone instead of scrolling sideways. */
+.task-funnel { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: var(--space-3) 0; }
+.task-funnel dt { font-size: var(--fs-xs); color: var(--color-subtle); }
+.task-funnel dd { margin: 0; font-size: var(--fs-sm); }
+
+.step-list { list-style: none; margin: 0 0 var(--space-3); padding: 0; }
+.step-row { border-bottom: 1px solid var(--color-border); }
+.step-open { display: flex; align-items: baseline; gap: var(--space-2); width: 100%;
+  background: none; border: none; padding: var(--space-2) 0; cursor: pointer;
+  text-align: left; color: var(--color-text); font-size: var(--fs-sm); }
+.step-open:hover .step-title { text-decoration: underline; }
+.step-dot { width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: var(--color-border-strong); }
+.step-row.is-done .step-dot { background: var(--color-ok); }
+.step-row.is-running .step-dot { background: var(--color-accent); }
+.step-row.is-failed .step-dot { background: var(--color-danger); }
+.step-seq { font-size: var(--fs-xs); color: var(--color-subtle); min-width: 1.5em; }
+.step-title { flex: 1 1 auto; }
+.step-meta { font-size: var(--fs-xs); white-space: nowrap; }
+
+.schedule-list { list-style: none; margin: 0; padding: 0; }
+.schedule-row { display: flex; gap: var(--space-3); align-items: baseline;
+  padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border);
+  font-size: var(--fs-sm); }
+.schedule-when { min-width: 8em; color: var(--color-accent); }
+.schedule-what { flex: 1 1 auto; }
+
+/* The outputs artifact opens inline under the list rather than in the chat drawer's
+   fixed panel, which is anchored to the chat layout and would float wrongly here. */
+.outputs-artifact { position: relative; margin-top: var(--space-4);
+  border-top: 1px solid var(--color-border); padding-top: var(--space-3); }
+.outputs-artifact .artifact-close { position: absolute; top: var(--space-2); right: 0; }
+.board-lane-more { font-size: var(--fs-xs); margin: var(--space-1) 0 0; }
+/* Real titles are the task's whole first sentence (measured: 100+ chars), so an
+   un-clamped card grew to a paragraph and made every lane a wall of text. */
+.task-card-title { display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3;
+  -webkit-box-orient: vertical; overflow: hidden; }
+/* Empty lanes still hold their column (an empty "Đang chạy" is information), but they
+   must not claim as much width as a lane with work in it. */
+.board-lane:not(:has(.task-card)) { flex: 0 1 140px; min-width: 120px; }
+.task-card.is-stuck { border-color: var(--color-warn); }
+.task-card-bar-fill.is-stuck { background: var(--color-warn); }
+.task-detail-room { font-size: var(--fs-xs); margin: 0 0 var(--space-2); }
+/* Real step titles are the step's full instruction sentence (measured: 200+ chars), so
+   the row clamps to one line and keeps the whole list scannable. */
+.step-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

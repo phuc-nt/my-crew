@@ -13,6 +13,8 @@ export const queryKeys = {
     all: ['approvals'] as const,
     /** Fleet-wide flat index — the queue shown in both the chat pane and the work hub. */
     pending: () => [...queryKeys.approvals.all, 'pending'] as const,
+    /** Today's auto-delivered runs — what the trust ladder ran without asking. */
+    autoApproved: () => [...queryKeys.approvals.all, 'auto-approved'] as const,
   },
   office: {
     all: ['office'] as const,
@@ -38,6 +40,10 @@ export const queryKeys = {
   outputs: {
     all: ['outputs'] as const,
     list: () => [...queryKeys.outputs.all, 'list'] as const,
+  },
+  schedule: {
+    all: ['schedule'] as const,
+    upcoming: () => [...queryKeys.schedule.all, 'upcoming'] as const,
   },
   team: {
     all: ['team'] as const,
