@@ -45,6 +45,22 @@ không ghi giá trị ở đây).
 - **Alert tự động đã có sẵn**: ops-alerts DM CEO khi agent chết ngầm/fail; budget cảnh
   báo ở 80%; follow-up sweep nhắc việc kẹt. Không cần dựng thêm gì.
 
+### Đường báo vận hành khi không dùng Telegram
+
+Trước v90, mọi thông báo vận hành (việc kẹt, agent chết, cần bạn quyết) chỉ đi được bằng
+Telegram; agent nào chưa gắn bot là im lặng hoàn toàn. Kiểm kê fleet thật: 7/11 agent
+không có kênh nào. Nay có 2 đường thay thế, khai báo bằng biến môi trường trong `.env`:
+
+| Biến | Ý nghĩa |
+|---|---|
+| `OPERATOR_EMAIL` | Địa chỉ nhận thông báo vận hành; dùng cấu hình `SMTP_*` sẵn có. Bỏ trống thì rơi về `SMTP_RECIPIENTS`. |
+| `OPERATOR_WEBHOOK_URL` | URL nhận POST JSON (`text` / `content` / `message` / `rationale` — `content` là khoá Discord dùng). |
+
+Thứ tự thử: **Telegram → email → webhook**; gửi được ở kênh nào thì dừng ở đó. Agent không
+có kênh nào được bỏ qua để hệ thống tìm tiếp agent khác, chứ không tính là gửi thất bại.
+Trạng thái hiện tại xem ở hub **Đội ngũ** → sức khoẻ tích hợp, mục **Kênh báo vận hành**
+(chỉ soi biến môi trường toàn fleet; ràng buộc Telegram theo từng agent nằm trong profile).
+
 ## 4. Kill-switch & rollback (đã DRILL THẬT 2026-08-03)
 
 - **Chặn toàn fleet**: thêm `AGENT_WRITE_DISABLED=true` vào `.env` + restart service

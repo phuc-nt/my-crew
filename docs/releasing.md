@@ -18,7 +18,9 @@ see the deployment guide.
 
 ## Cutting a release
 
-1. Ensure main is green (CI: BE pytest + ruff + FE vitest/tsc/build).
+1. Ensure main is green (CI: BE pytest + ruff + FE vitest/tsc/build), then run
+   `scripts/cold-start-smoke.sh --browser` — CI never installs the wheel, so a
+   packaging break (missing `_shipped/`, stale FE dist) passes CI and fails the user.
 2. If FE changed since the last dist rebuild: `cd web && npm run build`, commit the
    regenerated `my_crew/server/static/app/` (the wheel ships whatever is committed).
 3. Bump `version` in `pyproject.toml`; update `CHANGELOG.md`.
@@ -38,6 +40,23 @@ uv publish /tmp/my-crew-release/*
 ```
 
 ## Verify an install
+
+Automated (preferred) — builds a wheel, installs it into a throwaway venv against a fresh
+`MY_CREW_HOME`, and asserts what only a clean machine can catch: `_shipped/` resources and
+the committed FE bundle actually landed in the wheel, an empty home seeds itself, `/health`
+answers, and the served page carries a bundle. Self-cleaning, no network, no secrets; runs
+on its own port so it never touches a live service.
+
+```bash
+scripts/cold-start-smoke.sh              # backend only (~1 min)
+scripts/cold-start-smoke.sh --browser    # + a real chromium load of the installed bundle
+```
+
+The `--browser` pass runs `web/e2e-cold-start/` under `playwright.cold-start.config.ts` —
+a separate config from the mocked smoke suite on purpose: here the backend is the REAL one
+just installed, which is the whole point.
+
+Manual equivalent:
 
 ```bash
 python -m venv /tmp/v && /tmp/v/bin/pip install my-crew
