@@ -3,6 +3,57 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.12.0] — 2026-08-19
+
+The web app rebuilt around five hubs (v88): chat is now the home screen and the way
+work gets assigned, the 3D office became an observation deck rather than the entry
+point, and work/team/system each expose backend capability that previously had no
+surface. Every pre-redesign URL still resolves. Backend changes are additive — a
+fleet-wide approvals index, event provenance, and workroom read cursors — plus the
+cold-start fixes an audit of a first-run install surfaced.
+
+### Added
+- **Five-hub web app** (v88): `Trò chuyện` (home) · `Văn phòng` · `Công việc` ·
+  `Đội ngũ` · `Hệ thống`. Chat carries the conversation list, a folded event thread,
+  a pending pane for approvals and agent questions, an on-demand artifact drawer with
+  step transcripts, markdown milestone rendering, and the ops assistant as just
+  another conversation. Work adds a task board with a detail funnel, schedule, and a
+  shared approvals queue; Team adds inline hiring and an eight-tab agent page; System
+  gathers settings, connections, company, metrics, and the audit log. Tab state lives
+  in the URL, and ~21 redirects keep every pre-redesign URL working.
+- **Cmd+K palette** over navigation, ops commands, and history search.
+- **Phone layout** for the shell and the chat thread: a five-hub bottom bar, chrome
+  folded into a `⋯` menu, and chat as two screens (list → conversation) with Back.
+- **Fleet-wide pending-approvals index** (`GET /api/approvals/pending`): one call for
+  every agent's queue, each row tagged with its owning agent. The queue is shown on
+  more than one surface, which previously cost a per-agent fan-out per surface. One
+  unreadable profile is skipped rather than blanking the whole queue.
+- **Event provenance and read cursors**: office events carry `source_room_id`, and
+  the workroom list joins each room's `last_seq` so a client can compute unread
+  without a second round trip.
+
+### Changed
+- Advanced mode ("Chế độ nâng cao") no longer unlocks separate technical routes —
+  every hub is always reachable. It now reveals technical detail inside a hub: the
+  office health strip, the roster status column, and the artifact process tab.
+- Chart.js loads on demand instead of riding in the entry bundle.
+
+### Fixed
+- **The first hire is reachable on a cold start.** A fresh install could reach a
+  state where hiring was the necessary next step and no path led to it.
+- **Resuming an agent clears the profile gate too.** Template hires are created
+  `enabled: false` so tokens land in `.env` first; resume used to flip only the
+  registry, leaving a button whose only remedy was hand-editing YAML.
+- **A broken profile degrades instead of 500-ing.** The roster renders the agent id
+  where a name would go (it used to render the exception text, putting an absolute
+  filesystem path where a staff member belongs), and the detail route answers 200
+  with `profile_error`. This now covers a `profile.yaml` that will not parse at all,
+  not only one that parses into the wrong shape.
+- **The assign block names the screen that unblocks it.** With no escalation route
+  configured, assigning is refused with the path to fix it (Đội ngũ → coordinator →
+  tab Kênh) instead of backend vocabulary.
+- Internal links point at their real hub tab rather than bouncing through a redirect.
+
 ## [0.11.0] — 2026-08-18
 
 Observability and engine sovereignty (v80–v86): every team-step attempt now leaves a
