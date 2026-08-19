@@ -25,6 +25,7 @@ from my_crew.server import (
     routes_agent_telegram,
     routes_agents,
     routes_agents_admin,
+    routes_auth_password,
     routes_clarify,
     routes_company,
     routes_company_docs,
@@ -80,6 +81,7 @@ def create_app() -> FastAPI:
         same_site="lax",
     )
     app.include_router(auth.router)
+    app.include_router(routes_auth_password.router)
     # v7 M17: first-run Setup Wizard (only active before setup completes; 410 after).
     app.include_router(routes_setup.router)
 

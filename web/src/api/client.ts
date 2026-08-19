@@ -337,6 +337,13 @@ export const api = {
   login: (username: string, password: string) =>
     post<{ ok: boolean }>('/api/login', { username, password }),
   logout: () => post<{ ok: boolean }>('/api/logout'),
+  // Đổi mật khẩu từ trong app. Thành công là đá luôn phiên hiện tại (BE xoay
+  // session secret), nên nơi gọi phải đưa người dùng về màn đăng nhập.
+  changePassword: (currentPassword: string, newPassword: string) =>
+    post<{ ok: boolean; restarting: boolean; message: string }>(
+      '/api/auth/change-password',
+      { current_password: currentPassword, new_password: newPassword },
+    ),
   // v7 M17: first-run setup wizard.
   setupStatus: () =>
     request<{ completed: boolean; keys?: Record<string, boolean> }>('/api/setup/status'),

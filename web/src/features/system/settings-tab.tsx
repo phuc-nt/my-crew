@@ -11,6 +11,7 @@ import { queryKeys } from '../../api/queries/query-keys'
 import { IntegrationHealthPanel } from '../../components/IntegrationHealthPanel'
 import { useLanguage } from '../../i18n/language-context'
 import { useUiMode } from '../../ui-mode-context'
+import { ChangePasswordBox } from './change-password-box'
 
 export function SettingsTab() {
   const { t } = useLanguage()
@@ -59,6 +60,8 @@ export function SettingsTab() {
         </label>
         <p className="muted">{t('settings.advancedModeHint')}</p>
       </section>
+
+      <ChangePasswordBox />
 
       <IntegrationHealthPanel />
     </div>

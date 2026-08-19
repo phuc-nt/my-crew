@@ -66,6 +66,15 @@ def _verify(plain: str, hashed: str) -> bool:
         return False
 
 
+def verify_current_password(plain: str) -> bool:
+    """True khi `plain` khớp mật khẩu đang cấu hình.
+
+    Có mặt để đường đổi mật khẩu không phải tự đọc env + gọi bcrypt: mọi chỗ so mật khẩu
+    đều đi qua đúng một hàm này, nên `_verify` (nuốt lỗi hash hỏng) vẫn là chi tiết riêng.
+    """
+    return _verify(plain, os.environ.get(_HASH_ENV, ""))
+
+
 #: The insecure fallback session secret used ONLY in dev (auth off). If auth is ON, the
 #: operator MUST set a real WEB_SESSION_SECRET — signing sessions with this public constant
 #: would let anyone forge a logged-in cookie, defeating the whole auth layer.
@@ -180,4 +189,5 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 
 __all__ = ["router", "AuthMiddleware", "auth_enabled", "hash_password", "assert_bind_safe",
-           "assert_session_secret_safe"]
+           "assert_session_secret_safe", "verify_current_password",
+]
