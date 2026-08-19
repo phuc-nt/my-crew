@@ -322,6 +322,8 @@ const vi = {
   'board.taskCount': '{n} việc đang chạy · {done} đã xong',
   'board.empty': 'Chưa có việc nào trên bảng.',
   'board.moreDone': '… và {n} việc đã xong nữa — xem ở tab Kết quả.',
+  'board.dismissDraft': 'Hủy nháp',
+  'board.dismissingDraft': 'Đang hủy…',
   'schedule.loadError': 'không tải được lịch chạy',
   'schedule.empty': 'Không có lịch chạy nào sắp tới.',
   'schedule.inMinutes': 'trong {n} phút',
@@ -522,6 +524,20 @@ const vi = {
   'settings.advancedModeHint':
     'Bật để hiện đầy đủ số liệu vận hành cho người kỹ thuật (dòng thời gian, chi phí, bộ nhớ, guardrail, cấu hình, chạy tay) ngay trên thanh điều hướng. Tắt để giữ giao diện gọn 4 mục.',
   'settings.saveFailed': 'lưu thất bại',
+
+  // Đổi mật khẩu đăng nhập (hub Hệ thống → Cài đặt).
+  'password.title': 'Đổi mật khẩu đăng nhập',
+  'password.hint':
+    'Đổi xong, mọi thiết bị đang đăng nhập đều bị đăng xuất và dịch vụ khởi động lại — bạn đăng nhập lại bằng mật khẩu mới sau vài giây.',
+  'password.currentLabel': 'Mật khẩu hiện tại',
+  'password.newLabel': 'Mật khẩu mới',
+  'password.confirmLabel': 'Nhập lại mật khẩu mới',
+  'password.submit': 'Đổi mật khẩu',
+  'password.saving': 'Đang đổi…',
+  'password.mismatch': 'Hai ô mật khẩu mới không giống nhau.',
+  'password.tooShort': 'Mật khẩu mới tối thiểu {min} ký tự.',
+  'password.failed': 'Đổi mật khẩu thất bại.',
+  'password.backToLogin': 'Về màn đăng nhập',
 
   // Connections.tsx
   'connections.intro':
@@ -1292,6 +1308,8 @@ const en = {
   'board.taskCount': '{n} in flight · {done} done',
   'board.empty': 'No tasks on the board yet.',
   'board.moreDone': '… and {n} more finished — see the Outputs tab.',
+  'board.dismissDraft': 'Discard draft',
+  'board.dismissingDraft': 'Discarding…',
   'schedule.loadError': 'could not load the schedule',
   'schedule.empty': 'Nothing scheduled to run soon.',
   'schedule.inMinutes': 'in {n} min',
@@ -1490,6 +1508,20 @@ const en = {
   'settings.advancedModeHint':
     'Turn on to show full operational metrics for technical users (timeline, cost, memory, guardrail, config, manual run) right in the nav. Turn off to keep a compact 4-item nav.',
   'settings.saveFailed': 'save failed',
+
+  // Change login password (System hub → Settings).
+  'password.title': 'Change login password',
+  'password.hint':
+    'After changing, every signed-in device is logged out and the service restarts — sign in again with the new password after a few seconds.',
+  'password.currentLabel': 'Current password',
+  'password.newLabel': 'New password',
+  'password.confirmLabel': 'Repeat new password',
+  'password.submit': 'Change password',
+  'password.saving': 'Changing…',
+  'password.mismatch': 'The two new-password fields do not match.',
+  'password.tooShort': 'New password must be at least {min} characters.',
+  'password.failed': 'Could not change the password.',
+  'password.backToLogin': 'Back to sign in',
 
   // Connections.tsx
   'connections.intro':

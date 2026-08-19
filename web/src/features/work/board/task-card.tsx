@@ -4,12 +4,18 @@
 // coordinator queue position (waiting is not the same as stuck) and the count of steps
 // that escalate to the Docker sandbox tier. Clicking opens the task's own page rather
 // than jumping straight to the 3D office — the detail page links onward to the room.
+import { useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Link } from 'react-router'
+import { api } from '../../../api/client'
+import { queryKeys } from '../../../api/queries/query-keys'
 import { useLanguage } from '../../../i18n/language-context'
 import type { TeamBoardCard } from '../../../types'
 
 export function TaskCard({ card, lane }: { card: TeamBoardCard; lane?: string }) {
   const { t } = useLanguage()
+  const qc = useQueryClient()
+  const [dismissing, setDismissing] = useState(false)
   const queued = card.queue_position ?? 0
   const sandbox = card.steps_needs_shell ?? 0
   // Percent, not a fraction of a bar's width: a task with no steps yet must not render
@@ -20,6 +26,24 @@ export function TaskCard({ card, lane }: { card: TeamBoardCard; lane?: string })
   // which is the opposite of what the lane means. Measured on the real fleet: every
   // card in the stuck lane had a near-complete bar.
   const stuck = lane === 'khac'
+
+  // Bản nháp là kế hoạch đã xem trước nhưng chưa bấm xác nhận. Nó nằm cùng bảng với việc
+  // thật nên nhìn y hệt, và trước đây không có đường bỏ nó đi từ bảng — chỉ có màn giao
+  // việc đang mở mới hủy được. Nút này mở đúng đường đó ra cho bản nháp đã bỏ dở.
+  const draft = lane === 'planning'
+
+  const dismiss = () => {
+    setDismissing(true)
+    api
+      .assignCancel(card.task_id)
+      .catch(() => undefined) // dọn nháp là best-effort, giống lúc hủy ở màn giao việc
+      .finally(() => {
+        setDismissing(false)
+        // Bảng tự vẽ lại từ backend: nháp đã terminal thì biến khỏi cột, còn nếu điều phối
+        // viên vừa kịp xác nhận nó thì thẻ vẫn còn — đúng thực tế, không tự xoá lạc quan.
+        void qc.invalidateQueries({ queryKey: queryKeys.tasks.board() })
+      })
+  }
 
   return (
     <li className={`task-card${stuck ? ' is-stuck' : ''}`}>
@@ -55,6 +79,16 @@ export function TaskCard({ card, lane }: { card: TeamBoardCard; lane?: string })
           )}
         </span>
       </Link>
+      {draft && (
+        <button
+          type="button"
+          className="task-card-dismiss"
+          onClick={dismiss}
+          disabled={dismissing}
+        >
+          {dismissing ? t('board.dismissingDraft') : t('board.dismissDraft')}
+        </button>
+      )}
     </li>
   )
 }

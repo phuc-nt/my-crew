@@ -617,6 +617,29 @@ input, textarea, select { font-size: var(--fs-body); }
 .mode-toggle-box { margin-bottom: var(--space-5); }
 .mode-toggle { font-weight: 600; cursor: pointer; }
 
+/* Ô đổi mật khẩu (Hệ thống → Cài đặt). Cột dọc để trên điện thoại 3 ô mật khẩu không bị
+   ép ngang; max-width giữ ô không kéo dài hết bề ngang màn hình rộng. */
+.password-form { display: flex; flex-direction: column; gap: var(--space-2); max-width: 22rem; }
+.password-form label { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--fs-sm); }
+.password-form button { align-self: flex-start; }
+
+/* Nút bỏ bản nháp trên thẻ ở cột "Lập kế hoạch". Nằm ngoài <Link> bọc thẻ nên bấm nút
+   không mở trang việc; chữ nhỏ + mờ để không tranh chỗ với tiêu đề việc. */
+.task-card-dismiss {
+  display: block;
+  /* Thẻ là block chứ không phải flex, nên nút tự canh lề bằng padding khớp với <Link>
+     bên trên; padding-top bằng 0 để nút không rớt xa khỏi phần thân thẻ. */
+  padding: 0 var(--space-2) var(--space-2);
+  border: 0;
+  background: none;
+  color: var(--color-muted);
+  font-size: var(--fs-xs);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.task-card-dismiss:hover:not(:disabled) { color: var(--color-danger); }
+.task-card-dismiss:disabled { cursor: default; opacity: 0.6; }
+
 /* High-mode budget-usage bar on the Team table (v10 M25). Pure CSS, no chart lib. The cell wraps
    the text + bar so the mobile card-list flex row (App.css media query) has a single child on the
    value side — the bar sits UNDER the dollar text, not squeezed beside it. */
