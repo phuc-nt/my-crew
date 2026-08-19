@@ -1,9 +1,9 @@
 # System Architecture — my-crew
 
-> Kiến trúc kỹ thuật (as-built, v79 / 0.10.0). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
+> Kiến trúc kỹ thuật (as-built, v88 — redesign web FE; backend ở mức 0.11.0). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
 > (vì sao) + [action-gateway-explainer](action-gateway-explainer.md) (mô hình an toàn) +
 > [codebase-summary](codebase-summary.md) (cái gì ở file nào).
-> Cập nhật: 2026-08-16.
+> Cập nhật: 2026-08-19.
 
 ## 1. Nguyên tắc kiến trúc
 
@@ -437,25 +437,68 @@ bury fact giữa bookkeeping (marker viết mỗi lần, lesson hiếm) — swee
 task stalled cũ. Cost tính vào `BudgetTracker` sẵn (không cột DB mới). Module: `my_crew/agent/task_reflection.py`.
 Consolidation sweep (v35, chạy 03:00 nightly) giữ nguyên, lesson chỉ là memory thường.
 
-### 3.11 Frontend (`web/src/`)
-React 19 + Vite. Màn chính **Văn phòng** (`views/office-unified/`): 3 cột phòng-việc /
-hoạt-động / kết-quả + panel 3D (`views/office-3d/`, react-three-fiber). Reducer sự kiện
-(`agent-office-state.ts`) biến SSE stream → trạng thái bàn. Build dist commit vào
-`my_crew/server/static/app/`.
+### 3.11 Frontend (`web/src/`, v88 redesign)
+
+React 19 + Vite + TanStack Query. SPA phục vụ tại `/` (StaticFiles `html=True`), build dist
+commit vào `my_crew/server/static/app/`.
+
+**IA 5 hub.** `/chat` (màn nhà) · `/office` (3D) · `/work` · `/team` · `/system`. Mỗi màn
+trước redesign giờ là một **tab có URL riêng** (`?tab=`) bên trong hub đã hấp thụ nó, nên
+deep link mount đúng tab khi cold load. Bảng route ở `app/app-routes.tsx` giữ 21 redirect
+cho mọi URL cũ (`/settings`, `/cost`, `/agents/:id`…); `/agents/:id` giữ id trong path.
+
+**Cấu trúc.** `features/<hub>/` thay cho `views/` phẳng:
+
+```
+web/src/features/
+├── chat/     # màn nhà: danh sách hội thoại, composer, thread
+├── office/   # sàn bàn làm việc + 3D (office-3d/), activity feed, quick assign
+├── work/     # board, hàng đợi duyệt, task detail, outputs, company activity
+├── team/     # roster, agent detail (agent-detail/), hire panel
+├── system/   # settings, connections, company, insights, audit
+└── palette/  # command palette (không phải hub)
+```
+
+Cổng vào vẫn là `main.tsx` → `App.tsx` (chỉ là cửa setup/login, cố ý giữ mỏng) →
+`app/app-providers.tsx` (chỉ còn query client) → `app/app-routes.tsx` → `app/app-shell.tsx`.
+Theme/language/ui-mode provider nằm ở `main.tsx`, ngoài cửa auth.
+
+**Tầng dữ liệu** (`web/src/api/queries/`). TanStack Query thay các hook fetch rời + 2 global
+context cũ (`AgentProvider`, `PendingApprovalsProvider` — agent giờ nằm ở route, approvals là
+1 query cache; bỏ được vòng fan-out 30s toàn fleet).
+
+- `query-keys.ts` — factory key **duy nhất**; là thứ cho cầu SSE gọi đúng slice.
+- Query theo hub: `use-office-queries.ts`, `use-work-queries.ts`, `use-team-queries.ts`,
+  `use-system-queries.ts`, `use-agent-detail-queries.ts`.
+- Dùng chung: `use-agents-queries.ts`, `use-approvals-queries.ts`, `use-artifact-queries.ts`,
+  `use-clarify-queries.ts`, `use-auto-approved-query.ts`.
+- `sse-invalidation-bridge.ts` — ánh xạ **kind sự kiện phòng → các slice query có thể đã đổi**.
+  Cố ý là bảng thuần (không import `QueryClient`) để test được như dữ liệu: một kind lặng lẽ
+  thôi invalidate một slice là một màn lặng lẽ thôi cập nhật, không test render nào bắt được.
+
+**Chunk tách rời** (số đo từ lần build gần nhất): `agent-desk` 900 kB (94% là `three`+r3f, chỉ
+tải sau `/office`) · `chart-theme` 173 kB (chỉ Cost/Guardrail) · `agent-detail-page` 23 kB ·
+`office-page` 20 kB · `office-canvas` 19 kB · `task-detail-page` 3.5 kB. Entry `index` **475 kB**
+(cổng ≤560).
 
 ## 4. Luồng dữ liệu chính: giao 1 việc
 
-1. CEO gõ `@content <việc>` → `routes_office_assign` → `ops_assign_team_task.preview` —
+1. CEO gõ brief vào `/chat` (hub home) → message gửi backend.
+2. Backend `routes_office_assign.preview` → `ops_assign_team_task.preview` —
    phễu định tuyến (§3.5b) quyết sprint/team trước; đường team: 1 LLM call phân rã →
    validate code-side → `downgrade_to_sprint` kéo plan suy biến về sprint → lưu draft
    (status `planning`) + hash.
-2. CEO xác nhận (hoặc auto-confirm) → `confirm_plan(hash)` TOCTOU-proof → task `open`.
-3. Coordinator daemon tick kế: đọc task, `_verify_plan_hash` (chống tamper), dispatch
+3. CEO xác nhận (hoặc auto-confirm) trong **Chat** → `confirm_plan(hash)` TOCTOU-proof → task `open`.
+4. Coordinator daemon tick kế: đọc task, `_verify_plan_hash` (chống tamper), dispatch
    bước sẵn sàng → spawn worker.
-4. Worker chạy step graph → `deliver` ghi artifact `step-<n>.json` + append office event.
-5. SSE đẩy event → SPA cập nhật feed/3D realtime. Bước done `needs_review` → ticker chèn
-   soát chéo. Bước cuối (PIC) xong → task done.
-6. Bước "ghi ra ngoài" (nếu có) → Action Gateway → Lớp B chờ CEO duyệt ở tab Duyệt.
+5. Worker chạy step graph → `deliver` ghi artifact `step-<n>.json` + append office event.
+6. SSE đẩy event → **TanStack Query invalidates** affected keys → FE components re-render:
+   - **Chat** hub: task confirmation feedback
+   - **Office** hub: 3D desk updates, workroom list, action queue
+   - **Work** hub: kanban board refresh, queue updates
+   - **Team** hub: agent status updates
+7. Bước done `needs_review` → ticker chèn soát chéo. Bước cuối (PIC) xong → task done.
+8. Bước "ghi ra ngoài" (nếu có) → Action Gateway → Lớp B chờ CEO duyệt ở **Work → queue**.
 
 ### 4a. Vòng phán đoán khi step hỏng (cứng hoá 08-07/08-08)
 

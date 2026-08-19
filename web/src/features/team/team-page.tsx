@@ -40,7 +40,7 @@ export function TeamPage() {
             <Button variant="ghost" onClick={() => setCreateOpen((v) => !v)}>
               {createOpen ? t('team.hireClose') : t('team.hireOpen')}
             </Button>
-            <Link to="/company-docs" className="btn-link">
+            <Link to="/system?tab=company" className="btn-link">
               {t('team.docsRepo')}
             </Link>
           </div>

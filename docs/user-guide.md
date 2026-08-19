@@ -73,23 +73,23 @@ After setup, access the web interface at `http://127.0.0.1:8765` (or your deploy
 
 ---
 
-## The 4 Main Sections
+## The 5 Hubs
 
-The navigation bar has 4 primary sections (plus Settings):
+The navigation bar has 5 primary hubs (plus Settings):
 
-| Section | Purpose |
-|---|---|
-| **Office** | MAIN SCREEN: assign work, watch team in real-time, review deliverables in 3D workspace. |
-| **Team** | Roster: view agent status, budget, pause/enable/delete agents, create new ones. |
-| **Approvals** | Queue of work awaiting your approval (badge shows count) + kanban board of all tasks. |
-| **Assistant** | Chat with the executive assistant: ask questions, create agents via conversation, run one-off commands. |
-| **Settings** | System health, theme, advanced mode, auto-confirm rules. |
+| Hub | URL | Purpose |
+|---|---|---|
+| **Chat** | `/chat` | HOME: conversation list + message thread. Assign work, chat with the assistant or a workroom (`/chat/:roomId`), view artifacts inline. |
+| **Office** | `/office` | Real-time 3D workspace: watch team desks, pending approvals, upcoming schedule, activity feed. |
+| **Work** | `/work` | Approvals + clarify queue (always on top) over 4 tabs: board, outputs, schedule, activity. |
+| **Team** | `/team` | Agent roster: status, budget, enable/disable/delete. Click agent → 8 tabs (profile, activity, knowledge, skills, channels, budget, memory, advanced). Create new agents. |
+| **System** | `/system` | Fleet settings, connections, company info, audit log. Tabs: settings, connections, company, insights, audit. |
 
 ---
 
 ## Assigning Work to the Team
 
-**Quickest way:** Go to **Office** and type in the task box at the bottom.
+**Quickest way:** Go to **Chat** (home hub) and type in the message box.
 
 ### Three Assignment Styles
 
@@ -109,9 +109,9 @@ When you type `@`, a dropdown shows all available agents. The named agent become
 
 or just skip the `@` entirely. The system suggests which agent is best suited and shows you the plan before you confirm.
 
-**Option 3: Detailed conversation (via Assistant)**
+**Option 3: Detailed conversation (via Chat)**
 
-Click **Assistant** → type the request → answer questions step-by-step → the assistant creates the task and shows it in real-time on the **Office** screen.
+Type your request in **Chat** → answer questions step-by-step → the assistant creates the task, which then shows up on the **Work** board.
 
 ### Sprint Mode — One Agent, Start to Finish (v77, default since v78)
 
@@ -157,17 +157,17 @@ After you type a task, the system:
 3. Displays the **PIC** (person responsible for the final handoff).
 4. Waits for your **"Confirm"** or **"Cancel"**.
 
-On the Office screen, the 3D workspace shows the PIC's desk with a **⭐** and **PIC** label. You can refine the plan in the **Assistant** if needed (see Replan, below).
+In **Chat**, you see the plan preview. The 3D workspace in **Office** shows the PIC's desk with a **⭐** and **PIC** label. You can refine the plan in **Chat** if needed (see Replan, below).
 
 ### Workrooms
 
-Each assigned task opens a **workroom** — a dedicated space for that task. Workrooms are listed on the left of the Office screen:
+Each assigned task opens a **workroom** — a dedicated space for that task. Workrooms are listed in **Office** screen on the right:
 
 - **●** = task in progress
 - **⚠** = task stuck
 - **✓** = task completed
 
-Click a workroom to enter and:
+Click a workroom to enter and view activity + artifacts. You can also chat within the workroom and:
 
 - **Ask for status update** ("how's it going?") — agent responds in real-time (response is not saved to history).
 - **Tweak the plan mid-execution** ("drop the final review step" / "add image verification") — see the DIFF before applying.
@@ -179,12 +179,12 @@ Click a workroom to enter and:
 
 ### Two Types of Queued Work
 
-**Tab: Approvals**
+**Work hub → top queue** (always visible above kanban)
 
 | Type | Source | Action |
 |---|---|---|
 | **Actions from guarded agents** | Agent set to `trust_mode: guarded` | Awaits your approval before executing. |
-| **Automation proposals** | Automation script (no live agent) | Always awaits approval, any trust mode. |
+| **Clarification questions** | Task step hit a dead end | Answer in-place, no re-draft needed. |
 
 ### Autonomous vs. Guarded
 
@@ -196,19 +196,19 @@ Click a workroom to enter and:
 
 **To switch an agent to guarded:**
 
-1. Go to **Team** → select agent.
-2. In the **Settings** tab, add:
+1. Go to **Team** → click agent name.
+2. In the **🔬 Nâng cao** tab, edit YAML and add:
    ```yaml
    safety:
      trust_mode: guarded
    ```
-3. Save. Next upgrade cycle, agent becomes guarded.
+3. Save. Agent becomes guarded immediately on next task.
 
 ### Learning Rules from Approvals (v67+)
 
 When you **Approve** or **Reject** a guarded action, you can teach the system to auto-decide the **same action** next time:
 
-**In the Approvals tab:**
+**In the Work hub queue:**
 - Click **Approve** → optionally check **"Always approve this type"** (or use CLI `--always` flag)
 - Click **Reject** → optionally check **"Always reject this type"** (or use CLI `--deny` flag)
 
@@ -260,39 +260,40 @@ configured check-in until someone decides — a blocked agent can't wait unnotic
 
 ### View Team Status
 
-**Team** tab shows all agents with:
+**Team** hub shows all agents with:
 
 - **Status** (idle / working / errored)
 - **Budget spent** this cycle
 - **Any stuck tasks** (⚠)
 
+Click an agent to see 8 tabs: profile, activity, knowledge, skills, channels, budget, memory, advanced.
+
 ### Create a New Agent
 
 **Option 1: One-click templates** (fastest)
 
-Click **"+ Create virtual agent"** → pick a template card (6 roles: Team Lead, Research, Content, Analytics, Verification, PM-Coordinator) → click **"Create now"** → done. Agents start **disabled**. Enable them after setting up credentials (if needed) in the Team tab.
+Go to **Team** → click **"+ Create virtual agent"** → pick a template card (6 roles: Team Lead, Research, Content, Analytics, Verification, PM-Coordinator) → click **"Create now"** → done. Agents start **disabled**. Enable them after setting up credentials (if needed) in the agent detail page.
 
 Templates auto-load their skills at runtime, so updating a template skill instantly affects all agents using it.
 
 **Option 2: Crew creation** (bulk)
 
-Click **"+ Create full crew"** → system creates all 5 template agents at once (shows which ones already exist) → confirm → all created independently (if 1 fails, others still created).
+Go to **Team** → click **"+ Create full crew"** → system creates all 5 template agents at once (shows which ones already exist) → confirm → all created independently (if 1 fails, others still created).
 
 **Option 3: Custom via chat**
 
-Use the **Assistant** tab → ask "create an agent that…" → answer questions → assistant creates it and turns it on immediately.
+Go to **Chat** → ask "create an agent that…" → answer questions → assistant creates it and turns it on immediately.
 
 ### Manage Agents
 
-**Pause an agent** → disable it (stops receiving new work; in-flight work completes).
+**Team** hub has each agent card:
 
-**Delete an agent** → remove from roster (can recreate from template anytime).
-
-**Upgrade agent config** — when a template updates:
-
-1. Agent card shows **"⬆ new vN"** badge.
-2. Click it → see what will change.
-3. **"Upgrade"** applies new config (fields you customized stay yours); **old profile auto-backed up**.
+- **Pause an agent** → toggle off (stops receiving new work; in-flight work completes).
+- **Delete an agent** → click delete (can recreate from template anytime).
+- **Upgrade agent config** — when a template updates:
+  1. Agent card shows **"⬆ new vN"** badge.
+  2. Click it → see what will change.
+  3. **"Upgrade"** applies new config (fields you customized stay yours); **old profile auto-backed up**.
 
 ### Secretary Heartbeat (v68+, Optional)
 
@@ -329,7 +330,7 @@ Valid intervals: `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `12h`, `24h`.
 
 ## Reading Reports & Insights
 
-### Office Display (v54 Cockpit)
+### Office Display (v54 Cockpit + v87 redesign)
 
 The **Office** main screen is a **3-zone grid** (adapts to single column ≤1100px):
 
@@ -357,7 +358,7 @@ The **Office** main screen is a **3-zone grid** (adapts to single column ≤1100
 
 ### Activity Log
 
-**Office → Activity** (or ask Assistant "what did the team do this week?") shows the full audit trail:
+**Work → Activity** tab shows the full audit trail:
 
 - Every action the team took (posted to Slack, merged PR, wrote report).
 - **Actor** (which agent did it, or human who approved it).
@@ -414,7 +415,7 @@ After a step is done, a peer (usually Verification / QA if available):
 
 **If a task is running but you want to change it:**
 
-Go to **Assistant** → type:
+Go to **Chat** → type:
 
 ```
 replan task-123: drop the final audit step
@@ -438,7 +439,7 @@ The assistant:
 
 ## Chat with the Executive Assistant
 
-**Assistant** tab is your command center for ad-hoc requests:
+**Chat** hub (home screen) is your command center for ad-hoc requests:
 
 - **"What did the team accomplish this week?"** → summary of activity.
 - **"Run the daily report now"** (vs. waiting for the schedule).
@@ -446,9 +447,9 @@ The assistant:
 - **"Replan task-X: …"** (adjust running tasks).
 - **"Enable web search for the Research agent"** (configuration tweaks).
 
-Type a request and **send**. The assistant previews what it will do, asks clarifying questions if needed, and waits for you to confirm ("approve") before executing.
+Type a request and **send**. The assistant previews what it will do, asks clarifying questions if needed, and waits for you to confirm before executing.
 
-Click **"What can the assistant do?"** → system lists all available commands with examples. Click an example to copy it into the chat.
+Type `?` or look for a help button to see available commands with examples.
 
 ---
 
@@ -477,33 +478,21 @@ a **floor ring flash** after a peer review — green = passed, orange = needs re
 
 ### Theme (Light / Dark / Auto)
 
-Top-right corner button. Saved for next session.
+Top-right corner button next to language toggle. Saved for next session.
 
 ### Advanced Mode
 
-**Settings → Display Mode → "Advanced mode"** → navigation bar shows additional technical pages (all in Vietnamese):
+**System → Settings → "Chế độ nâng cao"**. The old advanced *navigation row* is gone —
+those pages are now tabs inside the hub that owns them, reachable by anyone. What the
+toggle still does is reveal the technical panels **inside** a hub: run/cost detail on the
+office floor, per-agent operational numbers on the roster, raw config and artifact
+internals. Leave it off for a 4-item interface; turn it on when you want the operator view.
 
-- **Overview** — full agent roster + status.
-- **Timeline** — execution history.
-- **Cost** — budget tracker chart.
-- **Memory** — what the assistant remembers + pending proposals.
-- **Guardrail** — audit log of actions allowed/denied/queued.
-- **Configuration** — edit agent profiles directly (YAML).
-- **Manual run** — run a report immediately.
-- **Office** — task timeline + 3D office wireframe.
+### Language Toggle (VN / EN)
 
-Toggle off to return to the simplified 4-section view. This only changes detail level; it doesn't affect permissions.
+The header (next to the theme toggle) shows a **VN / EN** chip. Click to switch interface language.
 
----
-
-## Language Toggle: Vietnamese / English (v53)
-
-The header (next to the theme toggle) shows a **VN / EN** chip. Click to switch interface language:
-
-- **Vietnamese (default):** All navigation, button labels, and UI text appear in Vietnamese (Tiếng Việt).
-- **English:** Same buttons and labels translate to English, making it easier for non-Vietnamese speakers to navigate.
-
-**What DOES change:** Dashboard nav labels ("Văn phòng" → "Office", "Đội" → "Team", etc.), settings labels, and all FE-static UI text.
+**What DOES change:** hub nav labels ("Trò chuyện" → "Chat", "Đội ngũ" → "Team", etc.), settings labels, and all FE-static UI text.
 
 **What STAYS Vietnamese in English mode:**
 - Health-check status and error messages (these come from the backend system, not the UI layer).
@@ -537,11 +526,11 @@ Real data is moved to `.demo-backup/` while demo is active. Demo agents have `dr
 
 ### Disable an Agent Temporarily
 
-**Team** tab → agent card → toggle **off**. Agent stops receiving new work; in-flight work finishes.
+**Team** hub → find agent card → toggle **off**. Agent stops receiving new work; in-flight work finishes.
 
 ### Set Per-Agent Web Search (Research Role)
 
-**Team** → Research agent → **Settings** tab → add to YAML:
+**Team** → click agent → **🔬 Nâng cao** tab → edit YAML and add:
 
 ```yaml
 academic_search: true
@@ -551,11 +540,11 @@ Agent can now find papers via OpenAlex (no API key needed).
 
 ### Enable Telegram Alerts
 
-**Team** → select agent → **Telegram Channel** tab → create a bot with @BotFather, paste token → agent sends alerts + reports to that bot.
+**Team** → click agent → **Kênh** (Channels) tab → create a bot with @BotFather, paste token → agent sends alerts + reports to that bot.
 
 ### Watch a Project (Wake-up on Changes)
 
-**Team** → agent → **Settings** → add:
+**Team** → click agent → **🔬 Nâng cao** tab → edit YAML and add:
 
 ```yaml
 watchers:
@@ -570,7 +559,7 @@ System checks every 5 minutes (no LLM if content unchanged). When content change
 
 Some tasks benefit from **multiple specialized sub-agents working inside a sandbox** (no Docker on host, all isolated):
 
-**Team** → deep_agent → **Settings** → enable:
+**Team** → click agent → **🔬 Nâng cao** tab → edit YAML and enable:
 
 ```yaml
 deep_team: true
@@ -585,12 +574,12 @@ Now that agent can decompose large tasks into ≤3 sub-tasks and run them in par
 
 | Problem | Solution |
 |---|---|
-| Task assigned but not running | Coordinator daemon not running. Check **Settings → System Health** → "Coordinator" status. Start it: `uv run python -m my_crew.runtime.service` |
-| "Agent offline" badge on agent card | Agent crashed or exceeded budget. Check **System Health** + agent's recent activity. Restart coordinator. |
-| Cannot assign work via chat | Assistant tab not loaded. Refresh browser. Check console for errors. |
-| Approvals tab not updating | Refresh browser. Check that coordinator is running. |
-| Report shows "🔒 3 sandbox" but deep_agent unconfigured | Agent doesn't have Docker configured. Task will fail. Assign to an agent with `agent_runtime: deep_agent` + `sandbox` config. |
-| "Web search not authorized" error | Web search key not set in Setup Wizard. Go to **Settings → System Health** for instructions. |
+| Task assigned but not running | Coordinator daemon not running. Check **System → Settings** → "Coordinator" status. Start it: `uv run python -m my_crew.runtime.service` |
+| "Agent offline" badge on agent card | Agent crashed or exceeded budget. Check **System** settings + agent's activity tab. Restart coordinator. |
+| Cannot chat in Chat hub | Chat hub not loaded. Refresh browser. Check console for errors. |
+| Work queue not updating | Refresh browser. Check that coordinator is running. |
+| Task shows "🔒 3 sandbox" but deep_agent unconfigured | Agent doesn't have Docker configured. Task will fail. Assign to an agent with `agent_runtime: deep_agent` + `sandbox` config. |
+| "Web search not authorized" error | Web search key not set in Setup Wizard. Go to **System → Settings** for instructions. |
 
 ---
 
@@ -598,23 +587,23 @@ Now that agent can decompose large tasks into ≤3 sub-tasks and run them in par
 
 **Do agents write to Slack/GitHub without asking?**
 
-By default (autonomous mode), **yes** — they write immediately and log it in the audit trail. If you want approval first, switch the agent to guarded mode (in Team → Settings).
+By default (autonomous mode), **yes** — they write immediately and log it in the audit trail. If you want approval first, switch the agent to guarded mode (in **Team** → click agent → **🔬 Nâng cao**).
 
 **What if an agent makes a mistake?**
 
-Every action is logged immutably (audit log). Dangerous actions (permanent data loss, exposing secrets) are blocked at the gateway even if you approved it. For mistakes within guardrails, you can manually undo via the source (Jira, Slack, GitHub, etc.).
+Every action is logged immutably (audit log visible in **System → Audit**). Dangerous actions (permanent data loss, exposing secrets) are blocked at the gateway even if you approved it. For mistakes within guardrails, you can manually undo via the source (Jira, Slack, GitHub, etc.).
 
 **Can I see how much budget was spent?**
 
-Yes — **Approvals** tab kanban cards show cost per step. Click **"Cost"** to break it down. **Advanced mode → Cost** page shows a chart.
+Yes — **Work** hub shows kanban cards with cost per step. Click **"Cost"** to break it down. **System → Insights** shows the fleet-wide spend table (each agent's spend against its cap, plus the fleet total).
 
 **What if an agent gets stuck (⚠)?**
 
-Go to the workroom → click **"Ask for help"** or **"Replan"** → adjust and confirm. If it's a genuine error, check **System Health** to see which integration failed.
+Go to the workroom in **Office** → click **"Ask for help"** or **"Replan"** → adjust and confirm. If it's a genuine error, check **System → Settings** to see which integration failed.
 
 **Can agents take on Telegram commands from me?**
 
-Yes, if you've enabled Telegram for that agent. You can send "run the weekly report" via Telegram and the agent receives it as a task. See **Team → [agent] → Telegram Channel**.
+Yes, if you've enabled Telegram for that agent. You can send "run the weekly report" via Telegram and the agent receives it as a task. See **Team** → click agent → **Kênh** (Channels) tab.
 
 ---
 

@@ -53,7 +53,7 @@ export function AssistantThread({ title }: { title: string }) {
             Still /create — the team hub takes that route over in a later phase. */}
         <p>
           {t('chat.createViaWizardPrefix')}
-          <Link to="/create">{t('chat.createViaWizardLink')}</Link>
+          <Link to="/team">{t('chat.createViaWizardLink')}</Link>
         </p>
       </section>
     )

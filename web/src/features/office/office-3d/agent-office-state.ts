@@ -375,15 +375,15 @@ export function agentIdsInOrder(messages: OfficeMessage[]): string[] {
   return seen
 }
 
-// v54 P4: ✋ pending-count badge — SAME source of truth as the action rail (P2), so the
-// desk badge and the rail list can never disagree. Pure merge of the two REST-polled
-// lists the rail already reads (useSharedPendingApprovals' items + clarify questions);
-// office-unified.tsx calls this once and passes the resulting map to BOTH the rail and
-// the canvas (no second poll — see the office-unified.tsx wiring for the lifted clarify
-// fetch). `agentId`/`agent_id` are the two lists' own field names (approvals are
-// decorated with `agentId` by usePendingApprovals; clarify rows are server payloads
-// using snake_case) — kept as loose shape params here (not the full imported types) so
-// this module stays a leaf with no dependency on the hooks/api layer.
+// ✋ pending-count badge. Pure merge of the two lists that mean "someone is waiting on the
+// CEO": the fleet-wide approvals index and the clarify questions. `use-office-orchestration`
+// reads both once and passes the resulting map into the canvas, so the desk badge cannot
+// disagree with whatever else renders the same queue.
+//
+// `agentId`/`agent_id` are the two lists' own field names (the approvals index is a server
+// payload using snake_case; the caller maps it before handing it over) — kept as loose shape
+// params here, not the full imported types, so this module stays a leaf with no dependency
+// on the hooks/api layer.
 export function derivePendingCounts(
   approvalItems: { agentId: string }[],
   clarifyItems: { agent_id: string }[],

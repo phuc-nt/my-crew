@@ -1,7 +1,14 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-08-09 — as-built sau arc v74 "tốc độ đa-agent" 08-08→08-09** (chi tiết
+> Status: **2026-08-19 — as-built sau arc v88 "redesign web FE"** (6 phase, commit `217970f`,
+> chi tiết `journals/260819-v88-web-fe-redesign-5-hub.md`): IA 5 hub (`/chat` màn nhà ·
+> `/office` · `/work` · `/team` · `/system`), mỗi màn cũ thành tab có URL riêng (`?tab=`);
+> code chuyển sang `web/src/features/<hub>/`; tầng dữ liệu TanStack Query với `query-keys.ts`
+> là factory key duy nhất + cầu SSE→invalidate; bỏ `AgentProvider` + `PendingApprovalsProvider`;
+> 21 redirect giữ mọi URL cũ còn resolve. Entry bundle 540.05→475.37 kB (cổng ≤560).
+> Cổng: 3538 BE (1 skipped) · 344 vitest · 28 e2e playwright · tsc/ruff sạch.
+> Arc trước — **v74 "tốc độ đa-agent" 08-08→08-09** (chi tiết
 > `journals/260808-v74-multi-agent-speed.md`, 7 vòng benchmark sống): tier theo bước
 > `needs_web` (bước không-web + review row → native one-shot; split-sub kế thừa cờ cha);
 > dispatch hướng sự kiện `runtime/tick_poke.py` (worker exit / tick action mở đường /
@@ -565,6 +572,56 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
 - **Right column** (≤300px): Workroom list + lazy `formatCost` chip per room. Outputs (step artifacts). Review tray: click review feed line → per-criterion rows (✓/✗ + note), persisted in `captures.criteria_json` (detail endpoint only).
 - **3D badges**: ✋ waiting-hand on desks + coordinator table (has pending items). ×N fan-out count ≥2 concurrent steps. Translucent ghost figure during deep_team step (step events carry `deep_team` flag).
 - **Mobile stacking**: Rail-first single column ≤1100px (minmax(0,1fr) CSS lesson).
+
+### v88: Web FE redesign — 5-hub IA + TanStack Query (2026-08-19, xong)
+
+Milestone 6 phase, plan `plans/260818-2137-web-fe-redesign-chat-first/`, commit cuối `217970f`.
+Phase 1 nền + tầng dữ liệu · 2 chat hub · 3 office hub · 4 team hub · 5 work hub · 6 system
+hub + dọn dẹp.
+
+**IA 5 hub.** `/` → `/chat` (màn nhà) · `/office` · `/work` · `/team` · `/system`. Mỗi màn
+top-level cũ giờ là **tab có URL riêng** (`?tab=`), nên deep link mount đúng tab khi cold load.
+SPA phục vụ tại `/`, **không** phải `/app/`.
+
+**Cấu trúc.** `web/src/features/{chat,office,work,team,system,palette}/` thay `views/` phẳng
+(`palette/` là command palette, không phải hub). Bảng route: `web/src/app/app-routes.tsx`.
+
+**Tầng dữ liệu** (`web/src/api/queries/`). TanStack Query thay các hook fetch rời và 2 global
+context (`AgentProvider`, `PendingApprovalsProvider`) — agent nằm ở route, approvals là 1 query
+cache; bỏ được vòng fan-out 30s toàn fleet.
+
+- `query-keys.ts` — factory key duy nhất, là thứ cho cầu SSE gọi đúng slice.
+- Theo hub: `use-office-queries.ts`, `use-work-queries.ts`, `use-team-queries.ts`,
+  `use-system-queries.ts`, `use-agent-detail-queries.ts`.
+- Dùng chung: `use-agents-queries.ts`, `use-approvals-queries.ts`, `use-artifact-queries.ts`,
+  `use-clarify-queries.ts`, `use-auto-approved-query.ts`.
+- `sse-invalidation-bridge.ts` — bảng thuần ánh xạ kind sự kiện phòng → slice query. Không
+  import `QueryClient` để test được như dữ liệu.
+- `api/client.ts` giữ nguyên vai trò wrapper HTTP mỏng.
+- `lib/api-cache.ts` **giữ lại** dù plan liệt vào danh sách xóa: còn 4 caller sống ngoài query
+  layer, xóa = tái phát burst fetch trùng mà nó sinh ra để chặn.
+
+**21 redirect** (có e2e phủ): `/settings`→`/system?tab=settings` · `/connections`→`?tab=connections`
+· `/company-docs`→`?tab=company` · `/captures`→`?tab=audit` · `/outputs`→`/work?tab=outputs` ·
+`/company-activity`→`/work?tab=activity` · `/approvals`,`/tasks`→`/work` · `/assistant`→
+`/chat/__assistant__` · `/create`→`/team` · `/agents/:id`→`/team/:id?tab=profile` (giữ id trong
+path) · `/overview`,`/timeline`,`/cost`,`/memory`,`/guardrail`,`/config`,`/trigger`→`/team` ·
+`/office/timeline`,`/office/3d`→`/office` · path lạ→`/chat`.
+
+**BE bổ sung, không phá hợp đồng cũ** (phase 1): provenance `room_id`/`task_id` cho các event
+kind còn thiếu (`office_event_projection.py`) · `last_seq` mỗi phòng trong GET `/api/workrooms`
+· index phẳng approvals toàn fleet.
+
+**Bundle.** Entry `index` **475.37 kB** (từ 540.05; cổng ≤560). Chunk tách rời đo từ lần build
+gần nhất: `agent-desk` 900 kB (94% `three`+r3f, chỉ sau `/office`) · `chart-theme` 173 kB ·
+`agent-detail-page` 23 kB · `office-page` 20 kB · `office-canvas` 19 kB · `task-detail-page`
+3.5 kB. Dọn kèm: 300 entry dictionary, 66 rule CSS, 10 file chết.
+
+**Cổng.** vitest 344/344 (47 file) · playwright 28/28 · `npx tsc -b` sạch · BE 3538 passed,
+1 skipped.
+
+**Còn nợ.** Đổi mật khẩu khi auth bật chưa làm được — `api/client.ts` không có endpoint, cần BE
+trước.
 
 ## Deferred
 

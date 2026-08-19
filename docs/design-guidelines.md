@@ -1,6 +1,6 @@
 # Design Guidelines — my-crew
 
-**Status:** Updated 2026-07-19 (v54 office cockpit layout; web UI design system + trust model).
+**Status:** Updated 2026-08-19 (v87 web FE redesign: 5-hub IA, TanStack Query, `/features/` structure).
 
 > Đây là agent backend + web frontend (React SPA). "Design" bao gồm: (1) nguyên tắc thiết kế HÀNH VI agent (agent cư xử như PM/SM đáng tin), (2) thiết kế UI/UX web dashboard (dark mode, responsive, WCAG AA).
 
@@ -166,31 +166,75 @@ Agent đóng vai management → phải hành xử như một PM/SM **giỏi và 
 
 **Wrap**: nav, quick-action chips, approval lists wrap on mobile.
 
-### 5.11 Office Cockpit Layout (v54)
+### 5.11 Five-Hub Architecture (v88)
 
-**3-zone grid design** (`web/src/views/office-unified/`): Fixed left action rail (260px) + center canvas/feed + right column (≤300px) + full-width composer. Layout shifts to single-column stacking (rail-first) at ≤1100px viewport.
+`/` điều hướng sang `/chat` (màn nhà). Năm hub sở hữu mọi màn; route top-level cũ giờ là tab
+trong hub.
 
-**Left rail primitives:**
-- **"Chờ anh/chị" queue:** Merged approval + clarify items (approve/reject + answer in place), shared `useSharedPendingApprovals` + `getClarifyPending` endpoints. Empty state shows one ✓ check mark.
-- **"Sắp chạy" schedule:** GET `/api/schedule/upcoming` (service EFFECTIVE schedule incl. synthesized watch tasks), refreshed every 60s.
+| Hub | Gốc | Gồm |
+|---|---|---|
+| Chat | `/chat` | `/chat/:roomId` cho từng phòng việc |
+| Office | `/office` | Sàn bàn 3D, activity feed, quick assign |
+| Work | `/work` | Board, outputs, company activity; `/work/task/:room` cho chi tiết |
+| Team | `/team` | Roster; `/team/:id` cho chi tiết agent (8 tab: profile · activity · knowledge · skills · channels · budget · memory · advanced) |
+| System | `/system` | Settings · connections · company · insights · audit |
 
-**Center columns:**
-- **Canvas:** 3D scene (collapsible).
-- **Activity feed:** Step + milestone + review + external_action events, filtered by chips [Tất cả | Bước | Ra ngoài] (presentation-only, no re-fetch).
+**URL cũ**: 21 redirect, có e2e phủ — `/assistant`, `/settings`, `/connections`,
+`/company-docs`, `/captures`, `/outputs`, `/company-activity`, `/approvals`, `/tasks`,
+`/create`, `/agents/:id`, `/overview`, `/timeline`, `/cost`, `/memory`, `/guardrail`,
+`/config`, `/trigger`, `/office/timeline`, `/office/3d`, và mọi path lạ → `/chat`.
 
-**Right column:**
-- **Workroom list + cost chips** (lazy per-room cost via `formatCost`).
-- **Outputs:** Completed step artifacts.
-- **Review tray:** Click a review line → per-criterion rows (✓/✗ + note), persisted in `captures.criteria_json` (detail endpoint only).
+**Tab nằm ở URL** (`?tab=`), nên deep link mount đúng tab khi cold load.
 
-**3D badges:**
-- **✋ waiting-hand** on desks with pending approvals/clarifications (coordinator table included).
-- **×N fan-out count** when ≥2 concurrent steps.
-- **Translucent ghost figure** while deep_team step runs (step events carry `deep_team` flag).
+### 5.12 Office Layout (v54 → v88)
 
-## 6. Giọng UI (v9 M1)
+Sàn bàn ở `web/src/features/office/`. **Action rail cố định bên trái của v54 đã bỏ**: hàng đợi
+duyệt giờ là một query cache mà `/work` sở hữu, `/office` giữ đúng phần nó làm tốt nhất — canvas
+3D + activity feed + quick assign. Bố cục dồn về một cột ở ≤1100px.
 
-**i18n approach**: Centralized `web/src/labels.ts` (DRY):
+- **Activity feed:** sự kiện step + milestone + review + external_action, lọc bằng chip
+  [Tất cả | Bước | Ra ngoài] (thuần trình bày, không re-fetch).
+- **Desk inspector:** click một bàn → trust mode, budget, tool call đang chạy, cost
+  (`formatCost`). v88 inspect tại chỗ thay vì điều hướng đi như màn cũ.
+- **Quick assign:** mở đúng `AssignComposer` của hub chat trong dialog, không dựng composer
+  thứ hai.
+
+**Huy hiệu 3D** (`office-3d/desk-badges.tsx`, overlay `<Html>` của drei):
+- **✋** trên bàn có việc chờ duyệt / chờ trả lời (gộp từ approvals index + clarify questions
+  qua `derivePendingCounts`).
+- **×N** khi ≥2 bước chạy song song.
+- **Bóng mờ trong suốt** khi bước deep_team đang chạy (event step mang cờ `deep_team`).
+
+## 6. Code Organization — Feature-Based Modules (v87)
+
+**From `/views/` to `/features/`**: Post-redesign, component hierarchy changes from view-centric to hub-centric. Each hub gets a top-level folder:
+
+```
+web/src/features/
+├── chat/          # Chat hub: conversation list, message composer, thread detail
+├── office/        # Office hub: 3D workspace, workroom list, action queue
+├── work/          # Work hub: approvals queue, kanban board, task detail, outputs, schedule
+├── team/          # Team hub: roster, agent detail with 8 tabs, hire panel
+├── system/        # System hub: settings, connections, company, insights, audit
+└── palette/       # Shared: colors, tokens, theme utilities (not a hub)
+```
+
+**Lazy loading** — expensive subtrees load on demand:
+- Agent detail page: 8-tab component (charts, editor, telegram config) → lazy chunk
+- Task detail page: artifacts + transcript viewer → lazy chunk
+- Office 3D scene → lazy chunk (react-three-fiber, three.js)
+
+**Data layer** (`web/src/api/queries/`):
+- `query-keys.ts` — single factory for React Query cache key generation; gates SSE→invalidate bridge
+- Per-hub files: `use-chat-queries.ts`, `use-office-queries.ts`, `use-work-queries.ts`, `use-team-queries.ts`, `use-system-queries.ts`
+- Global: `use-agents-queries.ts`, `use-approvals-queries.ts`, `use-artifact-queries.ts`
+- SSE bridge: `sse-invalidation-bridge.ts` — listens to office events, invalidates affected cache keys
+
+**API client** (`web/src/api/client.ts`): Thin HTTP wrapper, no caching logic (TanStack Query owns that).
+
+## 7. Giọng UI (v9 M1 + v87 redesign)
+
+**i18n approach**: Centralized `web/src/i18n/dictionary.ts` + `web/src/labels.ts` (DRY):
 - `KIND_LABEL`, `RUN_STATUS_LABEL`, `VERDICT_LABEL` — enums → Vietnamese labels.
 - `formatDateTime(date)` — ISO → "HH:mm dd/MM" Vietnamese format.
 - `formatCron(cron_string)` — "0 9 * * 1,3" → "09:00 Thứ 2, Thứ 4".
@@ -204,7 +248,7 @@ Agent đóng vai management → phải hành xử như một PM/SM **giỏi và 
 
 **External flag**: actions with `class="confirm-external"` highlighted red/bold + warning "Gửi RA NGOÀI công ty". JSON audit always available in `<details>`.
 
-## 7. Unresolved / Next
+## 8. Unresolved / Next
 
 - Chế độ Dark/Light theme trở thành default user preference thay vì opt-in (M24 hoàn tất).
 - Android/Linux deployment via Docker Compose (v10 M26 deferred: macOS-only install.sh stable).

@@ -89,7 +89,7 @@ export function OfficePage() {
                 office.companyName
                   ? <span className="office-company-name"> · {office.companyName}</span>
                   : (
-                    <Link className="office-company-name office-company-unset" to="/settings">
+                    <Link className="office-company-name office-company-unset" to="/system?tab=company">
                       {t('office.companyUnset')}
                     </Link>
                   )
