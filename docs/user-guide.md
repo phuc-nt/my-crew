@@ -256,6 +256,46 @@ configured check-in until someone decides — a blocked agent can't wait unnotic
 
 ---
 
+## Dry-Run Mode & Flipping to Live
+
+### Understanding Dry-Run
+
+By default, all agents **log intended actions without writing anywhere external.** They will:
+- Generate reports but not post to Slack
+- Comment on issues but not merge PRs
+- Schedule tasks but not send them to external systems
+
+This mode is **safe for testing**. When ready, you flip to **Live** mode to let agents act autonomously.
+
+### How to Tell Which Mode an Agent Is In
+
+**Team** hub → click an agent → **Profile** tab. You'll see a badge labeled:
+
+- **🎭 Diễn tập** (Dry-run) — logging only, no external writes
+- **📡 Gửi thật** (Live) — actions execute immediately
+
+The badge also shows the **source**:
+- **(from profile)** — this agent's personal override (takes priority)
+- **(from fleet)** — using the company-wide default
+
+### Flipping an Agent to Live (2 clicks)
+
+1. **Team** → click agent → **Profile** tab
+2. Click the **Diễn tập / Gửi thật** toggle
+
+The change takes effect on that agent's **next run** — no restart needed. Already-running tasks keep their original setting.
+
+### Flipping the Whole Fleet (Environment Variable)
+
+If you need all agents to go live at once:
+
+1. Edit `.env` and set: `DRY_RUN=false`
+2. Restart: `my-crew serve`
+
+After restart, all agents not overridden in their Profile become **Live**. Per-agent overrides still beat the fleet default.
+
+---
+
 ## Team Management
 
 ### View Team Status
@@ -284,7 +324,21 @@ Go to **Team** → click **"+ Create full crew"** → system creates all 5 templ
 
 Go to **Chat** → ask "create an agent that…" → answer questions → assistant creates it and turns it on immediately.
 
-### Manage Agents
+### Manage Agent Configuration
+
+**Team** hub → click agent → **Profile** tab. Use the **Settings** forms to edit the most-touched configuration without YAML:
+
+| Field | What it does | Example |
+|---|---|---|
+| **Name** | Display name on dashboard and reports | "Research Pro" |
+| **Model** | LLM this agent uses (overrides fleet default) | `deepseek/deepseek-v4-pro-0813` |
+| **Model Chain** | Alternative models per work type (e.g., cheaper model for reviews) | `review: your/cheaper-model` |
+| **Budget (month)** | Max spend in USD; agent stops when cap hits | `$10` |
+| **Schedule** | Cron lines for automated reports | `0 9 * * 1` (every Monday 9 AM) |
+
+All changes are saved immediately (no YAML required) and take effect on the agent's **next run**.
+
+### Manage Agents (Enable / Disable / Delete)
 
 **Team** hub has each agent card:
 
@@ -408,6 +462,51 @@ After a step is done, a peer (usually Verification / QA if available):
 - Takes 1-2 seconds; costs less than a full independent step.
 - Shown on the Office screen as a speech bubble between two desks (avatars walk to each other, consult, then return).
 - Does **not** count as a rework or escalation.
+
+---
+
+## Unsticking a Stalled Task (One-Click Buttons)
+
+When a task gets stuck waiting for your input, the **Work** board shows it with a **⚠** warning icon.
+
+**Recovery options** (visible in the workroom or on the card):
+
+| Button | What it does |
+|---|---|
+| **Retry** | Agent re-runs the failed step (unchanged inputs) |
+| **Accept** | Take the partial result as-is and move forward |
+| **Drop** | Remove the failed step and skip to the next |
+| **Cancel** | Stop the entire task (always available) |
+
+Click any button to act — **no chat, no re-drafting needed.** The workroom shows the step in real-time as it's retried or updated.
+
+**When to use each:**
+- **Retry** — if the failure was transient (network glitch, API timeout)
+- **Accept** — if the step's output is "good enough" to continue
+- **Drop** — if the step is optional and you want the task to keep going
+- **Cancel** — if the task logic is broken and needs a replan
+
+---
+
+## Reassigning a Task & Editing the Request
+
+If a task is running but you decide it should go to a different agent or you need to refine the request:
+
+**On the task detail page** (or task card on **Work** board), look for **"Giao lại việc này"** (Re-assign).
+
+1. Click **"Giao lại việc này"**
+2. The assignment composer opens with:
+   - The original request text **editable inline** (not locked)
+   - Agent picker (change the PIC or scope)
+3. Edit the request if needed — you can:
+   - Tighten the scope ("focus only on X, skip Y")
+   - Add clarifications ("use this format for the output")
+   - Change the priority or context
+4. Click the re-assign button to queue it
+
+The reassigned task becomes a **new entry** on the **Work** board; the original one stays for audit. The agent sees the revised request.
+
+**Tip:** If you're changing just the request text (same agent), click **"Sửa yêu cầu"** (Edit request) on the preview screen — it sends the updated text straight to the composer without opening a full re-assign flow.
 
 ---
 

@@ -49,6 +49,13 @@ middleware: localhost + chưa đặt password ⇒ auth OFF; bind LAN bị từ c
 web-auth (`assert_bind_safe`). `office_event_projection.py` = **PII firewall** (allowlist
 theo kind AT WRITE TIME — room event không chứa nội dung tự do).
 
+**Agent config routes (P4 v88):**
+- `GET/PATCH /api/agents/{id}/profile-settings` — structured edits to name, model, model_chain, budget, schedule (via `profile_patch` helper)
+- `GET/POST /api/agents/{id}/band` — autonomy band control (supervised/normal/trusted), separate SQLite write
+- `GET /api/agents/model-catalog` — model id suggestions from `config/model_prices.yaml`
+
+**Profile-patch helper (`my_crew/server/profile_patch.py`):** ruamel.yaml round-trip loader preserves comments and key order when writing profile.yaml updates. Whitelisted write surface: top-level scalars (`name`, `model`, `model_chain`), nested blocks (`safety.dry_run`, `budget.monthly_usd`, `schedule`). Same pattern as `save_company` (P5-D0) for configuration preservation.
+
 ### 3.2 Coordinator daemon (`my_crew/runtime/service.py`)
 Vòng lặp mỗi phút: đọc registry, chạy scheduler (báo cáo định kỳ) + **team-tick**
 (điều phối đội). Ghi `coordinator.heartbeat` mỗi vòng (health API + banner đỏ đọc file

@@ -189,6 +189,20 @@ dùng template đó. Bấm huy hiệu → hộp thoại hiện:
 
 Bấm **"Nâng cấp"** để áp, hoặc **"Huỷ"** để bỏ qua lần này (huy hiệu vẫn còn, có thể nâng cấp sau).
 
+### B.2e. Sửa cấu hình agent (tên / model / ngân sách / lịch) — ≤3 bấm
+
+Ở hub **Đội ngũ** → bấm agent → tab **Hồ sơ**. Dùng các **form cấu hình** để sửa mà không cần YAML:
+
+| Trường | Công dụng | Ví dụ |
+|---|---|---|
+| **Tên** | Tên hiển thị trên dashboard + báo cáo | "Chuyên gia Nghiên cứu" |
+| **Model** | Model LLM agent này dùng (ghi đè mặc định toàn công ty) | `deepseek/deepseek-v4-pro-0813` |
+| **Model theo vai trò** | Model khác cho từng loại việc (VD: model rẻ cho soát chéo) | `soat: model-re-hon` |
+| **Ngân sách (tháng)** | Giới hạn chi USD; agent dừng khi chạm | `$10` |
+| **Lịch** | Cron để tự động chạy báo cáo | `0 9 * * 1` (thứ 2 lúc 9 sáng) |
+
+Mỗi sửa được lưu **ngay lập tức** (không cần YAML) và có hiệu lực **lần chạy tiếp theo** của agent.
+
 ## B.3. Giao việc cho đội
 
 Cách nhanh nhất (v15): vào **Văn phòng** → ô **giao việc** ngay dưới màn hình, gõ theo 3 kiểu:
@@ -282,7 +296,34 @@ Màn Văn phòng được **thiết kế lại thành 3 khu vực** (≥1100px r
 - Tail 40 sự kiện (bước/mốc/soát chéo/ra ngoài). Lịch sử đầy đủ xem **Nhật ký**.
 - Filter chip: **Tất cả** (mọi loại), **Bước** (chỉ bước), **Ra ngoài** (chỉ hành động gửi ngoài).
 
-### B.3b. Duyệt việc — phụ thuộc vào chế độ tin tưởng (v30, autonomy-first)
+### B.3b. Chế độ Diễn tập vs Gửi thật (Dry-run control)
+
+Mặc định, **tất cả agent ghi nhật ký những gì định làm, không gửi ra ngoài thật**. Chế độ này gọi là **Diễn tập** — an toàn để kiểm tra. Khi sẵn sàng, bạn bật **Gửi thật** để agent thực sự hành động.
+
+**Xem agent nào đang ở chế độ nào:**
+
+Vào **Đội** → bấm vào một agent → tab **Hồ sơ**. Bạn sẽ thấy badge:
+- **🎭 Diễn tập** — chỉ ghi nhật ký, không gửi
+- **📡 Gửi thật** — hành động thực thi ngay
+
+Badge cũng hiện **nguồn**:
+- **(từ hồ sơ)** — agent này có cấu hình riêng (ưu tiên hơn)
+- **(từ toàn công ty)** — dùng thiết lập mặc định chung
+
+**Bật "Gửi thật" cho một agent (2 bấm):**
+
+1. **Đội** → bấm agent → tab **Hồ sơ**
+2. Bấm badge **Diễn tập / Gửi thật** để chuyển
+
+Thay đổi có hiệu lực **ngay lần chạy tiếp theo** — không cần khởi động lại. Việc đang chạy giữ nguyên chế độ cũ.
+
+**Bật toàn công ty (tất cả agent):**
+
+Sửa file `.env` thêm: `DRY_RUN=false`, rồi `uv run my-crew serve` lại.
+
+Sau khởi động, mọi agent không có cấu hình riêng đều thành **Gửi thật**. Những agent có cấu hình cá nhân vẫn dùng của riêng mình.
+
+### B.3c. Duyệt việc — phụ thuộc vào chế độ tin tưởng (v30, autonomy-first)
 
 Từ v30, **agent chạy việc ngay mặc định (autonomous mode)** để tự chủ nhanh. Tab **Duyệt** chứa 2 loại:
 
@@ -315,6 +356,27 @@ Khi làm việc, nhân sự có thể hỏi ý kiến của đồng nghiệp kh�
 - **Hiển thị trên Văn phòng**: bong bóng hỏi-đáp giữa 2 bàn (1 hỏi, 1 trả lời).
 - **Không tốn lượt rework**: là tham khảo, không phải "làm lại".
 
+### B.3d-bis. Gỡ kẹt — bất kỳ bước nào mắc (một bấm)
+
+Khi một bước bị kẹt chờ input của bạn, **Công việc** board sẽ hiện nó với biểu tượng **⚠** (cảnh báo).
+
+**Các tùy chọn gỡ kẹt** (hiện ở trang chi tiết việc hoặc card trên board):
+
+| Nút | Làm gì |
+|---|---|
+| **Thử lại** | Nhân sự chạy lại bước thất bại (không đổi input) |
+| **Chấp nhận** | Lấy kết quả hiện tại làm tạm (coi như đạt) |
+| **Bỏ** | Xoá bước này khỏi kế hoạch, tiếp tục bước sau |
+| **Huỷ** | Dừng toàn bộ việc (lúc nào cũng có) |
+
+Bấm nút bất kỳ để hành động — **không cần chat, không cần viết lại gì**. Phòng việc hiện từng bước theo thời gian thực.
+
+**Khi dùng cái nào:**
+- **Thử lại** — nếu lỗi là tạm thời (mạng gián đoạn, API timeout)
+- **Chấp nhận** — nếu kết quả "tạm được" để tiếp tục
+- **Bỏ** — nếu bước không bắt buộc, việc vẫn có thể tiếp
+- **Huỷ** — nếu logic việc bị sai, cần lập kế hoạch lại
+
 ### B.3e. Chỉnh kế hoạch giữa chừng (v13)
 
 Nếu kế hoạch đang chạy nhưng bạn muốn **sửa đổi** (bỏ bước không cần, thêm bước mới, hay giao lại người):
@@ -327,6 +389,26 @@ Trợ lý sẽ:
 3. Nếu đồng ý, bấm **"Xác nhận sửa"** → kế hoạch cập nhật. Những bước đã xong giữ nguyên, những bước chờ/đang chạy sẽ chạy theo kế hoạch mới.
 
 > **An toàn:** sửa đổi chỉ áp cho phần chờ chạy; phần đã xong không bị thay đổi. CEO (bạn) **luôn** xác nhận trước khi kế hoạch đổi.
+
+### B.3e-bis. Giao lại việc & sửa yêu cầu
+
+Nếu một việc đang chạy nhưng bạn muốn giao cho người khác HOẶC sửa lại lời yêu cầu:
+
+**Ở trang chi tiết việc** (hoặc card trên **Công việc** board), tìm nút **"Giao lại việc này"**.
+
+1. Bấm **"Giao lại việc này"**
+2. Composer mở ra với:
+   - Nội dung yêu cầu **có thể sửa inline** (không bị khóa)
+   - Danh sách người để chọn PIC hoặc phạm vi khác
+3. Sửa yêu cầu nếu cần — bạn có thể:
+   - Thu hẹp phạm vi ("chỉ tập trung vào X, bỏ Y")
+   - Thêm hướng dẫn ("lấy kết quả ở định dạng này")
+   - Thay đổi ưu tiên hay ngữ cảnh
+4. Bấm nút giao lại để xếp hàng
+
+Việc giao lại tạo **bản ghi mới** ở **Công việc** board; bản cũ vẫn ở đó để theo dõi. Người nhận thấy yêu cầu đã sửa.
+
+**Mẹo:** nếu chỉ sửa nội dung yêu cầu (cùng người), bấm **"Sửa yêu cầu"** ở màn preview — nó gửi text đã sửa thẳng vào composer mà không mở flow giao lại đầy đủ.
 
 ## B.3f. Hai ống kính: chế độ Thường vs Kỹ thuật (dual-lens)
 
@@ -715,5 +797,5 @@ không có thay đổi.
 
 ---
 
-Xem thêm: [Changelog](project-changelog.md) · [Getting Started (EN, chi tiết)](v2/getting-started.md) ·
-[Action Gateway — cơ chế an toàn](v1/action-gateway-explainer.md).
+Xem thêm: [Changelog](project-changelog.md) · [Getting Started (EN)](v2/getting-started.md) ·
+[Action Gateway](v1/action-gateway-explainer.md).

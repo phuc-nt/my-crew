@@ -287,6 +287,30 @@ Without this, all agents run in dry-run; set it in `.env`:
 DRY_RUN=false
 ```
 
+**Per-agent override beats the fleet default.** `DRY_RUN` in `.env` only sets the
+*fleet-wide* fallback. Any agent with an explicit `safety.dry_run` key in its own
+`profiles/<id>/profile.yaml` uses that value instead, regardless of `.env`:
+
+```yaml
+# profiles/<id>/profile.yaml
+safety:
+  dry_run: true    # this agent stays in dry-run even if DRY_RUN=false fleet-wide
+```
+
+**Web toggle:** each agent's **Team → \<agent\> → Profile** tab shows the agent's
+*effective* dry-run state as a badge (Diễn tập/Dry-run vs Gửi thật/Live), labelled with
+its source (per-agent override vs fleet default), and a one-click checkbox to flip it.
+The toggle writes `safety.dry_run` straight into that agent's `profile.yaml` (preserving
+the rest of the file's comments and formatting) — no manual YAML editing needed.
+
+**Takes effect on the agent's next run, no restart required.** Both the scheduler
+(ticks) and the per-run worker process re-read `profile.yaml` from disk fresh every
+time they dispatch — there is no in-memory cache of the profile between runs. A run
+already dispatched keeps whatever setting it started with; the very next scheduled or
+triggered run picks up the flip. This differs from `.env`-based settings such as
+connection/webhook config, which env-loading processes cache at boot and DO need a
+`my-crew serve` restart to pick up.
+
 ### Trust Modes (per agent)
 
 **Autonomous (default):** Actions that send outside the company (post to Slack, merge PR, close ticket) **run immediately** and are logged in the audit trail. No CEO approval needed.
