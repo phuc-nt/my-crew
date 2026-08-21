@@ -32,6 +32,12 @@ dependencies = [
     "pydantic>=2.13.4",
     "python-dotenv>=1.2.2",
     "pyyaml>=6.0.3",
+    # v87 P2: comment-preserving round-trip writes to profile.yaml from the web (dry-run
+    # toggle + future config-form writes). PyYAML's safe_load/safe_dump rebuilds the
+    # document and drops comments + hand-written keys it doesn't model — the same class
+    # of bug as the save_company rebuild-from-dict issue. ruamel.yaml's round-trip loader
+    # preserves comments, key order, and quote/flow styles across a targeted patch.
+    "ruamel.yaml>=0.18",
     "sse-starlette>=2.1",
     "uvicorn>=0.34",
 ]
