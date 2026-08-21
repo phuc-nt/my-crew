@@ -21,6 +21,8 @@ from my_crew.server import (
     auth,
     routes_agent_company_docs,
     routes_agent_knowledge,
+    routes_agent_profile_settings,
+    routes_agent_safety,
     routes_agent_studio_shared,
     routes_agent_telegram,
     routes_agents,
@@ -41,6 +43,7 @@ from my_crew.server import (
     routes_runs,
     routes_setup,
     routes_tasks,
+    routes_team_task_actions,
     routes_visualize,
 )
 from my_crew.server.run_manager import RunManager
@@ -102,6 +105,9 @@ def create_app() -> FastAPI:
     app.include_router(routes_connections.router)
     # v33 P3: outputs hub (cross-room artifact index + downloads) + team-task board.
     app.include_router(routes_outputs.router)
+    # v88 P3: one-click unstick (retry/accept/drop a stalled step) + cancel a live
+    # team task — REST wrappers over the existing chat-ops recovery commands.
+    app.include_router(routes_team_task_actions.router)
     # Dual-lens P3: read-only observability (fleet budget, captures explorer, history search).
     app.include_router(routes_observability.router)
     # v33 P4: clarify — agent questions the CEO answers from web or Telegram buttons.
@@ -120,7 +126,14 @@ def create_app() -> FastAPI:
     # The studio modules (telegram M18a + knowledge/skills M18b + company-docs opt-in M19)
     # attach their endpoints to the one shared router; importing them registers the
     # decorators, then we mount it once.
-    _ = (routes_agent_knowledge, routes_agent_telegram, routes_agent_company_docs)
+    # v87 P2: per-agent dry-run visibility + toggle (safety.dry_run), same shared-router
+    # mount as the rest of Agent Studio.
+    # v88 P4: structured config forms (name/model/model_chain/budget/schedule + band +
+    # model catalog) — same shared-router mount.
+    _ = (
+        routes_agent_knowledge, routes_agent_telegram, routes_agent_company_docs,
+        routes_agent_safety, routes_agent_profile_settings,
+    )
     app.include_router(routes_agent_studio_shared.router)
     app.include_router(routes_company_docs.router)
     # v6 M15b: assigned-tasks board (view + cancel; assigning stays on the chat path).

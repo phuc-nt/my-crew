@@ -219,6 +219,78 @@ def test_reopen_stalled_on_a_task_that_is_not_stalled_counts_nothing(tmp_path):
     store.close()
 
 
+# --- cancel_task (v88 P3): the live-task sibling of cancel_draft, same TOCTOU shape ---
+
+
+@pytest.mark.parametrize("status", ["open", "running", "stalled"])
+def test_cancel_task_flips_any_live_status_to_cancelled(tmp_path, status):
+    store = _store(tmp_path)
+    _plan(store)
+    store.set_task_status("t1", status)
+
+    assert store.cancel_task("t1") is True
+    assert store.get("t1").status == "cancelled"
+    store.close()
+
+
+@pytest.mark.parametrize("status", ["planning", "done", "cancelled"])
+def test_cancel_task_refuses_planning_and_terminal_statuses(tmp_path, status):
+    """`planning` belongs to `cancel_draft` (no dispatch risk yet); `done`/`cancelled`
+    are already terminal — either way `cancel_task` must report a clean False, never
+    silently re-terminalize or race a plan the CEO hasn't confirmed yet."""
+    store = _store(tmp_path)
+    if status == "planning":
+        # a fresh create_task alone starts in 'planning' before any set_plan/confirm
+        store.create_task(task_id="t-draft", title="draft", original_request="x")
+        target = "t-draft"
+    else:
+        _plan(store)
+        store.set_task_status("t1", status)
+        target = "t1"
+
+    assert store.cancel_task(target) is False
+    assert store.get(target).status == status
+    store.close()
+
+
+def test_cancel_task_missing_task_is_a_clean_false(tmp_path):
+    store = _store(tmp_path)
+    assert store.cancel_task("no-such-task") is False
+    store.close()
+
+
+def test_two_concurrent_cancel_task_calls_one_wins_one_loses(tmp_path):
+    """Same TOCTOU-proof shape as `confirm_plan`: the guarded UPDATE is the only source
+    of truth, so two threads racing the same row resolve to exactly one True."""
+    import threading
+
+    store = _store(tmp_path)
+    _plan(store)  # t1 is 'open'
+    store.close()
+
+    results = []
+    barrier = threading.Barrier(2)
+
+    def _call():
+        s = _store(tmp_path)
+        try:
+            barrier.wait()
+            results.append(s.cancel_task("t1"))
+        finally:
+            s.close()
+
+    threads = [threading.Thread(target=_call) for _ in range(2)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+
+    assert sorted(results) == [False, True]
+    verify = _store(tmp_path)
+    assert verify.get("t1").status == "cancelled"
+    verify.close()
+
+
 # --- cost roll-up ------------------------------------------------------------------
 
 

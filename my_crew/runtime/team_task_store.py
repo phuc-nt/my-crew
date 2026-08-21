@@ -554,6 +554,27 @@ class TeamTaskStore:
         self._conn.commit()
         return cur.rowcount > 0
 
+    def cancel_task(self, task_id: str) -> bool:
+        """CEO "huỷ" a LIVE task (open/running/stalled) — the `cancel_draft` sibling for
+        every status past `planning`. Same TOCTOU-proof shape as `confirm_plan`/
+        `reopen_stalled`: one guarded UPDATE, no read-then-write — two concurrent cancels
+        (or a cancel racing the ticker's own terminal write) leave exactly one winner,
+        the other a clean no-op via `rowcount == 0`.
+
+        Deliberately does NOT touch `team_steps` here: a cancelled task drops out of
+        `list_dispatchable` on the next read, and any step still `running` is reaped by
+        `team_task_halt.run_cancel_reap_sweep` (runs every tick — see that module's
+        docstring for why the kill lives there and not inline in every cancel caller).
+        Returns False when the task is missing or already in a terminal state
+        (`done`/`cancelled`) or still `planning` (use `cancel_draft` for that one)."""
+        cur = self._conn.execute(
+            "UPDATE team_tasks SET status = 'cancelled' WHERE id = ? "
+            "AND status IN ('open', 'running', 'stalled')",
+            (task_id,),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
+
     def record_task_cost(self, task_id: str, *, decompose: float | None = None,
                           aggregate: float | None = None) -> None:
         """Add to `decompose_cost_usd` / `aggregate_cost_usd` (coordinator-level LLM

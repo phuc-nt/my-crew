@@ -490,12 +490,14 @@ OPS_COMMANDS: dict[str, dict] = {
     "get_status": {
         "description": "Xem trạng thái cả đội (số agent, việc chờ duyệt, cảnh báo)",
         "readonly": True,
+        "example": "trạng thái đội",
         "slots": {},
         "run": _run_get_status,
     },
     "get_cost": {
         "description": "Xem chi phí LLM của cả đội tháng này",
         "readonly": True,
+        "example": "chi phí tháng này",
         "slots": {},
         "run": _run_get_cost,
     },
@@ -503,6 +505,7 @@ OPS_COMMANDS: dict[str, dict] = {
         "description": "Tìm trong lịch sử làm việc của đội (kết quả bàn giao + hành động)"
                        " — vd 'tuần trước quyết gì về agenda'",
         "readonly": True,
+        "example": "tuần trước team làm gì",
         "slots": {
             "query": {"prompt": "Tìm gì trong lịch sử làm việc?", "required": True,
                       "max_len": 120},
@@ -577,6 +580,7 @@ OPS_COMMANDS: dict[str, dict] = {
         "description": "Liệt kê các thẻ việc nhóm (việc giao cho cả đội) — tiến độ, "
                        "số lượt soát/sửa, chi phí, và thẻ nào đang chờ quyết định",
         "readonly": True,
+        "example": "liệt kê các thẻ việc",
         "slots": {},
         "run": run_list_team_tasks,
     },
@@ -740,6 +744,7 @@ OPS_COMMANDS: dict[str, dict] = {
     "list_approvals": {
         "description": "Xem mọi việc đang chờ CEO duyệt, của tất cả agent",
         "readonly": True,
+        "example": "việc chờ duyệt",
         "slots": {},
         "run": run_list_approvals,
     },
@@ -780,6 +785,7 @@ OPS_COMMANDS: dict[str, dict] = {
         "description": "Bật/tắt autopilot — thư ký thay CEO xác nhận kế hoạch, gỡ việc "
                        "dừng và duyệt bước gửi ra ngoài (có nhật ký + báo lại)",
         "readonly": False,
+        "example": "autopilot on",
         "slots": {
             "mode": {"prompt": "Bật hay tắt autopilot? (on / off)", "required": True,
                      "max_len": 8, "lower": True,
@@ -795,6 +801,7 @@ OPS_COMMANDS: dict[str, dict] = {
     "get_autopilot": {
         "description": "Xem trạng thái autopilot hiện tại",
         "readonly": True,
+        "example": "autopilot đang thế nào",
         "slots": {},
         "run": run_get_autopilot,
     },
