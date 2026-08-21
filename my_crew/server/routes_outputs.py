@@ -198,6 +198,16 @@ def team_task_board() -> dict:
         }
         if t.id in queue_position:
             card["queue_position"] = queue_position[t.id]
+        if t.status == "stalled":
+            # v88 P3: the title of the first dead/failed step, so the stuck-task panel
+            # on the board/detail page can say WHY without a second request. Same
+            # predicate `ops_stalled_task._dead_steps` uses (failed/timeout) — a
+            # review-exhausted stall (no dead step, newest review failed) has none of
+            # these and the field is simply absent; the FE falls back to a generic
+            # "đang chờ xử lý" line for that case.
+            dead = next((s for s in t.steps if s.status in ("failed", "timeout")), None)
+            if dead is not None:
+                card["stalled_step"] = dead.title
         lane = t.status if t.status in lanes else "khac"
         lanes[lane].append(card)
     return {"lanes": [{"id": lane, "cards": lanes[lane]} for lane in _BOARD_LANES]}

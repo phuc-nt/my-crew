@@ -59,7 +59,13 @@ def create_from_template(role_id: str, agent_id: str | None = None) -> dict:
     return {
         **created,
         "name": template["role"],
-        "hint": "Agent đang TẮT: điền token vào .env (nếu vai cần) rồi bật ở trang Đội.",
+        # Minimal bilingual: this codebase's other first-run HTTPException strings are
+        # Vietnamese-only (routes_office_assign.py:76,81 / routes_outputs.py:150 /
+        # ops_autopilot.py:79-91) — no new BE i18n mechanism for 2 strings, just add the
+        # English line inline for this exact hint (success criterion scope).
+        "hint": "Agent đang TẮT: điền token vào .env (nếu vai cần) rồi bật ở trang Đội. "
+                "(Agent is OFF: fill in the token in .env if the role needs one, "
+                "then enable it on the Team page.)",
     }
 
 

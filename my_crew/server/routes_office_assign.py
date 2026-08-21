@@ -89,15 +89,36 @@ def post_preview(
         preview_text = preview_assign_team_task(slots)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
+    pic_id = slots.get("pic_id", "")
     return {
         "preview_text": preview_text,
         "task_id": slots.get("task_id", ""),
         "plan_hash": slots.get("plan_hash", ""),
-        "pic_id": slots.get("pic_id", ""),
+        "pic_id": pic_id,
         "auto_confirmed": bool(slots.get("auto_confirmed")),
         # v82: routing-funnel outcome ("sprint" | "team") for the composer's mode badge.
         "route_mode": slots.get("route_mode", ""),
+        # v87 P2: the previewed PIC's EFFECTIVE dry-run (same resolution the worker
+        # uses) — so the CEO sees a "diễn tập" badge BEFORE confirming, not after the
+        # run silently produces no real send.
+        "pic_dry_run": _pic_dry_run(pic_id),
     }
+
+
+def _pic_dry_run(pic_id: str) -> bool:
+    """Effective `dry_run` for the previewed PIC — True (conservative default) for an
+    empty/unresolvable id so a badge never under-reports; one `load_profile` call, same
+    cost class as `agent_status`'s single-agent read (not the N-agent /staff roster,
+    which stays on the cheap `peek_profile_yaml` path per the v56 lesson)."""
+    if not pic_id:
+        return True
+    from my_crew.profile.loader import load_profile
+    from my_crew.runtime.agent_paths import agent_data_dir
+
+    try:
+        return bool(load_profile(pic_id, data_dir=agent_data_dir(pic_id)).settings.dry_run)
+    except (FileNotFoundError, RuntimeError, ValueError):
+        return True
 
 
 @router.post("/confirm")

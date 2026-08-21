@@ -146,9 +146,14 @@ def post_room_chat(room_id: str, message: str = Body(..., embed=True)) -> dict:
             preview_text = preview_assign_team_task(slots)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from None
+        # Same "diễn tập" (dry-run) badge signal the office-screen /preview returns, so a
+        # workroom-initiated assign shows it too rather than silently under-reporting.
+        from my_crew.server.routes_office_assign import _pic_dry_run
+
         return {"intent": "new_task", "preview_text": preview_text,
                 "task_id": slots.get("task_id", ""), "plan_hash": slots.get("plan_hash", ""),
                 "pic_id": slots.get("pic_id", ""),
+                "pic_dry_run": _pic_dry_run(slots.get("pic_id", "")),
                 "auto_confirmed": bool(slots.get("auto_confirmed")),
                 "route_mode": slots.get("route_mode", "")}
 
@@ -198,11 +203,42 @@ def post_confirm_adjust(
     return {"text": text}
 
 
-#: Coordinator health rides its own prefix (health namespace, not office).
+#: Coordinator health rides its own prefix (health namespace, not office) — deliberately
+#: separate from the public `/health` liveness probe (app.py), which stays `{"ok": True}`
+#: with no install-detail leak to an unauthenticated caller.
 health_router = APIRouter(prefix="/api/health", tags=["health"])
 
 #: Service loop touches the heartbeat every pass (~60s) — 3 missed passes ⇒ dead.
 _HEARTBEAT_STALE_S = 180
+
+
+def _coordinator_start_hint() -> str:
+    """How to (re)start the coordinator loop on THIS install, platform-detected.
+
+    The banner previously hardcoded `uv run python -m my_crew.runtime.service`, which is
+    the checkout-dev path only — wrong for a launchd-managed or containerized install
+    where the coordinator is a supervised process the operator restarts, not a command
+    they type. Mirrors the platform checks `routes_setup._restart_hint` uses for the web
+    service, applied to the coordinator's own supervision unit.
+    """
+    import os as _os
+
+    label = "com.mpm.coordinator"
+    try:
+        uid = _os.getuid()
+        rc = _os.system(f"launchctl print gui/{uid}/{label} >/dev/null 2>&1")  # noqa: S605
+        if rc == 0:
+            return (
+                f"Dịch vụ điều phối chạy qua launchd — chạy: "
+                f"launchctl kickstart -k gui/{uid}/{label}"
+            )
+    except Exception:  # noqa: BLE001 — detection is best-effort, fall through
+        pass
+    if _os.path.exists("/.dockerenv") or _os.path.exists("/run/.containerenv"):
+        return "Khởi động lại container điều phối (docker/podman compose restart)."
+    if _os.environ.get("INVOCATION_ID"):
+        return "Chạy: systemctl restart <service điều phối của bạn>."
+    return "Khởi động điều phối: uv run python -m my_crew.runtime.service"
 
 
 @health_router.get("/coordinator")
@@ -211,6 +247,8 @@ def get_coordinator_health() -> dict:
 
     `reason`: 'no_coordinator' (company.yaml chưa cấu hình trưởng phòng — banner khác),
     'no_heartbeat' (service chưa từng chạy), 'stale' (từng chạy, giờ im), '' khi alive.
+    `hint`: platform-aware "how to start it" string, present only when NOT alive (a live
+    coordinator needs no restart instruction).
     """
     import time
 
@@ -218,12 +256,14 @@ def get_coordinator_health() -> dict:
     from my_crew.runtime.company import load_company
 
     if not load_company().coordinator_id:
-        return {"alive": False, "last_beat_ago_s": None, "reason": "no_coordinator"}
+        return {"alive": False, "last_beat_ago_s": None, "reason": "no_coordinator", "hint": ""}
     path = DATA_DIR / "coordinator.heartbeat"
     try:
         ago = time.time() - path.stat().st_mtime
     except OSError:
-        return {"alive": False, "last_beat_ago_s": None, "reason": "no_heartbeat"}
+        return {"alive": False, "last_beat_ago_s": None, "reason": "no_heartbeat",
+                "hint": _coordinator_start_hint()}
     alive = ago <= _HEARTBEAT_STALE_S
     return {"alive": alive, "last_beat_ago_s": round(ago, 1),
-            "reason": "" if alive else "stale"}
+            "reason": "" if alive else "stale",
+            "hint": "" if alive else _coordinator_start_hint()}

@@ -160,6 +160,86 @@ def test_unknown_agent_404(monkeypatch, tmp_path):
     assert _client().get("/api/agents/ghost/approvals").status_code == 404
 
 
+# --- v88 P3: bounded scope (once/always/deny) on approve/reject ---
+
+
+def _rules(data_root, agent_id="acme"):
+    from my_crew.actions.approval_rule_store import ApprovalRuleStore
+
+    return ApprovalRuleStore(data_root / "agents" / agent_id / "approvals.db")
+
+
+def test_approve_default_scope_once_learns_no_rule(monkeypatch, tmp_path):
+    """A plain approve (no scope in the body) must behave exactly like before this
+    feature existed — no standing rule created."""
+    data_root = _patch(monkeypatch, tmp_path)
+    aid = _seed(data_root)
+    monkeypatch.setattr(
+        "my_crew.actions.slack_write.make_slack_post_handler",
+        lambda server: lambda action: "posted ts=1",
+    )
+    r = _client().post(f"/api/agents/acme/approvals/{aid}/approve")
+    assert r.status_code == 200
+    assert _rules(data_root).list_rules() == []
+
+
+def test_approve_scope_always_learns_a_standing_rule(monkeypatch, tmp_path):
+    data_root = _patch(monkeypatch, tmp_path)
+    aid = _seed(data_root)
+    monkeypatch.setattr(
+        "my_crew.actions.slack_write.make_slack_post_handler",
+        lambda server: lambda action: "posted ts=1",
+    )
+    r = _client().post(
+        f"/api/agents/acme/approvals/{aid}/approve", json={"scope": "always"}
+    )
+    assert r.status_code == 200
+    rules = _rules(data_root).list_rules()
+    assert len(rules) == 1
+    assert rules[0].scope == "always"
+    assert rules[0].created_by == "acme via web"
+
+
+def test_reject_scope_deny_learns_a_standing_rule(monkeypatch, tmp_path):
+    data_root = _patch(monkeypatch, tmp_path)
+    aid = _seed(data_root)
+    r = _client().post(
+        f"/api/agents/acme/approvals/{aid}/reject", json={"scope": "deny"}
+    )
+    assert r.status_code == 200
+    rules = _rules(data_root).list_rules()
+    assert len(rules) == 1
+    assert rules[0].scope == "deny"
+
+
+def test_reject_default_scope_once_learns_no_rule(monkeypatch, tmp_path):
+    data_root = _patch(monkeypatch, tmp_path)
+    aid = _seed(data_root)
+    r = _client().post(f"/api/agents/acme/approvals/{aid}/reject")
+    assert r.status_code == 200
+    assert _rules(data_root).list_rules() == []
+
+
+def test_approve_invalid_scope_400(monkeypatch, tmp_path):
+    data_root = _patch(monkeypatch, tmp_path)
+    aid = _seed(data_root)
+    r = _client().post(
+        f"/api/agents/acme/approvals/{aid}/approve", json={"scope": "sometimes"}
+    )
+    assert r.status_code == 400
+    assert "scope" in r.json()["detail"]
+
+
+def test_reject_invalid_scope_400(monkeypatch, tmp_path):
+    data_root = _patch(monkeypatch, tmp_path)
+    aid = _seed(data_root)
+    r = _client().post(
+        f"/api/agents/acme/approvals/{aid}/reject", json={"scope": "sometimes"}
+    )
+    assert r.status_code == 400
+    assert "scope" in r.json()["detail"]
+
+
 # --- config: validate → atomic replace; MEMORY.md read-only ---
 
 

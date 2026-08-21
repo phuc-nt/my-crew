@@ -28,11 +28,13 @@ def run_quickstart(args: list[str]) -> int:
     """
     # The guard must see .env values (the printed hint tells users to put the key
     # there) — the run path loads .env only later, inside the config builders.
-    load_dotenv(MY_CREW_HOME / ".env")
+    env_path = MY_CREW_HOME / ".env"
+    load_dotenv(env_path)
     if not os.environ.get("OPENROUTER_API_KEY"):
         print(
-            "Chưa có OPENROUTER_API_KEY. Đặt nó trong .env (hoặc export) rồi chạy lại:\n"
-            "  echo 'OPENROUTER_API_KEY=sk-or-...' >> .env",
+            "Chưa có OPENROUTER_API_KEY. Đặt nó trong .env rồi chạy lại "
+            "(Missing OPENROUTER_API_KEY — set it in .env, then re-run):\n"
+            f"  echo 'OPENROUTER_API_KEY=sk-or-...' >> {env_path}",
             file=sys.stderr,
         )
         return 2

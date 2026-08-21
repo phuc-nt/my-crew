@@ -25,8 +25,9 @@ def clean_env(tmp_path, monkeypatch):
     monkeypatch.setattr(routes_setup, "_SETUP_COMPLETE_MARKER", marker)
     monkeypatch.setattr("my_crew.server.routes_setup.MY_CREW_HOME", tmp_path)
     monkeypatch.delenv("WEB_AUTH_PASSWORD_HASH", raising=False)
-    # neutralize the real restart during tests
-    monkeypatch.setattr(routes_setup, "_restart_web_service", lambda: None)
+    # neutralize the real restart during tests — default to "accepted" like launchd would
+    monkeypatch.setattr(routes_setup, "_restart_web_service", lambda: True)
+    monkeypatch.setattr(routes_setup, "_restart_hint", lambda: "test-hint")
     return {"env": env, "marker": marker}
 
 
@@ -98,6 +99,7 @@ def test_full_flow_openrouter_then_finish_not_bricked(clean_env):
     # finish still reachable
     r = c.post("/api/setup/finish", json={"password": "ceopass"})
     assert r.status_code == 200 and r.json()["restarting"] is True
+    assert r.json()["restart_hint"] == "test-hint"
     # NOW locked (marker set at finish)
     assert c.post("/api/setup/env", json={"GITHUB_REPO": "o/r"}).status_code == 410
 
@@ -121,6 +123,36 @@ def test_finish_sets_password_marker_and_locks(clean_env, monkeypatch):
 def test_finish_short_password_rejected(clean_env):
     r = _client().post("/api/setup/finish", json={"password": "12"})
     assert r.status_code == 400
+
+
+def test_finish_reports_honest_false_when_restart_fails(clean_env, monkeypatch):
+    """If the platform restart mechanism didn't accept the kickstart, `restarting` must be
+    False and the message must tell the operator to restart manually — not lie."""
+    monkeypatch.setattr(routes_setup, "_restart_web_service", lambda: False)
+    r = _client().post("/api/setup/finish", json={"password": "ceopass"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["restarting"] is False
+    assert "thủ công" in body["message"]
+    assert body["restart_hint"] == "test-hint"
+
+
+def test_restart_hint_platform_detection(monkeypatch):
+    # launchd not loaded, no container markers, no systemd env → generic fallback
+    monkeypatch.setattr("os.system", lambda _cmd: 1 << 8)  # non-zero rc
+    monkeypatch.setattr("os.path.exists", lambda _p: False)
+    monkeypatch.delenv("INVOCATION_ID", raising=False)
+    hint = routes_setup._restart_hint()
+    assert "my-crew serve" in hint
+
+    monkeypatch.setattr("os.path.exists", lambda p: p == "/.dockerenv")
+    hint = routes_setup._restart_hint()
+    assert "docker" in hint.lower() or "podman" in hint.lower()
+
+    monkeypatch.setattr("os.path.exists", lambda _p: False)
+    monkeypatch.setenv("INVOCATION_ID", "abc")
+    hint = routes_setup._restart_hint()
+    assert "systemctl" in hint
 
 
 # --- the durability property (red-team MAJOR-2) ---

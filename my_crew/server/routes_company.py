@@ -46,6 +46,7 @@ def get_company() -> dict:
         "team_task_cap_usd": c.team_task_cap_usd,
         "team_task_concurrency": c.team_task_concurrency,
         "team_task_auto_confirm": c.team_task_auto_confirm,
+        "autopilot": c.autopilot,
     }
 
 
@@ -54,7 +55,9 @@ def post_company(
     name: str = Body(..., embed=True),
     coordinator_id: str | None = Body(None, embed=True),
     team_task_cap_usd: float | None = Body(None, embed=True),
+    team_task_concurrency: int | None = Body(None, embed=True),
     team_task_auto_confirm: bool | None = Body(None, embed=True),
+    autopilot: bool | None = Body(None, embed=True),
 ) -> dict:
     """Set company name + coordinator (config-only write, mirrors registry mutation).
 
@@ -64,6 +67,12 @@ def post_company(
     Load-modify-save (red-team F7): fields this request does NOT carry are re-written
     from the CURRENT company.yaml, never silently reset to defaults — the old behavior
     dropped `team_task_concurrency` back to 2 on every save.
+
+    v88 P5-D: `team_task_concurrency` and `autopilot` are now writable here too (Settings
+    tab). `run_set_autopilot` (the chat-ops path) does only `load_company` +
+    `save_company(...autopilot=enable)` with no separate audit event on the toggle
+    itself, so writing `autopilot` directly through `save_company` here is
+    behavior-equivalent — no chat-op wrapping needed.
     """
     if not isinstance(name, str):
         raise HTTPException(status_code=400, detail="name phải là chuỗi")
@@ -77,29 +86,37 @@ def post_company(
             )
     if team_task_cap_usd is not None and team_task_cap_usd <= 0:
         raise HTTPException(status_code=400, detail="team_task_cap_usd phải > 0")
+    if team_task_concurrency is not None and not (1 <= team_task_concurrency <= 10):
+        raise HTTPException(
+            status_code=400, detail="team_task_concurrency phải trong khoảng 1..10"
+        )
 
     current = load_company()
     # Omitted fields preserve the current value (F7 + review M2 — a Setup-wizard save
     # that carries no cap must not reset the CEO's configured cap back to 2.0).
     cap = current.team_task_cap_usd if team_task_cap_usd is None else float(team_task_cap_usd)
+    concurrency = (
+        current.team_task_concurrency if team_task_concurrency is None
+        else int(team_task_concurrency)
+    )
     auto_confirm = (
         current.team_task_auto_confirm if team_task_auto_confirm is None
         else bool(team_task_auto_confirm)
     )
+    autopilot_value = current.autopilot if autopilot is None else bool(autopilot)
     save_company(
         name.strip(), coord, cap,
-        team_task_concurrency=current.team_task_concurrency,
+        team_task_concurrency=concurrency,
         team_task_auto_confirm=auto_confirm,
-        # This route does not manage autopilot (chat-ops `set_autopilot` does) — a
-        # Setup-wizard save must never silently flip it (same F7 preserve rule).
-        autopilot=current.autopilot,
+        autopilot=autopilot_value,
     )
     return {
         "name": name.strip(),
         "coordinator_id": coord,
         "team_task_cap_usd": cap,
-        "team_task_concurrency": current.team_task_concurrency,
+        "team_task_concurrency": concurrency,
         "team_task_auto_confirm": auto_confirm,
+        "autopilot": autopilot_value,
     }
 
 

@@ -79,12 +79,20 @@ def test_preview_maps_slots_and_auto_confirmed_flag(monkeypatch, client):
         slots["auto_confirmed"] = "1"
         return "KẾ HOẠCH..."
 
+    class _FakeSettings:
+        dry_run = True
+
+    class _FakeLoaded:
+        settings = _FakeSettings()
+
     monkeypatch.setattr(assign_mod, "preview_assign_team_task", _fake_preview)
+    monkeypatch.setattr("my_crew.profile.loader.load_profile", lambda *a, **k: _FakeLoaded())
     r = client.post("/api/office/assign/preview", json={"brief": "@content viết bài"})
     assert r.status_code == 200
     # route_mode "" when the gateway did not route (composer shows no badge then)
     assert r.json() == {"preview_text": "KẾ HOẠCH...", "task_id": "t-1", "plan_hash": "h-1",
-                        "pic_id": "content", "auto_confirmed": True, "route_mode": ""}
+                        "pic_id": "content", "auto_confirmed": True, "route_mode": "",
+                        "pic_dry_run": True}
 
 
 def test_preview_surfaces_route_mode_for_composer_badge(monkeypatch, client):
@@ -99,6 +107,49 @@ def test_preview_surfaces_route_mode_for_composer_badge(monkeypatch, client):
     r = client.post("/api/office/assign/preview", json={"brief": "@content viết bài"})
     assert r.status_code == 200
     assert r.json()["route_mode"] == "sprint"
+
+
+def test_preview_surfaces_pic_dry_run_from_effective_profile(monkeypatch, client):
+    """pic_dry_run reflects the SAME resolution the worker uses (load_profile), not a
+    raw yaml peek — so a fleet-inherited value (no per-agent override) is captured too."""
+    def _fake_preview(slots):
+        slots["task_id"] = "t-3"
+        slots["plan_hash"] = "h-3"
+        slots["pic_id"] = "content"
+        return "KẾ HOẠCH..."
+
+    class _FakeSettings:
+        dry_run = False
+
+    class _FakeLoaded:
+        settings = _FakeSettings()
+
+    monkeypatch.setattr(assign_mod, "preview_assign_team_task", _fake_preview)
+    monkeypatch.setattr(
+        "my_crew.profile.loader.load_profile", lambda *a, **k: _FakeLoaded()
+    )
+    r = client.post("/api/office/assign/preview", json={"brief": "@content viết bài"})
+    assert r.status_code == 200
+    assert r.json()["pic_dry_run"] is False
+
+
+def test_preview_pic_dry_run_defaults_true_on_broken_profile(monkeypatch, client):
+    """A PIC whose profile fails to load must not crash the preview — badge defaults
+    to the conservative "diễn tập" (True) rather than silently claiming a real send."""
+    def _fake_preview(slots):
+        slots["task_id"] = "t-4"
+        slots["plan_hash"] = "h-4"
+        slots["pic_id"] = "ghost"
+        return "KẾ HOẠCH..."
+
+    def _raise(*a, **k):
+        raise FileNotFoundError("no such profile")
+
+    monkeypatch.setattr(assign_mod, "preview_assign_team_task", _fake_preview)
+    monkeypatch.setattr("my_crew.profile.loader.load_profile", _raise)
+    r = client.post("/api/office/assign/preview", json={"brief": "@ghost việc gì đó"})
+    assert r.status_code == 200
+    assert r.json()["pic_dry_run"] is True
 
 
 def test_preview_validation_error_is_400(monkeypatch, client):

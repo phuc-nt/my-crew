@@ -10,25 +10,64 @@ def _quiet_env(monkeypatch, tmp_path):
     monkeypatch.setattr(life, "load_dotenv", lambda *a, **k: None, raising=False)
 
 
-def test_doctor_reports_failures_rc1(monkeypatch, tmp_path, capsys):
+def test_doctor_optional_failure_does_not_fail_rc(monkeypatch, tmp_path, capsys):
+    """An OPTIONAL check (e.g. Slack) failing must not fail the whole doctor run — only
+    REQUIRED checks (OpenRouter, home writable) gate rc."""
     _quiet_env(monkeypatch, tmp_path)
-    monkeypatch.setattr(life, "_tool_version", lambda cmd: None)  # no node/npm
+    monkeypatch.setattr(life, "_tool_version", lambda cmd: None)  # no node/npm (optional)
     monkeypatch.setattr(
         "my_crew.server.integration_health._run_checks",
-        lambda: [{"id": "x", "label": "X", "ok": False, "detail": "d", "hint": "h"}],
+        lambda: [
+            {"id": "openrouter", "label": "OpenRouter (LLM)", "ok": True, "detail": "d",
+             "hint": ""},
+            {"id": "slack", "label": "Slack", "ok": False, "detail": "d", "hint": "h"},
+        ],
     )
     rc = life.run_doctor([])
     out = capsys.readouterr().out
-    assert rc == 1
-    assert "✗ node" in out and "✗ X" in out and "→ h" in out
+    assert rc == 0  # optional failure does not fail the run
+    assert "✗ node" in out and "✗ Slack" in out and "→ h" in out
+    assert "Bắt buộc:" in out and "Tùy chọn:" in out
+    assert "Chỉ cần OpenRouter để bắt đầu." in out
 
 
-def test_doctor_all_green_rc0(monkeypatch, tmp_path, capsys):
+def test_doctor_required_failure_rc1(monkeypatch, tmp_path, capsys):
     _quiet_env(monkeypatch, tmp_path)
     monkeypatch.setattr(life, "_tool_version", lambda cmd: "v22.0.0")
-    monkeypatch.setattr("my_crew.server.integration_health._run_checks", lambda: [])
+    monkeypatch.setattr(
+        "my_crew.server.integration_health._run_checks",
+        lambda: [
+            {"id": "openrouter", "label": "OpenRouter (LLM)", "ok": False, "detail": "chưa đặt",
+             "hint": "Set OPENROUTER_API_KEY"},
+        ],
+    )
+    rc = life.run_doctor([])
+    assert rc == 1
+    assert "✗ OpenRouter" in capsys.readouterr().out
+
+
+def test_doctor_clean_machine_openrouter_only_rc0(monkeypatch, tmp_path, capsys):
+    """Clean machine, only OPENROUTER_API_KEY set: every optional integration is
+    unconfigured, but rc must be 0 (required group all green)."""
+    _quiet_env(monkeypatch, tmp_path)
+    monkeypatch.setattr(life, "_tool_version", lambda cmd: None)  # node/npm missing (optional)
+    monkeypatch.setattr(
+        "my_crew.server.integration_health._run_checks",
+        lambda: [
+            {"id": "openrouter", "label": "OpenRouter (LLM)", "ok": True, "detail": "đã đặt",
+             "hint": ""},
+            {"id": "atlassian", "label": "Atlassian", "ok": False, "detail": "chưa đặt",
+             "hint": "h"},
+            {"id": "slack", "label": "Slack", "ok": False, "detail": "chưa đặt", "hint": "h"},
+            {"id": "github", "label": "GitHub", "ok": False, "detail": "chưa đăng nhập",
+             "hint": "h"},
+            {"id": "docker", "label": "Docker", "ok": False, "detail": "not running",
+             "hint": "h"},
+        ],
+    )
     assert life.run_doctor([]) == 0
-    assert "all checks passed" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "bắt buộc OK" in out
 
 
 def test_upgrade_check_exit_codes(monkeypatch, capsys):

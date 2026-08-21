@@ -21,6 +21,20 @@ def test_quickstart_without_openrouter_key_exits_nonzero(monkeypatch, capsys, tm
     assert "OPENROUTER_API_KEY" in err  # actionable hint, not a traceback
 
 
+def test_quickstart_error_is_bilingual_and_prints_real_env_path(monkeypatch, capsys, tmp_path):
+    """The hint must name the REAL MY_CREW_HOME-aware .env path (not a guessed one) and
+    carry both a Vietnamese and an English line so a non-Vietnamese-reading operator can
+    still act on it."""
+    monkeypatch.setattr(onb, "MY_CREW_HOME", tmp_path)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    rc = onb.run_quickstart([])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert str(tmp_path / ".env") in err
+    assert "Missing OPENROUTER_API_KEY" in err  # English line
+    assert "Chưa có OPENROUTER_API_KEY" in err  # Vietnamese line
+
+
 def test_quickstart_reads_key_from_env_file(monkeypatch, tmp_path):
     # The printed hint says "put the key in .env" — the guard must honor exactly that.
     import os

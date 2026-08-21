@@ -7,19 +7,25 @@ to know which agents to run, but a missing
 yet, and every reader (Setup wizard, dashboard header) must render a safe default instead
 of 500ing. Writes go through `save_company`, which mirrors `registry_edit`'s
 validate-before-replace + atomic temp-then-rename pattern under the same style of
-process-wide lock.
+process-wide lock. `save_company` is a ruamel.yaml round-trip load-modify-save (v88
+P5-D0, same sanctioned pattern as `my_crew.server.profile_patch`): it preserves any
+hand-written key and comment already in company.yaml, only touching the 6 known
+fields — it no longer rebuilds the document from a fixed dict.
 
 Config-only: no secret ever belongs in this file (name + coordinator id + a cost cap).
 """
 
 from __future__ import annotations
 
+import io
 import os
 import threading
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedMap
 
 from my_crew.config.settings import MY_CREW_HOME
 
@@ -127,6 +133,15 @@ def _default_company() -> Company:
     )
 
 
+def _ruamel_yaml() -> YAML:
+    # round_trip preserves comments/key-order/quote-style — same config as
+    # `profile_patch._yaml()`, the sanctioned pattern this mirrors.
+    y = YAML(typ="rt")
+    y.default_flow_style = False
+    y.preserve_quotes = True
+    return y
+
+
 def save_company(
     name: str,
     coordinator_id: str | None,
@@ -137,14 +152,22 @@ def save_company(
     *,
     path: Path | None = None,
 ) -> None:
-    """Atomic write of `company.yaml` (temp-then-rename), guarded by the process lock.
+    """Load-modify-save write of `company.yaml`, atomic (temp-then-rename) under the
+    process lock.
+
+    v88 P5-D0: rewritten from a fixed-6-key rebuild (which silently erased any
+    hand-written key not in that set — same incident class `profile_patch` was built
+    to avoid for profile.yaml) to a ruamel.yaml round-trip load-modify-save. Only the
+    6 known fields below are written; every other top-level key and comment already in
+    the file survives untouched. A missing/unreadable/non-mapping existing file starts
+    from an empty document (mirrors `load_company`'s degrade-not-raise posture).
 
     Validate-before-replace: the new document is round-tripped through `load_company` on
     the temp file before the real file is replaced, so a value that can't be read back
     correctly never lands (mirrors `registry_edit._replace_validated`).
     """
     company_path = path if path is not None else _COMPANY_PATH
-    doc = {
+    values = {
         "name": str(name or ""),
         "coordinator_id": str(coordinator_id) if coordinator_id else None,
         "team_task_cap_usd": float(team_task_cap_usd),
@@ -152,20 +175,41 @@ def save_company(
         "team_task_auto_confirm": bool(team_task_auto_confirm),
         "autopilot": bool(autopilot),
     }
-    text = yaml.safe_dump(doc, sort_keys=False, allow_unicode=True)
 
+    ryaml = _ruamel_yaml()
     with _EDIT_LOCK:
+        try:
+            raw = company_path.read_text(encoding="utf-8")
+        except OSError:
+            raw = None
+
+        doc = None
+        if raw is not None:
+            try:
+                doc = ryaml.load(raw)
+            except Exception:  # noqa: BLE001 — malformed existing file degrades to fresh doc
+                doc = None
+        if not isinstance(doc, dict):
+            doc = CommentedMap()
+
+        for key, value in values.items():
+            doc[key] = value
+
+        buf = io.StringIO()
+        ryaml.dump(doc, buf)
+        text = buf.getvalue()
+
         tmp = company_path.with_suffix(company_path.suffix + f".{os.getpid()}.tmp")
         tmp.write_text(text, encoding="utf-8")
         try:
             loaded = load_company(tmp)
             if (
-                loaded.name != doc["name"]
-                or loaded.coordinator_id != doc["coordinator_id"]
-                or loaded.team_task_cap_usd != doc["team_task_cap_usd"]
-                or loaded.team_task_concurrency != doc["team_task_concurrency"]
-                or loaded.team_task_auto_confirm != doc["team_task_auto_confirm"]
-                or loaded.autopilot != doc["autopilot"]
+                loaded.name != values["name"]
+                or loaded.coordinator_id != values["coordinator_id"]
+                or loaded.team_task_cap_usd != values["team_task_cap_usd"]
+                or loaded.team_task_concurrency != values["team_task_concurrency"]
+                or loaded.team_task_auto_confirm != values["team_task_auto_confirm"]
+                or loaded.autopilot != values["autopilot"]
             ):
                 raise RuntimeError("company.yaml write did not round-trip the expected values")
         except Exception:

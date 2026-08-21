@@ -23,6 +23,12 @@ from my_crew.config.settings import MY_CREW_HOME, REPO_ROOT
 
 _PYPI_JSON_URL = "https://pypi.org/pypi/my-crew/json"
 
+#: Check ids from `integration_health._run_checks()` that gate a first RUN (an OpenRouter
+#: report needs nothing else). Everything else (Atlassian, Slack, MCP builds, gws, docker,
+#: SMTP, operator push, websearch key) is an optional integration — useful once the
+#: operator wants that specific feature, but its absence must not read as "broken install".
+_REQUIRED_CHECK_IDS = frozenset({"openrouter"})
+
 
 def _is_checkout() -> bool:
     return (REPO_ROOT / ".git").exists()
@@ -50,28 +56,57 @@ def _tool_version(cmd: str) -> str | None:
 
 
 def run_doctor(args: list[str]) -> int:
-    """`my-crew doctor` — ✓/✗ per check with an actionable hint; rc 1 if anything failed."""
+    """`my-crew doctor` — ✓/✗ per check with an actionable hint, split into Bắt buộc
+    (required for a first OpenRouter-only run: the key itself, a writable home, and
+    working python deps — implied by doctor running at all) vs Tùy chọn (every other
+    integration). rc reflects the REQUIRED group only: a clean machine with just an
+    OpenRouter key exits 0 even though every optional integration is unconfigured —
+    doctor must not read "unconfigured Slack" as "broken install"."""
     # The server-side checks must see .env exactly like the dashboard does.
     from dotenv import load_dotenv
 
     load_dotenv(MY_CREW_HOME / ".env")
     print(f"my-crew doctor — home: {MY_CREW_HOME}")
+    print("Chỉ cần OpenRouter để bắt đầu.")
 
-    failures = 0
+    required_failures = 0
+    optional_failures = 0
 
-    # CLI-environment extras first: the integration checks assume a runnable host.
-    node_v = _tool_version("node")
-    _print_check(node_v is not None, "node (MCP servers runtime)", node_v or "not found",
-                 "install Node.js (brew install node / nodesource)")
-    failures += node_v is None
-    npm_v = _tool_version("npm")
-    _print_check(npm_v is not None, "npm", npm_v or "not found", "comes with Node.js")
-    failures += npm_v is None
+    def _required(ok: bool, label: str, detail: str, hint: str) -> None:
+        nonlocal required_failures
+        _print_check(ok, label, detail, hint)
+        required_failures += not ok
 
+    def _optional(ok: bool, label: str, detail: str, hint: str) -> None:
+        nonlocal optional_failures
+        _print_check(ok, label, detail, hint)
+        optional_failures += not ok
+
+    print("\nBắt buộc:")
     home_writable = os.access(MY_CREW_HOME, os.W_OK)
-    _print_check(home_writable, "home writable", str(MY_CREW_HOME),
-                 "fix permissions or set MY_CREW_HOME")
-    failures += not home_writable
+    _required(home_writable, "home writable", str(MY_CREW_HOME),
+              "fix permissions or set MY_CREW_HOME")
+
+    # Server-side integration checks (same source the dashboard health panel uses),
+    # split by id: REQUIRED (OpenRouter) vs everything else (optional integrations).
+    from my_crew.server.integration_health import _run_checks
+
+    server_checks = _run_checks()
+    for check in server_checks:
+        if check["id"] in _REQUIRED_CHECK_IDS:
+            _required(check["ok"], check["label"], check["detail"], check["hint"])
+
+    print("\nTùy chọn:")
+    # CLI-environment extras: node/npm (MCP servers runtime).
+    node_v = _tool_version("node")
+    _optional(node_v is not None, "node (MCP servers runtime)", node_v or "not found",
+              "install Node.js (brew install node / nodesource)")
+    npm_v = _tool_version("npm")
+    _optional(npm_v is not None, "npm", npm_v or "not found", "comes with Node.js")
+
+    for check in server_checks:
+        if check["id"] not in _REQUIRED_CHECK_IDS:
+            _optional(check["ok"], check["label"], check["detail"], check["hint"])
 
     # Informational: the pinned MCP-server versions this install targets.
     from my_crew.config.settings import SHIPPED_ROOT
@@ -90,15 +125,12 @@ def run_doctor(args: list[str]) -> int:
             f"slack {pins.get('SLACK_PKG_VERSION', '?')}"
         )
 
-    # Server-side integration checks (same source the dashboard health panel uses).
-    from my_crew.server.integration_health import _run_checks
-
-    for check in _run_checks():
-        _print_check(check["ok"], check["label"], check["detail"], check["hint"])
-        failures += not check["ok"]
-
-    print(f"doctor: {'all checks passed' if failures == 0 else f'{failures} check(s) failed'}")
-    return 0 if failures == 0 else 1
+    print(
+        f"\ndoctor: bắt buộc "
+        f"{'OK' if required_failures == 0 else f'{required_failures} lỗi'} · "
+        f"tùy chọn {'OK' if optional_failures == 0 else f'{optional_failures} chưa cấu hình'}"
+    )
+    return 0 if required_failures == 0 else 1
 
 
 def _pypi_latest(timeout_s: float = 5.0) -> str | None:

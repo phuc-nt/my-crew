@@ -40,8 +40,19 @@ def test_no_channel_configured_answers_none_not_false(monkeypatch):
     assert oc.send_via_channels("hi", loaded=_loaded()) is None
 
 
+def _no_ssrf_check(monkeypatch):
+    """Skip the real DNS-resolving SSRF guard in tests: `*.example.test` hostnames do
+    not resolve, and the guard itself is covered exhaustively by
+    tests/test_webhook_url_guard.py — these tests are about the channel-selection and
+    redirect-handling behavior, not the guard."""
+    monkeypatch.setattr(
+        "my_crew.runtime.webhook_url_guard.assert_safe_webhook_url", lambda url: None
+    )
+
+
 def test_webhook_alone_delivers_when_telegram_is_absent(monkeypatch):
     # The whole point of the arc: no Telegram binding anywhere, operator still pushed.
+    _no_ssrf_check(monkeypatch)
     monkeypatch.setenv(oc.OPERATOR_WEBHOOK_URL_ENV, "https://hook.example.test/notice")
     seen: dict = {}
 
@@ -54,17 +65,41 @@ def test_webhook_alone_delivers_when_telegram_is_absent(monkeypatch):
         def __exit__(self, *a):
             return False
 
-    def _urlopen(req, timeout=None):
+    def _open(req, timeout=None):
         seen["url"] = req.full_url
         seen["body"] = req.data
         return _Resp()
 
-    monkeypatch.setattr(oc.urllib.request, "urlopen", _urlopen)
+    monkeypatch.setattr(oc._NO_REDIRECT_OPENER, "open", _open)
     assert oc.send_via_channels("kẹt rồi", loaded=_loaded()) is True
     assert seen["url"] == "https://hook.example.test/notice"
     # Discord reads `content`, most others read `text` — one payload serves both, which
     # is why there is no per-vendor adapter.
     assert b'"content"' in seen["body"] and b'"text"' in seen["body"]
+
+
+def test_webhook_redirect_to_internal_host_is_not_followed(monkeypatch):
+    # A host that was public when saved (or at an earlier send) could 302 an attacker-
+    # controlled response toward an internal target. The redirect must not be followed —
+    # it must surface as a failure, never as a silent POST to the internal host.
+    _no_ssrf_check(monkeypatch)
+    monkeypatch.setenv(oc.OPERATOR_WEBHOOK_URL_ENV, "https://hook.example.test/notice")
+
+    posted_to: list[str] = []
+
+    def _open(req, timeout=None):
+        posted_to.append(req.full_url)
+        import urllib.error
+
+        # Simulate what the real opener does once `_NoRedirectHandler.redirect_request`
+        # returns None on a 302: HTTPError is raised instead of a second request firing.
+        headers = {"Location": "http://169.254.169.254/latest/meta-data/"}
+        raise urllib.error.HTTPError(req.full_url, 302, "Found", headers, None)
+
+    monkeypatch.setattr(oc._NO_REDIRECT_OPENER, "open", _open)
+    assert oc.send_via_channels("x", loaded=_loaded()) is False
+    # Only the original URL was ever requested — nothing was sent to the redirect target.
+    assert posted_to == ["https://hook.example.test/notice"]
 
 
 def test_smtp_takes_over_when_telegram_fails(monkeypatch):
@@ -86,18 +121,20 @@ def test_smtp_takes_over_when_telegram_fails(monkeypatch):
 def test_every_configured_channel_failing_answers_false(monkeypatch):
     # False, not None: the agent HAS channels, so the caller should not keep looking
     # for another agent — it should report the notice undelivered.
+    _no_ssrf_check(monkeypatch)
     monkeypatch.setenv(oc.OPERATOR_WEBHOOK_URL_ENV, "https://hook.example.test/x")
 
     def _boom(*a, **k):
         raise OSError("network down")
 
-    monkeypatch.setattr(oc.urllib.request, "urlopen", _boom)
+    monkeypatch.setattr(oc._NO_REDIRECT_OPENER, "open", _boom)
     assert oc.send_via_channels("x", loaded=_loaded()) is False
 
 
 def test_a_raising_channel_does_not_block_the_next_one(monkeypatch):
     # Contract with every caller is never-raises; a channel that explodes must be
     # logged and stepped over, not propagated into a background tick.
+    _no_ssrf_check(monkeypatch)
     monkeypatch.setenv(oc.OPERATOR_WEBHOOK_URL_ENV, "https://hook.example.test/x")
     monkeypatch.setenv(oc.OPERATOR_EMAIL_ENV, "ceo@example.test")
 
@@ -105,7 +142,7 @@ def test_a_raising_channel_does_not_block_the_next_one(monkeypatch):
         raise RuntimeError("telegram exploded")
 
     monkeypatch.setattr(oc, "_try_telegram", _boom)
-    monkeypatch.setattr(oc.urllib.request, "urlopen",
+    monkeypatch.setattr(oc._NO_REDIRECT_OPENER, "open",
                         lambda *a, **k: pytest.fail("should have stopped at smtp"))
     monkeypatch.setattr("my_crew.actions.email_write.send_plain_email",
                         lambda *a, **k: None)
@@ -128,6 +165,21 @@ def test_dry_run_telegram_counts_as_delivered_and_blocks_real_email(monkeypatch)
     monkeypatch.setattr("my_crew.actions.telegram_write.send_telegram_message",
                         lambda *a, **k: SimpleNamespace(status="dry_run"))
     assert oc.send_via_channels("x", loaded=_loaded(telegram_id="42", smtp=_SMTP)) is True
+
+
+def test_webhook_send_re_validates_and_blocks_rebound_dns(monkeypatch):
+    # The write-time guard only proves the URL was public when saved. If DNS for that
+    # host later rebinds to an internal address, the send-time re-check inside
+    # `_try_webhook` must catch it before any request goes out.
+    monkeypatch.setenv(oc.OPERATOR_WEBHOOK_URL_ENV, "https://hook.example.test/x")
+    monkeypatch.setattr(
+        "socket.getaddrinfo", lambda *a, **k: [(None, None, None, None, ("127.0.0.1", 0))]
+    )
+    monkeypatch.setattr(
+        oc._NO_REDIRECT_OPENER, "open",
+        lambda *a, **k: pytest.fail("must not reach the network once DNS rebinds internal"),
+    )
+    assert oc.send_via_channels("x", loaded=_loaded()) is False
 
 
 def test_channels_for_lists_only_what_is_usable(monkeypatch):

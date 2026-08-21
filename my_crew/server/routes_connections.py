@@ -19,11 +19,21 @@ import logging
 
 from fastapi import APIRouter, Body, HTTPException
 
+from my_crew.runtime.webhook_url_guard import WebhookUrlBlocked, assert_safe_webhook_url
 from my_crew.server import env_writer
-from my_crew.server.env_writer import SETUP_WRITABLE_KEYS, DisallowedEnvKey
+from my_crew.server.env_writer import (
+    CONNECTIONS_WRITABLE_KEYS,
+    SETUP_WRITABLE_KEYS,
+    DisallowedEnvKey,
+)
 from my_crew.server.integration_health import integration_checks
 
 logger = logging.getLogger(__name__)
+
+#: OPERATOR_WEBHOOK_URL_ENV name, mirrored here (not imported from operator_channels) to
+#: avoid pulling the runtime module's heavier import graph into the server route module for
+#: one string constant.
+_OPERATOR_WEBHOOK_URL_KEY = "OPERATOR_WEBHOOK_URL"
 
 router = APIRouter(prefix="/api/connections", tags=["connections"])
 
@@ -98,19 +108,32 @@ _CATALOG: tuple[dict, ...] = (
         "ok": True,
         "note": "Không cần key — Firecrawl chạy local, OpenAlex là API mở.",
     },
+    {
+        # Operator escalation channels (email + webhook): NOT wizard-writable — only the
+        # `/operator` route can set them (localhost-bound pre-auth, session-authed
+        # post-finish). See CONNECTIONS_WRITABLE_KEYS docstring for why this can't live
+        # in SETUP_WRITABLE_KEYS.
+        "id": "operator", "label": "Cảnh báo cho người vận hành (escalation)",
+        "check_ids": (),
+        "keys": ("OPERATOR_EMAIL", "OPERATOR_WEBHOOK_URL"),
+        "ok": True,
+        "note": "Nơi nhận thông báo khi agent cần người vận hành can thiệp (ngoài Telegram). "
+                "Webhook chỉ nhận https, không nhận địa chỉ nội bộ/loopback.",
+    },
 )
 
-# A catalog typo (key outside the wizard whitelist) must fail at import, not at runtime.
+# A catalog typo (key outside its intended whitelist) must fail at import, not at runtime.
 for _card in _CATALOG:
+    _allowed = SETUP_WRITABLE_KEYS if _card["id"] != "operator" else CONNECTIONS_WRITABLE_KEYS
     for _k in _card["keys"]:
-        assert _k in SETUP_WRITABLE_KEYS, f"catalog key {_k} not wizard-writable"
+        assert _k in _allowed, f"catalog key {_k} not writable on its intended path"
 
 
 @router.get("")
 def get_connections() -> dict:
     """Cards for the fixed catalog: aggregated status + key presence. Never a value."""
     checks = {c["id"]: c for c in integration_checks()["checks"]}
-    presence = env_writer.read_key_presence(SETUP_WRITABLE_KEYS)
+    presence = env_writer.read_key_presence(SETUP_WRITABLE_KEYS | CONNECTIONS_WRITABLE_KEYS)
     cards = []
     for card in _CATALOG:
         card_checks = [checks[cid] for cid in card["check_ids"] if cid in checks]
@@ -144,6 +167,55 @@ def put_connection_keys(updates: dict[str, str] = Body(..., embed=True)) -> dict
     _needs_restart = True
     logger.info("connections: wrote %d env key(s): %s", len(clean), ", ".join(sorted(clean)))
     return {"ok": True, "written": sorted(clean), "needs_restart": True}
+
+
+@router.put("/operator")
+def put_operator_keys(updates: dict[str, str] = Body(..., embed=True)) -> dict:  # noqa: B008
+    """Write OPERATOR_EMAIL / OPERATOR_WEBHOOK_URL — the ONLY path that may set them.
+    Never reachable through `/setup/env`. Like every other route here, this one is
+    localhost-bound pre-auth and session-authed post-finish (`AuthMiddleware` only
+    enforces sessions once `WEB_AUTH_PASSWORD_HASH` exists) — it is NOT unconditionally
+    "authed". OPERATOR_WEBHOOK_URL is SSRF-checked before it touches disk, and again at
+    send time in `operator_channels._try_webhook` (DNS can rebind between the two).
+
+    `needs_restart` is true only on EDIT (the key already held a DIFFERENT value) — the
+    scheduler/worker is a separate process from this web process and won't see a fresh
+    `load_dotenv(override=True)` here, so an edit needs a real restart to take effect. A
+    first-set still benefits from the immediate in-process reload (this process sees it
+    right away for e.g. a subsequent Test), so it does not falsely demand a restart.
+    """
+    global _needs_restart
+    clean = {k: v.strip() for k, v in updates.items() if str(v).strip() != ""}
+    if not clean:
+        raise HTTPException(status_code=400, detail="Không có giá trị nào để lưu.")
+
+    webhook = clean.get(_OPERATOR_WEBHOOK_URL_KEY)
+    if webhook is not None:
+        try:
+            assert_safe_webhook_url(webhook)
+        except WebhookUrlBlocked as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    before = env_writer.read_key_presence(CONNECTIONS_WRITABLE_KEYS)
+    # A key "already set" (present) whose value we're about to overwrite is an EDIT — the
+    # running scheduler process may already be using the OLD value and needs a restart to
+    # see the new one. First-set keys don't have that problem (nothing was using them).
+    is_edit = any(before.get(k) for k in clean)
+
+    try:
+        env_writer.merge_env(clean, allow=CONNECTIONS_WRITABLE_KEYS)
+    except DisallowedEnvKey as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    from dotenv import load_dotenv
+
+    from my_crew.config.settings import MY_CREW_HOME
+
+    load_dotenv(MY_CREW_HOME / ".env", override=True)  # this process sees the new value now
+    if is_edit:
+        _needs_restart = True
+    logger.info("connections: wrote %d operator key(s): %s", len(clean), ", ".join(sorted(clean)))
+    return {"ok": True, "written": sorted(clean), "needs_restart": is_edit}
 
 
 @router.post("/restart")

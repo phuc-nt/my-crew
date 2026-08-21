@@ -16,10 +16,20 @@ from __future__ import annotations
 from fastapi import APIRouter, Body, HTTPException
 
 from my_crew.actions.action_gateway import HardBlockedError
+from my_crew.actions.approval_rule_store import SCOPE_ALWAYS, SCOPE_DENY
 from my_crew.server import profile_editor
 from my_crew.server.ops_helpers import build_gateway, require_agent
 
 router = APIRouter(prefix="/api/agents", tags=["ops"])
+
+#: Scope tokens the web dropdown may send with an approve/reject decision — the SAME
+#: vocabulary `ops_approvals.py`'s chat path teaches a standing rule from
+#: (`SCOPE_ALWAYS`/`SCOPE_DENY`), plus "once" for the plain one-off decision (no rule
+#: learned). A bounded enum, not free text (H4/red-team): a typo here can never
+#: silently escalate a one-off decision into a permanent rule the way a parsed
+#: free-text field could.
+_SCOPE_ONCE = "once"
+_VALID_SCOPES = frozenset({_SCOPE_ONCE, SCOPE_ALWAYS, SCOPE_DENY})
 
 #: Fleet-wide approvals index. Separate router because the per-agent routes above are
 #: all mounted under `/api/agents/{agent_id}` and this one is deliberately NOT scoped to
@@ -81,11 +91,31 @@ def pending_index() -> dict:
     return {"pending": pending, "count": len(pending)}
 
 
+def _validate_scope(scope: str) -> str:
+    """`once` (default, no rule learned) or the two standing scopes — 400 on anything
+    else, so a client bug sending an unrecognized word fails loudly instead of the
+    chat path's forgiving "unknown ⇒ once" (a dropdown has no typos to forgive)."""
+    if scope not in _VALID_SCOPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"scope must be one of {sorted(_VALID_SCOPES)}, got {scope!r}",
+        )
+    return scope
+
+
 @router.post("/{agent_id}/approvals/{approval_id}/approve")
-def approve(agent_id: str, approval_id: int) -> dict:
-    """Run the approved action for REAL — same path as `mpm agent approve` / the htmx UI."""
+def approve(agent_id: str, approval_id: int, scope: str = Body(_SCOPE_ONCE, embed=True)) -> dict:
+    """Run the approved action for REAL — same path as `mpm agent approve` / the htmx UI.
+
+    `scope` (v88 P3): "once" (default) decides just this row; "always"/"deny" ALSO
+    teaches a standing rule via `gw.approval_rules.add_rule` — the exact two-step the
+    chat path's `_decide()` runs (approve/reject, then learn), so a web decision with
+    scope creates the identical rule row a chat decision would.
+    """
+    scope = _validate_scope(scope)
     loaded = require_agent(agent_id)
     gw = build_gateway(loaded)
+    pending = next((p for p in gw.pending_approvals() if p.id == approval_id), None)
     try:
         # Agent-bound dispatch (v31 P2): native types (schedule_update) get their identity
         # closure from THIS route's agent_id; mcp/email fall through to the shared dispatch.
@@ -100,16 +130,24 @@ def approve(agent_id: str, approval_id: int) -> dict:
         raise HTTPException(
             status_code=502, detail=f"post failed (still pending, retry): {exc}"
         ) from None
+    else:
+        if scope != _SCOPE_ONCE and pending is not None:
+            gw.approval_rules.add_rule(
+                pending.action, scope=scope, created_by=f"{agent_id} via web",
+            )
     finally:
         gw.close()
     return {"agent_id": agent_id, "approved": approval_id, "pending": _pending_json(loaded)}
 
 
 @router.post("/{agent_id}/approvals/{approval_id}/reject")
-def reject(agent_id: str, approval_id: int) -> dict:
-    """Reject (audit, no post)."""
+def reject(agent_id: str, approval_id: int, scope: str = Body(_SCOPE_ONCE, embed=True)) -> dict:
+    """Reject (audit, no post). Same `scope` contract as `approve` — "deny" teaches a
+    standing block rule from the rejected action."""
+    scope = _validate_scope(scope)
     loaded = require_agent(agent_id)
     gw = build_gateway(loaded)
+    pending = next((p for p in gw.pending_approvals() if p.id == approval_id), None)
     try:
         # False = unknown id, or another surface decided this row first. Same 400 the
         # approve path gives for an already-consumed id: the banner must refresh rather
@@ -118,6 +156,10 @@ def reject(agent_id: str, approval_id: int) -> dict:
             raise HTTPException(
                 status_code=400,
                 detail=f"Approval id={approval_id} is unknown or no longer pending.",
+            )
+        if scope != _SCOPE_ONCE and pending is not None:
+            gw.approval_rules.add_rule(
+                pending.action, scope=scope, created_by=f"{agent_id} via web",
             )
     finally:
         gw.close()

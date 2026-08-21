@@ -165,9 +165,17 @@ def setup_finish(request: Request, password: str = Body(..., embed=True),
         allow=FINISH_WRITABLE_KEYS,
     )
     _SETUP_COMPLETE_MARKER.write_text("v7 M17 setup done\n", encoding="utf-8")
-    _restart_web_service()
-    return {"ok": True, "restarting": True,
-            "message": "Đã lưu. Đang khởi động lại dịch vụ — đợi ~5 giây rồi đăng nhập."}
+    restarted = _restart_web_service()
+    message = (
+        "Đã lưu. Đang khởi động lại dịch vụ — đợi ~5 giây rồi đăng nhập."
+        if restarted
+        else (
+            "Đã lưu. Không tự khởi động lại được — hãy khởi động lại dịch vụ "
+            "thủ công rồi đăng nhập."
+        )
+    )
+    return {"ok": True, "restarting": restarted, "restart_hint": _restart_hint(),
+            "message": message}
 
 
 def _restart_web_service() -> bool:
@@ -184,6 +192,32 @@ def _restart_web_service() -> bool:
     except Exception:  # noqa: BLE001 — restart is best-effort; finish already persisted
         logger.warning("could not auto-restart web service; restart it manually", exc_info=True)
         return False
+
+
+def _restart_hint() -> str:
+    """Human-facing "how do I restart this" hint, platform-detected. Called AFTER
+    `_restart_web_service()` — if launchd already accepted the kickstart, the operator
+    doesn't need this text (the caller can still show it, it stays accurate), so this
+    only needs to name the CORRECT manual path when launchd isn't managing us.
+
+    Order matters: launchd is checked by the caller (kickstart success), containers next
+    (both compose engines), then systemd (`INVOCATION_ID` is set by systemd for any unit
+    it starts), else a generic "however you ran it" — never assumes Ctrl-C, which is
+    wrong for anyone running under a supervisor.
+    """
+    label = "com.mpm.web"
+    try:
+        uid = os.getuid()
+        rc = os.system(f"launchctl print gui/{uid}/{label} >/dev/null 2>&1")  # noqa: S605
+        if rc == 0:
+            return "Dịch vụ chạy qua launchd — tự khởi động lại, đợi ~5 giây rồi đăng nhập."
+    except Exception:  # noqa: BLE001 — detection is best-effort, fall through to next check
+        pass
+    if os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv"):
+        return "Khởi động lại container (docker/podman compose restart)."
+    if os.environ.get("INVOCATION_ID"):
+        return "Chạy: systemctl restart <service của bạn>."
+    return "Khởi động lại tiến trình server theo cách bạn đã chạy nó (ví dụ: my-crew serve)."
 
 
 __all__ = ["router", "setup_complete"]

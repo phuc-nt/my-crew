@@ -95,7 +95,10 @@ def ops_chat_commands() -> dict:
     return {
         "commands": [
             {"id": cid, "description": spec.get("description", ""),
-             "readonly": bool(spec.get("readonly"))}
+             "readonly": bool(spec.get("readonly")),
+             # A runnable example the web Chat box can seed on click — falls back to
+             # the bare command id when a catalog entry doesn't define one (P5-C).
+             "example": spec.get("example", cid)}
             for cid, spec in OPS_COMMANDS.items()
         ]
     }

@@ -42,9 +42,23 @@ def env_file(tmp_path, monkeypatch):
     env = tmp_path / ".env"
     env.write_text(f"OPENROUTER_API_KEY={_SECRET}\n", encoding="utf-8")
     monkeypatch.setattr("my_crew.server.env_writer._ENV_PATH", env)
+    monkeypatch.setattr("my_crew.config.settings.MY_CREW_HOME", tmp_path)
     monkeypatch.setattr(routes_connections, "integration_checks", lambda: _FAKE_CHECKS)
     monkeypatch.setattr(routes_connections, "_needs_restart", False)
-    return env
+    # The operator route re-reads the written .env via load_dotenv(override=True), which
+    # mutates the REAL os.environ — monkeypatch cannot intercept that. Snapshot + restore
+    # the operator keys so a write here never leaks into later tests (e.g. channels_for's
+    # env-derived webhook/email channels in test_ops_alerts). Isolation lives in the
+    # fixture, not in each test.
+    import os
+
+    _snapshot = {k: os.environ.get(k) for k in ("OPERATOR_EMAIL", "OPERATOR_WEBHOOK_URL")}
+    yield env
+    for k, v in _snapshot.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
 
 
 def _client():
@@ -129,8 +143,103 @@ def test_restart_reports_managed_when_launchd_accepts(env_file, monkeypatch):
 
 
 def test_catalog_keys_are_all_wizard_writable():
-    from my_crew.server.env_writer import SETUP_WRITABLE_KEYS
+    from my_crew.server.env_writer import CONNECTIONS_WRITABLE_KEYS, SETUP_WRITABLE_KEYS
 
     for card in routes_connections._CATALOG:
+        allowed = SETUP_WRITABLE_KEYS if card["id"] != "operator" else CONNECTIONS_WRITABLE_KEYS
         for key in card["keys"]:
-            assert key in SETUP_WRITABLE_KEYS
+            assert key in allowed
+
+
+# --- operator keys (OPERATOR_EMAIL / OPERATOR_WEBHOOK_URL): authed-only + SSRF guard ---
+
+
+def test_operator_keys_not_writable_via_setup_env(env_file):
+    """OPERATOR_* must be refused by the pre-auth /setup/env whitelist — they are
+    authed-Connections-only (routes_setup._guard has no password requirement pre-finish)."""
+    from my_crew.server.env_writer import CONNECTIONS_WRITABLE_KEYS, SETUP_WRITABLE_KEYS
+
+    assert CONNECTIONS_WRITABLE_KEYS.isdisjoint(SETUP_WRITABLE_KEYS)
+
+
+def test_put_operator_email_first_set_no_restart_needed(env_file):
+    r = _client().put(
+        "/api/connections/operator", json={"updates": {"OPERATOR_EMAIL": "ceo@x.com"}}
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["needs_restart"] is False
+    assert "OPERATOR_EMAIL=ceo@x.com" in env_file.read_text(encoding="utf-8")
+    import os
+
+    assert os.environ.get("OPERATOR_EMAIL") == "ceo@x.com"  # load_dotenv(override=True)
+
+
+def test_put_operator_email_edit_needs_restart(env_file, monkeypatch):
+    monkeypatch.setenv("OPERATOR_EMAIL", "old@x.com")
+    env_file.write_text(env_file.read_text(encoding="utf-8") + "OPERATOR_EMAIL=old@x.com\n",
+                         encoding="utf-8")
+    r = _client().put(
+        "/api/connections/operator", json={"updates": {"OPERATOR_EMAIL": "new@x.com"}}
+    )
+    assert r.status_code == 200
+    assert r.json()["needs_restart"] is True
+
+
+def test_put_operator_webhook_https_public_accepted(env_file, monkeypatch):
+    monkeypatch.setattr(
+        "my_crew.server.routes_connections.assert_safe_webhook_url", lambda _u: None
+    )
+    r = _client().put(
+        "/api/connections/operator",
+        json={"updates": {"OPERATOR_WEBHOOK_URL": "https://hooks.example.com/x"}},
+    )
+    assert r.status_code == 200
+    assert "OPERATOR_WEBHOOK_URL=https://hooks.example.com/x" in env_file.read_text(
+        encoding="utf-8"
+    )
+
+
+def test_put_operator_webhook_http_rejected(env_file):
+    r = _client().put(
+        "/api/connections/operator",
+        json={"updates": {"OPERATOR_WEBHOOK_URL": "http://example.com/hook"}},
+    )
+    assert r.status_code == 400
+    assert "OPERATOR_WEBHOOK_URL" not in env_file.read_text(encoding="utf-8")
+
+
+def test_put_operator_webhook_loopback_rejected(env_file):
+    r = _client().put(
+        "/api/connections/operator",
+        json={"updates": {"OPERATOR_WEBHOOK_URL": "https://127.0.0.1/hook"}},
+    )
+    assert r.status_code == 400
+    assert "OPERATOR_WEBHOOK_URL" not in env_file.read_text(encoding="utf-8")
+
+
+def test_put_operator_webhook_private_rfc1918_rejected(env_file):
+    r = _client().put(
+        "/api/connections/operator",
+        json={"updates": {"OPERATOR_WEBHOOK_URL": "https://10.0.0.5/hook"}},
+    )
+    assert r.status_code == 400
+
+
+def test_put_operator_webhook_metadata_ip_rejected(env_file):
+    r = _client().put(
+        "/api/connections/operator",
+        json={"updates": {"OPERATOR_WEBHOOK_URL": "https://169.254.169.254/latest/meta"}},
+    )
+    assert r.status_code == 400
+
+
+def test_put_operator_disallows_unknown_key(env_file):
+    r = _client().put(
+        "/api/connections/operator",
+        json={"updates": {"OPERATOR_EMAIL": "x@y.com", "OPENROUTER_API_KEY": "sk-hijack"}},
+    )
+    assert r.status_code == 400
+    text = env_file.read_text(encoding="utf-8")
+    assert "sk-hijack" not in text  # all-or-nothing: the hijack attempt wrote nothing
+    assert "OPERATOR_EMAIL" not in text

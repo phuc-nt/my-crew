@@ -52,6 +52,19 @@ FINISH_WRITABLE_KEYS: frozenset[str] = frozenset({
     "WEB_AUTH_USERNAME", "WEB_AUTH_PASSWORD_HASH", "WEB_SESSION_SECRET",
 })
 
+#: Keys writable ONLY through the Connections screen's `/operator` route (never through
+#: `/setup/env`, which is reachable pre-auth via `_guard`'s localhost-only check — no
+#: password required yet during first-run). This route is localhost-bound pre-auth and
+#: session-authed post-finish, same as every other route — it is NOT unconditionally
+#: authed; `AuthMiddleware` only starts enforcing sessions once `WEB_AUTH_PASSWORD_HASH`
+#: exists (set by `setup_finish`). OPERATOR_WEBHOOK_URL is an SSRF-sensitive sink (see
+#: `runtime.webhook_url_guard`, re-checked again at send time in `operator_channels`);
+#: OPERATOR_EMAIL is low-risk but shares the same write path since both are
+#: operator-escalation config, not first-run integration keys.
+CONNECTIONS_WRITABLE_KEYS: frozenset[str] = frozenset({
+    "OPERATOR_EMAIL", "OPERATOR_WEBHOOK_URL",
+})
+
 #: Per-agent telegram bot token (M18): `<AGENT>_TELEGRAM_BOT_TOKEN`, agent id upper-cased.
 _TELEGRAM_TOKEN_RE = re.compile(r"^[A-Z0-9_]+_TELEGRAM_BOT_TOKEN$")
 

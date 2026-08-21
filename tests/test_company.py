@@ -84,3 +84,44 @@ def test_save_accepts_any_float_validation_is_at_route_layer(tmp_path, cap):
     p = tmp_path / "company.yaml"
     save_company("Acme", None, cap, path=p)
     assert load_company(p).team_task_cap_usd == cap
+
+
+def test_save_preserves_hand_written_key_and_comment(tmp_path):
+    # v88 P5-D0: save_company used to rebuild company.yaml from a fixed 6-key dict,
+    # silently erasing any hand-written key/comment not in that set. It must now
+    # load-modify-save via ruamel round-trip, touching only the known fields.
+    p = tmp_path / "company.yaml"
+    p.write_text(
+        "# CEO's private note — do not remove\n"
+        "name: Acme\n"
+        "coordinator_id: coord-1\n"
+        "team_task_cap_usd: 2.0\n"
+        "weird_handwritten_key: xin chào thế giới\n",
+        encoding="utf-8",
+    )
+
+    save_company("Acme Renamed", "coord-1", 2.0, path=p)
+
+    after = p.read_text(encoding="utf-8")
+    assert "# CEO's private note — do not remove" in after
+    assert "weird_handwritten_key: xin chào thế giới" in after
+    assert "name: Acme Renamed" in after
+    # load_company only models the known fields — the unknown key survives on disk
+    # even though it's invisible to the Company dataclass.
+    c = load_company(p)
+    assert c.name == "Acme Renamed"
+    assert c.coordinator_id == "coord-1"
+
+
+def test_save_starts_fresh_when_file_missing(tmp_path):
+    p = tmp_path / "company.yaml"
+    assert not p.exists()
+    save_company("Acme", "coord-1", path=p)
+    assert load_company(p).name == "Acme"
+
+
+def test_save_starts_fresh_when_file_malformed(tmp_path):
+    p = tmp_path / "company.yaml"
+    p.write_text("not: [valid: yaml: at all\n", encoding="utf-8")
+    save_company("Acme", "coord-1", path=p)
+    assert load_company(p).name == "Acme"

@@ -139,6 +139,24 @@ def _try_smtp(text: str, *, loaded: Any, subject: str, **_: Any) -> bool | None:
     return True
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Refuse to follow 3xx responses.
+
+    `urllib`'s default opener silently follows redirects, so a webhook host that was
+    public at write time (or even one call ago) could 302 to an internal target
+    (169.254.169.254, 127.0.0.1, ...) and this client would happily chase it — the SSRF
+    guard on the original URL would never see the redirected one. Returning None here
+    (per the base class contract) makes `urlopen` raise `HTTPError` on any 3xx instead
+    of following it.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: N802,ANN001,ANN201
+        return None
+
+
+_NO_REDIRECT_OPENER = urllib.request.build_opener(_NoRedirectHandler)
+
+
 def _try_webhook(text: str, *, rationale: str, **_: Any) -> bool | None:
     """Generic JSON POST. None when `OPERATOR_WEBHOOK_URL` is unset.
 
@@ -149,13 +167,25 @@ def _try_webhook(text: str, *, rationale: str, **_: Any) -> bool | None:
     url = os.environ.get(OPERATOR_WEBHOOK_URL_ENV, "").strip()
     if not url:
         return None
+    # Re-validate at SEND time, not just at write time: DNS can rebind between when the
+    # operator saved this URL and this send (or any earlier send), so a host that was
+    # public at write time could now resolve to an internal/metadata address. Cheap
+    # relative to the network round-trip below, and closes that window.
+    from my_crew.runtime.webhook_url_guard import assert_safe_webhook_url
+
+    assert_safe_webhook_url(url)
     payload = json.dumps(
         {"text": text, "content": text, "message": text, "rationale": rationale}
     ).encode("utf-8")
-    req = urllib.request.Request(  # noqa: S310 — operator-supplied URL, not user input
+    # noqa: S310 — re-validated immediately above by
+    # `webhook_url_guard.assert_safe_webhook_url` (https + resolves only to globally
+    # routable addresses), and redirects are disabled via `_NO_REDIRECT_OPENER` so a
+    # 3xx to an internal host fails instead of being followed. Do not treat this as a
+    # bare "trust the env var" — the re-validation is what makes it safe.
+    req = urllib.request.Request(  # noqa: S310
         url, data=payload, headers={"Content-Type": "application/json"}, method="POST",
     )
-    with urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT_S) as resp:  # noqa: S310
+    with _NO_REDIRECT_OPENER.open(req, timeout=WEBHOOK_TIMEOUT_S) as resp:  # noqa: S310
         return 200 <= resp.status < 300
 
 

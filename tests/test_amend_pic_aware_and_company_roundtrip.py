@@ -100,7 +100,7 @@ def test_post_company_preserves_concurrency_and_auto_confirm(tmp_path, monkeypat
     from my_crew.server.routes_company import post_company
 
     out = post_company(name="Cty mới", coordinator_id=None, team_task_cap_usd=3.0,
-                       team_task_auto_confirm=None)
+                       team_task_concurrency=None, team_task_auto_confirm=None)
     assert out["team_task_concurrency"] == 4  # NOT reset to the default 2
     assert out["team_task_auto_confirm"] is True  # preserved when body omits it
 
@@ -109,3 +109,72 @@ def test_post_company_preserves_concurrency_and_auto_confirm(tmp_path, monkeypat
     assert saved.team_task_auto_confirm is True
     assert saved.team_task_cap_usd == 3.0
     assert saved.name == "Cty mới"
+
+
+@pytest.mark.parametrize("bad", [0, 11, -1])
+def test_post_company_rejects_out_of_range_concurrency(tmp_path, monkeypatch, bad):
+    """P5-D: team_task_concurrency must be 1..10 or the route 400s before any write."""
+    from fastapi import HTTPException
+
+    from my_crew.runtime import company as company_mod
+    from my_crew.runtime.company import save_company
+
+    path = tmp_path / "company.yaml"
+    monkeypatch.setattr(company_mod, "_COMPANY_PATH", path)
+    save_company("Cty", None, 2.0)
+
+    from my_crew.server.routes_company import post_company
+
+    with pytest.raises(HTTPException) as exc_info:
+        post_company(name="Cty", coordinator_id=None, team_task_cap_usd=None,
+                     team_task_concurrency=bad, team_task_auto_confirm=None)
+    assert exc_info.value.status_code == 400
+
+
+def test_post_company_writes_concurrency_and_autopilot(tmp_path, monkeypatch):
+    """P5-D: opening the two previously-refused fields — both must actually persist."""
+    from my_crew.runtime import company as company_mod
+    from my_crew.runtime.company import load_company, save_company
+
+    path = tmp_path / "company.yaml"
+    monkeypatch.setattr(company_mod, "_COMPANY_PATH", path)
+    save_company("Cty", None, 2.0)
+
+    from my_crew.server.routes_company import post_company
+
+    out = post_company(name="Cty", coordinator_id=None, team_task_cap_usd=None,
+                       team_task_concurrency=7, team_task_auto_confirm=None,
+                       autopilot=True)
+    assert out["team_task_concurrency"] == 7
+    assert out["autopilot"] is True
+
+    saved = load_company(path)
+    assert saved.team_task_concurrency == 7
+    assert saved.autopilot is True
+
+
+def test_post_company_save_preserves_hand_written_key(tmp_path, monkeypatch):
+    """P5-D0+D tie-in: a Settings-tab save through the route must not erase an unknown
+    hand-written key already in company.yaml (D0's ruamel round-trip guarantee, exercised
+    through the route that now writes concurrency/autopilot)."""
+    from my_crew.runtime import company as company_mod
+
+    path = tmp_path / "company.yaml"
+    path.write_text(
+        "# hand-written note\n"
+        "name: Cty\n"
+        "coordinator_id: null\n"
+        "team_task_cap_usd: 2.0\n"
+        "custom_field: giữ lại giùm\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(company_mod, "_COMPANY_PATH", path)
+
+    from my_crew.server.routes_company import post_company
+
+    post_company(name="Cty", coordinator_id=None, team_task_cap_usd=None,
+                team_task_concurrency=5, team_task_auto_confirm=None, autopilot=True)
+
+    after = path.read_text(encoding="utf-8")
+    assert "# hand-written note" in after
+    assert "custom_field: giữ lại giùm" in after

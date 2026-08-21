@@ -117,8 +117,8 @@ def test_post_chat_empty_engine_reply_becomes_hint(monkeypatch):
 
 
 def test_ops_chat_commands_listing_is_descriptions_only(monkeypatch, tmp_path):
-    """v32 discoverability: the catalog listing exposes id/description/readonly and
-    NOTHING else (no slots internals, no handlers)."""
+    """v32 discoverability: the catalog listing exposes id/description/readonly/example
+    and NOTHING else (no slots internals, no handlers)."""
     from fastapi.testclient import TestClient
 
     from my_crew.server.app import create_app
@@ -128,4 +128,19 @@ def test_ops_chat_commands_listing_is_descriptions_only(monkeypatch, tmp_path):
     commands = r.json()["commands"]
     ids = {c["id"] for c in commands}
     assert {"create_agent", "get_status", "company_activity"} <= ids
-    assert all(set(c) == {"id", "description", "readonly"} for c in commands)
+    assert all(set(c) == {"id", "description", "readonly", "example"} for c in commands)
+
+
+def test_ops_chat_commands_example_defined_vs_fallback_to_id(monkeypatch, tmp_path):
+    """P5-C: entries that define `example` expose it verbatim; entries that don't
+    fall back to the bare command id (routes_ops_chat.py's `spec.get("example", cid)`)."""
+    from fastapi.testclient import TestClient
+
+    from my_crew.server.app import create_app
+
+    r = TestClient(create_app()).get("/api/ops/chat/commands")
+    commands = {c["id"]: c["example"] for c in r.json()["commands"]}
+    # set_autopilot defines an explicit example.
+    assert commands["set_autopilot"] == "autopilot on"
+    # create_agent defines no example in the catalog -> falls back to its own id.
+    assert commands["create_agent"] == "create_agent"

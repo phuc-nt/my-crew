@@ -178,6 +178,10 @@ def test_chat_new_task_llm_tier_forces_manual_confirm(client, monkeypatch):
     assert r.status_code == 200
     assert captured["room_id"] == "r9"  # child task joins the room
     assert captured["no_auto_confirm"] == "1"  # LLM tier NEVER auto-confirms (M3)
+    # The in-room preview carries the same dry-run signal the office-screen /preview
+    # does, so the "diễn tập" badge renders for a workroom-initiated assign too. No PIC
+    # resolved here -> the conservative True default.
+    assert r.json()["pic_dry_run"] is True
 
 
 # ---- health (M2) ---------------------------------------------------------------

@@ -87,6 +87,15 @@ def test_create_from_template_lands_disabled(tmp_world):
     assert _profile_doc(profiles, "wiz")["enabled"] is True
 
 
+def test_create_from_template_hint_is_bilingual(tmp_world):
+    """The "Agent is OFF" hint carries both Vietnamese (primary) and a short English
+    line — this codebase's other first-run BE strings stay Vietnamese-only, so this is
+    scoped to exactly this hint, not a general i18n mechanism."""
+    result = template_create.create_from_template("content")
+    assert "Agent đang TẮT" in result["hint"]
+    assert "Agent is OFF" in result["hint"]
+
+
 def test_create_from_template_records_template_role_and_no_copy(tmp_world):
     """v36 P2: skills are NOT copied — the agent records `template_role` and loads skills
     live from the template dir (verified in test_template_live_skills.py)."""
