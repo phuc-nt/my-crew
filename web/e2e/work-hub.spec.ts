@@ -234,3 +234,123 @@ test('21. hủy việc trên thẻ yêu cầu xác nhận trước khi gọi rou
   await page.locator('.confirm-dialog').getByRole('button', { name: DICT.vi['stalledActions.cancel'] }).click()
   await expect.poll(() => calls).toEqual(['/api/team-tasks/t-3/cancel'])
 })
+
+// v91: the same unstick cluster on the TASK DETAIL page. Board-card coverage above is
+// not a substitute: the detail page renders from the room-artifacts query, a different
+// cache entry than the board's, so its repaint depends on the mutation invalidating
+// `artifacts.room(roomId)` — the exact wiring a review found missing (the panel stayed
+// frozen until a remount). These tests fail if that invalidation regresses.
+const STALLED_ROOM_ARTIFACTS = {
+  tasks: [
+    {
+      task_id: 't-3',
+      title: 'Tổng hợp số liệu quý',
+      pic_id: 'ke-toan',
+      status: 'stalled',
+      steps: [
+        { step_id: 's-1', title: 'thu thập số liệu', assigned_to: 'ke-toan',
+          status: 'failed', seq: 1, step_type: 'content' },
+      ],
+    },
+  ],
+}
+
+/** The same room after the action landed — the task is unstuck, so the panel's reason
+ *  line and its recovery buttons must both disappear on re-fetch. */
+const UNSTUCK_ROOM_ARTIFACTS = {
+  tasks: [
+    {
+      task_id: 't-3',
+      title: 'Tổng hợp số liệu quý',
+      pic_id: 'ke-toan',
+      status: 'open',
+      steps: [
+        { step_id: 's-1', title: 'thu thập số liệu', assigned_to: 'ke-toan',
+          status: 'pending', seq: 1, step_type: 'content' },
+      ],
+    },
+  ],
+}
+
+test('22. gỡ kẹt từ trang chi tiết repaint tại chỗ, không cần tải lại trang', async ({ page }) => {
+  await mockOfficeApi(page, {
+    artifacts: STALLED_ROOM_ARTIFACTS,
+    artifactsAfterAction: UNSTUCK_ROOM_ARTIFACTS,
+  })
+  await page.goto('/work/task/room-gamma')
+
+  // Stamped on the window and never re-set: any full document navigation (or a remount
+  // via reload) wipes it, so its survival proves the repaint was a re-fetch.
+  await page.evaluate(() => {
+    ;(window as unknown as { __noReload?: boolean }).__noReload = true
+  })
+
+  const panel = page.locator('.task-detail-stalled-panel')
+  await expect(page.locator('.task-detail-stalled-reason')).toContainText('thu thập số liệu')
+
+  await panel.getByRole('button', { name: DICT.vi['stalledActions.retry'] }).click()
+
+  // The reason line and the recovery trio go away because the room's artifacts were
+  // invalidated and re-fetched — the task now reads 'open'.
+  await expect(page.locator('.task-detail-stalled-reason')).toHaveCount(0)
+  await expect(
+    panel.getByRole('button', { name: DICT.vi['stalledActions.retry'] }),
+  ).toHaveCount(0)
+  // Cancel stays: it is valid on any live task, and the task is merely open now.
+  await expect(panel.getByRole('button', { name: DICT.vi['stalledActions.cancel'] })).toBeVisible()
+
+  expect(await page.evaluate(() => (window as unknown as { __noReload?: boolean }).__noReload)).toBe(
+    true,
+  )
+})
+
+test('23. hủy việc từ trang chi tiết cần xác nhận rồi repaint trạng thái mới', async ({ page }) => {
+  const calls: string[] = []
+  await mockOfficeApi(page, {
+    artifacts: STALLED_ROOM_ARTIFACTS,
+    artifactsAfterAction: {
+      tasks: [{ ...UNSTUCK_ROOM_ARTIFACTS.tasks[0], status: 'cancelled', steps: [] }],
+    },
+  })
+  // A listener, not a route: intercepting here would shadow the mock's own cancel
+  // handler (last route registered wins), and that handler is what advances the
+  // room artifacts to their post-action phase.
+  page.on('request', (req) => {
+    const { pathname } = new URL(req.url())
+    if (req.method() === 'POST' && pathname.endsWith('/cancel')) calls.push(pathname)
+  })
+  await page.goto('/work/task/room-gamma')
+
+  const panel = page.locator('.task-detail-stalled-panel')
+  await panel.getByRole('button', { name: DICT.vi['stalledActions.cancel'] }).click()
+  expect(calls).toEqual([]) // destructive: the first click only opens the dialog
+
+  await page
+    .locator('.confirm-dialog')
+    .getByRole('button', { name: DICT.vi['stalledActions.cancel'] })
+    .click()
+  await expect.poll(() => calls).toEqual(['/api/team-tasks/t-3/cancel'])
+
+  // A cancelled task is terminal — the whole action panel leaves the page.
+  await expect(page.locator('.task-detail-stalled-panel')).toHaveCount(0)
+})
+
+test('24. giao lại seed brief sang composer đúng một lần', async ({ page }) => {
+  await mockOfficeApi(page, { artifacts: STALLED_ROOM_ARTIFACTS })
+  await page.goto('/work/task/room-gamma')
+
+  await page.getByRole('button', { name: DICT.vi['taskDetail.reassign'] }).click()
+
+  // Lands on the overview composer with the old brief + PIC mention already filled.
+  await expect(page).toHaveURL(/\/chat$/)
+  const composer = page.locator('.office-composer input[type="text"]')
+  await expect(composer).toHaveValue('@ke-toan Tổng hợp số liệu quý')
+
+  // One-shot: arriving replaces its own history entry with a state-less one, so a
+  // reload of that entry re-mounts the composer with no seed. Reload (not in-app
+  // navigation) is the honest probe here — the browser restores typed input across
+  // in-app history moves regardless of what the app does with router state.
+  await page.reload()
+  await expect(page).toHaveURL(/\/chat$/)
+  await expect(page.locator('.office-composer input[type="text"]')).toHaveValue('')
+})

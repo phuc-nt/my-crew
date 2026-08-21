@@ -7,7 +7,7 @@
 import { expect, test } from '@playwright/test'
 import { DICT } from '../src/i18n/dictionary'
 import { agentsFixture } from './fixtures/office-fixtures'
-import { mockOfficeApi } from './support/mock-api'
+import { expectNoUnmockedRoutes, mockOfficeApi } from './support/mock-api'
 
 const TAB_KEYS = [
   'agentDetail.tabProfile',
@@ -69,4 +69,87 @@ test('15. trang chi tiết agent gom 8 tab, tab nằm trong URL', async ({ page 
   await expect(
     page.locator('.agent-tabs button.tab-active'),
   ).toHaveText(DICT.vi['agentDetail.tabMemory'])
+})
+
+// v91 P4: the agent-config form. Component tests already cover each field in isolation;
+// what only a browser proves is that a save round-trips through the real query cache —
+// the PATCH lands, the settings query re-fetches, and the row repaints with the written
+// value instead of the stale one it was mounted with.
+test('25. sửa model rồi lịch chạy trên tab Hồ sơ, mỗi field 3 click và repaint giá trị mới', async ({
+  page,
+}) => {
+  const mock = await mockOfficeApi(page, {
+    agentProfileSettings: {
+      name: 'Trợ lý PM',
+      model: 'openai/gpt-4o',
+      model_chain: [],
+      schedule: { weekly_report: '0 9 * * 1' },
+    },
+  })
+  await page.goto('/team/tro-ly-pm')
+
+  const modelRow = page.locator('dd').filter({ hasText: 'openai/gpt-4o' }).first()
+  // Click 1 of 3 — open the row for editing. (Landing on the agent page already shows
+  // the Profile tab, so picking the field costs no extra click.)
+  await modelRow.getByRole('button', { name: DICT.vi['agentDetail.editBtn'] }).click()
+  // Click 2 is the typing itself, click 3 commits.
+  await page.locator('.inline-edit-row-form input').fill('anthropic/claude-sonnet-4')
+  await page.getByRole('button', { name: DICT.vi['agentDetail.saveBtn'] }).click()
+
+  await expect.poll(() => mock.agentWrites).toEqual([
+    { route: 'profile-settings', agentId: 'tro-ly-pm', body: { model: 'anthropic/claude-sonnet-4' } },
+  ])
+  // Back in read mode showing the NEW value — i.e. re-fetched, not the mount-time value.
+  await expect(page.locator('.inline-edit-row-form')).toHaveCount(0)
+  await expect(page.getByText('anthropic/claude-sonnet-4')).toBeVisible()
+
+  // Schedule is the multi-line "kind = cron" map; the PATCH replaces the whole block.
+  const scheduleRow = page.locator('dd').filter({ hasText: 'weekly_report: 0 9 * * 1' }).first()
+  await scheduleRow.getByRole('button', { name: DICT.vi['agentDetail.editBtn'] }).click()
+  await page.locator('.inline-edit-row-form textarea').fill('weekly_report = 0 7 * * 2')
+  await page.getByRole('button', { name: DICT.vi['agentDetail.saveBtn'] }).click()
+
+  await expect.poll(() => mock.agentWrites.at(-1)).toEqual({
+    route: 'profile-settings',
+    agentId: 'tro-ly-pm',
+    body: { schedule: { weekly_report: '0 7 * * 2' } },
+  })
+  await expect(page.getByText('weekly_report: 0 7 * * 2')).toBeVisible()
+})
+
+test('26. đổi mức tin cậy và bật diễn tập ghi đúng payload rồi đổi nhãn nguồn', async ({ page }) => {
+  const mock = await mockOfficeApi(page, {
+    agentBand: 'normal',
+    agentSafety: { dry_run: false, dry_run_source: 'fleet' },
+  })
+  await page.goto('/team/tro-ly-pm')
+
+  // The band select commits on change — no separate Save, because picking a value in a
+  // dropdown is already the deliberate action.
+  const band = page.locator('.agent-band-control select')
+  await expect(band).toHaveValue('normal')
+  await band.selectOption('trusted')
+  await expect.poll(() => mock.agentWrites).toEqual([
+    { route: 'band', agentId: 'tro-ly-pm', body: { band: 'trusted' } },
+  ])
+  await expect(band).toHaveValue('trusted')
+
+  // Dry-run is a per-agent override, so turning it on also flips the source label off
+  // "fleet" — the pair is what tells the CEO the setting is now this agent's own.
+  // A plain click, not .check(): the box is controlled by server state, so it only
+  // flips once the PATCH resolves and the safety query re-fetches — .check() asserts a
+  // synchronous state change and would fail on that latency alone.
+  await page.locator('.agent-dry-run-toggle input[type="checkbox"]').click()
+  await expect.poll(() => mock.agentWrites.at(-1)).toEqual({
+    route: 'safety',
+    agentId: 'tro-ly-pm',
+    body: { dry_run: true },
+  })
+  await expect(page.locator('.agent-dry-run-toggle')).toContainText(DICT.vi['agentDetail.dryRunOn'])
+  await expect(page.locator('.agent-dry-run-source')).toContainText(
+    DICT.vi['agentDetail.dryRunSourceProfile'],
+  )
+
+  // The agent page is where the fixture gap lived; assert it now serves everything.
+  await expectNoUnmockedRoutes(mock)
 })

@@ -7,6 +7,7 @@
 // and replay (the hook dedups by seq). pushRoomEvents() appends events, so the next
 // reconnect (~100ms) delivers them "live" — that is how the results-dot test injects
 // a handoff after first render.
+import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import type {
   CaptureRow,
@@ -72,11 +73,48 @@ export interface OfficeApiMockOptions {
   /** v88 P3: the refreshed-task shape every retry/accept/drop/cancel call returns
    *  (default: a plain "back to open" / "cancelled" shape — see the dispatcher below). */
   teamTaskActionResult?: TeamTaskActionResult
+  /** Room artifacts served AFTER a task-action POST has landed, so a spec can prove the
+   *  task detail page repaints from a re-fetch instead of a remount. The flip is keyed
+   *  on "an action was POSTed", not on a GET count: the page fetches this route more
+   *  than once per visit, and counting hits would make the assertion order-dependent. */
+  artifactsAfterAction?: RoomArtifactsPayload
+  /** v91: starting values for the agent-config surfaces (profile-settings form, autonomy
+   *  band, dry-run safety). The mock keeps these as mutable state so a write is visible
+   *  to the next read — that round-trip is the whole point of the config-form specs. */
+  agentProfileSettings?: Record<string, unknown>
+  agentBand?: string
+  agentSafety?: { dry_run: boolean; dry_run_source: 'profile' | 'fleet' }
+  /** Model ids offered by the model field's datalist. */
+  modelCatalog?: string[]
+  /** Preview served AFTER the PIC's dry-run has been switched off, so one spec can walk
+   *  the whole "see the rehearsal badge -> turn dry-run off -> preview again -> badge gone"
+   *  journey. Keyed on the safety write, the same way artifactsAfterAction is keyed on a
+   *  task action rather than on a fetch count. */
+  assignPreviewAfterSafetyWrite?: Record<string, unknown>
+  /** Overrides merged into the default company payload the settings form reads. */
+  company?: Record<string, unknown>
 }
 
 export interface OfficeApiMock {
   /** Append events to a room's stream — delivered on the next EventSource reconnect (~100ms). */
   pushRoomEvents(roomId: string, events: OfficeMessage[]): void
+  /** Bodies of every agent-config write, in call order — so a spec can assert the exact
+   *  payload the form sent rather than only the repainted DOM. */
+  agentWrites: AgentWrite[]
+  /** Assign-flow calls in order — lets a spec assert that a client-side-only action
+   *  (edit request) made no confirm call at all. */
+  assignCalls: string[]
+  /** Bodies of every POST /api/company, in call order. */
+  companyWrites: Record<string, unknown>[]
+  /** Every `/api` call that reached no handler. `expectNoUnmockedRoutes` asserts it is
+   *  empty; a non-empty list means the app asked for data the fixture never served. */
+  unmocked: string[]
+}
+
+export interface AgentWrite {
+  route: 'profile-settings' | 'band' | 'safety'
+  agentId: string
+  body: Record<string, unknown>
 }
 
 function sseBody(events: OfficeMessage[]): string {
@@ -90,6 +128,29 @@ export async function mockOfficeApi(
 ): Promise<OfficeApiMock> {
   const streams = new Map<string, OfficeMessage[]>(Object.entries(opts.roomEvents ?? {}))
   if (!streams.has('office')) streams.set('office', makeOverviewEvents())
+  // Flipped by any retry/accept/drop/cancel POST; read by the room-artifacts route.
+  let taskActionLanded = false
+  // Agent-config state. Held here rather than returned as a constant so a PATCH/POST is
+  // reflected by the following GET, which is what the form's repaint actually depends on.
+  const agentWrites: AgentWrite[] = []
+  const unmocked: string[] = []
+  const assignCalls: string[] = []
+  const companyWrites: Record<string, unknown>[] = []
+  let safetyWritten = false
+  let profileSettings: Record<string, unknown> = { ...(opts.agentProfileSettings ?? {}) }
+  let agentBand = opts.agentBand ?? 'normal'
+  let agentSafety = opts.agentSafety ?? { dry_run: false, dry_run_source: 'fleet' as const }
+  // Held as state: the settings form is load-modify-save, so a write must be visible to
+  // the invalidated re-read or the toggle would snap back to its old value on repaint.
+  let company: Record<string, unknown> = {
+    name: 'ACME',
+    coordinator_id: null,
+    team_task_cap_usd: 1,
+    team_task_concurrency: 1,
+    team_task_auto_confirm: false,
+    autopilot: false,
+    ...(opts.company ?? {}),
+  }
 
   // Predicate, not a glob: '**/api/**' would also swallow vite module URLs like
   // /src/api/client.ts and abort the app's own source files.
@@ -100,15 +161,53 @@ export async function mockOfficeApi(
 
     if (pathname === '/api/setup/status') return json({ completed: true })
     if (pathname === '/api/me') return json({ authenticated: true, auth: 'off' })
-    if (pathname === '/api/company')
-      return json({
-        name: 'ACME',
-        coordinator_id: null,
-        team_task_cap_usd: 1,
-        team_task_concurrency: 1,
-        team_task_auto_confirm: false,
-      })
+    if (pathname === '/api/company') {
+      if (route.request().method() === 'POST') {
+        const body = route.request().postDataJSON() as Record<string, unknown>
+        companyWrites.push(body)
+        // Merge, not replace — mirrors the backend's load-modify-save, so an omitted
+        // field keeps its current value instead of being cleared.
+        company = { ...company, ...body }
+      }
+      return json(company)
+    }
     if (pathname === '/api/agents') return json(agentsFixture)
+    // v91 agent-config surfaces. `/band` in particular was the one route the fixture
+    // never mocked, which showed up as an "[mock-api] UNMOCKED" line on every agent page.
+    if (pathname === '/api/agents/model-catalog')
+      return json({ models: opts.modelCatalog ?? ['openai/gpt-4o', 'anthropic/claude-sonnet-4'] })
+    if (/^\/api\/agents\/[^/]+\/profile-settings$/.test(pathname)) {
+      const agentId = pathname.split('/')[3]
+      if (route.request().method() === 'PATCH') {
+        const body = route.request().postDataJSON() as Record<string, unknown>
+        agentWrites.push({ route: 'profile-settings', agentId, body })
+        profileSettings = { ...profileSettings, ...body }
+        return json({ agent_id: agentId, needs_restart: false })
+      }
+      return json({ agent_id: agentId, ...profileSettings })
+    }
+    if (/^\/api\/agents\/[^/]+\/band$/.test(pathname)) {
+      const agentId = pathname.split('/')[3]
+      if (route.request().method() === 'POST') {
+        const body = route.request().postDataJSON() as Record<string, unknown>
+        agentWrites.push({ route: 'band', agentId, body })
+        agentBand = String(body.band)
+      }
+      return json({ agent_id: agentId, band: agentBand })
+    }
+    if (/^\/api\/agents\/[^/]+\/safety$/.test(pathname)) {
+      const agentId = pathname.split('/')[3]
+      if (route.request().method() === 'PATCH') {
+        const body = route.request().postDataJSON() as Record<string, unknown>
+        agentWrites.push({ route: 'safety', agentId, body })
+        safetyWritten = true
+        // A per-agent write is by definition a profile-level override, so the source
+        // label flips away from "fleet" exactly as the real route reports it.
+        agentSafety = { dry_run: Boolean(body.dry_run), dry_run_source: 'profile' }
+        return json({ agent_id: agentId, dry_run: agentSafety.dry_run, needs_restart: false })
+      }
+      return json({ agent_id: agentId, ...agentSafety })
+    }
     if (/^\/api\/agents\/[^/]+\/approvals$/.test(pathname))
       return json({ agent_id: pathname.split('/')[3], pending: [] })
     // Fleet-wide index behind the shell's approvals badge. Served from `opts.pendingApprovals`
@@ -157,6 +256,7 @@ export async function mockOfficeApi(
     // "back to open" shape covering the common happy-path assertion.
     if (/^\/api\/team-tasks\/[^/]+\/steps\/[^/]+\/(retry|accept|drop)$/.test(pathname)) {
       const taskId = pathname.split('/')[3]
+      taskActionLanded = true
       return json(
         opts.teamTaskActionResult ?? {
           task_id: taskId, title: 'Việc', status: 'open', pic_id: '', room_id: taskId, steps: [],
@@ -165,6 +265,7 @@ export async function mockOfficeApi(
     }
     if (/^\/api\/team-tasks\/[^/]+\/cancel$/.test(pathname)) {
       const taskId = pathname.split('/')[3]
+      taskActionLanded = true
       return json(
         opts.teamTaskActionResult ?? {
           task_id: taskId, title: 'Việc', status: 'cancelled', pic_id: '', room_id: taskId,
@@ -256,7 +357,11 @@ export async function mockOfficeApi(
     if (pathname === '/api/health/coordinator')
       return json({ alive: true, last_beat_ago_s: 3, reason: '' })
     if (/^\/api\/office\/rooms\/[^/]+\/artifacts$/.test(pathname))
-      return json(opts.artifacts ?? { tasks: [] })
+      return json(
+        taskActionLanded && opts.artifactsAfterAction
+          ? opts.artifactsAfterAction
+          : opts.artifacts ?? { tasks: [] },
+      )
     if (/^\/api\/office\/tasks\/[^/]+\/steps\/\d+\/artifact$/.test(pathname) && opts.stepArtifact)
       return json(opts.stepArtifact)
     if (/^\/api\/office\/tasks\/[^/]+\/steps\/\d+\/transcript$/.test(pathname)) {
@@ -267,8 +372,22 @@ export async function mockOfficeApi(
         body: JSON.stringify({ detail: 'bước này chưa có transcript' }),
       })
     }
-    if (pathname === '/api/office/assign/preview' && opts.assignPreview)
-      return json(opts.assignPreview)
+    if (pathname === '/api/office/assign/preview' && opts.assignPreview) {
+      assignCalls.push(pathname)
+      return json(
+        safetyWritten && opts.assignPreviewAfterSafetyWrite
+          ? opts.assignPreviewAfterSafetyWrite
+          : opts.assignPreview,
+      )
+    }
+    if (pathname === '/api/office/assign/confirm') {
+      assignCalls.push(pathname)
+      return json({ text: 'Đã giao việc.' })
+    }
+    if (pathname === '/api/office/assign/cancel') {
+      assignCalls.push(pathname)
+      return json({ ok: true })
+    }
     if (/^\/api\/team-tasks\/[^/]+\/route$/.test(pathname))
       return json({ task_id: pathname.split('/')[3], mode: '', source: '', reason: '' })
     if (/^\/api\/team-tasks\/[^/]+\/metrics$/.test(pathname))
@@ -291,6 +410,11 @@ export async function mockOfficeApi(
       })
     }
 
+    // Fail loudly rather than log-and-abort. An unmocked route used to surface only as a
+    // console line nobody read, and a real fixture gap (`/api/agents/{id}/band`) survived
+    // several rounds that way — the app silently rendered without that data and the spec
+    // still passed. Aborting is kept too so the failure is also visible as a dead request.
+    unmocked.push(`${route.request().method()} ${pathname}`)
     console.log(`[mock-api] UNMOCKED ${route.request().method()} ${pathname}`)
     return route.abort()
   })
@@ -299,6 +423,10 @@ export async function mockOfficeApi(
     pushRoomEvents(roomId, events) {
       streams.set(roomId, [...(streams.get(roomId) ?? []), ...events])
     },
+    agentWrites,
+    assignCalls,
+    companyWrites,
+    unmocked,
   }
 }
 
@@ -420,4 +548,13 @@ export function makeHandoff(seq: number): OfficeMessage {
       assigned_to: 'tro-ly-pm',
     },
   }
+}
+
+/** Asserts the fixture served every `/api` call the app made during the test.
+
+    Call at the END of a spec: an unmocked route aborts its request, so the app renders
+    as if that data simply never arrived — which usually still looks fine on screen and
+    lets a genuine fixture gap pass unnoticed. */
+export async function expectNoUnmockedRoutes(mock: OfficeApiMock): Promise<void> {
+  await expect.poll(() => mock.unmocked).toEqual([])
 }

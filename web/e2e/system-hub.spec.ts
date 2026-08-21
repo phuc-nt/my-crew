@@ -93,3 +93,45 @@ test('23. mọi URL trước khi thiết kế lại vẫn mở được, không 
     await expect(page, `${from} phải chuyển hướng`).toHaveURL(to)
   }
 })
+
+// v91 P5-D: autopilot and concurrency became editable here. Both save through the same
+// load-modify-save route, so what matters is that a write carries the OTHER fields
+// unchanged — a save that dropped them would silently reset the fleet's cap or its
+// auto-confirm flag while the CEO was only nudging one number.
+test('24. bật autopilot ghi đúng payload và giữ nguyên các cài đặt khác', async ({ page }) => {
+  const mock = await mockOfficeApi(page, {
+    company: { team_task_cap_usd: 7, team_task_auto_confirm: true, team_task_concurrency: 3 },
+  })
+  await page.goto('/system')
+
+  const autopilot = page.locator('.mode-toggle', { hasText: DICT.vi['settings.autopilotLabel'] })
+  await autopilot.locator('input[type="checkbox"]').click()
+
+  await expect.poll(() => mock.companyWrites).toEqual([
+    {
+      name: 'ACME',
+      coordinator_id: null,
+      team_task_cap_usd: 7,
+      team_task_auto_confirm: true,
+      autopilot: true,
+    },
+  ])
+  await expect(autopilot.locator('input[type="checkbox"]')).toBeChecked()
+})
+
+test('25. sửa số việc chạy song song ghi giá trị mới, bỏ qua giá trị ngoài biên', async ({
+  page,
+}) => {
+  const mock = await mockOfficeApi(page, { company: { team_task_concurrency: 1 } })
+  await page.goto('/system')
+
+  const concurrency = page.locator('#settings-concurrency')
+  await concurrency.fill('4')
+  await expect.poll(() => mock.companyWrites.at(-1)?.team_task_concurrency).toBe(4)
+  await expect(concurrency).toHaveValue('4')
+
+  // Out of range is refused client-side — no write at all, rather than a rejected one.
+  const before = mock.companyWrites.length
+  await concurrency.fill('99')
+  await expect.poll(() => mock.companyWrites.length).toBe(before)
+})

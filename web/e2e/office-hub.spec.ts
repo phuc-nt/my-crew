@@ -114,6 +114,75 @@ test('9. badge SPRINT hiện trong preview giao việc trước khi xác nhận'
   await expect(badge).toHaveText(DICT.vi['assignComposer.modeSprint'])
 })
 
+// v91 P2/P5: the two composer journeys the badge/edit work added. Both are about what
+// the CEO sees BEFORE committing — a rehearsal warning, and a way back out to edit.
+test('27. badge diễn tập hiện trước khi xác nhận, tắt diễn tập thì mất', async ({ page }) => {
+  const dryRunPreview = {
+    preview_text: 'KẾ HOẠCH: 1 bước, @tro-ly-pm làm thẳng',
+    task_id: 't-dry', plan_hash: 'h1', pic_id: 'tro-ly-pm',
+    auto_confirmed: false, route_mode: 'sprint', pic_dry_run: true,
+  }
+  const mock = await openOffice(page, '/office', {
+    assignPreview: dryRunPreview,
+    assignPreviewAfterSafetyWrite: { ...dryRunPreview, pic_dry_run: false },
+    agentSafety: { dry_run: true, dry_run_source: 'profile' },
+  })
+
+  async function preview() {
+    await page.locator('[data-testid="office-quick-assign"]').click()
+    await page
+      .getByPlaceholder(DICT.vi['assignComposer.placeholderNew'])
+      .fill('@tro-ly-pm viết nháp thông báo nội bộ')
+    await page.getByRole('button', { name: DICT.vi['assignComposer.assign'], exact: true }).click()
+  }
+
+  await preview()
+  await expect(page.locator('.office-dry-run-badge')).toHaveText(
+    DICT.vi['assignComposer.dryRunBadge'],
+  )
+
+  // Turn the PIC's rehearsal mode off where it is actually controlled — the agent page.
+  await page.goto('/team/tro-ly-pm')
+  await page.locator('.agent-dry-run-toggle input[type="checkbox"]').click()
+  await expect.poll(() => mock.agentWrites.at(-1)?.body).toEqual({ dry_run: false })
+
+  // Same brief, previewed again: no badge, because the run is now real.
+  await page.goto('/office')
+  await expect(page.locator('[data-testid="office-page"]')).toBeVisible()
+  await preview()
+  await expect(page.locator('pre')).toContainText('KẾ HOẠCH')
+  await expect(page.locator('.office-dry-run-badge')).toHaveCount(0)
+})
+
+test('28. "Sửa yêu cầu" trả nguyên văn về ô soạn và không gọi xác nhận', async ({ page }) => {
+  const mock = await openOffice(page, '/office', {
+    assignPreview: {
+      preview_text: 'KẾ HOẠCH: 3 bước',
+      task_id: 't-edit', plan_hash: 'h1', pic_id: 'tro-ly-pm',
+      auto_confirmed: false, route_mode: 'team',
+    },
+  })
+  const BRIEF = '@tro-ly-pm tổng hợp số liệu quý rồi gửi sếp'
+
+  await page.locator('[data-testid="office-quick-assign"]').click()
+  await page.getByPlaceholder(DICT.vi['assignComposer.placeholderNew']).fill(BRIEF)
+  await page.getByRole('button', { name: DICT.vi['assignComposer.assign'], exact: true }).click()
+  await expect(page.locator('.office-composer-preview')).toBeVisible()
+
+  await page.getByRole('button', { name: DICT.vi['assignComposer.editRequest'] }).click()
+
+  // The preview is gone and the ORIGINAL text is back to be edited — verbatim, since a
+  // re-submit runs a fresh decompose rather than patching the discarded plan.
+  await expect(page.locator('.office-composer-preview')).toHaveCount(0)
+  await expect(page.getByPlaceholder(DICT.vi['assignComposer.placeholderNew'])).toHaveValue(BRIEF)
+
+  // Editing is client-side: the stale draft is released, but nothing was confirmed.
+  await expect.poll(() => mock.assignCalls).toEqual([
+    '/api/office/assign/preview',
+    '/api/office/assign/cancel',
+  ])
+})
+
 test.describe('mobile', () => {
   test.use({ viewport: { width: 390, height: 844 } })
 
