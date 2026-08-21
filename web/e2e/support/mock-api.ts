@@ -184,7 +184,20 @@ export async function mockOfficeApi(
         profileSettings = { ...profileSettings, ...body }
         return json({ agent_id: agentId, needs_restart: false })
       }
-      return json({ agent_id: agentId, ...profileSettings })
+      // All five keys always, matching the real route: `read_profile_settings_raw`
+      // returns the loader's "absent" shapes (null/[]/{}) rather than omitting keys,
+      // and `AgentProfileSettingsPayload` types them as required. Spreading only the
+      // supplied keys would hand the form `undefined` where the contract guarantees
+      // `null` — a fixture that lies makes a green test worth nothing.
+      return json({
+        agent_id: agentId,
+        name: null,
+        model: null,
+        model_chain: [],
+        budget_monthly_usd: null,
+        schedule: {},
+        ...profileSettings,
+      })
     }
     if (/^\/api\/agents\/[^/]+\/band$/.test(pathname)) {
       const agentId = pathname.split('/')[3]
@@ -550,11 +563,15 @@ export function makeHandoff(seq: number): OfficeMessage {
   }
 }
 
-/** Asserts the fixture served every `/api` call the app made during the test.
+/** Asserts the fixture served every `/api` call the app made SO FAR.
 
     Call at the END of a spec: an unmocked route aborts its request, so the app renders
     as if that data simply never arrived — which usually still looks fine on screen and
-    lets a genuine fixture gap pass unnoticed. */
+    lets a genuine fixture gap pass unnoticed.
+
+    Note this is a snapshot, not a wait: on an already-empty list `expect.poll` resolves
+    on its first tick, so it cannot catch a stray call that lands later. Assert the
+    page's own content first, and this check then covers everything that reached it. */
 export async function expectNoUnmockedRoutes(mock: OfficeApiMock): Promise<void> {
   await expect.poll(() => mock.unmocked).toEqual([])
 }

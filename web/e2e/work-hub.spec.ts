@@ -277,13 +277,16 @@ test('22. gỡ kẹt từ trang chi tiết repaint tại chỗ, không cần t�
     artifacts: STALLED_ROOM_ARTIFACTS,
     artifactsAfterAction: UNSTUCK_ROOM_ARTIFACTS,
   })
-  await page.goto('/work/task/room-gamma')
-
-  // Stamped on the window and never re-set: any full document navigation (or a remount
-  // via reload) wipes it, so its survival proves the repaint was a re-fetch.
-  await page.evaluate(() => {
-    ;(window as unknown as { __noReload?: boolean }).__noReload = true
+  // Counts artifact fetches without intercepting them — a spec-level route would shadow
+  // the mock's own handler and stop it advancing to the post-action phase.
+  let artifactFetches = 0
+  page.on('request', (req) => {
+    if (/\/api\/office\/rooms\/[^/]+\/artifacts$/.test(new URL(req.url()).pathname))
+      artifactFetches += 1
   })
+  await page.goto('/work/task/room-gamma')
+  await expect(page.getByTestId('task-detail-page')).toBeVisible()
+  const fetchesBeforeAction = artifactFetches
 
   const panel = page.locator('.task-detail-stalled-panel')
   await expect(page.locator('.task-detail-stalled-reason')).toContainText('thu thập số liệu')
@@ -299,9 +302,10 @@ test('22. gỡ kẹt từ trang chi tiết repaint tại chỗ, không cần t�
   // Cancel stays: it is valid on any live task, and the task is merely open now.
   await expect(panel.getByRole('button', { name: DICT.vi['stalledActions.cancel'] })).toBeVisible()
 
-  expect(await page.evaluate(() => (window as unknown as { __noReload?: boolean }).__noReload)).toBe(
-    true,
-  )
+  // Positive proof the repaint came from a RE-FETCH: the room's artifacts were requested
+  // again after the action. A window sentinel cannot show this — it survives a client-side
+  // remount untouched, so it would only rule out a full document navigation.
+  expect(artifactFetches).toBeGreaterThan(fetchesBeforeAction)
 })
 
 test('23. hủy việc từ trang chi tiết cần xác nhận rồi repaint trạng thái mới', async ({ page }) => {
