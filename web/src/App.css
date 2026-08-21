@@ -640,6 +640,13 @@ input, textarea, select { font-size: var(--fs-body); }
 .task-card-dismiss:hover:not(:disabled) { color: var(--color-danger); }
 .task-card-dismiss:disabled { cursor: default; opacity: 0.6; }
 
+/* v88 P3: one-click unstick cluster (task-card.tsx + task-detail-page.tsx). */
+.task-card-stalled-reason { padding: 0 var(--space-2); margin: 0 0 var(--space-1); font-size: var(--fs-xs); }
+.stalled-task-actions { padding: 0 var(--space-2) var(--space-2); }
+.stalled-task-actions .pending-actions { margin-top: var(--space-1); }
+.task-detail-stalled-panel { margin: var(--space-2) 0; padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-2); }
+.task-detail-stalled-reason { margin: 0 0 var(--space-1); font-size: var(--fs-sm); }
+
 /* High-mode budget-usage bar on the Team table (v10 M25). Pure CSS, no chart lib. The cell wraps
    the text + bar so the mobile card-list flex row (App.css media query) has a single child on the
    value side — the bar sits UNDER the dollar text, not squeezed beside it. */
@@ -1068,6 +1075,10 @@ input, textarea, select { font-size: var(--fs-body); }
 .pending-agent { font-weight: 600; }
 .pending-kind { color: var(--color-subtle); }
 .pending-reason { margin: 0 0 var(--space-2); overflow-wrap: anywhere; }
+/* v88 P3: bounded once/always/deny scope picker — a dropdown, not free text, so the
+   value always matches the ops layer's enum (routes_ops_json.py's _VALID_SCOPES). */
+.pending-scope { display: flex; align-items: center; gap: var(--space-1);
+  margin: 0 0 var(--space-2); font-size: var(--fs-sm); }
 .pending-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .pending-input { flex: 1 1 8rem; min-width: 0; }
 .pending-empty { font-size: var(--fs-sm); }

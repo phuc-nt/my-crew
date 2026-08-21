@@ -34,7 +34,7 @@ test('mode toggle flips low-high-low through the shared context', () => {
 
 test('health strip: alive beat + failing checks render as chips with hints', async () => {
   vi.spyOn(api, 'getCoordinatorHealth').mockResolvedValue({
-    alive: true, last_beat_ago_s: 12.4, reason: '',
+    alive: true, last_beat_ago_s: 12.4, reason: '', hint: '',
   })
   vi.spyOn(api, 'getIntegrationHealth').mockResolvedValue({
     checked_at: 1,

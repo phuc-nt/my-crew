@@ -31,6 +31,32 @@ export function SettingsTab() {
       .catch((e: unknown) => setSaveError(e instanceof Error ? e.message : t('settings.saveFailed')))
   }
 
+  // v88 P5-D: autopilot + concurrency, same load-modify-save posture — every OTHER
+  // field is re-sent unchanged so this save never clobbers auto-confirm/cap/name.
+  const toggleAutopilot = (on: boolean) => {
+    if (!company) return
+    setSaveError(null)
+    api
+      .saveCompany(
+        company.name, company.coordinator_id, company.team_task_cap_usd,
+        company.team_task_auto_confirm, { autopilot: on },
+      )
+      .then(() => qc.invalidateQueries({ queryKey: queryKeys.team.company() }))
+      .catch((e: unknown) => setSaveError(e instanceof Error ? e.message : t('settings.saveFailed')))
+  }
+
+  const saveConcurrency = (value: number) => {
+    if (!company || !Number.isInteger(value) || value < 1 || value > 10) return
+    setSaveError(null)
+    api
+      .saveCompany(
+        company.name, company.coordinator_id, company.team_task_cap_usd,
+        company.team_task_auto_confirm, { teamTaskConcurrency: value },
+      )
+      .then(() => qc.invalidateQueries({ queryKey: queryKeys.team.company() }))
+      .catch((e: unknown) => setSaveError(e instanceof Error ? e.message : t('settings.saveFailed')))
+  }
+
   return (
     <div className="settings-page">
       <section className="mode-toggle-box">
@@ -45,6 +71,36 @@ export function SettingsTab() {
           {t('settings.autoConfirmLabel')}
         </label>
         <p className="muted">{t('settings.autoConfirmHint')}</p>
+
+        <label className="mode-toggle">
+          <input
+            type="checkbox"
+            checked={company?.autopilot ?? false}
+            disabled={!company}
+            onChange={(e) => toggleAutopilot(e.target.checked)}
+          />{' '}
+          {t('settings.autopilotLabel')}
+        </label>
+        <p className="muted">{t('settings.autopilotHint')}</p>
+
+        <label className="mode-toggle" htmlFor="settings-concurrency">
+          {t('settings.concurrencyLabel')}
+        </label>
+        <input
+          id="settings-concurrency"
+          type="number"
+          min={1}
+          max={10}
+          step={1}
+          value={company?.team_task_concurrency ?? ''}
+          disabled={!company}
+          onChange={(e) => {
+            const value = Number(e.target.value)
+            if (Number.isFinite(value)) saveConcurrency(value)
+          }}
+        />
+        <p className="muted">{t('settings.concurrencyHint')}</p>
+
         {saveError && <p className="error">{t('settings.errorPrefix', { message: saveError })}</p>}
       </section>
 

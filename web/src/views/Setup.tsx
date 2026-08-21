@@ -8,7 +8,15 @@
 // NOT gated by the setup wizard's localhost/lock guard (that guard protects .env/auth
 // secrets; company identity has no secret in it). Auth is off until `finish`, so this call
 // reaches the server the same way GET /api/agents already does pre-setup.
-import { useCallback, useEffect, useState } from 'react'
+//
+// The 410-brick: `finish` can restart the service so fast that the HTTP response never
+// flushes back to the browser — the fetch then rejects with a raw network error (not an
+// ApiError), NOT a failure of the save itself (the marker + password were already
+// written server-side before the restart). Retrying `finish` in that state hits the
+// NOW-locked wizard and gets a 410. Neither case is "finish failed": both mean finish
+// already succeeded. So: a network error OR a 410 from `finish` polls `/setup/status`
+// for `{completed:true}` instead of showing an error.
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
@@ -93,9 +101,14 @@ export function Setup({ onDone }: { onDone: () => void }) {
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('admin')
   const [finished, setFinished] = useState(false)
+  const [restartHint, setRestartHint] = useState('')
   const [companyName, setCompanyName] = useState('')
   const [coordinatorId, setCoordinatorId] = useState('')
   const [agents, setAgents] = useState<AgentSummary[]>([])
+  // Guards the poll loop against a component unmount mid-poll (StrictMode double-invoke,
+  // or the user navigating away) — never call onDone/setState after that.
+  const unmountedRef = useRef(false)
+  useEffect(() => () => { unmountedRef.current = true }, [])
 
   useEffect(() => {
     if (!companyStep) return
@@ -162,6 +175,31 @@ export function Setup({ onDone }: { onDone: () => void }) {
     [saveGroup, t],
   )
 
+  // Poll /api/setup/status until {completed:true} (or the ~30s cap runs out), then move
+  // on to login. Used both on a clean finish (real restart) and on the 410-brick path
+  // (finish succeeded server-side but the response never reached us).
+  const pollUntilComplete = useCallback(async () => {
+    const deadline = Date.now() + 30_000
+    while (Date.now() < deadline) {
+      if (unmountedRef.current) return
+      try {
+        const status = await api.setupStatus()
+        if (status.completed) {
+          onDone()
+          return
+        }
+      } catch {
+        /* status itself unreachable mid-restart — keep polling until the deadline */
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+    }
+    if (!unmountedRef.current) {
+      setError(t('setup.finishTimedOut'))
+      setFinished(false)
+      setBusy(false)
+    }
+  }, [onDone, t])
+
   const finish = useCallback(async () => {
     if (password.length < 6) {
       setError(t('setup.passwordTooShort'))
@@ -170,15 +208,25 @@ export function Setup({ onDone }: { onDone: () => void }) {
     setBusy(true)
     setError(null)
     try {
-      await api.setupFinish(username, password)
+      const result = await api.setupFinish(username, password)
+      setRestartHint(result.restart_hint)
       setFinished(true)
-      // give launchd ~6s to restart, then re-check (App will show Login)
-      setTimeout(onDone, 6000)
+      void pollUntilComplete()
     } catch (e: unknown) {
+      // A network error (fetch rejected, not an ApiError) or a 410 (wizard already
+      // locked) both mean finish already succeeded server-side — the restart just beat
+      // the HTTP response back to us. Neither is a real failure: poll instead of
+      // showing finishFailed (which would wrongly tell the CEO to retry into a 410).
+      const brick = !(e instanceof ApiError) || e.status === 410
+      if (brick) {
+        setFinished(true)
+        void pollUntilComplete()
+        return
+      }
       setError(e instanceof ApiError ? e.message : t('setup.finishFailed'))
       setBusy(false)
     }
-  }, [password, username, onDone, t])
+  }, [password, username, pollUntilComplete, t])
 
   if (finished) {
     return (
@@ -186,6 +234,8 @@ export function Setup({ onDone }: { onDone: () => void }) {
         <Card className="setup-box">
           <h1>{t('setup.restartingTitle')}</h1>
           <p>{t('setup.restartingBody')}</p>
+          {restartHint && <p className="setup-hint">{restartHint}</p>}
+          {error && <p className="error">{error}</p>}
         </Card>
       </div>
     )

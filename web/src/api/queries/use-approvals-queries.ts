@@ -6,6 +6,7 @@
 // invalidates the key both are subscribed to.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../client'
+import type { ApprovalScope } from '../../types'
 import { queryKeys } from './query-keys'
 
 export function usePendingApprovals() {
@@ -15,7 +16,12 @@ export function usePendingApprovals() {
   })
 }
 
-/** Approve/reject stay per-agent routes, so each row carries the agent it belongs to. */
+/**
+ * Approve/reject stay per-agent routes, so each row carries the agent it belongs to.
+ * `scope` is the bounded once/always (approve) or once/deny (reject) choice the row's
+ * dropdown offers — it defaults to 'once' so a plain click keeps today's one-shot
+ * behavior when the caller doesn't pass one.
+ */
 export function useApprovalDecision() {
   const client = useQueryClient()
   return useMutation({
@@ -23,14 +29,16 @@ export function useApprovalDecision() {
       agentId,
       approvalId,
       decision,
+      scope = 'once',
     }: {
       agentId: string
       approvalId: number
       decision: 'approve' | 'reject'
+      scope?: ApprovalScope
     }) =>
       decision === 'approve'
-        ? api.approve(agentId, approvalId)
-        : api.reject(agentId, approvalId),
+        ? api.approve(agentId, approvalId, scope)
+        : api.reject(agentId, approvalId, scope),
     onSettled: () => {
       // Settled, not success: a failed approve leaves the row pending (the gateway
       // reverts it), so the queue still has to refetch or the UI would show a decision

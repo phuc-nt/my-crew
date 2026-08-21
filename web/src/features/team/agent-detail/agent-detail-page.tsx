@@ -9,6 +9,7 @@ import type { UiKey } from '../../../i18n/dictionary'
 import { RunNowButton } from '../run-now-button'
 import { ActivityTab } from './activity-tab'
 import { AdvancedTab } from './advanced-tab'
+import { BandControl } from './band-control'
 import { BudgetCostTab } from './budget-cost-tab'
 import { ChannelsTab } from './channels-tab'
 import { KnowledgeTab } from './knowledge-tab'
@@ -80,6 +81,7 @@ export function AgentDetailPage() {
             {t('agentPage.pendingApprovals', { n: status.pending_approvals })}
           </Link>
         )}
+        <BandControl id={id} />
         <RunNowButton agent={{ id, name: status.name, enabled: status.enabled, last_run: status.last_run }} />
       </header>
 

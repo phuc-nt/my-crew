@@ -2,8 +2,10 @@
 //
 // Shaped like every other thread in the hub (log above, composer below) so switching
 // between a workroom and the assistant does not change how the pane behaves.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
+import { usePendingApprovals } from '../../../api/queries/use-approvals-queries'
+import { useTaskBoard } from '../../../api/queries/use-work-queries'
 import { useLanguage } from '../../../i18n/language-context'
 import { useOpsChat } from './use-ops-chat'
 
@@ -13,6 +15,16 @@ export function AssistantThread({ title }: { title: string }) {
   const [draft, setDraft] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
   const [params, setParams] = useSearchParams()
+  // v88 P5-C: context-aware chips reuse the SAME board/approvals queries the work hub
+  // and pending pane already subscribe to — no new endpoint, and the chip appears the
+  // moment either cache has an entry (SSE keeps both fresh already).
+  const board = useTaskBoard()
+  const approvals = usePendingApprovals()
+  const hasStalled = useMemo(
+    () => (board.data?.lanes ?? []).some((lane) => lane.cards.some((c) => c.status === 'stalled')),
+    [board.data],
+  )
+  const hasPending = (approvals.data?.count ?? 0) > 0
 
   // The command palette hands a command over as ?ask=…, which lands in the composer
   // rather than being sent: an ops command is a sentence the engine parses, and the CEO
@@ -59,10 +71,15 @@ export function AssistantThread({ title }: { title: string }) {
     )
   }
 
+  // Base 3 chips always show; the stalled/pending chips are appended only when the
+  // already-loaded board/approvals data says there is something to act on — a chip that
+  // reads "xem task kẹt" when nothing is stalled would be a dead-end command.
   const quickChips = [
     t('chat.quickChipStatus'),
     t('chat.quickChipCreateAgent'),
     t('chat.quickChipCost'),
+    ...(hasStalled ? [t('chat.quickChipStalled')] : []),
+    ...(hasPending ? [t('chat.quickChipPending')] : []),
   ]
 
   return (
@@ -110,7 +127,14 @@ export function AssistantThread({ title }: { title: string }) {
               <summary>{t('chat.commandsSummary', { n: commands.length })}</summary>
               <ul>
                 {commands.map((c) => (
-                  <li key={c.id}>{c.description}</li>
+                  <li key={c.id}>
+                    {/* Seeds the composer with a runnable example, same posture as the
+                        ?ask= param and the quick chips — never auto-submits, since most
+                        ops commands need a slot filled in before they mean anything. */}
+                    <button type="button" className="ops-command-item" onClick={() => setDraft(c.example)}>
+                      {c.description}
+                    </button>
+                  </li>
                 ))}
               </ul>
             </details>

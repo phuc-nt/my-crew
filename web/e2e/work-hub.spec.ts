@@ -164,3 +164,73 @@ test('19. tab lịch chạy nằm trong URL và liệt kê lần chạy sắp t�
   await expect(page.locator('.schedule-row')).toHaveCount(1)
   await expect(page.locator('.schedule-what')).toContainText('Báo cáo ngày')
 })
+
+// v88 P3: one-click unstick — a stalled card on the board offers Retry/Accept/Drop
+// straight from the lane, with a real POST to the same task-actions route the task
+// detail page uses. No chat detour: this is the "≤2 clicks" contract the phase set.
+const STALLED_LANES = [
+  {
+    id: 'khac',
+    cards: [
+      {
+        task_id: 't-3',
+        title: 'Tổng hợp số liệu quý',
+        pic_id: 'ke-toan',
+        room_id: 'room-gamma',
+        status: 'stalled',
+        created_at: '2026-08-19T03:00:00Z',
+        steps_done: 1,
+        steps_total: 2,
+        stalled_step: 'thu thập số liệu',
+      },
+    ],
+  },
+]
+
+test('20. thẻ việc kẹt hiện lý do và bấm gỡ kẹt đi thẳng đến route hành động', async ({ page }) => {
+  const calls: string[] = []
+  await mockOfficeApi(page, { boardLanes: STALLED_LANES })
+  await page.route('**/api/team-tasks/*/steps/*/retry', async (route) => {
+    calls.push(new URL(route.request().url()).pathname)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        task_id: 't-3', title: 'Tổng hợp số liệu quý', status: 'open', pic_id: 'ke-toan',
+        room_id: 'room-gamma', steps: [],
+      }),
+    })
+  })
+  await page.goto('/work')
+
+  const card = page.locator('.task-card').first()
+  await expect(card).toContainText('thu thập số liệu')
+  await card.getByRole('button', { name: DICT.vi['stalledActions.retry'] }).click()
+
+  await expect.poll(() => calls).toEqual(['/api/team-tasks/t-3/steps/_/retry'])
+})
+
+test('21. hủy việc trên thẻ yêu cầu xác nhận trước khi gọi route hủy', async ({ page }) => {
+  const calls: string[] = []
+  await mockOfficeApi(page, { boardLanes: STALLED_LANES })
+  await page.route('**/api/team-tasks/*/cancel', async (route) => {
+    calls.push(new URL(route.request().url()).pathname)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        task_id: 't-3', title: 'Tổng hợp số liệu quý', status: 'cancelled', pic_id: 'ke-toan',
+        room_id: 'room-gamma', steps: [],
+      }),
+    })
+  })
+  await page.goto('/work')
+
+  const card = page.locator('.task-card').first()
+  await card.getByRole('button', { name: DICT.vi['stalledActions.cancel'] }).click()
+  // Destructive — the first click only opens the confirm dialog, no request yet.
+  expect(calls).toEqual([])
+
+  await page.locator('.confirm-dialog').getByRole('button', { name: DICT.vi['stalledActions.cancel'] }).click()
+  await expect.poll(() => calls).toEqual(['/api/team-tasks/t-3/cancel'])
+})

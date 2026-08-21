@@ -11,6 +11,7 @@ import { api } from '../../../api/client'
 import { queryKeys } from '../../../api/queries/query-keys'
 import { useLanguage } from '../../../i18n/language-context'
 import type { TeamBoardCard } from '../../../types'
+import { StalledTaskActions } from '../stalled-task-actions'
 
 export function TaskCard({ card, lane }: { card: TeamBoardCard; lane?: string }) {
   const { t } = useLanguage()
@@ -88,6 +89,23 @@ export function TaskCard({ card, lane }: { card: TeamBoardCard; lane?: string })
         >
           {dismissing ? t('board.dismissingDraft') : t('board.dismissDraft')}
         </button>
+      )}
+      {/* v88 P3: a stuck task's unstick cluster right on the card — no chat detour.
+          card.status carries the real store status ('stalled'), independent of the
+          `stuck` local var above (which is lane-derived and also true for the `khac`
+          side lane in general). card.stalled_step is the dead step's TITLE (display
+          only, routes_outputs.py's board serializer) — NOT its step_id, so it is never
+          passed as StalledTaskActions' `stepId` prop; that prop is left unset and the
+          component falls back to its own stable URL placeholder. */}
+      {card.status === 'stalled' && (
+        <>
+          {card.stalled_step && (
+            <p className="task-card-stalled-reason muted">
+              {t('teamKanban.stalledAt', { step: card.stalled_step })}
+            </p>
+          )}
+          <StalledTaskActions taskId={card.task_id} />
+        </>
       )}
     </li>
   )

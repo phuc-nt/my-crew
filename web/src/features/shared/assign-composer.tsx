@@ -7,6 +7,7 @@
 // composer against a live stream, but the mention matching is the logic that matters).
 import { useRef, useState } from 'react'
 import { api } from '../../api/client'
+import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { DICT } from '../../i18n/dictionary'
 import { useLanguage } from '../../i18n/language-context'
@@ -66,15 +67,23 @@ interface AssignComposerProps {
   // Called with the new task's id after a successful toàn-cảnh confirm — parent
   // switches into the task's brand-new room.
   onTaskCreated?: (taskId: string) => void
+  // v88 P5-A: pre-fills the draft on mount — the task-detail page's "Giao lại việc
+  // này" seeds the old task's brief + PIC mention here via router navigation state.
+  // Read once (mount only): a live prop change should not stomp on what the CEO is
+  // already typing.
+  initialBrief?: string
 }
 
-export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignComposerProps) {
+export function AssignComposer({ activeRoom = null, onTaskCreated, initialBrief }: AssignComposerProps) {
   const { t } = useLanguage()
-  const [brief, setBrief] = useState('')
+  const [brief, setBrief] = useState(initialBrief ?? '')
   const [staff, setStaff] = useState<StaffOption[]>([])
   // undefined until the roster payload lands — the hint only fires on an explicit false.
   const [webSearchReady, setWebSearchReady] = useState<boolean | undefined>(undefined)
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
+  // v88 P5-B: the brief text as submitted, kept so "Sửa yêu cầu" can restore it to the
+  // draft when the CEO wants to tweak the request instead of accepting the plan.
+  const [lastBrief, setLastBrief] = useState('')
   const fetchedStaff = useRef(false)
 
   // Roster fetched once on first focus — cheap, and the list only changes when the
@@ -98,6 +107,7 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
     // would orphan the previewed draft row (review m5).
     if (phase.kind === 'preview' || phase.kind === 'adjust-preview') return
     if (!brief.trim() || phase.kind === 'previewing' || phase.kind === 'confirming') return
+    setLastBrief(brief.trim())
     setPhase({ kind: 'previewing' })
     if (activeRoom) {
       // v16 chat-in-room: backend routes the message to question/adjust/new_task.
@@ -173,6 +183,17 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
     setPhase({ kind: 'idle' })
   }
 
+  // v88 P5-B: "Sửa yêu cầu" — client-side only. Discards the previewed plan (same
+  // best-effort draft cleanup as Cancel — the plan_hash this preview bound is now
+  // stale either way) and hands the ORIGINAL request text back to the draft so the CEO
+  // edits and re-submits; each re-submit is a fresh decompose through the normal
+  // submit() path. No confirm call, no new endpoint.
+  const editRequest = (data: AssignPreviewPayload) => {
+    api.assignCancel(data.task_id).catch(() => undefined)
+    setBrief(lastBrief)
+    setPhase({ kind: 'idle' })
+  }
+
   return (
     // v55 layout B: `office-composer-bar` styles this as the screen's primary command bar
     // (it sits under the header now, not at the page bottom). The label names the action so
@@ -228,6 +249,13 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
                 : t('assignComposer.modeTeam')}
             </span>
           )}
+          {/* v87 P2: the PIC's effective dry-run, shown BEFORE confirm so the CEO never
+              mistakes a rehearsal run for a real send. */}
+          {phase.data.pic_dry_run && (
+            <Badge tone="warn" className="office-dry-run-badge">
+              {t('assignComposer.dryRunBadge')}
+            </Badge>
+          )}
           <pre>{phase.data.preview_text}</pre>
           {webSearchHintNeeded(phase.data.pic_id, staff, webSearchReady) && (
             <p className="office-composer-hint">{t('assignComposer.webSearchNoKey')}</p>
@@ -235,6 +263,9 @@ export function AssignComposer({ activeRoom = null, onTaskCreated }: AssignCompo
           <div className="office-composer-actions">
             <Button variant="primary" onClick={() => confirm(phase.data)}>
               {t('assignComposer.confirmAssign')}
+            </Button>
+            <Button variant="ghost" onClick={() => editRequest(phase.data)}>
+              {t('assignComposer.editRequest')}
             </Button>
             <Button variant="ghost" onClick={() => cancel(phase.data)}>
               {t('assignComposer.cancel')}

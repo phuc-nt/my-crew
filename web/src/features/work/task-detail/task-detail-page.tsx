@@ -4,13 +4,30 @@
 // Addressed by ROOM id, not task id: the artifact index, the office and the chat thread
 // are all keyed by room, and a room holds the task. A room with several tasks renders
 // each one — that is real in the store, so the page does not pretend otherwise.
-import { Link, useParams } from 'react-router'
+import { useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router'
 import { useRoomArtifacts } from '../../../api/queries/use-artifact-queries'
 import { useTaskMetrics, useTaskRoute } from '../../../api/queries/use-work-queries'
 import { useLanguage } from '../../../i18n/language-context'
 import { formatCost } from '../../../labels'
 import type { RoomArtifactTask } from '../../../types'
+import { StalledTaskActions } from '../stalled-task-actions'
 import { StepProgress } from './step-progress'
+
+/** The first dead (failed/timeout) step's id — same predicate the board card and the
+ *  backend serializer use. Absent for a review-exhausted stall; `accept` still works
+ *  for that case (the ops layer derives its own target from task state either way). */
+function deadStepId(task: RoomArtifactTask): string | undefined {
+  return task.steps.find((s) => s.status === 'failed' || s.status === 'timeout')?.step_id
+}
+
+/** v88 P5-A: the re-assign seed — the task's own brief (payload only carries `title`,
+ *  no separate description) plus the old PIC as an @mention so the new draft keeps the
+ *  same target unless the CEO changes it. Exported for the seeding unit test. */
+export function reassignSeed(task: RoomArtifactTask): string {
+  const mention = task.pic_id ? `@${task.pic_id} ` : ''
+  return `${mention}${task.title}`
+}
 
 /** The route + metrics funnel for one task — how it was dispatched and what it cost. */
 function TaskFunnel({ taskId }: { taskId: string }) {
@@ -53,8 +70,13 @@ function TaskFunnel({ taskId }: { taskId: string }) {
   )
 }
 
-function TaskSection({ task, showTitle }: { task: RoomArtifactTask; showTitle: boolean }) {
+function TaskSection(
+  { task, showTitle, roomId }: { task: RoomArtifactTask; showTitle: boolean; roomId: string },
+) {
   const { t } = useLanguage()
+  const navigate = useNavigate()
+  const [actionError, setActionError] = useState<string | null>(null)
+  const stalledStep = task.steps.find((s) => s.step_id === deadStepId(task))
   return (
     <section className="task-detail-task">
       {showTitle && (
@@ -66,6 +88,43 @@ function TaskSection({ task, showTitle }: { task: RoomArtifactTask; showTitle: b
         {task.status}
         {task.pic_id && ` · ${t('taskDetail.owner', { id: task.pic_id })}`}
       </p>
+      {/* v88 P5-A: re-assign — navigates to the chat hub's toàn-cảnh composer with the
+          old brief + PIC seeded via router state (no new endpoint; the composer's
+          existing preview/confirm flow creates a brand-new task from the seed). */}
+      <p>
+        <button
+          type="button"
+          className="task-detail-reassign"
+          onClick={() =>
+            navigate('/chat', { state: { assignSeed: reassignSeed(task) } })
+          }
+        >
+          {t('taskDetail.reassign')}
+        </button>
+      </p>
+      {/* v88 P3: the unstick panel — a stalled task gets its reason + the 4 actions
+          right on the page it's already open, no chat detour. Cancel is offered on
+          ANY non-terminal task (open/running/stalled), not only stalled — "hủy task"
+          is a control the CEO wants on a live task too, not just a stuck one. */}
+      {(task.status === 'stalled' || task.status === 'open' || task.status === 'running') && (
+        <div className="task-detail-stalled-panel">
+          {task.status === 'stalled' && (
+            <p className="task-detail-stalled-reason">
+              {stalledStep
+                ? t('teamKanban.stalledAt', { step: stalledStep.title })
+                : t('stalledActions.reviewExhausted')}
+            </p>
+          )}
+          <StalledTaskActions
+            taskId={task.task_id}
+            stepId={deadStepId(task)}
+            roomId={roomId}
+            onError={setActionError}
+            showRecovery={task.status === 'stalled'}
+          />
+          {actionError && <p className="error">{actionError}</p>}
+        </div>
+      )}
       <TaskFunnel taskId={task.task_id} />
       <StepProgress taskId={task.task_id} steps={task.steps} />
     </section>
@@ -104,7 +163,7 @@ export function TaskDetailPage() {
       )}
 
       {tasks.map((task) => (
-        <TaskSection key={task.task_id} task={task} showTitle={tasks.length > 1} />
+        <TaskSection key={task.task_id} task={task} showTitle={tasks.length > 1} roomId={room} />
       ))}
     </section>
   )

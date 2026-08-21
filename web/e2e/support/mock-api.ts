@@ -21,6 +21,7 @@ import type {
   StepArtifactPayload,
   StepTranscriptPayload,
   TeamBoardLane,
+  TeamTaskActionResult,
   TeamTaskMetricsPayload,
   Workroom,
 } from '../../src/types'
@@ -68,6 +69,9 @@ export interface OfficeApiMockOptions {
   taskMetrics?: TeamTaskMetricsPayload
   /** Hits for GET /api/search — the palette's history source. */
   searchHits?: { excerpt: string; source: string; ref: string; agent_id: string; ts: string }[]
+  /** v88 P3: the refreshed-task shape every retry/accept/drop/cancel call returns
+   *  (default: a plain "back to open" / "cancelled" shape — see the dispatcher below). */
+  teamTaskActionResult?: TeamTaskActionResult
 }
 
 export interface OfficeApiMock {
@@ -147,6 +151,27 @@ export async function mockOfficeApi(
         total_input_tokens: 1000,
         total_output_tokens: 500,
       })
+    // v88 P3: one-click unstick (retry/accept/drop) + cancel — every mutation returns
+    // the task's refreshed shape; `opts.teamTaskActionResult` lets a spec override it
+    // (e.g. to prove the card leaves the board after cancel), default is a plain
+    // "back to open" shape covering the common happy-path assertion.
+    if (/^\/api\/team-tasks\/[^/]+\/steps\/[^/]+\/(retry|accept|drop)$/.test(pathname)) {
+      const taskId = pathname.split('/')[3]
+      return json(
+        opts.teamTaskActionResult ?? {
+          task_id: taskId, title: 'Việc', status: 'open', pic_id: '', room_id: taskId, steps: [],
+        },
+      )
+    }
+    if (/^\/api\/team-tasks\/[^/]+\/cancel$/.test(pathname)) {
+      const taskId = pathname.split('/')[3]
+      return json(
+        opts.teamTaskActionResult ?? {
+          task_id: taskId, title: 'Việc', status: 'cancelled', pic_id: '', room_id: taskId,
+          steps: [],
+        },
+      )
+    }
     if (pathname === '/api/schedule/upcoming') return json({ items: opts.scheduleItems ?? [] })
     // The outputs tab carries its filters in the query string, so match the path only.
     if (pathname === '/api/outputs') return json({ items: opts.outputs ?? [], truncated: false })

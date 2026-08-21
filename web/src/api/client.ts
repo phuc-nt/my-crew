@@ -24,8 +24,15 @@ import type {
   StepTranscriptPayload,
   RoomChatPayload,
   WorkroomsPayload,
+  AgentBand,
+  AgentBandResult,
+  AgentProfileSettingsPatch,
+  AgentProfileSettingsPatchResult,
+  AgentProfileSettingsPayload,
+  AgentSafetyPayload,
   AgentStatus,
   AgentSummary,
+  ApprovalScope,
   ApprovalsPayload,
   ClarifyPendingPayload,
   AuditPayload,
@@ -50,6 +57,7 @@ import type {
   IntegrationHealthPayload,
   KnowledgePayload,
   MemoryPayload,
+  ModelCatalogPayload,
   SkillsPayload,
   OpsChatAvailable,
   OutputsPayload,
@@ -58,6 +66,7 @@ import type {
   TemplateUpgradePreview,
   TemplateUpgradeResult,
   TeamBoardPayload,
+  TeamTaskActionResult,
   TeamTaskCostPayload,
   TeamTaskMetricsPayload,
   TeamTaskRoutePayload,
@@ -186,15 +195,36 @@ export const api = {
     request<MemoryPayload>(`/api/memory/${id}?audience=${encodeURIComponent(audience)}`),
   getAutomation: (id: string) => request<AutomationPayload>(`/api/automation/${id}`),
   getAudit: (id: string) => request<AuditPayload>(`/api/audit/${id}`),
+  // v87 P2: per-agent dry-run visibility + toggle. PATCH writes through profile_patch
+  // (comment-preserving) and is effective on the agent's next scheduled tick / triggered
+  // run — both dispatch paths re-read profile.yaml fresh, so no restart is required.
+  getAgentSafety: (id: string) => request<AgentSafetyPayload>(`/api/agents/${id}/safety`),
+  setAgentDryRun: (id: string, dryRun: boolean) =>
+    mutate<AgentSafetyPayload>(`/api/agents/${id}/safety`, 'PATCH', { dry_run: dryRun }),
+
+  // v88 P4: structured config form — name/model/model_chain/budget cap/schedule, all
+  // written through the comment-preserving profile_patch (see AgentProfileSettingsPatch).
+  getAgentProfileSettings: (id: string) =>
+    request<AgentProfileSettingsPayload>(`/api/agents/${id}/profile-settings`),
+  patchAgentProfileSettings: (id: string, patch: AgentProfileSettingsPatch) =>
+    mutate<AgentProfileSettingsPatchResult>(`/api/agents/${id}/profile-settings`, 'PATCH', patch),
+  // Autonomy band — a BandStore side-effect, NOT a profile.yaml write.
+  getAgentBand: (id: string) => request<AgentBandResult>(`/api/agents/${id}/band`),
+  setAgentBand: (id: string, band: AgentBand, reason?: string) =>
+    post<AgentBandResult>(`/api/agents/${id}/band`, { band, reason }),
+  // Model dropdown suggestions from config/model_prices.yaml (fleet-wide, agent-independent).
+  getModelCatalog: () => request<ModelCatalogPayload>('/api/agents/model-catalog'),
 
   // --- ops (S4): write surfaces — all go through the existing gateway-routed endpoints ---
   /** Every agent's pending approvals in one call. The queue is shown on more than
    *  one surface, so a per-agent fan-out was paid once per surface. */
   getPendingApprovals: () => request<PendingApprovalsIndex>('/api/approvals/pending'),
-  approve: (id: string, approvalId: number) =>
-    post<ApprovalsPayload>(`/api/agents/${id}/approvals/${approvalId}/approve`),
-  reject: (id: string, approvalId: number) =>
-    post<ApprovalsPayload>(`/api/agents/${id}/approvals/${approvalId}/reject`),
+  // v88 P3: scope defaults to "once" (no standing rule) — "always"/"deny" also
+  // teaches the gateway's rule store the same way the chat `duyệt ... luôn` path does.
+  approve: (id: string, approvalId: number, scope: ApprovalScope = 'once') =>
+    post<ApprovalsPayload>(`/api/agents/${id}/approvals/${approvalId}/approve`, { scope }),
+  reject: (id: string, approvalId: number, scope: ApprovalScope = 'once') =>
+    post<ApprovalsPayload>(`/api/agents/${id}/approvals/${approvalId}/reject`, { scope }),
   getConfig: (id: string) => request<ConfigPayload>(`/api/agents/${id}/config`),
   saveProfile: (id: string, text: string) =>
     post<{ saved: string }>(`/api/agents/${id}/config/profile`, { text }),
@@ -245,6 +275,23 @@ export const api = {
     request<TeamTaskRoutePayload>(`/api/team-tasks/${encodeURIComponent(taskId)}/route`),
   getTeamTaskMetrics: (taskId: string) =>
     request<TeamTaskMetricsPayload>(`/api/team-tasks/${encodeURIComponent(taskId)}/metrics`),
+  // v88 P3: one-click unstick (retry/accept/drop a stalled step) + cancel a live
+  // task — thin wrappers over `routes_team_task_actions.py`; every call returns the
+  // refreshed task shape so a caller can repaint without a follow-up GET.
+  retryStalledStep: (taskId: string, stepId: string) =>
+    post<TeamTaskActionResult>(
+      `/api/team-tasks/${encodeURIComponent(taskId)}/steps/${encodeURIComponent(stepId)}/retry`,
+    ),
+  acceptStalledResult: (taskId: string, stepId: string) =>
+    post<TeamTaskActionResult>(
+      `/api/team-tasks/${encodeURIComponent(taskId)}/steps/${encodeURIComponent(stepId)}/accept`,
+    ),
+  dropStalledStep: (taskId: string, stepId: string) =>
+    post<TeamTaskActionResult>(
+      `/api/team-tasks/${encodeURIComponent(taskId)}/steps/${encodeURIComponent(stepId)}/drop`,
+    ),
+  cancelTeamTask: (taskId: string) =>
+    post<TeamTaskActionResult>(`/api/team-tasks/${encodeURIComponent(taskId)}/cancel`),
   // v33 P4: clarify — agent questions the CEO answers (buttons or free text).
   getClarifyPending: () => request<ClarifyPendingPayload>('/api/clarify/pending'),
   answerClarify: (id: number, answer: string) =>
@@ -257,6 +304,10 @@ export const api = {
   saveCompany: (
     name: string, coordinatorId: string | null, teamTaskCapUsd?: number,
     teamTaskAutoConfirm?: boolean,
+    // v88 P5-D: concurrency + autopilot opened up on this same route — kept as a
+    // trailing options object rather than two more positional params (every existing
+    // call site stays byte-compatible).
+    extra?: { teamTaskConcurrency?: number; autopilot?: boolean },
   ) =>
     post<CompanyPayload>('/api/company', {
       name,
@@ -264,6 +315,9 @@ export const api = {
       ...(teamTaskCapUsd !== undefined ? { team_task_cap_usd: teamTaskCapUsd } : {}),
       // omitted ⇒ backend preserves the current value (load-modify-save, v15 F7)
       ...(teamTaskAutoConfirm !== undefined ? { team_task_auto_confirm: teamTaskAutoConfirm } : {}),
+      ...(extra?.teamTaskConcurrency !== undefined
+        ? { team_task_concurrency: extra.teamTaskConcurrency } : {}),
+      ...(extra?.autopilot !== undefined ? { autopilot: extra.autopilot } : {}),
     }),
   // v15 office composer — thin wrappers over the assign command's preview/confirm/cancel.
   getAssignableStaff: () =>
@@ -352,10 +406,10 @@ export const api = {
   setupTest: (group: string) =>
     post<{ group: string; ok: boolean; detail: string; hint: string }>(`/api/setup/test/${group}`),
   setupFinish: (username: string, password: string) =>
-    post<{ ok: boolean; restarting: boolean; message: string }>('/api/setup/finish', {
-      username,
-      password,
-    }),
+    post<{ ok: boolean; restarting: boolean; restart_hint: string; message: string }>(
+      '/api/setup/finish',
+      { username, password },
+    ),
   // v7 M18a: bind a Telegram bot to an agent (validates via getMe, no restart needed).
   bindTelegram: (agentId: string, token: string, chatIds: string[]) =>
     post<{ ok: boolean; bot_username?: string; env_name: string }>(

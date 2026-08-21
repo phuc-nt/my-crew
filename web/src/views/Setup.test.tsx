@@ -2,7 +2,7 @@
 // Mocked api, no network (npm test).
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
-import { api } from '../api/client'
+import { ApiError, api } from '../api/client'
 import { LanguageProvider } from '../i18n/language-context'
 import { Setup } from './Setup'
 
@@ -56,8 +56,10 @@ test('advances through groups to the password step and finishes', async () => {
   vi.spyOn(api, 'setupFinish').mockResolvedValue({
     ok: true,
     restarting: true,
+    restart_hint: 'Dịch vụ chạy qua launchd — tự khởi động lại, đợi ~5 giây rồi đăng nhập.',
     message: 'restarting',
   })
+  vi.spyOn(api, 'setupStatus').mockResolvedValue({ completed: true })
   const onDone = vi.fn()
   renderSetup(onDone)
 
@@ -69,6 +71,63 @@ test('advances through groups to the password step and finishes', async () => {
   fireEvent.click(screen.getByText('Hoàn tất & khởi động'))
   await waitFor(() => expect(screen.getByText(/Đang khởi động lại/)).toBeInTheDocument())
   expect(api.setupFinish).toHaveBeenCalledWith('admin', 'ceopass')
+  // the server-supplied restart hint is shown, not a hardcoded string
+  await waitFor(() =>
+    expect(screen.getByText(/Dịch vụ chạy qua launchd/)).toBeInTheDocument(),
+  )
+  await waitFor(() => expect(onDone).toHaveBeenCalled())
+})
+
+test('a bricked finish (network error mid-restart) polls setup/status instead of showing finishFailed', async () => {
+  // The restart kills the process before the HTTP response flushes — fetch rejects with
+  // a raw network error, not an ApiError. This must NOT show "hoàn tất thất bại"; it
+  // must poll /api/setup/status until completed, then call onDone.
+  vi.spyOn(api, 'setupFinish').mockRejectedValue(new TypeError('Failed to fetch'))
+  const setupStatus = vi.spyOn(api, 'setupStatus').mockResolvedValue({ completed: true })
+  const onDone = vi.fn()
+  renderSetup(onDone)
+
+  await advanceThroughGroupsAndCompany()
+  await waitFor(() => expect(screen.getByText('Đặt mật khẩu đăng nhập')).toBeInTheDocument())
+
+  fireEvent.change(screen.getByLabelText(/Mật khẩu/), { target: { value: 'ceopass' } })
+  fireEvent.click(screen.getByText('Hoàn tất & khởi động'))
+
+  await waitFor(() => expect(screen.getByText(/Đang khởi động lại/)).toBeInTheDocument())
+  expect(screen.queryByText('hoàn tất thất bại')).toBeNull()
+  await waitFor(() => expect(setupStatus).toHaveBeenCalled())
+  await waitFor(() => expect(onDone).toHaveBeenCalled())
+})
+
+test('a 410 from finish (wizard already locked) also polls instead of erroring', async () => {
+  vi.spyOn(api, 'setupFinish').mockRejectedValue(new ApiError(410, 'setup already completed'))
+  vi.spyOn(api, 'setupStatus').mockResolvedValue({ completed: true })
+  const onDone = vi.fn()
+  renderSetup(onDone)
+
+  await advanceThroughGroupsAndCompany()
+  await waitFor(() => expect(screen.getByText('Đặt mật khẩu đăng nhập')).toBeInTheDocument())
+
+  fireEvent.change(screen.getByLabelText(/Mật khẩu/), { target: { value: 'ceopass' } })
+  fireEvent.click(screen.getByText('Hoàn tất & khởi động'))
+
+  await waitFor(() => expect(screen.getByText(/Đang khởi động lại/)).toBeInTheDocument())
+  await waitFor(() => expect(onDone).toHaveBeenCalled())
+})
+
+test('a genuine finish validation error (non-410 ApiError) still shows finishFailed-style message', async () => {
+  vi.spyOn(api, 'setupFinish').mockRejectedValue(new ApiError(400, 'invalid username'))
+  const onDone = vi.fn()
+  renderSetup(onDone)
+
+  await advanceThroughGroupsAndCompany()
+  await waitFor(() => expect(screen.getByText('Đặt mật khẩu đăng nhập')).toBeInTheDocument())
+
+  fireEvent.change(screen.getByLabelText(/Mật khẩu/), { target: { value: 'ceopass' } })
+  fireEvent.click(screen.getByText('Hoàn tất & khởi động'))
+
+  await waitFor(() => expect(screen.getByText('invalid username')).toBeInTheDocument())
+  expect(onDone).not.toHaveBeenCalled()
 })
 
 test('short password blocks finish', async () => {

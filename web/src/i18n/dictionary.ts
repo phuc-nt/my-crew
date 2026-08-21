@@ -139,6 +139,7 @@ const vi = {
   'assignComposer.webSearchNoKey':
     'PIC bật web_search nhưng máy chưa có key tìm kiếm — agent sẽ chỉ dùng dữ liệu nội bộ (thêm key ở màn Kết nối).',
   'assignComposer.cancel': 'Huỷ',
+  'assignComposer.editRequest': 'Sửa yêu cầu',
   'assignComposer.confirmAdjust': 'Xác nhận sửa kế hoạch',
   'assignComposer.dismiss': 'Bỏ qua',
   'assignComposer.confirming': 'Đang xác nhận…',
@@ -150,6 +151,8 @@ const vi = {
   'assignComposer.errorPrefix': 'Lỗi: {message}',
   'assignComposer.modeSprint': 'SPRINT — 1 người làm thẳng, không chia bước',
   'assignComposer.modeTeam': 'TEAM — chia bước, có review',
+  // v87 P2: preview-time dry-run badge — CEO thấy TRƯỚC khi xác nhận.
+  'assignComposer.dryRunBadge': 'DIỄN TẬP — kết quả không gửi đi thật',
 
   // workroom-list.tsx
   'workroomList.ariaLabel': 'Phòng việc',
@@ -253,6 +256,36 @@ const vi = {
   'agentDetail.capEngine': 'Engine',
   'agentDetail.capTokens': 'Token',
   'agentDetail.capCost': 'Chi phí',
+  // v87 P2: dry-run visibility + toggle on the agent's Profile tab (≤2 clicks, no YAML).
+  'agentDetail.dryRunLabel': 'Chế độ diễn tập',
+  'agentDetail.dryRunHint': 'BẬT = kết quả không gửi đi thật',
+  'agentDetail.dryRunOn': 'Diễn tập',
+  'agentDetail.dryRunOff': 'Gửi thật',
+  'agentDetail.dryRunSourceProfile': 'ghi đè riêng',
+  'agentDetail.dryRunSourceFleet': 'theo mặc định hạm đội',
+  'agentDetail.dryRunToggleFailed': 'Không đổi được chế độ diễn tập, thử lại.',
+  // v88 P4: structured config forms — tên/model/model_chain/lịch/band, ≤3 click, không YAML tay.
+  'agentDetail.editBtn': 'Sửa',
+  'agentDetail.saveBtn': 'Lưu',
+  'agentDetail.cancelBtn': 'Hủy',
+  'agentDetail.saveFailed': 'Lưu thất bại, thử lại.',
+  'agentDetail.fieldModel': 'Model',
+  'agentDetail.modelHelp': 'Bỏ trống = dùng model chung của công ty',
+  'agentDetail.modelEmptyDisplay': '(dùng model chung của công ty)',
+  'agentDetail.fieldModelChain': 'Chuỗi model dự phòng',
+  'agentDetail.modelChainHelp': 'Danh sách model id cách nhau bởi dấu phẩy, thử theo thứ tự khi model chính lỗi. Để trống = chỉ dùng 1 model.',
+  'agentDetail.modelChainEmptyDisplay': '(không có, chỉ dùng 1 model)',
+  'agentDetail.fieldSchedule': 'Lịch chạy',
+  'agentDetail.scheduleHelp':
+    'Mỗi dòng là "loại_báo_cáo = biểu_thức_cron", ví dụ weekly_report = 0 9 * * 1. ' +
+    'Chỉ những loại nằm trong danh sách báo cáo của agent mới thật sự chạy — loại lạ sẽ được lưu nhưng không kích hoạt.',
+  'agentDetail.scheduleEmptyDisplay': '(chưa đặt lịch)',
+  'agentDetail.fieldBand': 'Mức độ tin cậy',
+  'agentDetail.bandHelp': 'Band chỉ đổi mức soát chéo (bao nhiêu bước cần duyệt), không đổi quyền hành động khác',
+  'agentDetail.bandSupervised': 'Giám sát chặt',
+  'agentDetail.bandNormal': 'Bình thường',
+  'agentDetail.bandTrusted': 'Tin cậy',
+  'agentDetail.bandChangeFailed': 'Không đổi được band, thử lại.',
   'advancedTab.filesTitle': 'Tệp cấu hình',
   'team.hireClose': 'Đóng bảng tuyển',
   'team.companyCoordinator': 'Trưởng phòng điều phối: {id}',
@@ -334,6 +367,7 @@ const vi = {
   'taskDetail.noTasks': 'Phòng này chưa có việc nào.',
   'taskDetail.noSteps': 'Việc này chưa có bước nào.',
   'taskDetail.owner': 'Phụ trách: {id}',
+  'taskDetail.reassign': 'Giao lại việc này',
   'taskDetail.openChat': '💬 Mở hội thoại',
   'taskDetail.openOffice': '🏢 Xem trong văn phòng',
   'taskDetail.routeMode': 'Chế độ điều phối',
@@ -342,6 +376,27 @@ const vi = {
   'taskDetail.cost': 'Chi phí',
   'taskDetail.stepSplit': 'Phân loại bước',
   'taskDetail.stepSplitValue': '{content} làm · {review} soát · {rework} làm lại',
+
+  // stalled-task-actions.tsx (v88 P3: one-click unstick)
+  'stalledActions.retry': 'Thử lại bước',
+  'stalledActions.retrying': 'Đang thử lại…',
+  'stalledActions.retryFailed': 'Không thử lại được bước này.',
+  'stalledActions.accept': 'Chấp nhận kết quả hiện có',
+  'stalledActions.accepting': 'Đang chấp nhận…',
+  'stalledActions.acceptFailed': 'Không chấp nhận được kết quả này.',
+  'stalledActions.drop': 'Bỏ bước',
+  'stalledActions.dropping': 'Đang bỏ…',
+  'stalledActions.dropFailed': 'Không bỏ được bước này.',
+  'stalledActions.confirmDropTitle': 'Bỏ bước kẹt?',
+  'stalledActions.confirmDropBody':
+    'Bước này sẽ được đánh dấu xong với kết quả trống — dữ liệu của bước sẽ mất, các bước còn lại vẫn tiếp tục.',
+  'stalledActions.cancel': 'Hủy việc',
+  'stalledActions.cancelling': 'Đang hủy…',
+  'stalledActions.cancelFailed': 'Không hủy được việc này.',
+  'stalledActions.confirmCancelTitle': 'Hủy việc này?',
+  'stalledActions.confirmCancelBody':
+    'Việc đang chạy sẽ dừng ngay, kể cả bước đang xử lý — không thể hoàn tác.',
+  'stalledActions.reviewExhausted': 'Kẹt vì đã hết lượt duyệt lại — chọn một hành động bên dưới.',
 
   // Outputs.tsx
   'outputs.filterAgent': 'Nhân sự',
@@ -403,6 +458,7 @@ const vi = {
   'teamKanban.queuedTitle':
     'Điều phối xử lý 1 hành động mỗi phút, việc cũ trước — việc này đang chờ tới lượt',
   'teamKanban.loadError': 'không tải được bảng việc đội',
+  'teamKanban.stalledAt': 'Kẹt ở bước "{step}"',
 
   // components/TeamTaskCost.tsx
   'teamTaskCost.toggle': 'Chi phí',
@@ -459,6 +515,9 @@ const vi = {
   'chat.quickChipStatus': 'Đội mình đang thế nào?',
   'chat.quickChipCreateAgent': 'Tạo nhân sự ảo mới',
   'chat.quickChipCost': 'Tổng chi phí tháng này?',
+  // v88 P5-C: context-aware chips, only shown when the board/approvals data has one.
+  'chat.quickChipStalled': 'Xem task đang kẹt',
+  'chat.quickChipPending': 'Duyệt việc đang chờ',
   'chat.checking': 'Đang kiểm tra…',
   'chat.unavailablePrefix': 'Chưa dùng được: {reason}',
   'chat.createViaWizardPrefix': 'Bạn vẫn có thể ',
@@ -499,6 +558,10 @@ const vi = {
   'pending.expired': 'Câu hỏi đã hết hạn.',
   'pending.decisionFailed': 'Không gửi được quyết định.',
   'pending.answerFailed': 'Không gửi được câu trả lời.',
+  'pending.scopeLabel': 'Áp dụng',
+  'pending.scopeOnce': 'Chỉ lần này',
+  'pending.scopeAlways': 'Luôn tự động duyệt việc giống thế này',
+  'pending.scopeDeny': 'Luôn tự động từ chối việc giống thế này',
   'chat.repeatCount': 'lặp ×{n}',
   'chat.roomStatus.running': 'Đang chạy',
   'chat.roomStatus.blocked': 'Kẹt',
@@ -518,6 +581,12 @@ const vi = {
   'settings.autoConfirmLabel': 'Tự xác nhận kế hoạch khi giao việc',
   'settings.autoConfirmHint':
     'Bật: giao việc (kể cả bằng @ ở màn Văn phòng) chạy ngay sau khi hệ thống lập xong kế hoạch — bạn không phải bấm xác nhận từng việc. Mọi ràng buộc an toàn khác giữ nguyên: việc gửi ra ngoài công ty vẫn chờ bạn duyệt riêng. Tắt (mặc định): bạn xem trước kế hoạch và bấm xác nhận như hiện tại.',
+  'settings.autopilotLabel': 'Autopilot — thư ký toàn quyền quyết thay',
+  'settings.autopilotHint':
+    'Bật: thư ký tự xác nhận kế hoạch, tự gỡ việc bị dừng và tự duyệt bước gửi ra ngoài — mọi quyết định đều có nhật ký và báo lại bạn. Tắt (mặc định): mọi kế hoạch, phê duyệt và việc bị dừng chờ bạn quyết như cũ.',
+  'settings.concurrencyLabel': 'Số việc chạy song song tối đa (1–10)',
+  'settings.concurrencyHint':
+    'Số bước của MỘT thẻ việc nhóm mà điều phối viên được chạy đồng thời — không phải số thẻ việc.',
   'settings.errorPrefix': 'Lỗi: {message}',
   'settings.displayModeTitle': 'Chế độ hiển thị',
   'settings.advancedModeLabel': 'Chế độ nâng cao',
@@ -707,6 +776,8 @@ const vi = {
   'setup.finishFailed': 'hoàn tất thất bại',
   'setup.restartingTitle': 'Đang khởi động lại…',
   'setup.restartingBody': 'Đã lưu cấu hình. Dịch vụ đang khởi động lại — đợi vài giây rồi đăng nhập.',
+  'setup.finishTimedOut':
+    'Đã lưu cấu hình nhưng chưa xác nhận được dịch vụ khởi động lại xong sau 30 giây. Hãy khởi động lại thủ công (xem gợi ý phía trên) rồi tải lại trang để đăng nhập.',
   'setup.progress': 'Bước {step}/{total}',
   'setup.testConnection': 'Kiểm tra kết nối',
   'setup.connectionOk': '✓ Kết nối OK',
@@ -836,6 +907,9 @@ const vi = {
   'cost.thisMonthPrefix': 'Tháng này: ',
   'cost.capSuffix': ' trên hạn mức ',
   'cost.empty': 'Chưa có lịch sử chi phí.',
+  // v88 P4: trần chi tháng editable ngay trên tab Ngân sách (thay vì chỉ sửa YAML tay).
+  'cost.capEditLabel': 'Trần chi tháng',
+  'cost.capSaveFailed': 'Không lưu được trần chi, thử lại.',
 
   'memoryAuto.rememberedTitle': 'Sự kiện đã ghi nhớ',
   'memoryAuto.loading': 'Đang tải…',
@@ -1127,6 +1201,7 @@ const en = {
   'assignComposer.webSearchNoKey':
     'The PIC has web_search on but no search API key is configured — the agent will use internal data only (add a key in Connections).',
   'assignComposer.cancel': 'Cancel',
+  'assignComposer.editRequest': 'Edit request',
   'assignComposer.confirmAdjust': 'Confirm plan change',
   'assignComposer.dismiss': 'Dismiss',
   'assignComposer.confirming': 'Confirming…',
@@ -1138,6 +1213,8 @@ const en = {
   'assignComposer.errorPrefix': 'Error: {message}',
   'assignComposer.modeSprint': 'SPRINT — one person, straight run, no step split',
   'assignComposer.modeTeam': 'TEAM — multi-step with review',
+  // v87 P2: preview-time dry-run badge — the CEO sees it BEFORE confirming.
+  'assignComposer.dryRunBadge': 'DRY-RUN — results are not really sent',
 
   // workroom-list.tsx
   'workroomList.ariaLabel': 'Workrooms',
@@ -1239,6 +1316,36 @@ const en = {
   'agentDetail.capEngine': 'Engine',
   'agentDetail.capTokens': 'Tokens',
   'agentDetail.capCost': 'Cost',
+  // v87 P2: dry-run visibility + toggle on the agent's Profile tab (≤2 clicks, no YAML).
+  'agentDetail.dryRunLabel': 'Dry-run mode',
+  'agentDetail.dryRunHint': 'ON = results are not really sent',
+  'agentDetail.dryRunOn': 'Dry-run',
+  'agentDetail.dryRunOff': 'Live',
+  'agentDetail.dryRunSourceProfile': 'per-agent override',
+  'agentDetail.dryRunSourceFleet': 'fleet default',
+  'agentDetail.dryRunToggleFailed': 'Could not change dry-run mode, try again.',
+  // v88 P4: structured config forms — name/model/model_chain/schedule/band, ≤3 clicks, no raw YAML.
+  'agentDetail.editBtn': 'Edit',
+  'agentDetail.saveBtn': 'Save',
+  'agentDetail.cancelBtn': 'Cancel',
+  'agentDetail.saveFailed': 'Save failed, try again.',
+  'agentDetail.fieldModel': 'Model',
+  'agentDetail.modelHelp': 'Blank = use the company-wide model',
+  'agentDetail.modelEmptyDisplay': '(uses the company-wide model)',
+  'agentDetail.fieldModelChain': 'Fallback model chain',
+  'agentDetail.modelChainHelp': 'Comma-separated model ids, tried in order if the primary fails. Blank = single model only.',
+  'agentDetail.modelChainEmptyDisplay': '(none, single model only)',
+  'agentDetail.fieldSchedule': 'Schedule',
+  'agentDetail.scheduleHelp':
+    'One "report_kind = cron_expr" per line, e.g. weekly_report = 0 9 * * 1. ' +
+    "Only kinds in the agent's report list actually fire — an unknown kind is saved but never triggers.",
+  'agentDetail.scheduleEmptyDisplay': '(no schedule set)',
+  'agentDetail.fieldBand': 'Trust band',
+  'agentDetail.bandHelp': 'Band only changes how many steps get a second review, not any other action authority',
+  'agentDetail.bandSupervised': 'Closely supervised',
+  'agentDetail.bandNormal': 'Normal',
+  'agentDetail.bandTrusted': 'Trusted',
+  'agentDetail.bandChangeFailed': 'Could not change band, try again.',
   'advancedTab.filesTitle': 'Config files',
   'team.hireClose': 'Close hiring panel',
   'team.companyCoordinator': 'Coordinator: {id}',
@@ -1320,6 +1427,7 @@ const en = {
   'taskDetail.noTasks': 'This room holds no tasks.',
   'taskDetail.noSteps': 'This task has no steps yet.',
   'taskDetail.owner': 'Owner: {id}',
+  'taskDetail.reassign': 'Reassign this task',
   'taskDetail.openChat': '\ud83d\udcac Open conversation',
   'taskDetail.openOffice': '\ud83c\udfe2 View in the office',
   'taskDetail.routeMode': 'Routing mode',
@@ -1328,6 +1436,27 @@ const en = {
   'taskDetail.cost': 'Cost',
   'taskDetail.stepSplit': 'Step split',
   'taskDetail.stepSplitValue': '{content} content \u00b7 {review} review \u00b7 {rework} rework',
+
+  // stalled-task-actions.tsx (v88 P3: one-click unstick)
+  'stalledActions.retry': 'Retry step',
+  'stalledActions.retrying': 'Retrying\u2026',
+  'stalledActions.retryFailed': 'Could not retry this step.',
+  'stalledActions.accept': 'Accept existing result',
+  'stalledActions.accepting': 'Accepting\u2026',
+  'stalledActions.acceptFailed': 'Could not accept this result.',
+  'stalledActions.drop': 'Drop step',
+  'stalledActions.dropping': 'Dropping\u2026',
+  'stalledActions.dropFailed': 'Could not drop this step.',
+  'stalledActions.confirmDropTitle': 'Drop the stuck step?',
+  'stalledActions.confirmDropBody':
+    'This step will be marked done with an empty result \u2014 its data is lost, the remaining steps continue.',
+  'stalledActions.cancel': 'Cancel task',
+  'stalledActions.cancelling': 'Cancelling\u2026',
+  'stalledActions.cancelFailed': 'Could not cancel this task.',
+  'stalledActions.confirmCancelTitle': 'Cancel this task?',
+  'stalledActions.confirmCancelBody':
+    'The running task stops immediately, including any step in progress \u2014 this cannot be undone.',
+  'stalledActions.reviewExhausted': 'Stuck because review retries ran out \u2014 pick an action below.',
 
   // Outputs.tsx
   'outputs.filterAgent': 'Staff',
@@ -1389,6 +1518,7 @@ const en = {
   'teamKanban.queuedTitle':
     'The coordinator handles one action per minute, oldest first — this task is waiting its turn',
   'teamKanban.loadError': 'could not load the team task board',
+  'teamKanban.stalledAt': 'Stuck on step "{step}"',
 
   // components/TeamTaskCost.tsx
   'teamTaskCost.toggle': 'Cost',
@@ -1445,6 +1575,8 @@ const en = {
   'chat.quickChipStatus': "How's the team doing?",
   'chat.quickChipCreateAgent': 'Create a new virtual staffer',
   'chat.quickChipCost': "What's total cost this month?",
+  'chat.quickChipStalled': 'View stalled tasks',
+  'chat.quickChipPending': 'Review pending approvals',
   'chat.checking': 'Checking…',
   'chat.unavailablePrefix': 'Not available: {reason}',
   'chat.createViaWizardPrefix': 'You can still ',
@@ -1483,6 +1615,10 @@ const en = {
   'pending.expired': 'This question has expired.',
   'pending.decisionFailed': 'Could not send the decision.',
   'pending.answerFailed': 'Could not send the answer.',
+  'pending.scopeLabel': 'Apply',
+  'pending.scopeOnce': 'Just this once',
+  'pending.scopeAlways': 'Always auto-approve actions like this',
+  'pending.scopeDeny': 'Always auto-reject actions like this',
   'chat.repeatCount': 'repeated ×{n}',
   'chat.roomStatus.running': 'Running',
   'chat.roomStatus.blocked': 'Blocked',
@@ -1502,6 +1638,12 @@ const en = {
   'settings.autoConfirmLabel': 'Auto-confirm plans when assigning work',
   'settings.autoConfirmHint':
     'On: assigning work (including via @ in the Office screen) runs immediately once the plan is built — you don\'t need to confirm each task. All other safety rules still apply: anything sent outside the company still waits for your separate approval. Off (default): you preview the plan and confirm, as today.',
+  'settings.autopilotLabel': 'Autopilot — the secretary decides in your place',
+  'settings.autopilotHint':
+    'On: the secretary auto-confirms plans, auto-resolves stalled tasks, and auto-approves steps sent outside the company — every decision is logged and reported back to you. Off (default): every plan, approval, and stalled task waits for your decision, as today.',
+  'settings.concurrencyLabel': 'Max concurrent running steps (1–10)',
+  'settings.concurrencyHint':
+    'How many steps of ONE team task the coordinator may run at once — not how many team tasks.',
   'settings.errorPrefix': 'Error: {message}',
   'settings.displayModeTitle': 'Display mode',
   'settings.advancedModeLabel': 'Advanced mode',
@@ -1691,6 +1833,8 @@ const en = {
   'setup.finishFailed': 'finish failed',
   'setup.restartingTitle': 'Restarting…',
   'setup.restartingBody': 'Config saved. The service is restarting — wait a few seconds, then log in.',
+  'setup.finishTimedOut':
+    "Config saved, but we couldn't confirm the service restarted within 30 seconds. Restart it manually (see the hint above), then reload this page to log in.",
   'setup.progress': 'Step {step}/{total}',
   'setup.testConnection': 'Test connection',
   'setup.connectionOk': '✓ Connection OK',
@@ -1820,6 +1964,9 @@ const en = {
   'cost.thisMonthPrefix': 'This month: ',
   'cost.capSuffix': ' out of cap ',
   'cost.empty': 'No cost history yet.',
+  // v88 P4: monthly cap editable right on the Budget tab (instead of raw YAML only).
+  'cost.capEditLabel': 'Monthly cap',
+  'cost.capSaveFailed': 'Could not save the cap, try again.',
 
   'memoryAuto.rememberedTitle': 'Remembered events',
   'memoryAuto.loading': 'Loading…',

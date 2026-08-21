@@ -244,6 +244,8 @@ export interface CompanyPayload {
   // v15: present on reads; optional so older cached payload shapes still typecheck.
   team_task_concurrency?: number
   team_task_auto_confirm?: boolean
+  // v88 P5-D: present on reads; optional for the same cached-payload-shape reason.
+  autopilot?: boolean
 }
 
 // v15 office composer (/api/office/assign/*)
@@ -339,6 +341,7 @@ export interface CoordinatorHealthPayload {
   alive: boolean
   last_beat_ago_s: number | null
   reason: '' | 'no_coordinator' | 'no_heartbeat' | 'stale'
+  hint: string
 }
 
 export interface AssignPreviewPayload {
@@ -350,6 +353,66 @@ export interface AssignPreviewPayload {
   // v82: routing-funnel outcome ('sprint' | 'team'). Optional — a pre-v82 server
   // omits it and the composer simply renders no mode badge.
   route_mode?: string
+  // v87 P2: the previewed PIC's EFFECTIVE dry-run (profile override -> fleet env ->
+  // default true) — the same resolution the worker runs with, so the composer can warn
+  // BEFORE confirm instead of the CEO discovering "nothing was sent" after the fact.
+  // Optional — a pre-v87 server omits it and the composer shows no dry-run badge.
+  pic_dry_run?: boolean
+}
+
+// v87 P2: effective per-agent dry-run + toggle write result (GET/PATCH
+// /api/agents/{id}/safety).
+export interface AgentSafetyPayload {
+  agent_id: string
+  dry_run: boolean
+  // GET only: whether `dry_run` comes from an explicit profile.yaml override or is
+  // inherited from the fleet DRY_RUN env/default.
+  dry_run_source?: 'profile' | 'fleet'
+  // PATCH only: always false today (both dispatch paths re-read profile.yaml fresh
+  // per run) — carried so the FE never has to assume and can render a restart hint if
+  // a future backend ever needs one, same shape as ConnectionKeysResult.needs_restart.
+  needs_restart?: boolean
+}
+
+// v88 P4: structured agent config form (GET/PATCH /api/agents/{id}/profile-settings).
+// Values are the RAW ones written in profile.yaml — an absent `model`/empty
+// `model_chain`/absent `budget_monthly_usd` means "follow the fleet default", not "0".
+export interface AgentProfileSettingsPayload {
+  agent_id: string
+  name: string | null
+  model: string | null
+  model_chain: string[]
+  budget_monthly_usd: number | null
+  schedule: Record<string, string> // {kind: cron_expr} — same shape as create-time
+}
+
+// PATCH body: every field optional — only the keys present are patched.
+export interface AgentProfileSettingsPatch {
+  name?: string
+  model?: string
+  model_chain?: string[]
+  budget_monthly_usd?: number
+  schedule?: Record<string, string>
+}
+
+export interface AgentProfileSettingsPatchResult {
+  agent_id: string
+  needs_restart: boolean
+}
+
+// v88 P4: autonomy band — supervised (mọi bước soát chéo) | normal | trusted (bớt soát
+// bước thường). NOT a profile.yaml key — a separate BandStore side-effect.
+export type AgentBand = 'supervised' | 'normal' | 'trusted'
+
+export interface AgentBandResult {
+  agent_id: string
+  band: AgentBand
+}
+
+// v88 P4: model dropdown suggestions read from config/model_prices.yaml — never
+// hardcoded, never fetched from OpenRouter. Free-text is always allowed alongside it.
+export interface ModelCatalogPayload {
+  models: string[]
 }
 
 export interface StaffTemplate {
@@ -477,6 +540,9 @@ export interface OpsChatCommand {
   id: string
   description: string
   readonly: boolean
+  // v88 P5-C: a runnable example the Chat box seeds into the composer on click — the
+  // route falls back to the bare command id when a catalog entry defines none.
+  example: string
 }
 
 export interface OpsChatAvailable {
@@ -689,12 +755,39 @@ export interface TeamBoardCard {
   // v58: vị trí trong hàng đợi coordinator (0 = tới lượt; ≥1 = xếp sau N việc; absent =
   // không trong hàng dispatchable). Ticker 1 hành-động/phút nên N ≈ số phút chờ.
   queue_position?: number
+  // v88 P3: title of the first dead (failed/timeout) step on a `stalled` task — absent
+  // when the stall came from an exhausted review round (no dead step) or the task is
+  // not stalled at all.
+  stalled_step?: string
 }
 
 export interface TeamBoardLane {
   id: string
   cards: TeamBoardCard[]
 }
+
+// v88 P3: one-click unstick + cancel — every action route returns the task's
+// refreshed shape so the caller can repaint from one response.
+export interface TeamTaskActionStep {
+  step_id: string
+  title: string
+  status: string
+  step_type: string
+  assigned_to: string
+}
+
+export interface TeamTaskActionResult {
+  task_id: string
+  title: string
+  status: string
+  pic_id: string
+  room_id: string
+  steps: TeamTaskActionStep[]
+}
+
+// v88 P3: the bounded scope enum an approve/reject decision may carry — "once" (no
+// standing rule) or the two learned-rule scopes the gateway's rule store accepts.
+export type ApprovalScope = 'once' | 'always' | 'deny'
 
 // v50: per-task cost breakdown — one entry per step-attempt + task totals.
 export interface TeamTaskCostStep {

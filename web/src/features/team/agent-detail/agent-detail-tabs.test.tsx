@@ -147,3 +147,51 @@ test('MEMORY.md editor stays read-only (no Save button)', async () => {
   // profile/soul/project each have a Save → 3, not 4 (memory has none)
   expect(screen.getAllByText('Lưu')).toHaveLength(3)
 })
+
+// v88 P4: the monthly budget cap became editable on this tab (was charts-only before).
+
+test('budget tab: editing the cap PATCHes budget_monthly_usd and invalidates the cost query', async () => {
+  vi.spyOn(api, 'getCost').mockResolvedValue({
+    agent_id: 'acme',
+    series: [],
+    cap: 50,
+    warn_ratio: 0.8,
+    spent_this_month: 0,
+  })
+  vi.spyOn(api, 'getAudit').mockResolvedValue({ agent_id: 'acme', counts: {}, recent: [] })
+  const patch = vi.spyOn(api, 'patchAgentProfileSettings').mockResolvedValue({
+    agent_id: 'acme', needs_restart: false,
+  })
+  wrap(<BudgetCostTab id="acme" />)
+  await waitFor(() => expect(screen.getByText('Trần chi tháng:')).toBeInTheDocument())
+
+  fireEvent.click(screen.getByText('Sửa'))
+  const input = screen.getByDisplayValue('50')
+  fireEvent.change(input, { target: { value: '120' } })
+  fireEvent.click(screen.getByText('Lưu'))
+
+  await waitFor(() =>
+    expect(patch).toHaveBeenCalledWith('acme', { budget_monthly_usd: 120 }),
+  )
+})
+
+test('budget tab: a negative cap is rejected client-side without calling the API', async () => {
+  vi.spyOn(api, 'getCost').mockResolvedValue({
+    agent_id: 'acme',
+    series: [],
+    cap: 50,
+    warn_ratio: 0.8,
+    spent_this_month: 0,
+  })
+  vi.spyOn(api, 'getAudit').mockResolvedValue({ agent_id: 'acme', counts: {}, recent: [] })
+  const patch = vi.spyOn(api, 'patchAgentProfileSettings')
+  wrap(<BudgetCostTab id="acme" />)
+  await waitFor(() => expect(screen.getByText('Trần chi tháng:')).toBeInTheDocument())
+
+  fireEvent.click(screen.getByText('Sửa'))
+  fireEvent.change(screen.getByDisplayValue('50'), { target: { value: '-5' } })
+  fireEvent.click(screen.getByText('Lưu'))
+
+  await waitFor(() => expect(screen.getByText(/Không lưu được trần chi/)).toBeInTheDocument())
+  expect(patch).not.toHaveBeenCalled()
+})

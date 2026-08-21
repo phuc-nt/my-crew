@@ -6,6 +6,11 @@
 // sees the coordinator state). These are distinct routes — only one is mounted at a time, so
 // there is no simultaneous double-poll; a shared poll-context would be over-engineering for a
 // single 30s GET. Keep the two mount points; this component is the single source.
+//
+// The restart command is SERVER-supplied (`health.hint`, computed in
+// routes_office_room_chat.get_coordinator_health) rather than hardcoded here — a
+// launchd/container/systemd install needs a different instruction than the checkout-dev
+// `uv run python -m my_crew.runtime.service` this used to hardcode unconditionally.
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
 import { useLanguage } from '../../i18n/language-context'
@@ -37,8 +42,8 @@ export function CoordinatorHealthBanner() {
   }
   return (
     <div className="office-health-banner office-health-dead">
-      {t('coordinatorHealth.deadPrefix')}{' '}
-      <code>uv run python -m my_crew.runtime.service</code> {t('coordinatorHealth.deadSuffix')}
+      {t('coordinatorHealth.deadPrefix')} <code>{health.hint}</code>{' '}
+      {t('coordinatorHealth.deadSuffix')}
     </div>
   )
 }

@@ -75,3 +75,45 @@ test('still refetches when the cancel call fails, so the board never lies', asyn
     expect(screen.getByRole('button', { name: 'Hủy nháp' }).hasAttribute('disabled')).toBe(false),
   )
 })
+
+// --- v88 P3: the unstick cluster on a stalled card ---
+
+const STALLED_CARD: TeamBoardCard = {
+  ...CARD,
+  task_id: 'tsk-2',
+  status: 'stalled',
+  stalled_step: 'Soạn báo cáo tuần',
+}
+
+function setupWithCard(card: TeamBoardCard, lane?: string) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={qc}>
+      <LanguageProvider>
+        <MemoryRouter>
+          <TaskCard card={card} lane={lane} />
+        </MemoryRouter>
+      </LanguageProvider>
+    </QueryClientProvider>,
+  )
+}
+
+test('a stalled card shows the stalled reason and the four unstick buttons', () => {
+  setupWithCard(STALLED_CARD)
+  expect(screen.getByText('Kẹt ở bước "Soạn báo cáo tuần"')).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Thử lại bước' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Chấp nhận kết quả hiện có' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Bỏ bước' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Hủy việc' })).toBeTruthy()
+})
+
+test('a non-stalled card never shows the unstick cluster', () => {
+  setupWithCard({ ...CARD, status: 'open' }, 'open')
+  expect(screen.queryByRole('button', { name: 'Thử lại bước' })).toBeNull()
+})
+
+test('a stalled card with no stalled_step (review-exhausted) skips the reason line but still shows actions', () => {
+  setupWithCard({ ...CARD, status: 'stalled', stalled_step: undefined })
+  expect(screen.queryByText(/^Kẹt ở bước/)).toBeNull()
+  expect(screen.getByRole('button', { name: 'Chấp nhận kết quả hiện có' })).toBeTruthy()
+})

@@ -4,8 +4,8 @@
 // uses. Its intent flow (preview → confirm, adjust → confirm-adjust, question → reply)
 // with @mention picking is already built and tested against the real endpoints; a second
 // implementation here would be a second thing to keep correct.
-import { useCallback, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router'
 import { useWorkrooms } from '../../api/queries/use-office-queries'
 import { useLanguage } from '../../i18n/language-context'
 import { AssignComposer } from '../shared/assign-composer'
@@ -25,8 +25,21 @@ import { ThreadView } from './thread-view'
 export function ChatPage() {
   const { t } = useLanguage()
   const navigate = useNavigate()
+  const location = useLocation()
   const { roomId } = useParams<{ roomId?: string }>()
   const { data, isLoading } = useWorkrooms()
+  // v88 P5-A: the task-detail page's "Giao lại việc này" hands the old brief over as
+  // router navigation state (avoids URL-length limits a query param would hit on a
+  // long brief) — read once on arrival, same one-shot-seed posture as the assistant
+  // thread's `?ask=` param.
+  const assignSeed = (location.state as { assignSeed?: string } | null)?.assignSeed
+  // Clear the seed from history state after the first mount consumes it, so a browser
+  // Back to this entry (or a route remount) never re-stomps a draft the user has since
+  // edited. `initialBrief` is mount-only, so consuming it once is enough.
+  useEffect(() => {
+    if (assignSeed) navigate(location.pathname, { replace: true, state: null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on arrival
+  }, [])
   // Lazily read once: localStorage is synchronous and this is the pane's first paint.
   const [cursors, setCursors] = useState<ReadCursors>(() => loadReadCursors())
 
@@ -84,7 +97,10 @@ export function ChatPage() {
         )}
 
         {!isAssistant ? (
-          <AssignComposer activeRoom={activeId === OVERVIEW_ROOM_ID ? null : activeId} />
+          <AssignComposer
+            activeRoom={activeId === OVERVIEW_ROOM_ID ? null : activeId}
+            initialBrief={activeId === OVERVIEW_ROOM_ID ? assignSeed : undefined}
+          />
         ) : null}
       </div>
 
