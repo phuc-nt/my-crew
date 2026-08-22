@@ -44,6 +44,10 @@
 
 ## Mở / sang sau
 
-- **Live-UAT (P6) của plan v91 vẫn cần người:** bind `ops_operator_id` qua Telegram DM rồi tick.
+- **UAT ops-chat live pass (22/08):** `ops_operator_id` hóa ra đã bind sẵn; 4 lệnh chỉ-đọc
+  (`get_status`/`get_cost`/`search_history`/`list_team_tasks`) qua `@phucnt_my_admin_bot` đều
+  trả lời ~30s, audit đủ, tổng ~$0.018. P6 đầy đủ (cold-start 8 bước máy trắng) vẫn chưa chạy.
+- Vòng UAT lộ 3 vấn đề vận hành: `search_history` trả rỗng dù dữ liệu có; 3 thẻ việc
+  BỊ DỪNG 0/1 bước treo từ v81; decompose fail lặp vì ràng buộc PIC — sang plan riêng.
 - `expectNoUnmockedRoutes` là snapshot chứ không phải wait (poll trên list rỗng resolve ngay
   tick đầu) — assert nội dung trang trước, helper này mới phủ hết cái đã tới.
