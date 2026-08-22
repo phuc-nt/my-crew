@@ -229,6 +229,14 @@ def _acyclic(steps: tuple[TeamStepPlan, ...]) -> bool:
     return visited == len(steps)
 
 
+def find_terminals(steps: tuple[TeamStepPlan, ...]) -> list[TeamStepPlan]:
+    """Steps nobody in the slice depends on. One terminal ⇒ every other step
+    transitively feeds it. Shared so the PIC rule and the code-side repair that
+    satisfies it read the plan's shape the same way."""
+    dep_targets = {d for s in steps for d in s.deps}
+    return [s for s in steps if s.step_id not in dep_targets]
+
+
 def validate_pic_terminal(steps: tuple[TeamStepPlan, ...], pic_id: str) -> None:
     """v15 PIC hard rule (red-team F5), applied to a PENDING slice of steps: the slice
     must have EXACTLY ONE terminal step (no step in the slice depends on it) and that
@@ -241,8 +249,7 @@ def validate_pic_terminal(steps: tuple[TeamStepPlan, ...], pic_id: str) -> None:
     step has no new dependents by construction (`_AMEND_SYSTEM` forbids referencing
     frozen ids), so including frozen rows would make every amend fail with multiple
     terminals. Blank `pic_id` never reaches here (caller skips — no-PIC task)."""
-    dep_targets = {d for s in steps for d in s.deps}
-    terminals = [s for s in steps if s.step_id not in dep_targets]
+    terminals = find_terminals(steps)
     if len(terminals) != 1:
         ids = ", ".join(s.step_id for s in terminals)
         raise DecompositionError(

@@ -197,8 +197,15 @@ def _run_get_status(slots: dict[str, str]) -> str:
         finally:
             tstore.close()
         if waiting:
-            lines.append(f"\n⏳ {len(waiting)} thẻ việc nhóm đang chờ quyết định — "
-                         "xem `list_team_tasks`.")
+            # Age the oldest stall right here: a bare count reads as "some admin to
+            # do", while "cũ nhất kẹt 13 ngày" is what actually tells the CEO the
+            # queue has been ignored rather than merely filled.
+            from my_crew.agent.ops_list_team_tasks import stall_age_days
+
+            ages = [d for t in stalled if (d := stall_age_days(t)) is not None]
+            oldest = f" (cũ nhất kẹt {max(ages)} ngày)" if ages and max(ages) else ""
+            lines.append(f"\n⏳ {len(waiting)} thẻ việc nhóm đang chờ quyết định"
+                         f"{oldest} — xem `list_team_tasks`.")
     except Exception:  # noqa: BLE001 — status must render even if the team store is unavailable
         pass
     return "\n".join(lines)
@@ -212,15 +219,23 @@ def _run_search_history(slots: dict[str, str]) -> str:
     query = (slots.get("query") or "").strip()
     if not query:
         return "Cần từ khoá để tìm."
+    days_raw = (slots.get("days") or "").strip()
+    days = int(days_raw) if days_raw.isdigit() else 0
     idx = HistorySearchIndex()
     try:
         idx.sweep()
-        hits = idx.search(query)
+        hits = idx.search(query, days=days)
     finally:
         idx.close()
+    window = f" trong {days} ngày qua" if days > 0 else ""
     if not hits:
-        return f"Không tìm thấy gì về “{query}” trong lịch sử làm việc."
-    lines = [f"Tìm thấy {len(hits)} kết quả về “{query}”:"]
+        return (f"Không tìm thấy gì về “{query}”{window} trong lịch sử làm việc. "
+                "Thử từ khoá ngắn hơn, chỉ giữ nội dung cần tìm "
+                "(vd 'chi phí' thay vì cả câu hỏi).")
+    # An any-word fallback answered instead of an exact match — say so rather than
+    # letting loose hits read as a precise answer.
+    loose = " (kết quả gần đúng)" if any(h.get("matched") == "any" for h in hits) else ""
+    lines = [f"Tìm thấy {len(hits)} kết quả về “{query}”{window}{loose}:"]
     for h in hits:
         where = (f"việc {h['ref'].split(':')[0][:12]}" if h["source"] == "step"
                  else "nhật ký hành động")
@@ -508,7 +523,12 @@ OPS_COMMANDS: dict[str, dict] = {
         "example": "tuần trước team làm gì",
         "slots": {
             "query": {"prompt": "Tìm gì trong lịch sử làm việc?", "required": True,
-                      "max_len": 120},
+                      "max_len": 120,
+                      "hint": "chỉ từ khoá nội dung, bỏ phần thời gian "
+                              "(vd 'agenda' — 'tuần trước' điền vào days)"},
+            "days": {"prompt": "Giới hạn trong bao nhiêu ngày qua (tuỳ chọn)?",
+                     "required": False, "max_len": 3, "pattern": r"[0-9]+",
+                     "hint": "chỉ con số ngày (vd '7')"},
         },
         "run": _run_search_history,
     },

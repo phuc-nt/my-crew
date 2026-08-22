@@ -40,6 +40,7 @@ from my_crew.agent.task_decomposition import (
     DecompositionError,
     fanout_gap,
     fanout_split,
+    find_terminals,
     parse_decomposed_task,
     validate_decomposition,
 )
@@ -152,6 +153,34 @@ def parse_pic_prefix(brief: str) -> tuple[str, str]:
     return handle, rest
 
 
+def _repair_terminal_assignee(task, staff_ids: set[str], pic_requested: str):
+    """Hand the final synthesis step back to the PIC when the model gave it away.
+
+    The prompt already states the rule in bold and the model still breaks it, so
+    every violation used to cost a full re-prompt. Reassigning is the whole fix: the
+    DAG shape, the step list and every other assignment stay put, and the PIC owning
+    the terminal step is exactly what the invariant demands. Only the unambiguous
+    case is repaired — with several terminals, *which* one is final is a judgement
+    about the work, so that still goes back to the model. Best-effort: the validator
+    downstream stays the only gate.
+    """
+    pic = pic_requested or task.pic_id
+    if not pic or pic not in staff_ids:
+        return task
+    terminals = find_terminals(task.steps)
+    if len(terminals) != 1 or terminals[0].assigned_to == pic:
+        return task
+    terminal = terminals[0]
+    logger.info(
+        "assign_team_task: code-side repair — terminal step [%s] reassigned %s → PIC %s",
+        terminal.step_id, terminal.assigned_to, pic,
+    )
+    return task.model_copy(update={"steps": tuple(
+        s.model_copy(update={"assigned_to": pic}) if s.step_id == terminal.step_id else s
+        for s in task.steps
+    )})
+
+
 def _decompose_with_retries(
     brief: str, staff: list[tuple[str, str]], pic_requested: str = "",
 ) -> tuple:
@@ -182,6 +211,8 @@ def _decompose_with_retries(
             total_cost += result.cost_usd
         try:
             task = parse_decomposed_task(result.content)
+            task = _repair_terminal_assignee(
+                task, {a for a, _ in staff}, pic_requested)
             task = validate_decomposition(
                 task, staff_ids={a for a, _ in staff},
                 pic_id=pic_requested if pic_requested else None,

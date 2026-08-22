@@ -575,3 +575,27 @@ def test_amend_prompt_pins_flags_in_example_schema():
     assert '"needs_shell":false' in _AMEND_SYSTEM
     assert '"external_write":false' in _AMEND_SYSTEM
     assert '"acceptance"' in _AMEND_SYSTEM
+
+
+def test_find_terminals_reads_the_plan_shape():
+    from my_crew.agent.task_decomposition import TeamStepPlan, find_terminals
+
+    linear = (
+        TeamStepPlan(step_id="a", title="t", assigned_to="x"),
+        TeamStepPlan(step_id="b", title="t", assigned_to="x", deps=("a",)),
+    )
+    assert [s.step_id for s in find_terminals(linear)] == ["b"]
+    # diamond: two branches fanning back into one final step
+    diamond = (
+        TeamStepPlan(step_id="root", title="t", assigned_to="x"),
+        TeamStepPlan(step_id="l", title="t", assigned_to="x", deps=("root",)),
+        TeamStepPlan(step_id="r", title="t", assigned_to="x", deps=("root",)),
+        TeamStepPlan(step_id="end", title="t", assigned_to="x", deps=("l", "r")),
+    )
+    assert [s.step_id for s in find_terminals(diamond)] == ["end"]
+    # parallel branches that never join leave several terminals
+    split = (
+        TeamStepPlan(step_id="one", title="t", assigned_to="x"),
+        TeamStepPlan(step_id="two", title="t", assigned_to="x"),
+    )
+    assert {s.step_id for s in find_terminals(split)} == {"one", "two"}

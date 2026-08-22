@@ -351,3 +351,91 @@ def test_decompose_falls_back_to_code_side_fanout_when_the_model_never_splits(
     fin = next(s for s in task.steps if s.step_id == "finalize")
     assert set(fin.deps) == {s.step_id for s in subs}
     assert cost == pytest.approx(0.001 * mod._MAX_DECOMPOSE_ATTEMPTS)
+
+
+def test_decompose_repairs_a_terminal_step_handed_to_the_wrong_agent(monkeypatch):
+    """Live UAT shape: the prompt states the PIC-terminal rule and the model still
+    assigns the final synthesis elsewhere. Reassigning is a code-side fix, so the
+    assign must succeed on the FIRST completion instead of burning re-prompts."""
+    import json
+
+    plan = json.dumps({
+        "pic_id": "agent-a",
+        "steps": [
+            {"step_id": "research", "title": "Tra cứu", "assigned_to": "agent-b",
+             "deps": []},
+            {"step_id": "finalize", "title": "Tổng hợp báo cáo",
+             "assigned_to": "agent-b", "deps": ["research"]},
+        ],
+    })
+    calls = []
+
+    class _Llm:
+        def complete(self, messages, **_kw):
+            calls.append(messages)
+            return SimpleNamespace(content=plan, cost_usd=0.001)
+
+    monkeypatch.setattr(mod, "_build_llm", lambda: (_Llm(), None))
+
+    task, cost = mod._decompose_with_retries(
+        "Tóm tắt chi phí", [("agent-a", "office"), ("agent-b", "office")])
+
+    assert len(calls) == 1  # no retry burned on a violation code can fix
+    assert cost == pytest.approx(0.001)
+    fin = next(s for s in task.steps if s.step_id == "finalize")
+    assert fin.assigned_to == "agent-a"  # handed back to the PIC
+    # everything else the model decided stays exactly as it was
+    assert next(s for s in task.steps if s.step_id == "research").assigned_to == "agent-b"
+
+
+def test_decompose_repair_honours_the_ceo_named_pic_over_the_model(monkeypatch):
+    import json
+
+    plan = json.dumps({
+        "pic_id": "agent-b",  # the model's own pick loses to the CEO's @-name
+        "steps": [
+            {"step_id": "research", "title": "Tra cứu", "assigned_to": "agent-b",
+             "deps": []},
+            {"step_id": "finalize", "title": "Tổng hợp", "assigned_to": "agent-b",
+             "deps": ["research"]},
+        ],
+    })
+
+    class _Llm:
+        def complete(self, messages, **_kw):
+            return SimpleNamespace(content=plan, cost_usd=0.001)
+
+    monkeypatch.setattr(mod, "_build_llm", lambda: (_Llm(), None))
+
+    task, _cost = mod._decompose_with_retries(
+        "Tóm tắt chi phí", [("agent-a", "office"), ("agent-b", "office")],
+        pic_requested="agent-a")
+
+    assert next(s for s in task.steps if s.step_id == "finalize").assigned_to == "agent-a"
+
+
+def test_decompose_leaves_an_ambiguous_multi_terminal_plan_to_the_model(monkeypatch):
+    """Which of several terminals is 'the' final step is a judgement about the work,
+    not a mechanical fix — that violation still goes back through the retry loop."""
+    import json
+
+    plan = json.dumps({
+        "pic_id": "agent-a",
+        "steps": [
+            {"step_id": "one", "title": "Nhánh 1", "assigned_to": "agent-b", "deps": []},
+            {"step_id": "two", "title": "Nhánh 2", "assigned_to": "agent-b", "deps": []},
+        ],
+    })
+    calls = []
+
+    class _Llm:
+        def complete(self, messages, **_kw):
+            calls.append(messages)
+            return SimpleNamespace(content=plan, cost_usd=0.001)
+
+    monkeypatch.setattr(mod, "_build_llm", lambda: (_Llm(), None))
+
+    with pytest.raises(mod.DecompositionError):
+        mod._decompose_with_retries(
+            "Tóm tắt chi phí", [("agent-a", "office"), ("agent-b", "office")])
+    assert len(calls) == mod._MAX_DECOMPOSE_ATTEMPTS

@@ -206,11 +206,26 @@ class HistorySearchIndex:
                limit: int = 8) -> list[dict]:
         """Top matches, newest-first among rank ties. Each hit carries its source ref
         so the caller can cite (task/step or audit ts). The raw query is escaped into
-        quoted FTS5 terms — MATCH syntax from the caller is data, not operators."""
+        quoted FTS5 terms — MATCH syntax from the caller is data, not operators.
+
+        All words must match (FTS5's implicit AND). A conversational question carries
+        words the corpus never contains ("tuần trước team làm gì"), so an all-words
+        miss falls back to any-word matching ranked by relevance: a loose hit beats
+        the empty answer the CEO used to get. Hits from that pass carry
+        `matched="any"` so callers can say the results are approximate."""
         terms = [t.replace('"', '""') for t in str(query).split() if t.strip()]
         if not terms:
             return []
-        match = " ".join(f'"{t}"' for t in terms)
+        hits = self._match(" ".join(f'"{t}"' for t in terms),
+                           days=days, agent=agent, limit=limit, matched="all")
+        if not hits and len(terms) > 1:
+            hits = self._match(" OR ".join(f'"{t}"' for t in terms),
+                               days=days, agent=agent, limit=limit, matched="any")
+        return hits
+
+    def _match(self, match: str, *, days: int, agent: str, limit: int,
+               matched: str) -> list[dict]:
+        """One FTS5 MATCH pass. `match` is already-escaped query syntax."""
         sql = ("SELECT snippet(search_index, 0, '»', '«', '…', 24), source, ref,"
                " agent_id, ts FROM search_index WHERE search_index MATCH ?")
         params: list = [match]
@@ -230,6 +245,6 @@ class HistorySearchIndex:
             return []
         return [
             {"excerpt": r[0][:500], "source": r[1], "ref": r[2],
-             "agent_id": r[3], "ts": r[4]}
+             "agent_id": r[3], "ts": r[4], "matched": matched}
             for r in rows
         ]

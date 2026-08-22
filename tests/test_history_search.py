@@ -118,8 +118,12 @@ def test_search_escapes_fts_syntax_and_caps_results(wired):
     idx = HistorySearchIndex()
     try:
         idx.sweep()
-        # raw FTS operators/quotes must be treated as data, not syntax
-        assert idx.search('agenda" OR NEAR(') == []
+        # raw FTS operators/quotes must be treated as data, not syntax: the query
+        # runs without an OperationalError and the operator words match nothing on
+        # their own, so only the real word can pull a hit (via the any-word pass).
+        rough = idx.search('agenda" OR NEAR(')
+        assert all(h["matched"] == "any" for h in rough)
+        assert idx.search('" OR NEAR(') == []
         assert idx.search("   ") == []
         hit = idx.search("agenda")[0]
         assert len(hit["excerpt"]) <= 500
@@ -135,6 +139,35 @@ def test_agent_and_days_filters(wired):
         assert idx.search("agenda", agent="content")
         assert idx.search("agenda", agent="ai-khac") == []
         assert idx.search("agenda", days=36500)
+    finally:
+        idx.close()
+
+
+def test_all_words_wins_before_any_word_fallback(wired):
+    _seed_step(wired)
+    idx = HistorySearchIndex()
+    try:
+        idx.sweep()
+        # every word present → exact pass answers, fallback never runs
+        exact = idx.search("chốt agenda")
+        assert exact and all(h["matched"] == "all" for h in exact)
+        # a conversational question carries words the corpus lacks; the CEO still
+        # gets the relevant rows instead of an empty answer
+        loose = idx.search("tuần trước team chốt agenda gì")
+        assert loose and all(h["matched"] == "any" for h in loose)
+        # nothing relevant at all stays empty in both passes
+        assert idx.search("zzz-khong-co qqq-khong-co") == []
+    finally:
+        idx.close()
+
+
+def test_any_word_fallback_respects_filters(wired):
+    _seed_step(wired)
+    idx = HistorySearchIndex()
+    try:
+        idx.sweep()
+        assert idx.search("tuần trước agenda gì", agent="content")
+        assert idx.search("tuần trước agenda gì", agent="ai-khac") == []
     finally:
         idx.close()
 
@@ -167,4 +200,28 @@ def test_ops_command_search_history(wired):
     _seed_step(wired)
     reply = spec["run"]({"query": "agenda"})
     assert "Tìm thấy" in reply and "Kết quả" in reply
-    assert "Không tìm thấy" in spec["run"]({"query": "zzz-khong-co"})
+    # a miss now coaches the CEO toward a narrower query instead of dead-ending
+    miss = spec["run"]({"query": "zzz-khong-co"})
+    assert "Không tìm thấy" in miss and "từ khoá ngắn hơn" in miss
+
+
+def test_ops_command_search_history_days_slot(wired):
+    from my_crew.agent.ops_catalog import OPS_COMMANDS
+
+    spec = OPS_COMMANDS["search_history"]
+    assert spec["slots"]["days"]["required"] is False
+    _seed_step(wired)
+    reply = spec["run"]({"query": "agenda", "days": "7"})
+    assert "7 ngày qua" in reply
+    # the seeded step is older than a week, so the window really filters
+    assert "Không tìm thấy" in reply
+    assert "Tìm thấy" in spec["run"]({"query": "agenda", "days": "36500"})
+
+
+def test_ops_command_search_history_flags_loose_results(wired):
+    from my_crew.agent.ops_catalog import OPS_COMMANDS
+
+    _seed_step(wired)
+    reply = OPS_COMMANDS["search_history"]["run"](
+        {"query": "tuần trước team chốt agenda gì"})
+    assert "Tìm thấy" in reply and "kết quả gần đúng" in reply

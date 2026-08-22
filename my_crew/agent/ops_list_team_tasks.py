@@ -10,6 +10,8 @@ the CEO (stalled / draft awaiting confirm). Pure store reads — no LLM, no writ
 
 from __future__ import annotations
 
+import datetime as _dt
+
 #: Status → CEO-facing label. `planning` drafts and `stalled` tasks are the two
 #: "waiting on a decision" states the listing must make impossible to miss.
 _STATUS_LABELS = {
@@ -19,6 +21,28 @@ _STATUS_LABELS = {
     "stalled": "BỊ DỪNG — chờ xử lý",
     "done": "xong",
 }
+
+
+def stall_age_days(task) -> int | None:
+    """Whole days since this task last did anything, or None if that is unknowable.
+
+    A stalled card that shows no age reads the same on day one and day ten, which is
+    how a fortnight-old test leftover ends up sitting next to real work in the same
+    "waiting on you" count. There is no stall timestamp to read (`escalated_at` is
+    unset on stalled tasks), so the last step heartbeat stands in for "last activity",
+    falling back to when the task was created if no step ever ran.
+    """
+    stamps = [s.last_seen for s in task.steps if s.last_seen]
+    latest = max(stamps) if stamps else getattr(task, "created_at", "")
+    if not latest:
+        return None
+    try:
+        when = _dt.datetime.fromisoformat(latest)
+    except ValueError:
+        return None
+    if when.tzinfo is None:  # step heartbeats are written without an offset
+        when = when.replace(tzinfo=_dt.UTC)
+    return max(0, (_dt.datetime.now(_dt.UTC) - when).days)
 
 
 def run_list_team_tasks(slots: dict[str, str]) -> str:
@@ -51,6 +75,10 @@ def run_list_team_tasks(slots: dict[str, str]) -> str:
         # invisible-done — the CEO must see that the result exists but was not posted.
         if t.status == "done" and t.delivery_status in ("pending", "failed"):
             label = "xong — CHƯA BÁO ĐƯỢC kết quả"
+        if t.status == "stalled":
+            age = stall_age_days(t)
+            if age is not None:
+                label += f" (kẹt {age} ngày)" if age else " (kẹt từ hôm nay)"
         if t.status in ("planning", "stalled"):
             waiting += 1
         retro = f"{done}/{len(t.steps)} bước"

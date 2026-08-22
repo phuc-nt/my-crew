@@ -4,6 +4,8 @@ artifact writes gated on `status == "stalled"`)."""
 
 from __future__ import annotations
 
+import datetime as _dt
+
 import pytest
 
 from my_crew.agent.ops_stalled_task import (
@@ -566,3 +568,50 @@ def test_retry_keeps_assignee_when_no_capable_replacement(tmp_path, monkeypatch)
         assert s1.status == "pending"
     finally:
         store.close()
+
+
+def test_list_team_tasks_ages_a_stalled_card(tmp_path):
+    """A stall with no age reads identically on day one and day thirteen — which is
+    how weeks-old leftovers keep sitting in the same "waiting on you" count as real
+    work."""
+    from my_crew.agent.ops_list_team_tasks import run_list_team_tasks
+
+    _mk_review_stalled_task(tmp_path)  # heartbeats are from just now
+
+    assert "kẹt từ hôm nay" in run_list_team_tasks({})
+
+    store = _open_store(tmp_path)
+    try:
+        store._conn.execute(
+            "UPDATE team_steps SET last_seen = ? WHERE task_id = 't1'",
+            ((_dt.datetime.now(_dt.UTC) - _dt.timedelta(days=13)).isoformat(),))
+        store._conn.commit()
+    finally:
+        store.close()
+
+    assert "kẹt 13 ngày" in run_list_team_tasks({})
+
+
+def test_stall_age_falls_back_to_creation_when_no_step_ever_ran(tmp_path):
+    """The shape 4 of 6 live stalled cards are in: the task stalled while its step sat
+    `pending`, so there is no heartbeat anywhere to date it from."""
+    from my_crew.agent.ops_list_team_tasks import stall_age_days
+
+    store = _open_store(tmp_path)
+    try:
+        store.create_task(task_id="t9", title="Chưa chạy", original_request="x",
+                          assigned_by="ceo")
+        steps = [{"step_id": "s1", "title": "thu thập", "assigned_to": "agent-a",
+                  "deps": []}]
+        store.set_plan("t9", steps, _content_hash(steps))
+        store._conn.execute(
+            "UPDATE team_tasks SET created_at = ? WHERE id = 't9'",
+            ((_dt.datetime.now(_dt.UTC) - _dt.timedelta(days=6)).isoformat(),))
+        store.set_task_status("t9", "stalled")
+        store._conn.commit()
+        task = store.get("t9")
+    finally:
+        store.close()
+
+    assert all(s.last_seen is None for s in task.steps)
+    assert stall_age_days(task) == 6
