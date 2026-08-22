@@ -1,13 +1,9 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-08-19 — as-built sau arc v88 "redesign web FE"** (6 phase, commit `217970f`,
-> chi tiết `journals/260819-v88-web-fe-redesign-5-hub.md`): IA 5 hub (`/chat` màn nhà ·
-> `/office` · `/work` · `/team` · `/system`), mỗi màn cũ thành tab có URL riêng (`?tab=`);
-> code chuyển sang `web/src/features/<hub>/`; tầng dữ liệu TanStack Query với `query-keys.ts`
-> là factory key duy nhất + cầu SSE→invalidate; bỏ `AgentProvider` + `PendingApprovalsProvider`;
-> 21 redirect giữ mọi URL cũ còn resolve. Entry bundle 540.05→475.37 kB (cổng ≤560).
-> Cổng: 3538 BE (1 skipped) · 344 vitest · 28 e2e playwright · tsc/ruff sạch.
+> Status: **2026-08-21 — as-built sau v91 "UX real-use journeys"** (5 phase + vòng e2e full-flow tới `9d586e2`,
+> chi tiết `journals/260820-v91-ux-real-use-journeys.md`): cold-start hardening · dry-run UX visibility · one-click unstick + task control · agent config forms round-trip · assign + manage quick wins. Trên nền v88 web FE redesign (IA 5 hub với `/chat` `/office` `/work` `/team` `/system`, mỗi cũ → tab URL; TanStack Query `query-keys.ts` duy nhất; SSE→invalidate; 21 redirect). Entry bundle 475.37 kB (cổng ≤560).
+> Cổng: 3690 BE (1 skipped) · 406 vitest (59 file) · 44 e2e playwright (39 chromium + 5 mobile) · tsc/ruff sạch.
 > Arc trước — **v74 "tốc độ đa-agent" 08-08→08-09** (chi tiết
 > `journals/260808-v74-multi-agent-speed.md`, 7 vòng benchmark sống): tier theo bước
 > `needs_web` (bước không-web + review row → native one-shot; split-sub kế thừa cờ cha);
@@ -559,8 +555,8 @@ registry.yaml     # [NEW P3] agents: [{id, enabled}]
   delivery→mirror), chỉ 2 biên bị double (LlmClient.complete → ScriptedLlm,
   telegram_write.api_call → outbox); trace JSONL per-scenario. Hướng dẫn vận hành +
   viết scenario mới: `docs/fullflow-testing-guide.md`.
-- **Unit tests**: `uv run pytest` — ~2344 backend tests pass (M1–M6, M19, M27–M30 + v31–v50 coverage: pack/dispatch/red-line/office/web-search injection, per-step routing, audit actor, sandbox/prepull, MCP pool, onboarding).
-- **Frontend tests**: `vitest` — 200 tests (3D/office views, template-picker, team components).
+- **Unit tests**: `uv run pytest` — 3690 backend tests pass (1 skipped) (M1–M6, M19, M27–M30 + v31–v91 coverage: pack/dispatch/red-line/office/web-search injection, per-step routing, audit actor, sandbox/prepull, MCP pool, onboarding, team-task journey, agent config round-trip, dry-run UX).
+- **Frontend tests**: `vitest run` — 406 tests (59 file, 3D/office views, template-picker, team components, TanStack Query hook fixtures).
 - **Linting**: `uv run ruff check src tests` — clean.
 - **Byte-identity**: pm-pack output (report text, Slack mrkdwn, Confluence XHTML) diff vs pre-v3 = empty (2026-06-30).
 - **E2E Red-line suite** (M5 verified live, 2026-06-30): pack allowlist loaded; Lớp A hard-deny refuses destructive unplugged tools; default-DENY preserves invariant. `default` profile (no domain field) routes to pm-pack; M1-style e2e (Jira read, Confluence create, Slack post) re-runs without code change.
@@ -623,8 +619,7 @@ gần nhất: `agent-desk` 900 kB (94% `three`+r3f, chỉ sau `/office`) · `cha
 `agent-detail-page` 23 kB · `office-page` 20 kB · `office-canvas` 19 kB · `task-detail-page`
 3.5 kB. Dọn kèm: 300 entry dictionary, 66 rule CSS, 10 file chết.
 
-**Cổng.** vitest 344/344 (47 file) · playwright 28/28 · `npx tsc -b` sạch · BE 3538 passed,
-1 skipped.
+**Cổng.** vitest 406/406 (59 file) · playwright 44/44 (39 chromium + 5 mobile) · `npx tsc -b` sạch · BE 3690 passed, 1 skipped.
 
 **Đổi mật khẩu web (v90).** Endpoint `POST /api/auth/change-password` (`my_crew/server/routes_auth_password.py`) ghi phía BE. Giao diện ở tab Cài đặt Hub Hệ thống (`web/src/features/system/change-password-box.tsx`). Thiết kế: đổi mật khẩu xoay luôn `WEB_SESSION_SECRET` nên **mọi phiên đăng nhập bị đá ra** (kể cả phiên hiện tại) — đây là chủ ý để cưỡng chế login lại an toàn. UI nút "Về màn đăng nhập". Tối thiểu 6 ký tự, phải khác mật khẩu cũ.
 

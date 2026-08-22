@@ -49,9 +49,11 @@
 - Test trước khi push. KHÔNG ignore test fail để build xanh.
 - KHÔNG fake data/mock để giả pass. Mock chỉ dùng để **cô lập external API** trong unit test, phải rõ ràng là mock.
 - Tool layer thiết kế để mock được (cho test không cần API thật).
-- Sửa hành vi pipeline giao việc (intake/decompose/tick/review/delivery) → chạy
-  `tests/fullflow/` và thêm/cập nhật scenario nếu hành vi user-facing đổi
-  (guide: `docs/fullflow-testing-guide.md`).
+- **Backend fullflow** — sửa hành vi pipeline giao việc (intake/decompose/tick/review/delivery) → chạy `tests/fullflow/` và thêm/cập nhật scenario nếu hành vi user-facing đổi (guide: `docs/fullflow-testing-guide.md`).
+- **Frontend e2e fixture** — `web/e2e/support/mock-api.ts` là mock chung cho toàn bộ `/api`.
+  Thêm route BE mà e2e chạm tới → phải mock luôn, và gọi `expectNoUnmockedRoutes(mock)` cuối
+  test. Lý do: route thiếu mock chỉ log `[mock-api] UNMOCKED` ra console, app vẫn render như
+  chưa từng gọi nên test vẫn xanh — gap `/api/agents/{id}/band` sống sót nhiều vòng đúng kiểu đó.
 - Chạy compile/import check sau khi sửa code.
 
 ## Git
