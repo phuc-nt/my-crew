@@ -6,6 +6,7 @@ the roster gate on reassign, and the degrade-to-give_up paths — all against
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -303,6 +304,58 @@ def test_give_up_is_attempt_guarded_so_it_cannot_clobber_a_newer_attempt(tmp_pat
     _give_up(_deps(store), task, stale_step, "hết cách")
 
     # The newer attempt is still running — the stale ruling did not kill it.
+    assert store.get_step("t1", "s1").status == "running"
+
+
+def test_give_up_still_terminates_a_step_whose_lease_was_released_by_an_earlier_retry(
+    tmp_path, caplog,
+):
+    """A `stalled` task must never keep a `pending` step.
+
+    `_retry` clears attempt_id via `reset_step_to_pending`, so a later `_give_up` in the
+    same decision sequence guards on a lease the row no longer carries and its write
+    matches nothing. That silent miss is what produced live tasks stuck `stalled` with a
+    dispatchable `pending` step that `retry_stalled_step` could not rescue.
+    """
+    store = _stuck_store(tmp_path)
+    task = store.get("t1")
+    stale_step = next(s for s in task.steps if s.step_id == "s1")
+    assert stale_step.attempt_id  # the snapshot names a lease...
+    store.reset_step_to_pending("t1", "s1")  # ...which this releases.
+
+    from my_crew.agent.coordinator_nodes.stuck_decision import _give_up
+
+    with caplog.at_level(logging.WARNING):
+        _give_up(_deps(store), task, stale_step, "hết cách")
+
+    assert store.get_step("t1", "s1").status == "failed"
+    # The recovery worked, so nothing is escalated to the operator.
+    assert "could not terminate step" not in caplog.text
+    assert "matched no row" not in caplog.text
+
+
+def test_a_terminal_write_that_matches_no_row_is_logged(tmp_path, caplog):
+    """A dropped terminal write leaves a step alive under a task that moved on. The
+    boolean was ignored at every call site, so the store itself says so."""
+    store = _stuck_store(tmp_path)
+    store.reset_step_to_pending("t1", "s1")
+
+    with caplog.at_level(logging.WARNING):
+        assert store.mark_failed("t1", "s1", attempt_id="an-attempt-nobody-holds") is False
+
+    assert "matched no row" in caplog.text
+    assert "s1" in caplog.text
+    assert store.get_step("t1", "s1").status == "pending"
+
+
+def test_the_pending_only_repair_cannot_kill_a_step_that_got_re_reserved(tmp_path):
+    """`mark_failed_if_pending` drops the attempt guard, so `only_if_status` is the only
+    thing keeping it off a live worker's row."""
+    store = _stuck_store(tmp_path)
+    store.reset_step_to_pending("t1", "s1")
+    store.reserve_step("t1", "s1")
+
+    assert store.mark_failed_if_pending("t1", "s1") is False
     assert store.get_step("t1", "s1").status == "running"
 
 

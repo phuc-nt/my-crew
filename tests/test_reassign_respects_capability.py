@@ -66,7 +66,10 @@ class _Store:
         pass
 
     def mark_failed(self, _task_id, step_id, *_a, **_k):
+        # Returns True like the real store: the caller reads this to detect a write
+        # that matched no row, and a falsy stand-in would send it down the repair path.
         self.failed.append(step_id)
+        return True
 
     def set_delivery(self, *_a, **_k):
         pass

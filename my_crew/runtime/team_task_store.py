@@ -695,6 +695,31 @@ class TeamTaskStore:
         self._conn.commit()
         return updated
 
+    def _terminal_write(self, task_id: str, step_id: str, status: str, *,
+                         attempt_id: str | None, quiet: bool = False, **kwargs) -> bool:
+        """One terminal status write, with the no-op made audible.
+
+        Every `mark_*` below is the LAST thing that happens to a step, so a write that
+        silently matches no row leaves the step alive in a task that has already moved
+        on — a `stalled` task holding a `pending` step is exactly that hybrid, and it
+        went unnoticed because the boolean was dropped at every call site. The guard
+        doing its job (a concurrent re-reservation) and the guard misfiring (a stale
+        snapshot's attempt_id) are indistinguishable from here, so this logs rather
+        than raises; callers that can repair the miss check the return value and pass
+        `quiet=True` so their own recovery attempt does not log a miss they handle.
+        """
+        updated = _steps.set_step_status(
+            self._conn, task_id, step_id, status, attempt_id=attempt_id, **kwargs,
+        )
+        self._conn.commit()
+        if not updated and not quiet:
+            logger.warning(
+                "team-step terminal write matched no row: task=%s step=%s status=%s "
+                "attempt_id=%s — step keeps its current status",
+                task_id, step_id, status, attempt_id or "<none>",
+            )
+        return updated
+
     def mark_done(self, task_id: str, step_id: str, *, outcome_ref: str | None = None,
                   cost_usd: float | None = None, attempt_id: str | None = None,
                   split_proposal_json: str | None = None) -> bool:
@@ -703,12 +728,10 @@ class TeamTaskStore:
         returns False (no-op) if a newer attempt has since reserved the step.
         `split_proposal_json` (v34 P4): the fan-out proposal this step delivered
         instead of content — the ticker's fanout-insert rule consumes it."""
-        updated = _steps.set_step_status(
-            self._conn, task_id, step_id, "done", outcome_ref=outcome_ref, cost_usd=cost_usd,
-            attempt_id=attempt_id, split_proposal_json=split_proposal_json,
+        return self._terminal_write(
+            task_id, step_id, "done", attempt_id=attempt_id, outcome_ref=outcome_ref,
+            cost_usd=cost_usd, split_proposal_json=split_proposal_json,
         )
-        self._conn.commit()
-        return updated
 
     def mark_needs_decision(self, task_id: str, step_id: str, *,
                             outcome_ref: str | None = None,
@@ -723,22 +746,38 @@ class TeamTaskStore:
         nothing to read. Downstream steps do not treat it as a satisfied dependency, so
         an unacceptable result never becomes another step's input.
         """
-        updated = _steps.set_step_status(
-            self._conn, task_id, step_id, "needs_decision", outcome_ref=outcome_ref,
-            cost_usd=cost_usd, attempt_id=attempt_id,
+        return self._terminal_write(
+            task_id, step_id, "needs_decision", attempt_id=attempt_id,
+            outcome_ref=outcome_ref, cost_usd=cost_usd,
         )
-        self._conn.commit()
-        return updated
 
     def mark_failed(self, task_id: str, step_id: str, *, outcome_ref: str | None = None,
-                     cost_usd: float | None = None, attempt_id: str | None = None) -> bool:
-        """Mark a step failed. Same `attempt_id` no-op guard as `mark_done`."""
-        updated = _steps.set_step_status(
-            self._conn, task_id, step_id, "failed", outcome_ref=outcome_ref, cost_usd=cost_usd,
-            attempt_id=attempt_id,
+                     cost_usd: float | None = None, attempt_id: str | None = None,
+                     quiet: bool = False) -> bool:
+        """Mark a step failed. Same `attempt_id` no-op guard as `mark_done`.
+
+        `quiet` suppresses the no-op warning for the one caller that recovers from a
+        guard miss itself (`stuck_decision._give_up`) — it retries via
+        `mark_failed_if_pending` and logs only if that fails too.
+        """
+        return self._terminal_write(
+            task_id, step_id, "failed", attempt_id=attempt_id, outcome_ref=outcome_ref,
+            cost_usd=cost_usd, quiet=quiet,
         )
-        self._conn.commit()
-        return updated
+
+    def mark_failed_if_pending(self, task_id: str, step_id: str) -> bool:
+        """Terminate a step that is `pending` — no attempt guard, by design.
+
+        The recovery path for `mark_failed`'s guard matching nothing because the row
+        was RELEASED rather than re-reserved: `reset_step_to_pending` clears attempt_id,
+        so a caller holding a pre-reset snapshot guards on a lease that no longer
+        exists. A pending row has no worker in flight to clobber, so the attempt guard
+        buys nothing here; `only_if_status` supplies the atomicity instead, keeping the
+        write a clean no-op if the step got re-reserved in the meantime.
+        """
+        return self._terminal_write(
+            task_id, step_id, "failed", attempt_id=None, only_if_status="pending",
+        )
 
     def halt_step(self, task_id: str, step_id: str, *, attempt_id: str | None) -> bool:
         """Atomic running→failed for the in-flight brake (`team_task_halt`). Guarded
@@ -760,11 +799,7 @@ class TeamTaskStore:
         concurrent re-reservation (a second ticker instance, or the worker's own
         terminal write racing this one) makes this a clean no-op instead of clobbering
         a newer attempt's row. Returns True iff a row was actually updated."""
-        updated = _steps.set_step_status(
-            self._conn, task_id, step_id, "timeout", attempt_id=attempt_id
-        )
-        self._conn.commit()
-        return updated
+        return self._terminal_write(task_id, step_id, "timeout", attempt_id=attempt_id)
 
     def append_outcome(self, task_id: str, step_id: str, outcome_ref: str) -> None:
         """Record the handoff-artifact path a step produced (does not change status)."""

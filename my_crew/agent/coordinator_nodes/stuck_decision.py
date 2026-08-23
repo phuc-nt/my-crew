@@ -289,9 +289,24 @@ def _give_up(
     # read at the top of this tick, so a concurrent re-reservation (a CEO's manual
     # retry, a second ticker) must make this a clean no-op rather than clobber the
     # newer attempt's row and orphan its live worker.
-    deps.store.mark_failed(
+    if not deps.store.mark_failed(
         task.id, step.step_id, outcome_ref=step.outcome_ref, attempt_id=step.attempt_id,
-    )
+        quiet=True,
+    ):
+        # The guard matched no row. Live-worker races are not the only way that happens:
+        # a `_retry` earlier in this same decision sequence calls `reset_step_to_pending`,
+        # which CLEARS attempt_id, so `step`'s snapshot then names a lease the row no
+        # longer carries and the terminal write silently vanishes — leaving a `stalled`
+        # task holding a `pending` step, which `retry_stalled_step` cannot rescue
+        # (`_dead_steps` only matches failed/timeout) and only cancel can clear.
+        # A released row has no worker to protect, so retry unguarded but pinned to the
+        # status we are actually concluding from.
+        if not deps.store.mark_failed_if_pending(task.id, step.step_id):
+            logger.warning(
+                "team-tick: give_up could not terminate step %s/%s — it is neither on "
+                "attempt %s nor pending; leaving it as-is",
+                task.id, step.step_id, step.attempt_id or "<none>",
+            )
     deps.store.set_delivery(task.id, status="pending", summary=summary)
     deps.store.set_task_status(task.id, "stalled")
     delivered = deps.deliver_room(task, summary) is not False
