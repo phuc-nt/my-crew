@@ -36,6 +36,11 @@ from my_crew.llm.fallback_policy import INFRA_ERRORS
 
 logger = logging.getLogger(__name__)
 
+#: Bounded re-ask when the classifier's completion does not parse. One retry, not more:
+#: a genuinely ambiguous message keeps landing on `question` (the safe default) fast,
+#: while a one-off malformed completion no longer silently drops a CEO delegation.
+_MAX_CLASSIFY_ATTEMPTS = 2
+
 _CONFIRM_WORDS = frozenset({"xác nhận", "xac nhan", "đồng ý", "dong y", "ok", "duyệt",
                             "duyet", "yes", "chốt", "chot", "được", "duoc"})
 _CANCEL_WORDS = frozenset({"huỷ", "hủy", "huy", "thôi", "thoi", "không", "khong", "cancel",
@@ -119,19 +124,34 @@ def classify_ops_intent(
         for cid, spec in commands.items()
     )
     user = f"DANH SÁCH LỆNH:\n{catalog}\n\nTIN NHẮN:\n{message}"
-    try:
-        result = llm.complete(
-            [{"role": "system", "content": _INTENT_SYSTEM}, {"role": "user", "content": user}],
-            role="plan",
-        )
-        parsed = _parse_json_object(result.content)
-        parsed["_cost_usd"] = result.cost_usd
-        return parsed
-    except INFRA_ERRORS:
-        raise  # provider down ⇒ retry (hold watermark), never silently degrade
-    except Exception as exc:  # noqa: BLE001 — malformed output must never become an action
-        logger.warning("ops intent classifier fell back to question: %s", exc)
-        return {"intent": "question", "_cost_usd": None}
+    cost: float | None = None
+    for attempt in range(_MAX_CLASSIFY_ATTEMPTS):
+        try:
+            result = llm.complete(
+                [{"role": "system", "content": _INTENT_SYSTEM}, {"role": "user", "content": user}],
+                role="plan",
+            )
+            cost = _add_costs(cost, result.cost_usd)
+            parsed = _parse_json_object(result.content)
+            parsed["_cost_usd"] = cost
+            return parsed
+        except INFRA_ERRORS:
+            raise  # provider down ⇒ retry (hold watermark), never silently degrade
+        except Exception as exc:  # noqa: BLE001 — malformed output must never become an action
+            # Degrading to `question` is the right SAFE default (a parse error must never
+            # become a write), but it is the wrong answer for a TRANSIENT model slip: the
+            # CEO's delegation is silently answered instead of becoming a team task, and
+            # nothing tells them it was dropped. Observed live — a run of the delegation
+            # suite failed on the phrasing that is otherwise 3/3, purely on malformed
+            # JSON. So re-ask once before giving up, the same bounded-retry shape
+            # `assign_team_task` already uses for a malformed decomposition.
+            if attempt + 1 < _MAX_CLASSIFY_ATTEMPTS:
+                logger.warning(
+                    "ops intent classifier returned unparseable output, retrying: %s", exc,
+                )
+                continue
+            logger.warning("ops intent classifier fell back to question: %s", exc)
+            return {"intent": "question", "_cost_usd": cost}
 
 
 def extract_slot_value(

@@ -82,8 +82,33 @@ def test_confirm_accepts_natural_affirmation_and_cancel_wins(tmp_path, monkeypat
 
 @pytest.mark.parametrize("garbage", ["not json", "[1,2]", '{"intent":', ""])
 def test_classify_garbage_falls_back_to_question(garbage):
-    out = classify_ops_intent(_FakeLlm(garbage), "msg")
+    """Unparseable BOTH times ⇒ the safe default. Two items queued, not one: the
+    classifier re-asks once, and a one-item queue would let the stub's own exhaustion
+    stand in for the real fallback."""
+    out = classify_ops_intent(_FakeLlm(garbage, garbage), "msg")
     assert out["intent"] == "question"
+
+
+def test_classify_re_asks_once_when_the_first_completion_does_not_parse():
+    """A transient malformed completion must not silently swallow a delegation.
+
+    Degrading to `question` is right for a genuinely unclear message, but it is the
+    wrong answer for a model slip: the CEO's request is answered in chat instead of
+    becoming a team task, and nothing reports that it was dropped. Seen live — the
+    delegation suite failed on the phrasing that is otherwise 3/3, purely on bad JSON.
+    """
+    llm = _FakeLlm("not json at all", '{"intent":"command","command_id":"create_agent"}')
+    out = classify_ops_intent(llm, "tạo agent")
+    assert out["intent"] == "command"
+    assert out["command_id"] == "create_agent"
+
+
+def test_classify_bills_every_attempt_it_made():
+    """The retry costs a real completion — the turn must not under-report by dropping
+    the failed attempt's cost."""
+    llm = _FakeLlm("not json", '{"intent":"question"}')
+    out = classify_ops_intent(llm, "msg")
+    assert out["_cost_usd"] == pytest.approx(0.0002)
 
 
 def test_classify_reraises_infra_error():
