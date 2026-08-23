@@ -3,6 +3,51 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.13.0] — 2026-08-23
+
+Everything the v88 web app could show but not touch is now actionable: a stalled task
+can be unstuck from the board, an agent's profile and safety settings edited from its
+page, and connections/company set up without hand-editing YAML. A live UAT of the ops
+chat then surfaced three operational defects, all fixed here — including one that could
+strand a task in a state no recovery action could clear.
+
+### Added
+- **One-click unstick for stalled tasks** (REST + UI): Retry / Accept / Drop on the
+  dead step, plus Cancel for any live task, from both the Work board and the task
+  detail page. A stuck task no longer has to detour through the coordinator chat.
+  Drop and Cancel go through a confirm step; the backend's own message is surfaced
+  verbatim rather than a canned string.
+- **Agent profile and safety config forms**: edit `profile.yaml`, SOUL.md and
+  PROJECT.md from the agent page. Writes are a comment-preserving round-trip patch
+  (ruamel.yaml), so hand-written keys and comments in a profile survive a save that
+  touches an unrelated field. MEMORY.md stays read-only — the agent writes it.
+- **Connections, company and setup routes**: first-run configuration through the web
+  app instead of hand-edited YAML, plus a cold-start integrity check.
+
+### Fixed
+- **A stalled task could hold a step no recovery action could clear.** When the
+  coordinator retried a step and then gave up on it in the same decision sequence, the
+  retry released the step's attempt lease while the give-up still guarded on it — so
+  the terminal write silently matched no row and vanished. The task went `stalled`
+  while its step stayed `pending`, a hybrid `retry_stalled_step` cannot rescue (it only
+  looks for `failed`/`timeout` steps), leaving cancel as the only exit. Give-up now
+  repairs the miss by terminating the step on its actual `pending` status.
+- **Terminal step writes that match no row are now logged.** Every `mark_done` /
+  `mark_failed` / `mark_needs_decision` / `mark_timeout` returns whether it updated a
+  row, and that boolean was dropped at every call site — which is why the bug above
+  went unnoticed. A write that concludes a step and silently hits nothing now warns.
+- **History search returned nothing for ordinary multi-word questions.** A query whose
+  words do not all co-occur now falls back to matching any word, with the results
+  flagged as approximate. Asking "what did the team do last week" returned nothing
+  before this and returns flagged results now.
+- **Terminal-PIC repair and stall age**: a task whose PIC sits on an already-finished
+  step is repaired in code rather than left for the coordinator to rediscover, and
+  stall age is reported.
+- **The frontend typecheck gate was checking nothing.** `tsc --noEmit` reads the empty
+  root `tsconfig.json`, so it passed while `tsc -b` (what the build actually runs)
+  failed on 15 errors. The gate is restored and the errors fixed; the shipped bundle,
+  which had drifted 38 source files behind the committed dist, was rebuilt.
+
 ## [0.12.0] — 2026-08-19
 
 The web app rebuilt around five hubs (v88): chat is now the home screen and the way
