@@ -40,7 +40,7 @@ beforeEach(() => {
 })
 
 test('defaults to once and approve sends scope=once', async () => {
-  const approve = vi.spyOn(api, 'approve').mockResolvedValue({ pending: [], count: 0 })
+  const approve = vi.spyOn(api, 'approve').mockResolvedValue({ agent_id: 'content', pending: [] })
   setup()
   await screen.findByText('Đăng bài lên kênh ngoài')
   expect(screen.getByRole('combobox').textContent).toContain('Chỉ lần này')
@@ -49,7 +49,7 @@ test('defaults to once and approve sends scope=once', async () => {
 })
 
 test('picking always and approving sends scope=always', async () => {
-  const approve = vi.spyOn(api, 'approve').mockResolvedValue({ pending: [], count: 0 })
+  const approve = vi.spyOn(api, 'approve').mockResolvedValue({ agent_id: 'content', pending: [] })
   setup()
   await screen.findByText('Đăng bài lên kênh ngoài')
   fireEvent.change(screen.getByRole('combobox'), { target: { value: 'always' } })
@@ -58,7 +58,7 @@ test('picking always and approving sends scope=always', async () => {
 })
 
 test('picking deny and rejecting sends scope=deny', async () => {
-  const reject = vi.spyOn(api, 'reject').mockResolvedValue({ pending: [], count: 0 })
+  const reject = vi.spyOn(api, 'reject').mockResolvedValue({ agent_id: 'content', pending: [] })
   setup()
   await screen.findByText('Đăng bài lên kênh ngoài')
   fireEvent.change(screen.getByRole('combobox'), { target: { value: 'deny' } })

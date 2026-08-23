@@ -10,6 +10,7 @@
 // attempt, accept only finalizes what already exists) and fire immediately.
 import { useState } from 'react'
 import { Button } from '../../components/ui/button'
+import type { UiKey } from '../../i18n/dictionary'
 import { useLanguage } from '../../i18n/language-context'
 import {
   useAcceptStalledResult,
@@ -19,10 +20,10 @@ import {
 } from '../../api/queries/use-work-queries'
 
 interface ConfirmDialogProps {
-  titleKey: string
-  bodyKey: string
-  confirmLabelKey: string
-  busyLabelKey: string
+  titleKey: UiKey
+  bodyKey: UiKey
+  confirmLabelKey: UiKey
+  busyLabelKey: UiKey
   busy: boolean
   onConfirm: () => void
   onCancel: () => void
@@ -87,7 +88,7 @@ export function StalledTaskActions({
   const effectiveStepId = stepId || '_'
   const anyPending = retry.isPending || accept.isPending || drop.isPending || cancel.isPending
 
-  function report(err: unknown, fallbackKey: string) {
+  function report(err: unknown, fallbackKey: UiKey) {
     onError?.(err instanceof Error ? err.message : t(fallbackKey))
   }
 

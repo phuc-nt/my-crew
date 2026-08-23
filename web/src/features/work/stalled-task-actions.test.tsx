@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import { api } from '../../api/client'
+import type { TeamTaskActionResult } from '../../types'
 import { LanguageProvider } from '../../i18n/language-context'
 import { StalledTaskActions } from './stalled-task-actions'
 
@@ -104,7 +105,7 @@ test('cancel opens a confirm dialog and only calls the API after the second clic
 })
 
 test('buttons disable while a mutation is pending, guarding against a double-fire', async () => {
-  let resolveRetry: (v: unknown) => void = () => {}
+  let resolveRetry: (v: TeamTaskActionResult) => void = () => {}
   vi.spyOn(api, 'retryStalledStep').mockReturnValue(
     new Promise((resolve) => {
       resolveRetry = resolve
@@ -163,7 +164,6 @@ test('with roomId, a successful action invalidates the room artifacts (detail pa
 })
 
 test('without roomId (board card), no artifacts.room invalidation is attempted', async () => {
-  const { queryKeys } = await import('../../api/queries/query-keys')
   vi.spyOn(api, 'retryStalledStep').mockResolvedValue({
     task_id: 't1', title: 'x', status: 'open', pic_id: '', room_id: 't1', steps: [],
   })

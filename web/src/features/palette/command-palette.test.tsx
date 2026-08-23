@@ -35,7 +35,10 @@ function setup() {
 beforeEach(() => {
   vi.clearAllMocks()
   mocked.getOpsChatCommands.mockResolvedValue({
-    commands: [{ id: 'get_status', description: 'Xem trạng thái cả đội', readonly: true }],
+    commands: [
+      { id: 'get_status', description: 'Xem trạng thái cả đội', readonly: true,
+        example: 'get_status' },
+    ],
   })
   mocked.searchHistory.mockResolvedValue({ hits: [] })
   mocked.getWorkrooms.mockResolvedValue({ rooms: [] })

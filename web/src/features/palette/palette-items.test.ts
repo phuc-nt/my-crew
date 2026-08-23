@@ -62,8 +62,10 @@ describe('history hits', () => {
 
 describe('commandItems', () => {
   const commands = [
-    { id: 'get_status', description: 'Xem trạng thái cả đội', readonly: true },
-    { id: 'create_agent', description: 'Tạo một nhân sự ảo (agent) mới', readonly: false },
+    { id: 'get_status', description: 'Xem trạng thái cả đội', readonly: true,
+      example: 'get_status' },
+    { id: 'create_agent', description: 'Tạo một nhân sự ảo (agent) mới', readonly: false,
+      example: 'create_agent' },
   ]
 
   test('a command carries no destination — picking it seeds the assistant composer', () => {
