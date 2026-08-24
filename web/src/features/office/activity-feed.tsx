@@ -20,7 +20,7 @@ const FEED_TAIL = 40
 const KIND_ICON: Record<string, string> = {
   ceo: '🗣', assignment: '📋', step_status: '⚙', handoff: '✅',
   milestone: '🚩', consult: '💬', review: '🔍', external_action: '🔗',
-  step_activity: '🛠',
+  step_activity: '🛠', advisor: '👀',
 }
 
 type FeedFilter = 'all' | 'step' | 'external'
@@ -78,6 +78,8 @@ export function feedStatusClass(m: OfficeMessage): string {
     if (b.phase === 'nho-tro-giup') return 'pending'
     return 'warn' // started/working flavors
   }
+  // A concern steers the agent's next attempt; a nit is for the record only.
+  if (m.kind === 'advisor') return b.severity === 'concern' ? 'warn' : 'neutral'
   if (m.kind === 'milestone') return b.milestone === 'done' ? 'ok' : 'neutral'
   if (m.kind === 'external_action') return externalActionTone(b.outcome)
   return 'neutral'

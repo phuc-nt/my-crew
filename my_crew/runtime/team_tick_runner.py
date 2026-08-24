@@ -150,6 +150,17 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
             run_follow_up_sweep(store)
         except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
             logger.warning("team-tick: follow-up sweep failed", exc_info=True)
+        # Advisor ride-along: a second model reads what running steps have newly
+        # written and either stays silent or leaves ONE note (room note for a nit,
+        # step guidance for a concern). Off unless the coordinator's profile turns it
+        # on, and it spends an LLM call per active step — so it sits with the other
+        # hygiene sweeps, never in the dispatch path.
+        try:
+            from my_crew.runtime.advisor_sweep import run_advisor_sweep
+
+            run_advisor_sweep(store, settings)
+        except Exception:  # noqa: BLE001 — hygiene, never the tick's fate
+            logger.warning("team-tick: advisor sweep failed", exc_info=True)
         # Brake for cancelled tasks: a cancel (gateway move, follow-up auto-cancel,
         # direct store write) removes the task from dispatch, so its running workers
         # would never be polled or killed again — they'd finish on their own and keep

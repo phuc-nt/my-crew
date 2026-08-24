@@ -67,7 +67,12 @@ DEFAULT_MODEL = "deepseek/deepseek-v4-pro-0813"
 #               reflection). NOTE: the deep-agent sanitizer is deliberately NOT in
 #               this bucket — it is fail-closed and gates sandbox network access, so
 #               it stays on the fleet model regardless of cost.
-MODEL_ROLES = ("content", "review", "aggregate", "plan", "util")
+#   advisor   — the ride-along second opinion (`runtime/advisor_sweep.py`): reads a
+#               running step's transcript delta and either stays silent or emits ONE
+#               short note. Unlike the others this role wants a model that is not
+#               necessarily cheap — the whole point is a different, sharper reader
+#               than the one doing the work.
+MODEL_ROLES = ("content", "review", "aggregate", "plan", "util", "advisor")
 
 
 @dataclass(frozen=True)
@@ -163,6 +168,14 @@ class Settings:
     # `step_transcripts` is also on. STEP_ACTIVITY_FEED=false returns the office to
     # the pre-v80 "im lặng giữa hai step_status" behavior.
     step_activity_feed: bool = True
+
+    # Advisor ride-along (`runtime/advisor_sweep.py`): each team tick, read what a
+    # running step has newly written to its transcript and let a second model flag
+    # trouble the working agent cannot see from inside its own context. Default OFF —
+    # it spends an LLM call per active step per sweep, so a fleet opts in once it has
+    # seen the notes are worth the money. Requires `step_transcripts` (no transcript,
+    # nothing to advise on); the sweep is a no-op either flag off.
+    advisor_enabled: bool = False
 
     def effective_model_chain(self) -> tuple[str, ...]:
         """The chain `LlmClient.complete` walks: declared chain, or just the model."""

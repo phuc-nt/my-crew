@@ -79,3 +79,13 @@ test('step_activity in the writing phase renders the fixed writing line', () => 
   }))
   expect(line).toBe('đang viết…')
 })
+
+// The advisor's note IS its payload: the room shows the remark verbatim, so a missing
+// `message` must degrade to an empty line rather than render "undefined" at the user.
+test('advisor renders the note text itself', () => {
+  expect(messageLine(msg('advisor', {
+    task_id: 't1', step_id: 's1', severity: 'nit',
+    message: 'Hai gói không cùng hạng.',
+  }))).toBe('Hai gói không cùng hạng.')
+  expect(messageLine(msg('advisor', { task_id: 't1', severity: 'concern' }))).toBe('')
+})

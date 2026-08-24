@@ -30,6 +30,6 @@ export default defineConfig({
     setupFiles: './src/test-setup.ts',
     // Playwright specs live in e2e/ and must never run under vitest — @playwright/test
     // throws on foreign runners and fails the suite at collect time.
-    exclude: ['**/node_modules/**', 'e2e/**', 'e2e-cold-start/**'],
+    exclude: ['**/node_modules/**', 'e2e/**', 'e2e-cold-start/**', 'e2e-live/**'],
   },
 })

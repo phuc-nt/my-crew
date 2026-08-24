@@ -43,6 +43,11 @@ def _short_consult(value: object) -> str:
     return text
 
 
+#: `advisor`'s `severity` field is a closed enum — same "unknown -> drop" posture as
+#: `review`'s verdict. "concern" notes also reach the agent as step guidance; "nit"
+#: notes live only here in the room.
+_ADVISOR_SEVERITIES = frozenset({"nit", "concern"})
+
 #: `review`'s `verdict` field is a closed enum (never free text) — a value outside this
 #: set is dropped entirely rather than passed through, same "unknown -> drop" posture as
 #: an unrecognized `kind`.
@@ -65,7 +70,7 @@ def summarize_office_event(kind: str, body: dict) -> dict:
     """Project a raw office-event body to its non-PII allowlist (drop everything else).
 
     `kind` one of ceo | assignment | step_status | step_activity | handoff | milestone |
-    consult | review | external_action.
+    consult | review | external_action | advisor.
     Unknown kind -> {} (drop all).
     """
     if kind == "ceo":
@@ -178,6 +183,23 @@ def summarize_office_event(kind: str, body: dict) -> dict:
             # opaque internal UUID, same non-PII category as `step_status.attempt_id`.
             "attempt_id": _short(body.get("attempt_id")),
         }
+    if kind == "advisor":
+        # Advisor ride-along note (`runtime/advisor_sweep.py`). Unlike every other kind
+        # here, the note IS free text — a second model's short remark about work in
+        # flight is the whole product, so there is nothing structured to project it
+        # down to. What keeps it inside the same firewall posture: the advisor prompt
+        # caps it at 2 sentences, the sweep quarantines anything over
+        # `advisor_sweep.MAX_NOTE_CHARS`, and this layer re-trims to the consult tier
+        # independently of both. `severity` is a closed enum; an unknown value drops to
+        # "" rather than riding through as free text.
+        severity = _short(body.get("severity"))
+        return {
+            "task_id": _short(body.get("task_id")),
+            "step_id": _short(body.get("step_id")),
+            "step_title": _short(body.get("step_title")),
+            "severity": severity if severity in _ADVISOR_SEVERITIES else "",
+            "message": _short_consult(body.get("message")),
+        }
     if kind == "external_action":
         # v54: Action Gateway outcome bridge — every mutation that passes through
         # `ActionGateway._record` mirrors here. No-content-echo (same posture as every
@@ -222,5 +244,6 @@ VALID_KINDS = frozenset(
         "ceo", "assignment", "step_status", "handoff", "milestone", "consult", "review",
         "external_action",  # v54: Action Gateway outcome bridge
         "step_activity",  # v80 P4: live in-step tool/writing activity (ids + count only)
+        "advisor",  # ride-along second opinion on a running step (advisor_sweep.py)
     }
 )

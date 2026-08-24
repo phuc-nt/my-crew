@@ -35,6 +35,7 @@ const KIND_LABEL_KEY: Record<OfficeEventKind, UiKey> = {
   // v80 P4: live in-step activity (tool name + counter only — args/results never
   // reach the room, see office_event_projection.py's `step_activity` branch).
   step_activity: 'officeMessageLine.kindStepActivity',
+  advisor: 'officeMessageLine.kindAdvisor',
 }
 
 export function kindLabel(kind: OfficeEventKind, t: Translate = defaultT): string {
@@ -76,6 +77,11 @@ export function messageLine(m: OfficeMessage, t: Translate = defaultT): string {
         taskTitle: b.task_title ?? '', stepTitle: b.step_title ?? '', status, suffix,
       })
     }
+    case 'advisor':
+      // The note IS the payload — an advisor's whole product is its one short remark,
+      // so unlike the structured kinds there is nothing to compose here. Severity
+      // rides in the status tone (nit = neutral, concern = warn), not the text.
+      return b.message ?? ''
     case 'handoff':
       // v17: the feed is an index, not a report viewer — the FULL result lives in the
       // Outputs column (artifact viewer), so the line stays a fixed short notice.

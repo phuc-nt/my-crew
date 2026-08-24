@@ -93,6 +93,7 @@ const vi = {
   'officeMessageLine.outcomeAllow': '✓ cho phép',
   'officeMessageLine.outcomeDeny': '✗ từ chối',
   'officeMessageLine.kindStepActivity': 'Đang thao tác',
+  'officeMessageLine.kindAdvisor': 'Cố vấn',
   'officeMessageLine.stepActivityToolLine': 'đang gọi {tool} ({count})',
   'officeMessageLine.stepActivityWriting': 'đang viết…',
 
@@ -1155,6 +1156,7 @@ const en = {
   'officeMessageLine.outcomeAllow': '✓ allowed',
   'officeMessageLine.outcomeDeny': '✗ denied',
   'officeMessageLine.kindStepActivity': 'Working',
+  'officeMessageLine.kindAdvisor': 'Advisor',
   'officeMessageLine.stepActivityToolLine': 'calling {tool} ({count})',
   'officeMessageLine.stepActivityWriting': 'writing…',
 

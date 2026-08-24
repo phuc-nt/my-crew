@@ -580,6 +580,11 @@ export type OfficeEventKind =
   // runs ("content-01 đang gọi web_search (3)"). Ids + tool NAME + counter only; the
   // tool's args/results never reach the room (office_event_projection.py `step_activity`).
   | 'step_activity'
+  // Advisor ride-along: a second model reads a running step's transcript delta and
+  // leaves a short note. `severity` is a closed enum ("nit" | "concern"); `message` is
+  // the note itself, capped server-side to the consult tier
+  // (office_event_projection.py `advisor`).
+  | 'advisor'
 
 export interface OfficeEventBody {
   text?: string
@@ -642,6 +647,7 @@ export interface OfficeEventBody {
   task?: string
   step?: string
   count?: number
+  severity?: string
 }
 
 export interface OfficeMessage {

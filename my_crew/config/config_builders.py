@@ -169,6 +169,7 @@ def build_settings_from_dict(d: dict[str, Any]) -> Settings:
         reflection_transcript_evidence_max_chars=_d_int(
             d, "reflection_transcript_evidence_max_chars", 4000
         ),
+        advisor_enabled=_d_bool(d, "advisor_enabled", False),
     )
 
 
@@ -210,6 +211,7 @@ def build_settings_from_env() -> Settings:
             "reflection_transcript_evidence_max_chars": os.getenv(
                 "REFLECTION_TRANSCRIPT_EVIDENCE_MAX_CHARS"
             ),
+            "advisor_enabled": os.getenv("ADVISOR_ENABLED"),
             # Tracing is on (env side) when either the V2 flag is truthy OR an API key is
             # present — normalized to a bool so an API-key string (not a true/false word)
             # still enables. Shared helper so the worker/cli settings path and the server
