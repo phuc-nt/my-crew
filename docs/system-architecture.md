@@ -270,6 +270,35 @@ GET **không** trộn giá trị env vào payload: hiện giá trị kế thừa
 một lần Lưu vô hại ghim luôn default của fleet vào yaml riêng của agent. Không cần restart
 — tick loop và mỗi worker đọc lại profile.yaml mỗi lần dispatch.
 
+
+### 3.5e Provider registry: `provider::model` (v91)
+
+Trước v91 `LlmClient` chỉ dựng đúng MỘT client OpenAI trỏ `OPENROUTER_BASE_URL`. Nay mỗi
+entry trong chain có thể mang tiền tố `provider::model` để đi qua một endpoint
+OpenAI-compatible khác; entry trần (`org/model`) vẫn về OpenRouter y như cũ — không có
+config nào phải sửa để giữ hành vi cũ.
+
+- **Cú pháp**: tách ở `::` ĐẦU TIÊN (`llm/client.py::_resolve_entry`); id model gửi lên
+  upstream là phần SAU tiền tố — tiền tố là routing của mình, vendor không biết nó.
+  Chọn `::` vì id OpenRouter đã dùng hết `/` (org/model) và `:` (hậu tố `:free`).
+- **Registry**: `Settings.providers` = tuple `(name, base_url, api_key_env)`, khai báo ở
+  `providers:` trong company.yaml/profile.yaml (hoặc env `MY_CREW_PROVIDERS` dạng
+  `"name=base_url|API_KEY_ENV,..."`). Chỉ chứa TÊN biến môi trường, không bao giờ chứa
+  key — `_d_providers` từ chối thẳng giá trị trông giống key. Tên `openrouter` bị cấm
+  đặt lại: nó là provider ngầm của mọi entry trần, đổi nó = bẻ lái cả fleet.
+- **Client cache**: `_client_for(provider)` dựng lười và cache theo provider, nên chain
+  đi ngang nhiều vendor không dựng lại connection pool mỗi lần fallback. Header
+  `HTTP-Referer`/`X-Title` (attribution của OpenRouter) CHỈ gửi cho OpenRouter.
+- **Fallback xuyên provider**: chain `("deepseek::deepseek-chat", "org/fleet")` — vendor
+  rẻ chết thì bước vẫn xong trên fleet model, đúng ngữ nghĩa degrade-UP của v4 M9. Ghép
+  với §3.5d: `role_models: advisor: vendor::model` cho cố vấn chạy hẳn vendor khác.
+- **Lỗi**: provider lạ → nêu tên + liệt kê provider đã khai; thiếu key → nêu cả tên
+  provider LẪN tên biến env (env-name indirection nghĩa là config không nói biến tên gì,
+  thiếu một nửa thì operator không hành động được).
+- **Giới hạn có chủ đích**: chỉ endpoint OpenAI-compatible (DeepSeek, Moonshot, Groq,
+  Together, server local). API không tương thích nằm ngoài phạm vi. Chỉ provider dùng
+  API key — KHÔNG OAuth subscription (quyết định ToS ghi trong plan).
+
 ### 3.6 Action Gateway (`my_crew/actions/`, v30–v31, v67–v68 learned rules)
 `action_gateway.py` = cửa duy nhất. `hard_block.py` = Lớp A (chặn cứng, không duyệt được).
 Lớp B = phụ thuộc `safety.trust_mode` per-agent:

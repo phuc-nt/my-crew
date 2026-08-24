@@ -84,6 +84,11 @@ def build_settings_dict(yaml_doc: dict[str, Any], data_dir: Any) -> dict[str, An
     # v79 tier 3: per-role model overrides — yaml mapping wins; else env "role=model,..."
     # string; else omit (⇒ every role on the fleet model). Validated in _d_role_models.
     _put(out, "role_models", _fallback(yaml_doc.get("role_models"), "OPENROUTER_ROLE_MODELS"))
+    # v91: extra OpenAI-compatible endpoints a chain entry can name with
+    # `provider::model` — yaml mapping wins; else env "name=base_url|API_KEY_ENV,..."
+    # string; else omit (⇒ everything through OpenRouter). Validated in _d_providers,
+    # which also enforces that only env var NAMES land here, never key material.
+    _put(out, "providers", _fallback(yaml_doc.get("providers"), "MY_CREW_PROVIDERS"))
 
     # Booleans: a present YAML key wins (incl. an explicit `false`); else env; else omit.
     _put(out, "dry_run", _explicit_bool(safety, "dry_run", "DRY_RUN"))

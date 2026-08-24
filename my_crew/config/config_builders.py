@@ -18,6 +18,7 @@ public import path is `from my_crew.config.config_builders import build_*`.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -117,6 +118,101 @@ def _d_role_models(value: Any) -> tuple[tuple[str, str], ...]:
     return tuple(pairs)
 
 
+# A provider name is the prefix in `name::model`, so it must not contain `:` or `/`,
+# both of which already carry meaning in model ids. An api_key_env is an environment
+# variable NAME — the shape check is what stops a real key being pasted into yaml.
+_PROVIDER_NAME_RE = re.compile(r"[a-z0-9-]+")
+_ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]*")
+
+
+def _d_providers(value: Any) -> tuple[tuple[str, str, str], ...]:
+    """Coerce `providers` to `(name, base_url, api_key_env)` triples.
+
+    Two input shapes, mirroring `_d_role_models`: a yaml mapping
+    `{name: {base_url, api_key_env}}`, or the env string form
+    `"name=base_url|API_KEY_ENV,..."` for a fleet that configures everything through
+    .env.
+
+    Every failure here raises rather than dropping the entry, for the same reason
+    `_d_role_models` does: a provider that silently vanishes from the registry turns
+    every `provider::model` chain entry into an unknown-provider error at the first
+    LLM call, hours after the config was written.
+
+    `openrouter` is reserved — it is the implicit provider every bare `org/model`
+    entry already resolves through, and letting a config point that name somewhere
+    else would silently redirect the whole fleet.
+    """
+    if value is None or value == "" or value == {} or value == []:
+        return ()
+    triples: list[tuple[str, str, str]] = []
+    if isinstance(value, str):
+        for entry in (p.strip() for p in value.split(",")):
+            if not entry:
+                continue
+            name, sep, rest = entry.partition("=")
+            base_url, bar, api_key_env = rest.partition("|")
+            if not sep or not bar or not name.strip() or not base_url.strip():
+                raise ValueError(
+                    f"providers entry must be 'name=base_url|API_KEY_ENV', got {entry!r} "
+                    "(MY_CREW_PROVIDERS in .env)"
+                )
+            triples.append((name.strip(), base_url.strip(), api_key_env.strip()))
+    elif isinstance(value, dict):
+        for name, spec in value.items():
+            if not isinstance(spec, dict):
+                raise ValueError(
+                    f"providers[{name!r}] must be a mapping with base_url and "
+                    f"api_key_env, got {spec!r}"
+                )
+            base_url = spec.get("base_url")
+            api_key_env = spec.get("api_key_env")
+            if not isinstance(base_url, str) or not base_url.strip():
+                raise ValueError(
+                    f"providers[{name!r}].base_url must be a non-empty URL string, "
+                    f"got {base_url!r}"
+                )
+            if not isinstance(api_key_env, str) or not api_key_env.strip():
+                raise ValueError(
+                    f"providers[{name!r}].api_key_env must name an environment "
+                    f"variable, got {api_key_env!r} — put the env var NAME here, "
+                    "never the key itself"
+                )
+            triples.append((str(name).strip(), base_url.strip(), api_key_env.strip()))
+    else:
+        raise ValueError(
+            "providers must be a mapping or a 'name=base_url|API_KEY_ENV,...' string"
+        )
+
+    seen: set[str] = set()
+    for name, base_url, api_key_env in triples:
+        if name == "openrouter":
+            raise ValueError(
+                "provider name 'openrouter' is reserved — it is the implicit provider "
+                "every bare 'org/model' entry already uses; pick another name"
+            )
+        if not _PROVIDER_NAME_RE.fullmatch(name):
+            raise ValueError(
+                f"provider name {name!r} must be lowercase letters, digits and hyphens "
+                "— it is the prefix in 'name::model', so it cannot contain ':' or '/'"
+            )
+        if not base_url.startswith(("http://", "https://")):
+            raise ValueError(
+                f"providers[{name!r}].base_url must start with http:// or https://, "
+                f"got {base_url!r}"
+            )
+        if name in seen:
+            raise ValueError(f"providers declares {name!r} twice")
+        seen.add(name)
+        # An env var holding something that looks like a key rather than a NAME is the
+        # one mistake that leaks a secret into yaml, so reject the shape outright.
+        if not _ENV_NAME_RE.fullmatch(api_key_env):
+            raise ValueError(
+                f"providers[{name!r}].api_key_env must be an environment variable NAME "
+                f"(A-Z, digits, underscore), got {api_key_env!r} — never the key value"
+            )
+    return tuple(triples)
+
+
 def _d_trust_mode(value: Any) -> str:
     """Coerce/validate `trust_mode`. Absent/empty ⇒ "autonomous" (the product default).
 
@@ -145,6 +241,7 @@ def build_settings_from_dict(d: dict[str, Any]) -> Settings:
         openrouter_title=d.get("openrouter_title") or "my-crew",
         model_chain=_d_model_chain(d.get("model_chain")),
         role_models=_d_role_models(d.get("role_models")),
+        providers=_d_providers(d.get("providers")),
         dry_run=_d_bool(d, "dry_run", True),
         write_disabled=_d_bool(d, "write_disabled", False),
         trust_mode=_d_trust_mode(d.get("trust_mode")),
@@ -190,6 +287,7 @@ def build_settings_from_env() -> Settings:
             "openrouter_title": os.getenv("OPENROUTER_TITLE"),
             "model_chain": os.getenv("OPENROUTER_MODEL_CHAIN"),
             "role_models": os.getenv("OPENROUTER_ROLE_MODELS"),
+            "providers": os.getenv("MY_CREW_PROVIDERS"),
             "dry_run": os.getenv("DRY_RUN"),
             "write_disabled": os.getenv("AGENT_WRITE_DISABLED"),
             "trust_mode": os.getenv("TRUST_MODE"),

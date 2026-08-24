@@ -128,7 +128,7 @@ def test_retries_then_raises_after_budget(monkeypatch):
                     calls["n"] += 1
                     raise _timeout()
 
-    monkeypatch.setattr(cl, "_openai", lambda: _Boom())
+    monkeypatch.setattr(cl, "_client_for", lambda _p: _Boom())
     with pytest.raises(c.ProviderCallError):
         cl._call_with_retry([{"role": "user", "content": "hi"}], "x/y")
     # _MAX_RETRIES=4 → 5 total attempts; 4 sleeps between them
@@ -153,7 +153,7 @@ def test_total_wait_cap_stops_early(monkeypatch):
                 def create(**kw):
                     raise _timeout()
 
-    monkeypatch.setattr(cl, "_openai", lambda: _Boom())
+    monkeypatch.setattr(cl, "_client_for", lambda _p: _Boom())
     with pytest.raises(c.ProviderCallError):
         cl._call_with_retry([{"role": "user", "content": "hi"}], "x/y")
     assert sum(slept) <= c._RETRY_TOTAL_CAP_S  # never overran the budget
@@ -178,7 +178,7 @@ def test_malformed_body_retries_then_wraps(monkeypatch):
                     calls["n"] += 1
                     c.json.loads("<html>bad gateway</html>")
 
-    monkeypatch.setattr(cl, "_openai", lambda: _Garbage())
+    monkeypatch.setattr(cl, "_client_for", lambda _p: _Garbage())
     with pytest.raises(c.ProviderCallError):
         cl._call_with_retry([{"role": "user", "content": "hi"}], "x/y")
     assert calls["n"] == c._MAX_RETRIES + 1
@@ -201,6 +201,6 @@ def test_success_on_retry_returns(monkeypatch):
                         raise _timeout()
                     return "OK"
 
-    monkeypatch.setattr(cl, "_openai", lambda: _Flaky())
+    monkeypatch.setattr(cl, "_client_for", lambda _p: _Flaky())
     assert cl._call_with_retry([{"role": "user", "content": "hi"}], "x/y") == "OK"
     assert state["n"] == 2  # failed once, succeeded on retry

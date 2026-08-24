@@ -135,6 +135,16 @@ class Settings:
     # cost. See `model_for_role` for how an override resolves.
     role_models: tuple[tuple[str, str], ...] = ()
 
+    # Extra OpenAI-compatible endpoints a chain entry can name with `provider::model`
+    # (v91). Tuple of `(name, base_url, api_key_env)` for the same frozen/hashable
+    # reason as `role_models`. Empty (default) ⇒ every entry resolves through
+    # OpenRouter exactly as pre-v91.
+    #
+    # Only the env var NAME lives here — never the key itself — so a provider can be
+    # declared in a yaml that is safe to read, while the secret stays in the process
+    # environment. See `provider_for` / `require_provider_key`.
+    providers: tuple[tuple[str, str, str], ...] = ()
+
     # Optional web-search provider keys for the coordinator's team-task search_hook
     # (`tools/web_search_tool.py`). Both absent ⇒ `WebSearchConfig.available()` is
     # False and the hook degrades to a no-op — no crash, no key required to run.
@@ -199,6 +209,38 @@ class Settings:
                 fleet = self.effective_model_chain()
                 return (model,) + tuple(m for m in fleet if m != model)
         return self.effective_model_chain()
+
+    def provider_for(self, name: str) -> tuple[str, str]:
+        """Return `(base_url, api_key_env)` for a declared provider.
+
+        Unknown names raise rather than falling back to OpenRouter: a typo in
+        `deepsek::model` that quietly billed OpenRouter for a model it does not serve
+        would surface as a confusing upstream 404, not as the config error it is.
+        """
+        for declared, base_url, api_key_env in self.providers:
+            if declared == name:
+                return base_url, api_key_env
+        known = ", ".join(sorted(n for n, _u, _e in self.providers)) or "(none declared)"
+        raise RuntimeError(
+            f"unknown model provider {name!r} — declared providers: {known}. "
+            "Add it under `providers:` in company.yaml/profile.yaml."
+        )
+
+    def require_provider_key(self, name: str) -> str:
+        """The API key for provider `name`, read from its declared env var.
+
+        Names the provider AND the env var in the error, because the whole point of
+        env-name indirection is that the config does not say what the variable is
+        called — without both halves the operator cannot tell what to set.
+        """
+        _base_url, api_key_env = self.provider_for(name)
+        key = os.getenv(api_key_env)
+        if not key:
+            raise RuntimeError(
+                f"provider {name!r} needs API key in ${api_key_env}, which is not set. "
+                "Add it to .env."
+            )
+        return key
 
     def require_api_key(self) -> str:
         """Return the OpenRouter key, or raise a clear error if it is unset.

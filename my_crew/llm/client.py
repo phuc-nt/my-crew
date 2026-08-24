@@ -31,6 +31,13 @@ logger = logging.getLogger(__name__)
 
 # Bounded I/O: per-request timeout and a bounded retry budget for transient faults.
 _REQUEST_TIMEOUT_S = 60.0
+# v91 multi-provider: a chain entry may be prefixed `provider::model` to route it at a
+# non-OpenRouter OpenAI-compatible endpoint. `::` because OpenRouter ids already spend
+# `/` (org/model) and `:` (`:free`-style suffixes); no known model id contains `::`.
+_PROVIDER_SEP = "::"
+# The implicit provider a bare `org/model` entry resolves through — reserved in
+# `config_builders._d_providers` so a registry can never redirect it.
+_OPENROUTER = "openrouter"
 # v44: exponential backoff + full jitter + honor Retry-After, up to 4 retries. Under a team run
 # (many agents on one OpenRouter upstream) linear un-jittered retries fire in lockstep → a
 # self-inflicted 429 storm; jitter de-syncs them. TOTAL retry wall-time is capped WELL under the
@@ -125,17 +132,48 @@ class LlmClient:
     ) -> None:
         self._settings = settings
         self._budget = budget or BudgetTracker(self._settings)
-        self._client: OpenAI | None = None
+        # One SDK client per provider, built on first use. Keyed by the provider name
+        # (`_OPENROUTER` for a bare entry) so a chain that walks across providers does
+        # not rebuild a client — and so a provider whose key is unset only raises when
+        # a chain entry actually reaches it, not at construction.
+        self._clients: dict[str, OpenAI] = {}
 
-    def _openai(self) -> OpenAI:
-        """Lazily build the SDK client so non-LLM code needs no API key."""
-        if self._client is None:
-            self._client = OpenAI(
-                base_url=OPENROUTER_BASE_URL,
-                api_key=self._settings.require_api_key(),
-                timeout=_REQUEST_TIMEOUT_S,
+    def _resolve_entry(self, entry: str) -> tuple[str, str]:
+        """Split a chain entry into `(provider_name, model_id)`.
+
+        `provider::model` names a registry provider; a bare `org/model` is OpenRouter,
+        exactly as pre-v91. Splits on the FIRST `::` only, and the model id sent to the
+        API is the part after it — the prefix is routing, not part of the name upstream
+        knows.
+        """
+        provider, sep, model = entry.partition(_PROVIDER_SEP)
+        if not sep:
+            return _OPENROUTER, entry
+        if not provider or not model:
+            raise ValueError(
+                f"model entry {entry!r} is malformed — use 'provider::model' "
+                "(both halves non-empty), or a bare model id for OpenRouter"
             )
-        return self._client
+        return provider, model
+
+    def _client_for(self, provider: str) -> OpenAI:
+        """Lazily build (and cache) the SDK client for one provider.
+
+        Lazy for the same reason the single client was: non-LLM code (guardrails, graph
+        build) must run with no API key configured at all.
+        """
+        cached = self._clients.get(provider)
+        if cached is not None:
+            return cached
+        if provider == _OPENROUTER:
+            base_url = OPENROUTER_BASE_URL
+            api_key = self._settings.require_api_key()
+        else:
+            base_url, _env = self._settings.provider_for(provider)
+            api_key = self._settings.require_provider_key(provider)
+        client = OpenAI(base_url=base_url, api_key=api_key, timeout=_REQUEST_TIMEOUT_S)
+        self._clients[provider] = client
+        return client
 
     def complete(
         self,
@@ -337,17 +375,25 @@ class LlmClient:
         and a TOTAL retry-wait budget (`_RETRY_TOTAL_CAP_S`) so a stall can never overrun the
         sandbox lease. Only transient errors (`_RETRYABLE`) retry; everything else propagates.
         """
-        headers = {
-            "HTTP-Referer": self._settings.openrouter_referer,
-            "X-Title": self._settings.openrouter_title,
-        }
+        provider, model_id = self._resolve_entry(model_name)
+        # HTTP-Referer/X-Title are OpenRouter's attribution headers. Sending them to
+        # another vendor's endpoint is at best ignored and at worst rejected, so they
+        # ride only on OpenRouter calls.
+        headers = (
+            {
+                "HTTP-Referer": self._settings.openrouter_referer,
+                "X-Title": self._settings.openrouter_title,
+            }
+            if provider == _OPENROUTER
+            else {}
+        )
         last_exc: Exception | None = None
         total_slept = 0.0
         extra_kwargs: dict = {"tools": tools} if tools is not None else {}
         for attempt in range(_MAX_RETRIES + 1):
             try:
-                return self._openai().chat.completions.create(
-                    model=model_name,
+                return self._client_for(provider).chat.completions.create(
+                    model=model_id,
                     messages=messages,
                     extra_headers=headers,
                     **extra_kwargs,
