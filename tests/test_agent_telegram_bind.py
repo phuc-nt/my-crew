@@ -139,3 +139,48 @@ def test_recent_chats_uses_pasted_token_no_persist(agent_env, monkeypatch):
     assert r.json()["chats"] == [{"id": "555", "name": "ceo"}]
     # nothing persisted
     assert "TELEGRAM_BOT_TOKEN" not in agent_env["env"].read_text(encoding="utf-8")
+
+
+def test_bind_sets_ops_operator_id_so_escalation_is_routable(agent_env, monkeypatch):
+    """Binding through the UI must produce a profile that team-task assign ACCEPTS.
+
+    Assigning team work hard-blocks unless `telegram.ops_operator_id` is set and present in
+    `chat_ids`, and its refusal tells the operator to bind a bot on the Kênh tab. Nothing
+    else in the app writes that field, so a bind that omitted it made the instruction
+    unfollowable: do exactly what the error says, get the same error. Asserting on the
+    real predicate rather than the YAML keeps the two ends tied together.
+    """
+    monkeypatch.setattr("my_crew.actions.telegram_write.api_call",
+                        lambda token, method, payload=None: {"username": "acme_bot"})
+    r = _client().post("/api/agents/acme/telegram",
+                       json={"token": "123:ABC", "chat_ids": ["555"]})
+    assert r.status_code == 200
+    assert "ops_operator_id: '555'" in agent_env["saved"]["text"]
+
+    import yaml as _yaml
+
+    from my_crew.agent import ops_assign_team_task
+    from my_crew.config.config_builders import build_reporting_config_from_dict
+    from my_crew.profile.loader_mapping import build_reporting_dict
+
+    cfg = build_reporting_config_from_dict(
+        build_reporting_dict(_yaml.safe_load(agent_env["saved"]["text"]))
+    )
+    monkeypatch.setattr(ops_assign_team_task, "load_profile",
+                        lambda *a, **k: type("L", (), {"config": cfg})(), raising=False)
+    monkeypatch.setattr("my_crew.profile.loader.load_profile",
+                        lambda *a, **k: type("L", (), {"config": cfg})())
+    assert ops_assign_team_task._agent_has_operator_route("acme") is True
+
+
+def test_bind_does_not_override_an_explicit_ops_operator_id(agent_env, monkeypatch):
+    """An operator who already routes escalations to a different chat keeps that choice —
+    the default only fills a field nobody set."""
+    monkeypatch.setattr("my_crew.server.profile_editor.read_profile_files",
+                        lambda aid: {"profile": "name: acme\ndomain: pm\n"
+                                     "telegram:\n  bot_token_env: OLD\n  chat_ids:\n  - '999'\n"
+                                     "  ops_operator_id: '999'\n"})
+    monkeypatch.setattr("my_crew.actions.telegram_write.api_call",
+                        lambda token, method, payload=None: {"username": "acme_bot"})
+    _client().post("/api/agents/acme/telegram", json={"token": "123:ABC", "chat_ids": ["999"]})
+    assert "ops_operator_id: '999'" in agent_env["saved"]["text"]

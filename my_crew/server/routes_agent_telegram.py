@@ -101,6 +101,15 @@ def _add_telegram_block(agent_id: str, env_name: str, chat_ids: list[str]) -> No
     tg.setdefault("poll_minutes", 2)
     if chat_ids:
         tg["chat_ids"] = chat_ids
+        # The chat the operator designates for this bot IS the operator's own chat — that
+        # is what the UI asks for ("Chat id (DM của bạn)"). Several runtime paths refuse to
+        # act without `ops_operator_id`: assigning team work hard-blocks on it, because a
+        # multi-step task with no escalation route can get stuck unnoticed. Nothing else in
+        # the app ever writes this field, so leaving it unset made that guard unsatisfiable
+        # through the UI — its error message told the operator to bind a bot here, and doing
+        # so still left the assign blocked. Default it to the first designated chat; an
+        # explicit value already in the profile always wins.
+        tg.setdefault("ops_operator_id", chat_ids[0])
     doc["telegram"] = tg
     new_text = yaml.safe_dump(doc, sort_keys=False, allow_unicode=True)
     try:
