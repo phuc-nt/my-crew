@@ -41,6 +41,9 @@
   đánh trượt vòng 0 đúng lý do; vòng rework mới có nội dung truy được nguồn thật.
 
 ## Mở / sang sau
-- Service đang chạy là bản cài cũ, chưa mang bản vá; cần restart sau khi release.
+- ~~Service đang chạy bản cài cũ~~ — đã restart 24/8, chạy code 0.13.0, log sạch.
+  Log cũ còn lộ thêm: tiến trình Aug-19 bắn `ImportError: notify_operator_best_effort`
+  lặp ở rung 3 follow-up (bytecode cũ, hàm tồn tại trong cây mới) — bằng chứng restart
+  sau release không phải formality.
 - SMTP chưa cấu hình và chưa có kênh operator ngoài Telegram — lựa chọn cấu hình,
   không phải blocker.
