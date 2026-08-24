@@ -127,3 +127,59 @@ def test_patch_idempotent_same_value_noop_content(profiles_home):
     profile_patch.patch_profile_yaml("acme", {"safety": {"dry_run": True}})
     text2 = path.read_text(encoding="utf-8")
     assert text1 == text2
+
+
+def test_shipped_profile_template_keeps_example_blocks_above_the_key_they_document():
+    """The shipped template must not put a commented-out example block directly BELOW a
+    `key: {}` line that the web form can fill.
+
+    ruamel folds a trailing comment block into the PRECEDING key's comment token and
+    emits that token immediately after the key, so filling the key later pushes the new
+    children below those comment lines. The file still parses identically — the damage
+    is to the human reading it, who now sees the example block indented under the wrong
+    owner. Ordering the example block ABOVE the key attaches it to the following key
+    instead, which renders correctly in both states.
+
+    Guards only the keys the form can actually replace; `integrations: {}` has the same
+    shape but is not patchable through this module, so it is deliberately not listed.
+    """
+    from pathlib import Path
+
+    text = Path("profiles/default/profile.yaml").read_text(encoding="utf-8")
+    lines = text.splitlines()
+    for patchable in profile_patch._ROOT_LIKE_REPLACE_BLOCKS:
+        for i, line in enumerate(lines):
+            if not line.startswith(f"{patchable}:"):
+                continue
+            following = lines[i + 1] if i + 1 < len(lines) else ""
+            assert not following.lstrip().startswith("#"), (
+                f"`{patchable}` is followed by a comment line ({following!r}); move that "
+                "block above the key or ruamel will re-parent it when the form fills it"
+            )
+
+
+def test_replacing_an_empty_map_block_puts_children_under_their_own_key(profiles_home):
+    """Filling `schedule` from the form must render children directly under `schedule:`.
+
+    Written against the rendered TEXT, not the parsed value: the parse was always
+    correct, so a value-level assertion could not see this defect at all.
+    """
+    path = _write_profile(
+        profiles_home,
+        "acme",
+        "name: acme\n"
+        "# inbox:                    # example block, documents the key BELOW it\n"
+        "#   channel: C0XXXXXXX\n"
+        "schedule: {}                # parsed; consumed by the scheduler\n"
+        "reports: []\n",
+    )
+    profile_patch.patch_profile_yaml("acme", {"schedule": {"weekly_report": "0 9 * * 1"}})
+    out = path.read_text(encoding="utf-8").splitlines()
+
+    schedule_at = next(i for i, ln in enumerate(out) if ln.startswith("schedule:"))
+    assert out[schedule_at + 1].strip() == "weekly_report: 0 9 * * 1", (
+        "the new kind must sit immediately under `schedule:`, not below a comment block:\n"
+        + "\n".join(out)
+    )
+    # The example block still documents `schedule`, from above, and is untouched.
+    assert "# inbox:" in "\n".join(out[:schedule_at])

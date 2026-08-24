@@ -62,10 +62,14 @@ bindings:
 # Server-env read from FIXED v1 env names by the loader (not per-agent in M1):
 #   ATLASSIAN_SITE_NAME, ATLASSIAN_USER_EMAIL, SLACK_TEAM_DOMAIN.
 
-schedule: {}                  # parsed; consumed in P3 (scheduler)
 # inbox:                      # v3 M11 (optional): ask-agent Slack inbox — mention
 #   channel: C0XXXXXXX        # "@<agent-id>" trong channel INTERNAL này sẽ được trả lời
 #   poll_minutes: 5           # chu kỳ poll (>=1); bỏ cả block = tắt inbox
+# NOTE: keep commented-out example blocks ABOVE the key they document, never directly
+# below a `key: {}` line. ruamel folds a trailing comment block into the PRECEDING
+# key's comment token, so filling that key from the web form (schedule, role_models)
+# would emit the new children below these lines and make them read as that key's own.
+schedule: {}                  # parsed; consumed in P3 (scheduler)
 reports: []                   # parsed; consumed in P3 (kind gate)
 
 # M3-P11 (C3): config-driven extra MCP servers. Empty/absent ⇒ no integration (v1).
