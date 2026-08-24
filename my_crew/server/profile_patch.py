@@ -52,6 +52,10 @@ from my_crew.runtime.agent_paths import _validate_agent_id
 _ALLOWED_BLOCKS: dict[str, frozenset[str]] = {
     "safety": frozenset({"dry_run"}),
     "budget": frozenset({"monthly_usd"}),
+    # `runtime` holds infra keys the web form must NOT touch (checkpointer/store/
+    # postgres_dsn), so only the advisor toggle is listed — a leaf-merge keeps the
+    # neighbours and their comments untouched.
+    "runtime": frozenset({"advisor_enabled"}),
 }
 
 # Root-level scalar/list keys a caller may patch directly on the document (not nested
@@ -63,7 +67,11 @@ _ALLOWED_ROOT_KEYS: frozenset[str] = frozenset({"name", "model", "model_chain"})
 # set — currently only `schedule` (kind -> cron mapping, any kind name is legal). The
 # caller is responsible for validating each value before calling `patch_profile_yaml`
 # (routes_agent_profile_settings.py cron-validates every value with `croniter.is_valid`).
-_ROOT_LIKE_REPLACE_BLOCKS: frozenset[str] = frozenset({"schedule"})
+# `role_models` joins it for the same reason: it is a free `role -> model` mapping, and
+# a role the form no longer lists must actually DISAPPEAR — a leaf-merge would leave the
+# old override in place and keep billing for it, which is the silent-cost failure
+# `_d_role_models` exists to prevent one layer down.
+_ROOT_LIKE_REPLACE_BLOCKS: frozenset[str] = frozenset({"schedule", "role_models"})
 
 #: Pseudo-block key a caller uses to patch root-level scalars/lists (see `_ALLOWED_ROOT_KEYS`).
 ROOT_BLOCK = "_root"
@@ -244,6 +252,8 @@ def read_profile_settings_raw(agent_id: str) -> dict[str, Any]:
     budget = doc.get("budget")
     schedule = doc.get("schedule")
     model_chain = doc.get("model_chain")
+    role_models = doc.get("role_models")
+    runtime = doc.get("runtime")
     return {
         "name": doc.get("name"),
         "model": doc.get("model"),
@@ -252,4 +262,19 @@ def read_profile_settings_raw(agent_id: str) -> dict[str, Any]:
             budget.get("monthly_usd") if isinstance(budget, dict) else None
         ),
         "schedule": dict(schedule) if isinstance(schedule, dict) else {},
+        # `{}` means "no per-role override" — every role runs the fleet chain. The env
+        # form (`OPENROUTER_ROLE_MODELS`) is deliberately NOT merged in here: this is the
+        # raw per-agent value the form writes back, and showing an inherited env value in
+        # an editable field would make saving the form silently pin the fleet default
+        # into this agent's yaml.
+        "role_models": {str(k): str(v) for k, v in role_models.items()}
+        if isinstance(role_models, dict)
+        else {},
+        # `None` = key absent = inherit `ADVISOR_ENABLED` / the OFF default, which the
+        # form renders differently from an explicit `false`.
+        "advisor_enabled": (
+            bool(runtime["advisor_enabled"])
+            if isinstance(runtime, dict) and "advisor_enabled" in runtime
+            else None
+        ),
     }

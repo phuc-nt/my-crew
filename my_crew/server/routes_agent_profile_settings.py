@@ -103,6 +103,30 @@ def _validate_schedule(schedule: Any) -> dict[str, str]:
     return schedule
 
 
+def _validate_role_models(role_models: Any) -> dict[str, str]:
+    """Reject anything `_d_role_models` would reject, with ITS message verbatim.
+
+    Reusing the loader's own validator is the point: a role name the form accepts but
+    the loader rejects would write a profile.yaml that fails at the next dispatch —
+    an error the operator sees as a dead agent, far from the form that caused it.
+    Model ids stay free-text (same trust level as hand-editing the yaml); only the
+    ROLE names are a closed set.
+    """
+    if not isinstance(role_models, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in role_models.items()
+    ):
+        raise HTTPException(
+            status_code=400, detail="role_models phải là object dạng {vai_trò: model_id}"
+        )
+    from my_crew.config.config_builders import _d_role_models
+
+    try:
+        _d_role_models(role_models)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    return role_models
+
+
 @router.patch("/{agent_id}/profile-settings")
 def patch_agent_profile_settings(
     agent_id: str,
@@ -111,11 +135,14 @@ def patch_agent_profile_settings(
     model_chain: list[str] | None = Body(default=None),  # noqa: B008
     budget_monthly_usd: float | None = Body(default=None),
     schedule: dict[str, str] | None = Body(default=None),  # noqa: B008
+    role_models: dict[str, str] | None = Body(default=None),  # noqa: B008
+    advisor_enabled: bool | None = Body(default=None),
 ) -> dict:
     """Whitelisted subset write: any of `name`/`model`/`model_chain`/
-    `budget_monthly_usd`/`schedule`, all optional — only the keys present in the body
-    are patched. Each value is validated BEFORE any file write (validate-then-write,
-    same posture as `profile_patch` itself); an invalid value 400s and touches nothing.
+    `budget_monthly_usd`/`schedule`/`role_models`/`advisor_enabled`, all optional — only
+    the keys present in the body are patched. Each value is validated BEFORE any file
+    write (validate-then-write, same posture as `profile_patch` itself); an invalid
+    value 400s and touches nothing.
 
     `model_chain: []` is a legal, meaningful value (⇒ single model, no fallback chain) —
     it is distinguished from "field omitted" by FastAPI's own None-default handling, so a
@@ -145,6 +172,12 @@ def patch_agent_profile_settings(
         patch["budget"] = {"monthly_usd": _validate_budget(budget_monthly_usd)}
     if schedule is not None:
         patch["schedule"] = _validate_schedule(schedule)
+    if role_models is not None:
+        # Whole-mapping replace (`_ROOT_LIKE_REPLACE_BLOCKS`), so `{}` is how the form
+        # clears every per-role override and returns the agent to the fleet chain.
+        patch["role_models"] = _validate_role_models(role_models)
+    if advisor_enabled is not None:
+        patch["runtime"] = {"advisor_enabled": advisor_enabled}
 
     if patch:
         try:

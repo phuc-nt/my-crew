@@ -373,3 +373,123 @@ def test_model_catalog_missing_file_degrades_to_empty(tmp_path, monkeypatch):
     r = _client().get("/api/agents/model-catalog")
     assert r.status_code == 200
     assert r.json() == {"models": []}
+
+
+# --- role_models + advisor_enabled (per-agent model roles / second opinion) --
+
+
+def test_get_profile_settings_exposes_role_models_and_advisor(agent_profiles):
+    """Absent keys read as "no override" (`{}`) and "inherit the fleet" (`None`) —
+    distinct from an explicit empty mapping / explicit `false`, which the form shows
+    differently."""
+    r = _client().get("/api/agents/acme/profile-settings")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["role_models"] == {}
+    assert body["advisor_enabled"] is None
+
+
+def test_patch_role_models_writes_a_root_mapping(agent_profiles):
+    r = _client().patch(
+        "/api/agents/acme/profile-settings",
+        json={"role_models": {"review": "vendor/cheap", "advisor": "vendor/advisor"}},
+    )
+    assert r.status_code == 200
+    after = _profile_text(agent_profiles)
+    assert "role_models:" in after
+    assert "# hand-written comment — must survive every patch below" in after
+
+    got = _client().get("/api/agents/acme/profile-settings").json()
+    assert got["role_models"] == {"review": "vendor/cheap", "advisor": "vendor/advisor"}
+
+
+def test_patch_role_models_replaces_wholesale_so_a_removed_role_stops_billing(
+    agent_profiles,
+):
+    """The failure this guards: a leaf-merge would leave a role the operator deleted
+    from the form still overridden in yaml, quietly billing the old model forever."""
+    c = _client()
+    c.patch(
+        "/api/agents/acme/profile-settings",
+        json={"role_models": {"review": "vendor/cheap", "content": "vendor/writer"}},
+    )
+    c.patch("/api/agents/acme/profile-settings", json={"role_models": {"review": "vendor/cheap"}})
+    assert c.get("/api/agents/acme/profile-settings").json()["role_models"] == {
+        "review": "vendor/cheap"
+    }
+
+
+def test_patch_role_models_empty_mapping_clears_every_override(agent_profiles):
+    c = _client()
+    c.patch("/api/agents/acme/profile-settings", json={"role_models": {"review": "v/cheap"}})
+    r = c.patch("/api/agents/acme/profile-settings", json={"role_models": {}})
+    assert r.status_code == 200
+    assert c.get("/api/agents/acme/profile-settings").json()["role_models"] == {}
+
+
+def test_patch_role_models_written_value_survives_a_real_profile_load(agent_profiles):
+    """End of the chain: what the form writes is what `Settings.model_for_role` runs."""
+    from my_crew.profile.loader import load_profile
+
+    r = _client().patch(
+        "/api/agents/acme/profile-settings",
+        json={"model": "fleet/model", "role_models": {"advisor": "vendor/advisor"}},
+    )
+    assert r.status_code == 200
+    settings = load_profile("acme", profiles_dir=agent_profiles["profiles"]).settings
+    assert settings.model_for_role("advisor") == ("vendor/advisor", "fleet/model")
+
+
+def test_patch_role_models_unknown_role_400_with_the_loaders_own_message(agent_profiles):
+    before = _profile_text(agent_profiles)
+    r = _client().patch(
+        "/api/agents/acme/profile-settings", json={"role_models": {"contnet": "vendor/x"}}
+    )
+    assert r.status_code == 400
+    assert "unknown role_models key" in r.json()["detail"]
+    assert _profile_text(agent_profiles) == before
+
+
+def test_patch_role_models_non_mapping_400(agent_profiles):
+    before = _profile_text(agent_profiles)
+    r = _client().patch("/api/agents/acme/profile-settings", json={"role_models": ["a=b"]})
+    assert r.status_code in (400, 422)
+    assert _profile_text(agent_profiles) == before
+
+
+def test_patch_advisor_enabled_writes_under_runtime(agent_profiles):
+    c = _client()
+    r = c.patch("/api/agents/acme/profile-settings", json={"advisor_enabled": True})
+    assert r.status_code == 200
+    after = _profile_text(agent_profiles)
+    assert "runtime:" in after
+    assert c.get("/api/agents/acme/profile-settings").json()["advisor_enabled"] is True
+
+
+def test_patch_advisor_enabled_false_is_an_explicit_override_not_an_omission(agent_profiles):
+    c = _client()
+    c.patch("/api/agents/acme/profile-settings", json={"advisor_enabled": False})
+    assert c.get("/api/agents/acme/profile-settings").json()["advisor_enabled"] is False
+
+
+def test_patch_advisor_enabled_reaches_settings_and_beats_the_env(agent_profiles, monkeypatch):
+    from my_crew.profile.loader import load_profile
+
+    monkeypatch.setenv("ADVISOR_ENABLED", "true")
+    _client().patch("/api/agents/acme/profile-settings", json={"advisor_enabled": False})
+    settings = load_profile("acme", profiles_dir=agent_profiles["profiles"]).settings
+    assert settings.advisor_enabled is False
+
+
+def test_patch_advisor_enabled_does_not_disturb_other_runtime_keys(agent_profiles):
+    """`runtime` holds infra keys (checkpointer/store/dsn) the form must never touch."""
+    path = agent_profiles["profiles"] / "acme" / "profile.yaml"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + "runtime:\n  checkpointer: postgres   # infra, hands off\n",
+        encoding="utf-8",
+    )
+    _client().patch("/api/agents/acme/profile-settings", json={"advisor_enabled": True})
+    after = path.read_text(encoding="utf-8")
+    assert "checkpointer: postgres   # infra, hands off" in after
+    assert "advisor_enabled: true" in after

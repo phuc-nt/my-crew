@@ -281,6 +281,21 @@ const vi = {
     'Mỗi dòng là "loại_báo_cáo = biểu_thức_cron", ví dụ weekly_report = 0 9 * * 1. ' +
     'Chỉ những loại nằm trong danh sách báo cáo của agent mới thật sự chạy — loại lạ sẽ được lưu nhưng không kích hoạt.',
   'agentDetail.scheduleEmptyDisplay': '(chưa đặt lịch)',
+  'agentDetail.fieldRoleModels': 'Model theo loại việc',
+  'agentDetail.roleModelsHelp':
+    'Mỗi dòng là "loại_việc = model_id", ví dụ review = vendor/model-re. ' +
+    'Loại việc hợp lệ: content (viết bài giao nộp), review (soát chéo), aggregate (gộp kết quả), ' +
+    'plan (chia việc), util (việc máy móc ngắn), advisor (ý kiến thứ hai). ' +
+    'Loại nào không khai thì chạy model chung. Xóa hết dòng = bỏ mọi cấu hình riêng.',
+  'agentDetail.roleModelsEmptyDisplay': '(mọi loại việc dùng model chung)',
+  'agentDetail.fieldAdvisor': 'Cố vấn theo sát',
+  'agentDetail.advisorHelp':
+    'Mỗi nhịp, một model thứ hai đọc nhật ký bước đang chạy và nhắc khi thấy chệch hướng. ' +
+    'Tốn thêm một lượt gọi model cho mỗi bước đang chạy — đặt model rẻ ở dòng "advisor" phía trên để giảm chi phí.',
+  'agentDetail.advisorOn': 'Bật',
+  'agentDetail.advisorOff': 'Tắt',
+  'agentDetail.advisorInherited': '(theo mặc định công ty)',
+  'agentDetail.advisorToggleFailed': 'Không đổi được cố vấn, thử lại.',
   'agentDetail.fieldBand': 'Mức độ tin cậy',
   'agentDetail.bandHelp': 'Band chỉ đổi mức soát chéo (bao nhiêu bước cần duyệt), không đổi quyền hành động khác',
   'agentDetail.bandSupervised': 'Giám sát chặt',
@@ -1342,6 +1357,21 @@ const en = {
     'One "report_kind = cron_expr" per line, e.g. weekly_report = 0 9 * * 1. ' +
     "Only kinds in the agent's report list actually fire — an unknown kind is saved but never triggers.",
   'agentDetail.scheduleEmptyDisplay': '(no schedule set)',
+  'agentDetail.fieldRoleModels': 'Model per work kind',
+  'agentDetail.roleModelsHelp':
+    'One "work_kind = model_id" per line, e.g. review = vendor/model-re. ' +
+    'Valid kinds: content (writes the deliverable), review (cross-checks), aggregate (merges results), ' +
+    'plan (splits the work), util (short mechanical calls), advisor (second opinion). ' +
+    'An unlisted kind runs the company-wide model. Clearing every line removes all overrides.',
+  'agentDetail.roleModelsEmptyDisplay': '(every work kind uses the company model)',
+  'agentDetail.fieldAdvisor': 'Ride-along advisor',
+  'agentDetail.advisorHelp':
+    'Each tick, a second model reads the running step\'s transcript and flags trouble the worker cannot see. ' +
+    'Costs one extra model call per running step — set a cheap model on the "advisor" line above to keep it low.',
+  'agentDetail.advisorOn': 'On',
+  'agentDetail.advisorOff': 'Off',
+  'agentDetail.advisorInherited': '(company default)',
+  'agentDetail.advisorToggleFailed': 'Could not change the advisor, try again.',
   'agentDetail.fieldBand': 'Trust band',
   'agentDetail.bandHelp': 'Band only changes how many steps get a second review, not any other action authority',
   'agentDetail.bandSupervised': 'Closely supervised',

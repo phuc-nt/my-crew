@@ -384,6 +384,13 @@ export interface AgentProfileSettingsPayload {
   model_chain: string[]
   budget_monthly_usd: number | null
   schedule: Record<string, string> // {kind: cron_expr} — same shape as create-time
+  // Per-role model overrides ({role: model_id}). `{}` = no override, every role runs the
+  // fleet chain. Valid roles are fixed backend-side (settings.py MODEL_ROLES); model ids
+  // stay free-text, same trust level as hand-editing profile.yaml.
+  role_models: Record<string, string>
+  // Second-opinion sweep. `null` = key absent = inherit the fleet ADVISOR_ENABLED/OFF
+  // default, which the form shows differently from an explicit `false`.
+  advisor_enabled: boolean | null
 }
 
 // PATCH body: every field optional — only the keys present are patched.
@@ -393,6 +400,10 @@ export interface AgentProfileSettingsPatch {
   model_chain?: string[]
   budget_monthly_usd?: number
   schedule?: Record<string, string>
+  // Whole-mapping replace: `{}` clears every override. A role name the backend does not
+  // know 400s with the loader's own message.
+  role_models?: Record<string, string>
+  advisor_enabled?: boolean
 }
 
 export interface AgentProfileSettingsPatchResult {
@@ -626,6 +637,11 @@ export interface OfficeEventBody {
   // the PIC's desk on assignment and clear it on that task's `milestone: done`.
   pic?: string
   task_id?: string
+  // `advisor` only: the step the ride-along note is about. Truncated id, same opaque
+  // form as `task_id` — the room never links it, it only disambiguates which running
+  // step a note belongs to when several are live (office_event_projection.py's
+  // `advisor` allowlist branch; the note text itself rides in `message`).
+  step_id?: string
   // `step_status` only (v54): present (always `true`) only when the runtime dispatched
   // this step with the agent's `deep_team` (in-sandbox subagent delegation) opt-in on —
   // omitted entirely otherwise, keeping every pre-v54 event byte-identical.

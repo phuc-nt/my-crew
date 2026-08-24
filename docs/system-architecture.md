@@ -50,11 +50,11 @@ web-auth (`assert_bind_safe`). `office_event_projection.py` = **PII firewall** (
 theo kind AT WRITE TIME — room event không chứa nội dung tự do).
 
 **Agent config routes (P4 v88):**
-- `GET/PATCH /api/agents/{id}/profile-settings` — structured edits to name, model, model_chain, budget, schedule (via `profile_patch` helper)
+- `GET/PATCH /api/agents/{id}/profile-settings` — structured edits to name, model, model_chain, role_models, runtime.advisor_enabled, budget, schedule (via `profile_patch` helper)
 - `GET/POST /api/agents/{id}/band` — autonomy band control (supervised/normal/trusted), separate SQLite write
 - `GET /api/agents/model-catalog` — model id suggestions from `config/model_prices.yaml`
 
-**Profile-patch helper (`my_crew/server/profile_patch.py`):** ruamel.yaml round-trip loader preserves comments and key order when writing profile.yaml updates. Whitelisted write surface: top-level scalars (`name`, `model`, `model_chain`), nested blocks (`safety.dry_run`, `budget.monthly_usd`, `schedule`). Same pattern as `save_company` (P5-D0) for configuration preservation.
+**Profile-patch helper (`my_crew/server/profile_patch.py`):** ruamel.yaml round-trip loader preserves comments and key order when writing profile.yaml updates. Whitelisted write surface: top-level scalars (`name`, `model`, `model_chain`), leaf-merged blocks (`safety.dry_run`, `budget.monthly_usd`, `runtime.advisor_enabled` — `runtime`'s infra keys checkpointer/store/postgres_dsn stay unreachable from the web form), and whole-block-replace mappings (`schedule`, `role_models` — free key sets, so a role dropped from the form must actually disappear from yaml; a leaf-merge would leave the old override in place and keep billing for it). Same pattern as `save_company` (P5-D0) for configuration preservation.
 
 ### 3.2 Coordinator daemon (`my_crew/runtime/service.py`)
 Vòng lặp mỗi phút: đọc registry, chạy scheduler (báo cáo định kỳ) + **team-tick**
@@ -240,7 +240,7 @@ cùng đề, team 31m12s/$0.0700 vs sprint 8m43s/$0.0169, chấm mù 8 vs 28 đi
 `Settings.model_for_role(role)` (`my_crew/config/settings.py`, call-site `llm/client.py`)
 trả về CHAIN: model override của role đứng đầu, đuôi là fleet chain — model rẻ là đúng
 loại hay bị rate-limit/5xx, nên role degrade LÊN fleet model thay vì chết bước. Role hợp
-lệ `MODEL_ROLES = ("content", "review", "aggregate", "plan", "util")` — chia theo cost
+lệ `MODEL_ROLES = ("content", "review", "aggregate", "plan", "util", "advisor")` — chia theo cost
 shape ("người có đọc output này không"), không phải capability; content là sản phẩm,
 không bao giờ hạ cấp; sanitizer deep-agent chủ ý KHÔNG vào bucket nào (fail-closed gate
 network sandbox, giữ nguyên fleet model). Cấu hình per-agent trong profile.yaml: `model`
@@ -248,6 +248,27 @@ network sandbox, giữ nguyên fleet model). Cấu hình per-agent trong profile
 `OPENROUTER_ROLE_MODELS`; validate ở `config_builders._d_role_models` — role lạ/trùng
 raise rõ). Fleet default: `deepseek/deepseek-v4-pro-0813`
 (`DEFAULT_MODEL`). Role chưa cấu hình → nguyên fleet chain, byte-identical pre-v79.
+
+**Thứ tự 3 tầng (hẹp thắng rộng)**: `role_models[role]` trong profile.yaml của agent →
+`model`/`model_chain` của agent → fleet chain (`OPENROUTER_MODEL`/`DEFAULT_MODEL`). Env
+`OPENROUTER_ROLE_MODELS` chỉ là fallback cho tầng role KHI profile.yaml không có key
+`role_models` — key có mặt trong yaml thắng env, kể cả mapping rỗng. Loader đọc
+`role_models` ở TOP LEVEL của profile.yaml, còn `advisor_enabled` nằm dưới `runtime:`
+(`profile/loader_mapping.py`).
+
+**Role `advisor`** (v91): bucket cost cho ghi chú ride-along của cố vấn — mặc định TẮT
+(`Settings.advisor_enabled = False`), bật per-agent bằng `runtime.advisor_enabled: true`
+hoặc env `ADVISOR_ENABLED`; bool ghi rõ trong yaml thắng env (kể cả `false` tường minh).
+Vì advisor chạy song song mọi bước nên nó là role đáng gắn model rẻ nhất — `role_models:
+advisor: <model rẻ>` cho chain `(rẻ, fleet)`, degrade LÊN khi model rẻ rate-limit.
+
+**Surface web** (v91): tab Hồ sơ của agent có ô "Model theo loại việc" (textarea `role =
+model_id`, ghi đè NGUYÊN mapping nên xoá dòng = xoá override thật, không còn âm thầm
+tính tiền) và ô bật/tắt "Cố vấn theo sát". Route dùng lại `_d_role_models` để validate
+tên role và trả nguyên văn message của loader ra form — không cài lại luật ở lớp web.
+GET **không** trộn giá trị env vào payload: hiện giá trị kế thừa trong ô sửa được sẽ khiến
+một lần Lưu vô hại ghim luôn default của fleet vào yaml riêng của agent. Không cần restart
+— tick loop và mỗi worker đọc lại profile.yaml mỗi lần dispatch.
 
 ### 3.6 Action Gateway (`my_crew/actions/`, v30–v31, v67–v68 learned rules)
 `action_gateway.py` = cửa duy nhất. `hard_block.py` = Lớp A (chặn cứng, không duyệt được).

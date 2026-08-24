@@ -20,6 +20,7 @@ import { KIND_LABEL, RUN_STATUS_LABEL, labelFor } from '../../../labels'
 import type { AgentStatus } from '../../../types'
 import { InlineEditRow, useEditingField } from './inline-edit-row'
 import { ModelField } from './model-field'
+import { RoleModelsField } from './role-models-field'
 import { ScheduleField } from './schedule-field'
 
 export function ProfileTab({ id, status }: { id: string; status: AgentStatus }) {
@@ -118,6 +119,13 @@ export function ProfileTab({ id, status }: { id: string; status: AgentStatus }) 
           id={id}
           model={settings?.model ?? null}
           modelChain={settings?.model_chain ?? []}
+          editingField={editingField}
+          setEditingField={setEditingField}
+        />
+        <RoleModelsField
+          id={id}
+          roleModels={settings?.role_models ?? {}}
+          advisorEnabled={settings?.advisor_enabled ?? null}
           editingField={editingField}
           setEditingField={setEditingField}
         />
