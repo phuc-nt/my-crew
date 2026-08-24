@@ -121,7 +121,7 @@ export function RoleModelsField({
       </InlineEditRow>
       <dt>{t('agentDetail.fieldAdvisor')}</dt>
       <dd>
-        <label className="agent-dry-run-toggle" title={t('agentDetail.advisorHelp')}>
+        <label className="agent-advisor-toggle" title={t('agentDetail.advisorHelp')}>
           <input
             type="checkbox"
             checked={advisorEnabled === true}
@@ -132,7 +132,7 @@ export function RoleModelsField({
             {advisorEnabled === true ? t('agentDetail.advisorOn') : t('agentDetail.advisorOff')}
           </Badge>
           {advisorEnabled === null && (
-            <span className="agent-dry-run-source">{t('agentDetail.advisorInherited')}</span>
+            <span className="agent-advisor-source">{t('agentDetail.advisorInherited')}</span>
           )}
         </label>
         {advisorError && <p className="error">{advisorError}</p>}

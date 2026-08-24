@@ -28,8 +28,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test-setup.ts',
-    // Playwright specs live in e2e/ and must never run under vitest — @playwright/test
-    // throws on foreign runners and fails the suite at collect time.
-    exclude: ['**/node_modules/**', 'e2e/**', 'e2e-cold-start/**', 'e2e-live/**'],
+    // Playwright specs must never run under vitest — @playwright/test throws on a
+    // foreign runner and fails the suite at collect time. Matched by prefix rather
+    // than enumerated: every new e2e-* directory was silently collected until someone
+    // remembered to extend the list, so the glob is what actually holds.
+    exclude: ['**/node_modules/**', 'e2e/**', 'e2e-*/**'],
   },
 })
