@@ -432,6 +432,7 @@ Idempotent: if image exists, no-op. If daemon is offline, prints a clear message
 | deep_agent step errors "sandbox unavailable" | Docker daemon not running | Start Docker Desktop or `colima start`; check **Health** panel first |
 | First deep_agent step is slow | Image not cached; Docker is pulling | Pre-warm with `my-crew sandbox prepull` (§10) |
 | New route/feature doesn't appear after `git pull` | Dev server not reloading code | Restart web service: kill + re-run `serve`, or `./deploy/install.sh` if using launchd |
+| Every MCP integration fails at import (Jira, Confluence, Slack), doctor shows an ImportError next to a "set the token" hint | `mcp` resolved to 2.0.0, which dropped `mcp.shared.context.RequestContext` that `langchain-mcp-adapters` still imports | Already pinned as `mcp<2` in `pyproject.toml`; on an old environment re-sync deps rather than chasing the token hint, which cannot fix it |
 
 ---
 

@@ -54,7 +54,13 @@ theo kind AT WRITE TIME — room event không chứa nội dung tự do).
 - `GET/POST /api/agents/{id}/band` — autonomy band control (supervised/normal/trusted), separate SQLite write
 - `GET /api/agents/model-catalog` — model id suggestions from `config/model_prices.yaml`
 
-**Profile-patch helper (`my_crew/server/profile_patch.py`):** ruamel.yaml round-trip loader preserves comments and key order when writing profile.yaml updates. Whitelisted write surface: top-level scalars (`name`, `model`, `model_chain`), leaf-merged blocks (`safety.dry_run`, `budget.monthly_usd`, `runtime.advisor_enabled` — `runtime`'s infra keys checkpointer/store/postgres_dsn stay unreachable from the web form), and whole-block-replace mappings (`schedule`, `role_models` — free key sets, so a role dropped from the form must actually disappear from yaml; a leaf-merge would leave the old override in place and keep billing for it). Same pattern as `save_company` (P5-D0) for configuration preservation.
+**Profile-patch helper (`my_crew/server/profile_patch.py`):** ruamel.yaml round-trip loader preserves comments and key order when writing profile.yaml updates. Whitelisted write surface: top-level scalars (`name`, `model`, `model_chain`), leaf-merged blocks (`safety.dry_run`, `budget.monthly_usd`, `runtime.advisor_enabled` — `runtime`'s infra keys checkpointer/store/postgres_dsn stay unreachable from the web form), and whole-block-replace mappings (`schedule`, `role_models` — free key sets, so a role dropped from the form must actually disappear from yaml; a leaf-merge would leave the old override in place and keep billing for it). Same pattern as `save_company` (P5-D0) for configuration preservation. One authoring
+constraint follows from ruamel's comment model: a commented-out example block must sit
+*above* the key it documents, never directly below an empty `key: {}`. ruamel folds a
+key's inline comment and any comment block immediately following it into a single token
+attached to that key, so filling that key from the form emits the new children below
+those comment lines, making them read as the key's own children. A test guards the
+shipped `profiles/default/profile.yaml` against this for every replaceable block.
 
 ### 3.2 Coordinator daemon (`my_crew/runtime/service.py`)
 Vòng lặp mỗi phút: đọc registry, chạy scheduler (báo cáo định kỳ) + **team-tick**

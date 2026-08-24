@@ -314,6 +314,21 @@ Click an agent to see 8 tabs: profile, activity, knowledge, skills, channels, bu
 
 Go to **Team** → click **"+ Create virtual agent"** → pick a template card (6 roles: Team Lead, Research, Content, Analytics, Verification, PM-Coordinator) → click **"Create now"** → done. Agents start **disabled**. Enable them after setting up credentials (if needed) in the agent detail page.
 
+**Two steps the screens do not prompt for.** A cold-start walkthrough found both:
+
+- **A new agent is created switched off.** This is deliberate — it gives you a chance to
+  put credentials in `.env` before it starts running — but nothing on the create screen
+  says so. Turn it on with **Resume** in the Team roster once the agent is set up.
+- **Hiring the coordinator template does not make it the coordinator.** The role is
+  whoever `coordinator_id` names, and hiring leaves that empty, so Office keeps reporting
+  that no coordinator is configured and the team cannot take work. Set it in
+  **System → Company** by typing the agent id (e.g. `coordinator`) into the coordinator
+  field. Until you do, the Team page will keep advising you to hire a coordinator you
+  have already hired.
+
+Note the coordinator itself is not assignable — `assignable_staff` excludes coordinator
+and admin agents on purpose, because they route work rather than do it.
+
 Templates auto-load their skills at runtime, so updating a template skill instantly affects all agents using it.
 
 **Option 2: Crew creation** (bulk)
