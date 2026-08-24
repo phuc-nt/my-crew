@@ -155,6 +155,51 @@ def test_restart_hint_platform_detection(monkeypatch):
     assert "systemctl" in hint
 
 
+# --- restarting the RIGHT service ---
+
+
+def _launchd_print(pid: str | None):
+    """Fake `launchctl print` output, with or without a pid line."""
+    body = "\tstate = running\n" + (f"\tpid = {pid}\n" if pid else "")
+    return lambda cmd, **_kw: type("R", (), {"stdout": body if "print" in cmd[1] else ""})()
+
+
+def test_restart_only_when_launchd_manages_this_process(monkeypatch):
+    """A second server on the same Mac (own MY_CREW_HOME, own port) must NOT kickstart the
+    installed service. The launchd label names one installation; finishing a wizard in a
+    different instance once restarted somebody else's running fleet.
+    """
+    monkeypatch.setattr(routes_setup.subprocess, "run", _launchd_print("999999"))
+    kicked = []
+    monkeypatch.setattr("os.system", lambda cmd: kicked.append(cmd) or 0)
+
+    assert routes_setup._launchd_manages_us() is False
+    assert routes_setup._restart_web_service() is False
+    assert kicked == [], "must not kickstart a job it does not belong to"
+
+
+def test_restart_fires_when_this_process_is_the_launchd_job(monkeypatch):
+    """The flip side: the genuinely-managed service must still restart itself, or the
+    installed deployment regresses to manual restarts."""
+    import os as _os
+
+    monkeypatch.setattr(routes_setup.subprocess, "run", _launchd_print(str(_os.getpid())))
+    kicked = []
+    monkeypatch.setattr("os.system", lambda cmd: kicked.append(cmd) or 0)
+
+    assert routes_setup._launchd_manages_us() is True
+    assert routes_setup._restart_web_service() is True
+    assert kicked and "kickstart -k" in kicked[0]
+
+
+def test_restart_absent_when_launchd_has_no_such_job(monkeypatch):
+    """No label loaded at all (a plain `my-crew serve`) → no pid line → no restart."""
+    monkeypatch.setattr(routes_setup.subprocess, "run", _launchd_print(None))
+    monkeypatch.setattr("os.system", lambda _cmd: 0)
+    assert routes_setup._launchd_manages_us() is False
+    assert routes_setup._restart_web_service() is False
+
+
 # --- the durability property (red-team MAJOR-2) ---
 
 

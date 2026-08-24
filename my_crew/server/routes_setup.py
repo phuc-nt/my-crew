@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import secrets
+import subprocess
 
 from fastapi import APIRouter, Body, HTTPException, Request
 
@@ -178,16 +180,66 @@ def setup_finish(request: Request, password: str = Body(..., embed=True),
             "message": message}
 
 
+#: launchd job that `deploy/install.sh` installs for the web service. The label names ONE
+#: installation (its plist pins WorkingDirectory), so a second instance on the same Mac —
+#: a fresh MY_CREW_HOME on another port, a cold-start UAT, two checkouts — must never
+#: assume the label refers to itself.
+_LAUNCHD_LABEL = "com.mpm.web"
+
+
+def _launchd_manages_us() -> bool:
+    """True only when the `_LAUNCHD_LABEL` job is the one running THIS process.
+
+    Checking that the label merely *exists* is not enough and was a real bug: a second
+    server started by hand (different MY_CREW_HOME, different port) would finish its
+    wizard and kickstart the *installed* service, restarting somebody else's running
+    fleet. launchd reports the job's pid, so compare it against our own process tree and
+    act only on a genuine match.
+    """
+    try:
+        uid = os.getuid()
+        out = subprocess.run(  # noqa: S603
+            ["/bin/launchctl", "print", f"gui/{uid}/{_LAUNCHD_LABEL}"],
+            capture_output=True, text=True, timeout=5, check=False,
+        ).stdout
+    except Exception:  # noqa: BLE001 — detection is best-effort, never breaks finish
+        return False
+    match = re.search(r"^\s*pid = (\d+)$", out, re.MULTILINE)
+    if not match:
+        return False
+    job_pid = int(match.group(1))
+    # The job's pid is `uv run python`, whose child is us — walk up a few parents rather
+    # than demanding an exact match.
+    pid = os.getpid()
+    for _ in range(4):
+        if pid == job_pid:
+            return True
+        if pid <= 1:
+            break
+        try:
+            pid = int(subprocess.run(  # noqa: S603
+                ["/bin/ps", "-o", "ppid=", "-p", str(pid)],
+                capture_output=True, text=True, timeout=5, check=False,
+            ).stdout.strip() or 0)
+        except Exception:  # noqa: BLE001
+            break
+    return False
+
+
 def _restart_web_service() -> bool:
     """Ask launchd to restart this service so the new .env auth values load. If launchd isn't
     managing us (dev: uvicorn by hand), this no-ops with a log — the operator restarts by
     hand (the response tells them to). Never crashes finish. Returns True only when launchd
     accepted the kickstart, so callers can tell the operator the honest story."""
-    label = "com.mpm.web"
+    if not _launchd_manages_us():
+        logger.info("launchd does not manage this process; leaving restart to the operator")
+        return False
     try:
         uid = os.getuid()
         # kickstart -k restarts the job; only works if it's a loaded launchd service.
-        rc = os.system(f"launchctl kickstart -k gui/{uid}/{label} >/dev/null 2>&1")  # noqa: S605
+        rc = os.system(  # noqa: S605
+            f"launchctl kickstart -k gui/{uid}/{_LAUNCHD_LABEL} >/dev/null 2>&1"
+        )
         return rc == 0
     except Exception:  # noqa: BLE001 — restart is best-effort; finish already persisted
         logger.warning("could not auto-restart web service; restart it manually", exc_info=True)
@@ -205,14 +257,8 @@ def _restart_hint() -> str:
     it starts), else a generic "however you ran it" — never assumes Ctrl-C, which is
     wrong for anyone running under a supervisor.
     """
-    label = "com.mpm.web"
-    try:
-        uid = os.getuid()
-        rc = os.system(f"launchctl print gui/{uid}/{label} >/dev/null 2>&1")  # noqa: S605
-        if rc == 0:
-            return "Dịch vụ chạy qua launchd — tự khởi động lại, đợi ~5 giây rồi đăng nhập."
-    except Exception:  # noqa: BLE001 — detection is best-effort, fall through to next check
-        pass
+    if _launchd_manages_us():
+        return "Dịch vụ chạy qua launchd — tự khởi động lại, đợi ~5 giây rồi đăng nhập."
     if os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv"):
         return "Khởi động lại container (docker/podman compose restart)."
     if os.environ.get("INVOCATION_ID"):
