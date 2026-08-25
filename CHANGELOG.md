@@ -3,6 +3,78 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.14.0] — 2026-08-25
+
+A second model now rides along with running work and can flag a problem mid-step, and a
+fleet is no longer confined to one vendor — chains can route per-role to any
+OpenAI-compatible endpoint. Both are configurable from the agent page rather than by
+hand-editing YAML. The rest of the release is what a cold-start UAT found: four defects
+that only appear on a fresh install, which is exactly the path CI never walks.
+
+### Added
+- **Advisor ride-along review.** Each team tick, a second model reads the transcript
+  delta a running step just wrote and either stays silent (the default) or leaves one
+  note — `nit` lands in the office room, `concern` becomes guidance for the step's next
+  attempt. So a step going wrong can be caught while it runs, not at the end. Emission
+  is guarded by dedupe, one note per step per sweep, and a cooldown, so a talkative
+  model cannot flood the room. The advisor is its own entry in `MODEL_ROLES`, so it can
+  point at a different provider than the workers — a team all running one model gains
+  nothing from that model reviewing itself. The note travels the office feed as a new
+  `advisor` event kind through the same per-kind allowlist as every other kind.
+- **Multi-provider model chains** via a `provider::model` prefix. Providers are declared
+  under `providers:` in company.yaml/profile.yaml (or `MY_CREW_PROVIDERS`) as
+  `{name: {base_url, api_key_env}}` — only the env var NAME is stored, never key
+  material, so a YAML carrying the registry stays safe to read and share. Chain fallback
+  crosses vendors: a failing entry degrades to the next whoever serves it, and
+  `fallback_from` keeps the full prefixed entry so cost stays attributable. A bare model
+  id resolves through OpenRouter exactly as before, so configs with no `providers:` key
+  are unchanged.
+- **Per-role models and the advisor toggle in the profile form.** `role_models` and
+  `runtime.advisor_enabled` were reachable only by hand-editing profile.yaml; both now
+  round-trip through `GET`/`PATCH /api/agents/{id}/profile-settings` and the Hồ sơ tab.
+  `role_models` is a whole-mapping replace rather than a leaf-merge, so a role dropped
+  from the form actually disappears from YAML instead of silently continuing to bill.
+  The `runtime` whitelist stays narrowed to the advisor flag, keeping
+  checkpointer/store/postgres_dsn unreachable from the web.
+
+### Fixed
+- **MCP integrations died on any fresh install.** `langchain-mcp-adapters` imports
+  `mcp.shared.context.RequestContext` and declares no upper bound; mcp 2.0.0 removed
+  that symbol, so a clean resolve took 2.0.0 and Jira, Confluence and Slack all failed
+  at import. Found by running `my-crew doctor` in a cold-start venv, where the Slack
+  probe reported an ImportError while advising the operator to go set Slack tokens —
+  remediation that could never fix the cause. Now pinned `mcp<2`, with a test that
+  asserts the declared constraint rather than the installed version, since the installed
+  version is precisely the evidence that cannot see this class of bug.
+- **Finishing the wizard could kill an unrelated running fleet.** The finish step
+  kickstarted the `com.mpm.web` launchd job whenever the label existed, without checking
+  the label referred to *this* process. Since the label names one installation, a second
+  server on the same machine would finish its wizard and restart the installed service
+  instead. Now compares the pid launchd reports against this process's parent chain; a
+  hand-run server declines and returns a hint naming the manual path.
+- **Binding a Telegram bot left team assignment still blocked.** Assigning work
+  hard-blocks unless `telegram.ops_operator_id` is set and present in `chat_ids`, and
+  the refusal told the operator to bind a bot — but the bind route never wrote that
+  field, so following the instruction changed nothing and only hand-editing
+  profile.yaml would clear it. Bind now defaults it to the first designated chat; an
+  explicit value already in the profile still wins.
+- **Saving a profile from the web scrambled its example comments.** ruamel folds a
+  comment block directly following a `key: {}` line into that key's own token, so
+  filling the key from the form rendered the new children *below* those lines and the
+  commented-out `# inbox:` example read as if nested under `schedule`. The file still
+  parsed identically, which is why no value-level test caught it — the damage was only
+  to the human reading it. Tests now assert on rendered text, and a guard checks the
+  shipped template for any patchable key followed by a comment line.
+- **Self-check and peer review graded against drifted copies of the evidence rules.**
+  Peer review was missing the countable-requirement rule and the original-ask ceiling,
+  so it would pass a result whose criterion demanded a URL when the text only said
+  "nguồn: X", and fail a result for missing something the CEO never asked for. The four
+  rules now live in one constant both graders compose, with tests pinning the parity.
+- **vitest was collecting Playwright specs.** The exclude list named e2e directories
+  one by one, so each new one was silently collected until someone extended the list;
+  it now matches by prefix. The advisor toggle had also borrowed the dry-run toggle's
+  test-hook classname, making two specs strict-mode ambiguous — it has its own now.
+
 ## [0.13.0] — 2026-08-23
 
 Everything the v88 web app could show but not touch is now actionable: a stalled task
