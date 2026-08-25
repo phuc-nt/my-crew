@@ -29,8 +29,8 @@ import re
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "SprintPlan", "classify_brief", "downgrade_to_sprint", "route_signals", "sprint_intake",
-    "sprint_refusal", "strip_mode_prefix",
+    "SprintPlan", "classify_brief", "downgrade_to_sprint", "render_route_reason",
+    "route_signals", "sprint_intake", "sprint_refusal", "strip_mode_prefix",
 ]
 
 #: CEO ép chế độ bằng tiền tố ở đầu tin nhắn: "sprint: ..." / "team: ...".
@@ -213,6 +213,29 @@ def classify_brief(brief: str) -> tuple[bool, str]:
     return True, "không có tín hiệu cần đội (mặc định sprint)"
 
 
+#: Tên chế độ cho người đọc. Bản ghi routing dùng mã "sprint"/"team", nhưng CEO không
+#: đọc mã — họ đọc "một người chạy nhanh" hay "cả đội".
+_MODE_LABELS = {"sprint": "chạy nhanh (1 người)", "team": "cả đội"}
+
+
+def render_route_reason(route: dict | None) -> str:
+    """Một dòng nói CHẾ ĐỘ nào và VÌ SAO, cho preview và tin báo.
+
+    Các chuỗi `reason` mà `classify_brief`/`sprint_refusal` sinh ra vốn đã viết cho
+    người đọc, nên ở đây không diễn giải lại — chỉ ghép nhãn chế độ vào. Route rỗng
+    (task cũ trước v77, hoặc double trong test) trả chuỗi rỗng để nơi gọi bỏ qua dòng
+    này thay vì in ra một dòng trống khó hiểu.
+    """
+    if not route:
+        return ""
+    mode = str(route.get("mode") or "").strip()
+    if not mode:
+        return ""
+    label = _MODE_LABELS.get(mode, mode)
+    reason = str(route.get("reason") or "").strip()
+    return f"Chế độ: {label} (lý do: {reason})" if reason else f"Chế độ: {label}"
+
+
 class SprintPlan:
     """Kết quả intake: đủ để dựng MỘT dòng bước sprint.
 
@@ -328,6 +351,14 @@ def sprint_intake(
     from my_crew.llm.team_task_check_prompt import strip_json_fences
 
     cost = float(result.cost_usd or 0.0)
+    # Cắt cụt vì hết token đầu ra thì phần thân là một MẨU, không phải câu trả lời —
+    # nó hỏng JSON y hệt model viết bậy, nhưng lý do khác hẳn. Fail-open ngay với đúng
+    # nguyên nhân để log không đổ lỗi nhầm cho model.
+    # getattr: đường này fail-open trước MỌI bất ngờ từ tầng model, kể cả một client
+    # không báo lý do dừng. Không có tín hiệu nghĩa là "không cụt", không phải là nổ.
+    if getattr(result, "truncated", False):
+        plan, _ = _fallback("bị cắt cụt vì quá dài")
+        return plan, cost
     raw = strip_json_fences(result.content or "")
     try:
         data = json.loads(raw)

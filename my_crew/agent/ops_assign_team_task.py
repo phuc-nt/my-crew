@@ -209,6 +209,20 @@ def _decompose_with_retries(
         result = llm.complete(messages, role="plan")
         if result.cost_usd:
             total_cost += result.cost_usd
+        # A body cut off by the output-token limit is a PREFIX, not an answer: it fails
+        # JSON parsing exactly like model garbage does, but retrying with "your JSON was
+        # malformed" makes the model write the same too-long plan again. Name the real
+        # cause so the retry asks for a SHORTER plan — the only thing that can fix it.
+        if getattr(result, "truncated", False):
+            last_error = (
+                "câu trả lời trước bị cắt cụt vì quá dài — hãy trả lời NGẮN GỌN hơn: "
+                "ít bước hơn, mô tả mỗi bước ngắn hơn, không thêm giải thích ngoài JSON"
+            )
+            logger.warning(
+                "assign_team_task: decompose bị cắt cụt (finish_reason=length) — "
+                "thử lại với yêu cầu rút ngắn"
+            )
+            continue
         try:
             task = parse_decomposed_task(result.content)
             task = _repair_terminal_assignee(
@@ -535,6 +549,13 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
     append_office_event(room_for_task(task_id), author="ceo", kind="ceo", body={"text": brief})
 
     pic_line = f"\nPIC (chịu trách nhiệm chính): {task.pic_id}" if task.pic_id else ""
+    # Vì sao việc này đi đường một-người hay cả-đội. Ghép ở ĐÂY chứ không trong
+    # `_render_plan`: renderer đó chỉ nhận `task`, và kế hoạch đã persist không mang
+    # theo bản ghi route — chỉ nơi này vừa có cả hai.
+    from my_crew.agent.sprint_intake import render_route_reason
+
+    route_reason = render_route_reason(route)
+    route_line = f"\n{route_reason}" if route_reason else ""
 
     # v15 auto-confirm (Decision Q1 + red-team F3/F9): when the company flag is on,
     # confirm the JUST-previewed plan immediately with the SAME hash-bind path the CEO's
@@ -574,10 +595,10 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
             cancel_assign_team_task(slots)
             raise ValueError(f"tự xác nhận thất bại: {exc}") from None
         slots["auto_confirmed"] = "1"
-        return (f"{_render_plan(task)}{pic_line}\n\nMã việc: {task_id}\n"
+        return (f"{_render_plan(task)}{pic_line}{route_line}\n\nMã việc: {task_id}\n"
                 f"ĐÃ TỰ XÁC NHẬN (chế độ tự xác nhận đang bật) — {run_text}")
 
-    return (f"{_render_plan(task)}{pic_line}\n\nMã việc: {task_id}\n"
+    return (f"{_render_plan(task)}{pic_line}{route_line}\n\nMã việc: {task_id}\n"
             "Xác nhận giao việc này cho đội? (trả lời: xác nhận / huỷ)")
 
 

@@ -1,0 +1,79 @@
+"""Read-only routing retro for chat (v78): `route_stats`.
+
+Bộ định tuyến sprint/team quyết mỗi lần giao việc mà không ai nhìn thấy: quyết định
+nằm trong `route_json` cạnh outcome, nhưng chưa có mặt nào đọc nó ra. Câu hỏi duy
+nhất lệnh này tồn tại để trả lời là "mình còn đẩy việc một người vào bộ máy đội
+không?" — và câu hỏi ngược lại, "sprint có đang nhận nhầm việc quá tầm không?".
+
+Hai con số quan trọng nhất, cả hai đều là dấu bộ định tuyến ĐOÁN SAI và đã được lưới
+đỡ kéo về:
+  - `downgrade`: đoán sai về phía team, `downgrade_to_sprint` kéo lại — rẻ, chỉ mất
+    một lượt decompose đã trả tiền.
+  - `dead_end`: đoán sai về phía sprint, `sprint_dead_end` kéo lại — đắt hơn, vì việc
+    đã chạy hết một chuyến sprint rồi mới lộ.
+
+Thuần đọc store, không gọi model, không ghi gì.
+"""
+
+from __future__ import annotations
+
+#: Nguồn quyết định → nhãn cho người đọc. Khớp đúng các giá trị `source` mà
+#: `_plan_for_brief` và `_mark_route_dead_end` ghi ra.
+_SOURCE_LABELS = {
+    "prefix": "CEO ép bằng tiền tố",
+    "refusal": "rào an toàn (sprint không nhận)",
+    "heuristic": "bộ đoán tự động",
+    "downgrade": "hạ từ team xuống sprint",
+    "dead_end": "sprint bế tắc, cần chạy lại bằng đội",
+}
+
+_MODE_LABELS = {"sprint": "chạy nhanh (1 người)", "team": "cả đội"}
+
+
+def run_route_stats(slots: dict[str, str]) -> str:
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    store = TeamTaskStore(team_tasks_db_path())
+    try:
+        routes = store.list_routes()
+    finally:
+        store.close()
+
+    if not routes:
+        return ("Chưa có bản ghi định tuyến nào. Các việc giao từ phiên bản trước v78 "
+                "không lưu lại chế độ, nên chỉ việc giao mới mới được tính.")
+
+    by_mode: dict[str, int] = {}
+    by_source: dict[str, int] = {}
+    # Chỉ đếm dead_end trên việc đã kết thúc: một việc đang chạy chưa bế tắc.
+    dead_ends = 0
+    for route, _status in routes:
+        mode = str(route.get("mode") or "?")
+        source = str(route.get("source") or "?")
+        by_mode[mode] = by_mode.get(mode, 0) + 1
+        by_source[source] = by_source.get(source, 0) + 1
+        if source == "dead_end":
+            dead_ends += 1
+
+    total = len(routes)
+    lines = [f"Định tuyến {total} việc gần nhất:"]
+    for mode, count in sorted(by_mode.items(), key=lambda kv: -kv[1]):
+        label = _MODE_LABELS.get(mode, mode)
+        lines.append(f"  • {label}: {count} ({count * 100 // total}%)")
+
+    lines.append("")
+    lines.append("Ai quyết:")
+    for source, count in sorted(by_source.items(), key=lambda kv: -kv[1]):
+        lines.append(f"  • {_SOURCE_LABELS.get(source, source)}: {count}")
+
+    downgrades = by_source.get("downgrade", 0)
+    if downgrades or dead_ends:
+        lines.append("")
+        lines.append("Bộ đoán chệch (đã được kéo về):")
+        if downgrades:
+            lines.append(f"  • {downgrades} việc đoán thừa về phía đội, hạ lại thành "
+                         "chạy nhanh sau khi thấy kế hoạch thật")
+        if dead_ends:
+            lines.append(f"  • {dead_ends} việc chạy nhanh bế tắc, phải giao lại cho đội")
+    return "\n".join(lines)

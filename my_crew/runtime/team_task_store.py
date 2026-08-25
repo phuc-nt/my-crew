@@ -478,6 +478,34 @@ class TeamTaskStore:
             return None
         return value if isinstance(value, dict) else None
 
+    def list_routes(self, limit: int = 500) -> list[tuple[dict, str]]:
+        """Các bản ghi định tuyến gần đây kèm trạng thái task: `[(route, status), ...]`.
+
+        Một truy vấn cho cả bảng thay vì `get_route` từng task: người gọi duy nhất là
+        lệnh thống kê, nó cần TOÀN BỘ để đếm — vòng lặp N+1 ở đây chỉ tổ đọc chậm cùng
+        một dữ liệu.
+
+        Bỏ qua dòng JSON hỏng như `get_route`: thống kê thiếu một dòng vẫn dùng được,
+        thống kê nổ thì không.
+        """
+        import json
+
+        rows = self._conn.execute(
+            "SELECT route_json, status FROM team_tasks "
+            "WHERE route_json IS NOT NULL AND route_json != '' "
+            "ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        out: list[tuple[dict, str]] = []
+        for raw, status in rows:
+            try:
+                value = json.loads(raw)
+            except (ValueError, TypeError):
+                continue
+            if isinstance(value, dict):
+                out.append((value, str(status or "")))
+        return out
+
     def increment_autopilot_attempts(self, task_id: str) -> int:
         """v63: bump + return this task's spent stall auto-resolutions (sweep cap)."""
         self._conn.execute(

@@ -106,6 +106,18 @@ class LlmResult:
     completion_tokens: int
     cost_usd: float | None
     fallback_from: tuple[str, ...] = ()
+    #: Why the provider stopped. "length" means the answer is CUT OFF mid-token — the
+    #: content is a prefix, not an answer. Callers that parse structured output must
+    #: check `truncated` before trusting a parse failure as "the model wrote garbage":
+    #: a truncated body fails the same way but for a reason retrying identically will
+    #: not fix. Defaults to "" so every existing construction site (tests, doubles)
+    #: keeps working and simply reports "not truncated".
+    finish_reason: str = ""
+
+    @property
+    def truncated(self) -> bool:
+        """The answer was cut off by the output-token limit."""
+        return self.finish_reason == "length"
 
 
 @dataclass(frozen=True)
@@ -240,7 +252,9 @@ class LlmClient:
 
             usage = extract_usage(response)
             self._budget.record_cost(usage.cost_usd)  # every billed attempt counts
-            content = response.choices[0].message.content or ""
+            choice = response.choices[0]
+            content = choice.message.content or ""
+            finish_reason = str(getattr(choice, "finish_reason", "") or "")
             if not content.strip() and has_next:
                 logger.warning(
                     "FALLBACK: model %r returned empty content; trying %r",
@@ -255,6 +269,7 @@ class LlmClient:
                 )
             record_event({
                 "t": "llm_response", "model": model_name, "content": content,
+                "finish_reason": finish_reason,
                 "prompt_tokens": usage.prompt_tokens,
                 "completion_tokens": usage.completion_tokens,
                 "cost_usd": usage.cost_usd, "fallback_from": list(fallback_from),
@@ -266,6 +281,7 @@ class LlmClient:
                 completion_tokens=usage.completion_tokens,
                 cost_usd=usage.cost_usd,
                 fallback_from=tuple(fallback_from),
+                finish_reason=finish_reason,
             )
 
         # Unreachable: the chain is never empty and its LAST entry either returns a
@@ -361,6 +377,7 @@ class LlmClient:
                     completion_tokens=usage.completion_tokens,
                     cost_usd=usage.cost_usd,
                     fallback_from=tuple(fallback_from),
+                    finish_reason=finish_reason,
                 ),
             )
 

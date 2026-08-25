@@ -577,8 +577,12 @@ def test_a_short_report_keeps_its_body_intact():
 
 def test_a_sprint_dead_end_escalation_carries_the_upgrade_hint(tmp_path, monkeypatch):
     """End-to-end through the room append (the path that always runs): the CEO reading
-    a `gave_up` milestone for a sprint task must see the `team:` remedy in the SAME
-    message body, not only in a Telegram fast path that may have no binding at all."""
+    a `gave_up` milestone for a sprint task must see the remedy in the SAME message
+    body, not only in a Telegram fast path that may have no binding at all.
+
+    The remedy is now one-touch (`upgrade_to_team <id>`, which carries the dead run's
+    context over) rather than an instruction to retype the brief behind a `team:`
+    prefix, so the hint has to name THIS task — hence the format below."""
     from my_crew.runtime import team_task_paths
     from my_crew.runtime.team_tick_collaborators import _SPRINT_UPGRADE_SUGGESTION
 
@@ -595,7 +599,7 @@ def test_a_sprint_dead_end_escalation_carries_the_upgrade_hint(tmp_path, monkeyp
     finally:
         store.close()
 
-    assert rows[0].body["message"].endswith(_SPRINT_UPGRADE_SUGGESTION)
+    assert rows[0].body["message"].endswith(_SPRINT_UPGRADE_SUGGESTION.format(task_id="t1"))
     assert "KHÔNG LÀM ĐƯỢC" in rows[0].body["message"]
 
 

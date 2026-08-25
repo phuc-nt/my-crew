@@ -172,7 +172,9 @@ def test_sprint_dead_end_escalates_once_with_team_upgrade_hint(fullflow):
     final = h.task_rows()[0]
     assert final["status"] == "stalled", f"give_up phải stall task: {final}"
 
-    hint_msgs = [t for t in h.sent_texts() if "tiền tố `team:`" in t]
+    # Gợi ý đổi chế độ giờ là lệnh một chạm mang theo kết quả dở dang, không còn là
+    # lời nhắc CEO tự gõ lại đề sau tiền tố `team:`.
+    hint_msgs = [t for t in h.sent_texts() if f"upgrade_to_team {final['id']}" in t]
     assert len(hint_msgs) == 1, (
         f"đúng 1 tin escalate mang gợi ý đổi chế độ: {h.sent_texts()}"
     )

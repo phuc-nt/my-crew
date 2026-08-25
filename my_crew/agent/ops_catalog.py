@@ -60,6 +60,7 @@ from my_crew.agent.ops_heartbeat_cmds import (
 )
 from my_crew.agent.ops_list_lessons import run_list_lessons
 from my_crew.agent.ops_list_team_tasks import run_list_team_tasks
+from my_crew.agent.ops_route_stats import run_route_stats
 from my_crew.agent.ops_send_message import preview_send_message, run_send_message
 from my_crew.agent.ops_stalled_task import (
     preview_accept_stalled_result,
@@ -69,6 +70,7 @@ from my_crew.agent.ops_stalled_task import (
     run_drop_stalled_step,
     run_retry_stalled_step,
 )
+from my_crew.agent.ops_upgrade_to_team import preview_upgrade_to_team, run_upgrade_to_team
 
 #: An agent whose work comes only from `assign_team_task` (e.g. office roles) has no
 #: report kind of its own — the CEO says this instead of a report-kind list.
@@ -604,6 +606,17 @@ OPS_COMMANDS: dict[str, dict] = {
         "slots": {},
         "run": run_list_team_tasks,
     },
+    # v78: retro của bộ định tuyến sprint/team. Đứng cạnh `list_team_tasks` vì cùng
+    # một câu hỏi "đội đang chạy thế nào" — chỉ khác là nhìn vào quyết định CHỌN ĐƯỜNG
+    # thay vì nhìn vào từng thẻ việc.
+    "route_stats": {
+        "description": "Thống kê bộ định tuyến việc: bao nhiêu việc chạy chế độ nhanh "
+                       "(1 người) so với cả đội, ai quyết, và bao nhiêu lần đoán chệch",
+        "readonly": True,
+        "example": "thống kê định tuyến việc",
+        "slots": {},
+        "run": run_route_stats,
+    },
     "cancel_task": {
         "description": "Huỷ một việc đã giao cho một agent trong đội (việc nền/định kỳ). "
                        "KHÔNG dùng cho nhắc hẹn giờ cá nhân — 'huỷ nhắc'/'xoá nhắc'/"
@@ -728,6 +741,20 @@ OPS_COMMANDS: dict[str, dict] = {
         },
         "run": run_drop_stalled_step,
         "preview": preview_drop_stalled_step,
+    },
+    # v78: lối thoát thứ tư cho một việc bị dừng, dành riêng cho chuyến chạy nhanh đã
+    # chết — ba lệnh trên gỡ một việc ĐANG chạy đúng hình dạng của nó, còn lệnh này đổi
+    # hẳn hình dạng vì hình dạng cũ mới là thứ sai.
+    "upgrade_to_team": {
+        "description": "Giao lại một việc chạy nhanh (1 người) đã bế tắc cho CẢ ĐỘI, "
+                       "mang theo kết quả dở dang làm bối cảnh",
+        "readonly": False,
+        "slots": {
+            "task_id": {"prompt": "Mã việc chạy nhanh cần nâng lên chế độ đội?",
+                        "required": True, "max_len": 20},
+        },
+        "run": run_upgrade_to_team,
+        "preview": preview_upgrade_to_team,
     },
     # v69 chat approval surface — the third surface on the Lớp B queue, beside the CLI
     # and the web banner. Admin-only: these reach into OTHER agents' approval stores, so
@@ -879,6 +906,8 @@ ORCHESTRATION_COMMAND_IDS = frozenset({
     "get_status", "get_cost", "company_activity", "search_history",
     # v63 stall recovery — orchestration concern (unstick a team task), not fleet admin.
     "accept_stalled_result", "retry_stalled_step", "drop_stalled_step",
+    # v78 — cùng lớp: gỡ một việc bị dừng, không đụng tới quyền quản trị đội hình.
+    "upgrade_to_team",
     # v63 autopilot — the secretary IS the surface this mode exists for.
     "set_autopilot", "get_autopilot",
     # v68 heartbeat — the pulse belongs to the secretary, so its controls do too. These
@@ -890,6 +919,8 @@ ORCHESTRATION_COMMAND_IDS = frozenset({
     # v76 metrics — read-only aggregates over telemetry; same delegation-question class
     # as list_lessons (how is my team doing), no fleet authority involved.
     "team_metrics",
+    # v78 routing retro — cùng lớp với team_metrics: tổng hợp chỉ-đọc về cách đội chạy.
+    "route_stats",
 })
 
 

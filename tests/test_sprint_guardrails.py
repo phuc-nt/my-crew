@@ -10,8 +10,11 @@ one that passed it.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from my_crew.runtime.band_store import (
     BAND_NORMAL,
@@ -200,18 +203,22 @@ def _escalation_task(step_type="sprint", task_id="t1"):
                                SimpleNamespace(step_id="s1", step_type="work")])
 
 
-def test_a_sprint_dead_end_suggests_the_team_prefix():
+def test_a_sprint_dead_end_offers_the_switch_to_the_crew():
     """`reassign` is the coordinator's normal answer to a step nobody can finish, and
     it is the one answer that cannot help here: every sprint step runs the SAME
     code-paced pipeline, so a different agent re-runs identical code. The remedy is a
-    mode change, which only the CEO can make — so the escalation has to say so."""
+    mode change, which only the CEO can make — so the escalation has to say so.
+
+    v78 made that remedy one-touch: `upgrade_to_team <id>` rebuilds the work as a crew
+    task carrying the dead run's draft, instead of asking the CEO to retype the brief
+    behind a `team:` prefix and lose everything the sprint already produced."""
     from my_crew.runtime.team_tick_collaborators import (
         _SPRINT_UPGRADE_SUGGESTION,
         _is_sprint_dead_end,
     )
 
     assert _is_sprint_dead_end(_escalation_task(), "gave_up") is True
-    assert "team:" in _SPRINT_UPGRADE_SUGGESTION
+    assert "upgrade_to_team" in _SPRINT_UPGRADE_SUGGESTION
 
 
 def test_the_upgrade_hint_stays_off_a_step_the_coordinator_is_still_retrying():
@@ -232,15 +239,29 @@ def test_a_team_task_dead_end_gets_no_sprint_hint():
     assert _is_sprint_dead_end(_escalation_task(step_type="work"), "gave_up") is False
 
 
-def test_the_upgrade_hint_carries_no_task_derived_text():
-    """Same constant-template rule the amend/one-touch suggestions follow: an
-    escalation line the CEO may copy-paste as a command must never be composed from
-    task/step titles, which can carry text absorbed from a hostile brief or a web
-    search a prior step echoed."""
-    from my_crew.runtime.team_tick_collaborators import _SPRINT_UPGRADE_SUGGESTION
+@pytest.mark.parametrize("name", [
+    "_SPRINT_UPGRADE_SUGGESTION", "_SPRINT_UPGRADED_TEMPLATE",
+    "_AMEND_SUGGESTION_TEMPLATE", "_ONE_TOUCH_SUGGESTION_TEMPLATE",
+])
+def test_escalation_command_hints_carry_no_task_derived_text(name):
+    """The constant-template rule, asserted on every hint that ends up as a command
+    line the CEO may copy-paste: interpolate the code-assigned task id and NOTHING
+    else. Task/step titles can carry text absorbed from a hostile brief or from a web
+    result a prior step echoed, so a hint composed from them could smuggle a different
+    command into the CEO's clipboard.
 
-    assert "{" not in _SPRINT_UPGRADE_SUGGESTION
-    assert "format" not in _SPRINT_UPGRADE_SUGGESTION
+    Checking the placeholder NAMES rather than banning `{` altogether: these hints do
+    have to name a specific task to be one-touch, and forbidding interpolation outright
+    would only push the composition somewhere this test cannot see.
+    """
+    import my_crew.runtime.team_tick_collaborators as mod
+
+    template = getattr(mod, name)
+    placeholders = set(re.findall(r"{(\w+)}", template))
+    assert placeholders <= {"task_id", "new_task_id"}, (
+        f"{name} interpolates {placeholders - {'task_id', 'new_task_id'}} — only "
+        "code-assigned task ids may appear in a copy-pasteable command hint"
+    )
 
 
 # --- audit: searches ride the same audited path as every other web search -----------

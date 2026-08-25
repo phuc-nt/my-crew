@@ -38,15 +38,26 @@ _ONE_TOUCH_SUGGESTION_TEMPLATE = (
     "`drop_stalled_step {task_id}` (bỏ bước chết)"
 )
 
-#: v77 sprint dead-end. Carries NO task/step text for the same reason as the two
-#: templates above, and no `{task_id}`: the remedy is a NEW task in the other mode, so
-#: interpolating the dead task's id would invite the CEO to paste an id that re-opens
-#: nothing. The suggestion names a MODE, not a person, because a sprint step has only
-#: one runner — `reassign` moves it to a different agent running the identical
-#: code-paced pipeline, so "ask someone else" is the one remedy that cannot work here.
+#: v78 sprint dead-end, một chạm. Cùng luật hằng-số như hai template trên: chỉ nội suy
+#: `{task_id}` do code sinh, không bao giờ ghép từ tiêu đề việc/bước.
+#:
+#: v77 chỉ nói "CEO giao lại bằng tiền tố `team:`" — nghĩa là CEO tự gõ lại đề và mọi
+#: thứ chuyến sprint vừa làm ra rơi xuống đất. `upgrade_to_team` dựng việc mới mang
+#: theo bản nháp dở dang, nên lời mời nêu đúng mã việc cần nâng.
+#:
+#: Lời mời nêu một LỆNH, không nêu người: bước sprint chỉ có một người chạy, nên
+#: `reassign` chỉ đổi sang một agent khác chạy đúng pipeline đó — "nhờ người khác" là
+#: cách chữa duy nhất chắc chắn không giúp được gì ở đây.
 _SPRINT_UPGRADE_SUGGESTION = (
-    "\nViệc này chạy chế độ sprint (1 người, pipeline ngắn). Nếu cần đào sâu hơn, "
-    "CEO giao lại bằng tiền tố `team:` để chạy chế độ đội đầy đủ."
+    "\nViệc này chạy chế độ nhanh (1 người, pipeline ngắn) và đã bế tắc. "
+    "Giao lại cho cả đội kèm kết quả dở dang: `upgrade_to_team {task_id}`"
+)
+
+#: Autopilot đã tự nâng cấp — nêu id việc MỚI để CEO theo dõi được, và nói rõ việc cũ
+#: vẫn nằm đó. Constant template, chỉ nội suy id do code sinh, như mọi template khác.
+_SPRINT_UPGRADED_TEMPLATE = (
+    "\nViệc này chạy chế độ nhanh (1 người) và đã bế tắc, nên mình đã tự giao lại cho "
+    "cả đội kèm kết quả dở dang: việc mới `{new_task_id}`. Việc cũ giữ nguyên để đối chiếu."
 )
 
 
@@ -89,6 +100,80 @@ def _mark_route_dead_end(task_id: str) -> None:
     except Exception:
         logger.warning("không ghi được dấu bế tắc sprint vào route_json (%s)",
                        task_id, exc_info=True)
+
+
+def _route_reason_block(task_id: str) -> str:
+    """Dòng "việc này đang chạy đường nào và vì sao", cho cảnh báo kẹt.
+
+    CEO đọc một cảnh báo kẹt rồi phải quyết đổi chế độ hay không; không nói việc này
+    ĐANG chạy đường nào và vì sao thì quyết định đó là đoán mò. Task trước v77 không
+    có bản ghi route — trả rỗng, không bịa.
+
+    try/degrade như `_mark_route_dead_end`: đây là phần trang trí có ích, không bao
+    giờ được chặn một cảnh báo đang trên đường tới CEO.
+    """
+    try:
+        from my_crew.agent.sprint_intake import render_route_reason
+        from my_crew.runtime.team_task_paths import team_tasks_db_path
+        from my_crew.runtime.team_task_store import TeamTaskStore
+
+        store = TeamTaskStore(team_tasks_db_path())
+        try:
+            line = render_route_reason(store.get_route(task_id))
+        finally:
+            store.close()
+    except Exception:
+        logger.warning("không đọc được route_json để dựng dòng lý do (%s)",
+                       task_id, exc_info=True)
+        return ""
+    return f"\n{line}" if line else ""
+
+
+def _sprint_upgrade_tail(task: TeamTask) -> str:
+    """Phần đuôi cho một cảnh báo sprint bế tắc: tự nâng cấp, hoặc mời CEO bấm.
+
+    Autopilot bật nghĩa là CEO đã uỷ quyền cho máy gỡ việc bị dừng, và đây đúng là một
+    việc bị dừng. Nhưng vẫn CHỈ MỘT LẦN cho mỗi chuỗi: `upgrade_to_team` từ chối nâng
+    một task vốn đã là bản nâng cấp, nên chuỗi nâng→chết→nâng tự dừng ở mắt thứ hai và
+    rơi về đúng lời mời thủ công bên dưới.
+
+    Nâng cấp hỏng vì bất cứ lý do gì cũng chỉ hạ xuống lời mời thủ công: cảnh báo phải
+    tới CEO kèm MỘT cách chữa dùng được, không bao giờ được nổ giữa đường.
+    """
+    try:
+        from my_crew.agent.ops_autopilot import autopilot_enabled
+
+        if not autopilot_enabled() or getattr(task, "require_ceo_approval", False):
+            return _SPRINT_UPGRADE_SUGGESTION.format(task_id=task.id)
+    except Exception:  # noqa: BLE001 — không đọc được cờ thì coi như tắt
+        logger.warning("không đọc được cờ autopilot khi sprint bế tắc (%s)",
+                       task.id, exc_info=True)
+        return _SPRINT_UPGRADE_SUGGESTION.format(task_id=task.id)
+
+    try:
+        from my_crew.agent.ops_upgrade_to_team import run_upgrade_to_team
+
+        slots: dict[str, str] = {"task_id": task.id}
+        run_upgrade_to_team(slots)
+        new_id = slots.get("new_task_id", "")
+    except Exception as exc:  # noqa: BLE001 — mọi thất bại đều rơi về lối thủ công
+        logger.warning("autopilot: không tự nâng cấp được việc sprint %s (%s)",
+                       task.id, exc)
+        return _SPRINT_UPGRADE_SUGGESTION.format(task_id=task.id)
+
+    if not new_id or new_id == task.id:
+        return _SPRINT_UPGRADE_SUGGESTION.format(task_id=task.id)
+
+    try:
+        from my_crew.agent.ops_autopilot import record_autopilot_decision
+
+        record_autopilot_decision(
+            decision="upgrade_to_team", task_id=task.id, task_title=task.title,
+            detail=f"việc chạy nhanh bế tắc — đã giao lại cho cả đội thành `{new_id}`",
+        )
+    except Exception:  # noqa: BLE001 — audit không bao giờ chặn thứ nó ghi lại
+        logger.exception("autopilot: không ghi được nhật ký nâng cấp cho %s", task.id)
+    return _SPRINT_UPGRADED_TEMPLATE.format(new_task_id=new_id)
 
 
 def _review_evidence_block(task: TeamTask, step: TeamStep | None) -> str:
@@ -406,10 +491,11 @@ def make_escalate(loaded: Any, settings: Any):
         if event_kind == "review_rounds_exhausted":
             message = message + _review_evidence_block(task, step)
         if event_kind in _STALL_EVENT_KINDS:
-            message = (message + _AMEND_SUGGESTION_TEMPLATE.format(task_id=task.id)
+            message = (message + _route_reason_block(task.id)
+                       + _AMEND_SUGGESTION_TEMPLATE.format(task_id=task.id)
                        + _ONE_TOUCH_SUGGESTION_TEMPLATE.format(task_id=task.id))
         if _is_sprint_dead_end(task, event_kind):
-            message = message + _SPRINT_UPGRADE_SUGGESTION
+            message = message + _route_reason_block(task.id) + _sprint_upgrade_tail(task)
             _mark_route_dead_end(task.id)
 
         # Whether the direct (fast-path) send below succeeded. Stamped into the room
