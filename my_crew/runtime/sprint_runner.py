@@ -805,6 +805,7 @@ def build_sprint_work(
     needs_web: bool = True,
     retry_round: int = 0,
     effort: str = "medium",
+    task_id: str = "",
 ) -> Callable[[str, str, Any], tuple[str, float | None]]:
     """Return a `work_override` callable running the sprint pipeline for one step.
 
@@ -839,6 +840,10 @@ def build_sprint_work(
     nothing. "medium" and "high" run the pipeline EXACTLY as before — high is measured
     this round (via the route record), not yet acted on. Anything unrecognised reads as
     medium, so a bad value costs nothing.
+
+    `task_id` chỉ dùng để tìm file chỉ đạo giữa chừng (`sprint_steering`). Rỗng —
+    benchmark, replay, mọi caller không có task thật — thì không có chỗ nào để đọc chỉ
+    đạo, và pipeline chạy y hệt như trước khi có tính năng này.
     """
     from my_crew.runtime.collect_prefetch import prefetch_queries
 
@@ -848,6 +853,29 @@ def build_sprint_work(
         return prefetch_queries(loaded_, settings_, queries, keep_sentinels=True)
 
     run_prefetch = prefetch if prefetch is not None else _default_prefetch
+
+    def _take_steer_block(tid: str) -> str:
+        """Chỉ đạo đang chờ, đã gắn nhãn, đọc-rồi-xoá. "" khi không có.
+
+        Không có task id thì không có file để đọc: benchmark và replay đi thẳng qua đây.
+        """
+        if not tid:
+            return ""
+        # Bọc CẢ lượt đọc, không chỉ phần thân `take_steer`: import, `team_tasks_root()`
+        # và chính lời gọi đều nằm ngoài try của module kia. Mất một lời dặn thì tiếc,
+        # nhưng để nó giết một chuyến sprint đã trả tiền thì không bao giờ đáng.
+        try:
+            from my_crew.runtime.sprint_steering import STEER_LABEL, take_steer
+            from my_crew.runtime.team_task_paths import team_tasks_root
+
+            steer = take_steer(team_tasks_root(), tid)
+        except Exception:  # noqa: BLE001 — xem chú thích trên
+            logger.warning("sprint: không lấy được chỉ đạo giữa chừng", exc_info=True)
+            return ""
+        if not steer:
+            return ""
+        logger.info("sprint: áp chỉ đạo giữa chừng của CEO cho việc %s", tid)
+        return f"{STEER_LABEL}\n{steer}"
 
     def _work(title: str, handoff: str, hook: Any) -> tuple[str, float | None]:
         from my_crew.llm.client import LlmClient
@@ -930,6 +958,33 @@ def build_sprint_work(
         draft = str(getattr(result, "content", "") or "")
         _tally(result)
 
+        # Ranh giới 1: bản nháp vừa xong, chưa soát. Chỉ đạo tới trước lúc này còn kịp
+        # đổi cả hướng soát lẫn hướng sửa. Đọc GIỮA các stage chứ không cắt ngang một
+        # lượt gọi model đang chạy — chỉ đạo là thứ đổi vòng kế, không phải nút dừng.
+        #
+        # Giữ nguyên văn chỉ đạo (`steer_block`) chứ không chỉ giữ acceptance đã trộn:
+        # prompt nháp đã dựng xong và không dựng lại, nên đường DUY NHẤT để chỉ đạo tới
+        # được model là đi kèm lượt sửa kế tiếp.
+        steer_block = _take_steer_block(task_id)
+
+        # Chỉ đạo tới lúc bản nháp đã kín dữ liệu: vòng soát dưới sẽ thoát ngay ở
+        # `not gaps` và không còn lượt sửa nào để mang lời dặn đi. Chỉ đạo đã ĐỌC là đã
+        # XOÁ, nên bỏ qua ở đây là nuốt mất lời CEO sau khi đã hứa "áp từ vòng kế". Một
+        # lượt sửa riêng, chỉ khi có chỉ đạo và bản nháp không còn khoảng trống nào.
+        if steer_block and not coverage_gaps(draft, entities, bundle):
+            messages = [
+                *messages,
+                {"role": "assistant", "content": draft},
+                {"role": "user", "content": _steer_only_instruction(steer_block)},
+            ]
+            _beat("sprint_steer")
+            result = client.complete(messages, role=draft_role)
+            steered = str(getattr(result, "content", "") or "")
+            _tally(result)
+            if steered.strip():
+                draft = steered
+            steer_block = ""
+
         for round_no in range(1, revise_rounds + 1):
             _beat("sprint_check")
             gaps = coverage_gaps(draft, entities, bundle)
@@ -982,10 +1037,21 @@ def build_sprint_work(
             # Cumulative context: the draft and the new results ride in the SAME
             # thread. Re-briefing from scratch each round is what makes a team task's
             # rework rounds expensive, and there is no reason to repeat it here.
+            # Ranh giới 2: mỗi vòng sửa. Một chuyến dài có nhiều vòng, và CEO nhắn lúc
+            # nào là quyền của CEO — đọc lại ở đây để chỉ đạo tới giữa chừng không phải
+            # đợi hết chuyến mới được nhìn tới. Chỉ đạo mới THAY chỉ đạo cũ: vòng trước
+            # đã mang lời cũ đi rồi, gửi lại lần nữa là bắt model đọc hai lần một lời.
+            #
+            # Đọc TRƯỚC khi dựng `messages`: đọc sau thì lời dặn của vòng này phải chờ
+            # tới vòng sau mới đi được, mà vòng này có thể là vòng cuối — chỉ đạo đã đọc
+            # là đã xoá, nên nó sẽ mất hẳn.
+            fresh_steer = _take_steer_block(task_id)
+            if fresh_steer:
+                steer_block = fresh_steer
             messages = [
                 *messages,
                 {"role": "assistant", "content": draft},
-                {"role": "user", "content": _revise_instruction(gaps)},
+                {"role": "user", "content": _revise_instruction(gaps, steer_block)},
                 {"role": "user", "content": extra},
             ]
             _beat(f"sprint_revise_{round_no}")
@@ -1050,17 +1116,39 @@ def _draft_messages(
     )
 
 
-def _revise_instruction(gaps: list[str]) -> str:
+def _steer_only_instruction(steer: str) -> str:
+    """Lượt sửa chỉ vì chỉ đạo của CEO, khi bản nháp không còn khoảng trống dữ liệu.
+
+    Tách khỏi `_revise_instruction` vì hai lượt hỏi hai việc khác nhau: lượt kia đưa
+    thêm dữ liệu và bảo lấp chỗ thiếu, lượt này không có dữ liệu mới nào cả — nói
+    "bổ sung các phần còn thiếu" ở đây là mời model bịa ra chỗ thiếu để lấp.
+    """
+    return (
+        f"{steer}\n\n"
+        "Hãy chỉnh bản nháp trên theo đúng chỉ đạo này và giữ nguyên phần còn lại — "
+        "trả về bản đầy đủ đã cập nhật. Không có dữ liệu tra cứu mới: chỉ đạo nào cần "
+        "số liệu chưa có thì ghi rõ THIẾU kèm lý do, TUYỆT ĐỐI không suy đoán hay bịa."
+    )
+
+
+def _revise_instruction(gaps: list[str], steer: str = "") -> str:
     """The one thing the revise round is allowed to ask for: close these gaps.
 
     Named explicitly so the model rewrites the missing parts instead of restyling the
     whole draft — an untargeted "improve this" round is how a revise loop turns into
     the slow tool loop this mode replaces.
+
+    `steer` là chỉ đạo giữa chừng của CEO, đã có nhãn sẵn. Nó đi kèm NGAY trong lượt
+    sửa chứ không chỉ nằm trong acceptance, vì acceptance chỉ được đọc một lần lúc dựng
+    prompt nháp: một chỉ đạo tới sau lượt ấy mà chỉ cộng vào acceptance thì không có
+    lượt gọi model nào nhìn thấy nó nữa.
     """
-    return (
+    base = (
         "Bản nháp trên còn thiếu dữ liệu cho: " + ", ".join(gaps) + ".\n"
         "Dưới đây là kết quả tìm kiếm bổ sung. Hãy BỔ SUNG các phần còn thiếu vào bản "
         "nháp và giữ nguyên những phần đã đạt — trả về bản đầy đủ đã cập nhật.\n"
         "Mục nào kết quả bổ sung vẫn không có dữ liệu thì ghi rõ THIẾU kèm lý do, "
         "TUYỆT ĐỐI không suy đoán hay bịa số liệu."
     )
+    block = (steer or "").strip()
+    return f"{base}\n\n{block}" if block else base

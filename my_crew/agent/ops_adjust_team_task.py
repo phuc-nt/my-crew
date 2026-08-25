@@ -67,6 +67,44 @@ def _render_diff(task, new_pending: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _steer_running_sprint(task, task_id: str, request: str) -> str | None:
+    """Chỉ đạo giữa chừng nếu task này là một chuyến sprint đang chạy; None nếu không.
+
+    None nghĩa là "không phải ca của tôi" — gọi bên trên đi tiếp vào luồng amend cũ,
+    nên mọi task đội thường không đổi hành vi một chút nào.
+
+    Chỉ nhận đúng một hình dạng: task đang chạy VÀ có một bước sprint đang chạy. Task
+    đội nhiều bước có bước đang chạy vẫn còn bước chờ để amend thật — amend đổi được
+    kế hoạch, mạnh hơn hẳn một lời dặn, nên đừng cướp ca của nó.
+    """
+    # Đọc phòng thủ cả hai phía: nhánh này chỉ ĐỨNG SANG BÊN cho luồng amend cũ, nên
+    # nó tuyệt đối không được nổ trên một hình dạng task mà luồng kia vốn xử lý được.
+    if str(getattr(task, "status", "") or "") != "running":
+        return None
+    running_sprint = [
+        s for s in getattr(task, "steps", None) or []
+        if str(getattr(s, "status", "") or "") == "running"
+        and str(getattr(s, "step_type", "work") or "work") == "sprint"
+    ]
+    if not running_sprint:
+        return None
+
+    from my_crew.runtime.sprint_steering import write_steer
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    write_steer(team_tasks_root(), task_id, request)
+
+    from my_crew.runtime.office_room_append import append_office_event, room_for_task
+
+    append_office_event(room_for_task(task_id), author="ceo", kind="ceo", body={"text": request})
+
+    return (
+        f"Đã ghi nhận chỉ đạo cho việc {task_id} (đang chạy chế độ nhanh).\n"
+        "Chỉ đạo áp từ vòng kế tiếp — phần đã chạy xong không làm lại. "
+        "Gửi tiếp lời khác sẽ THAY lời này nếu vòng kế chưa kịp chạy."
+    )
+
+
 def preview_adjust_team_task(slots: dict[str, str]) -> str:
     """Load the current DAG, run the amend LLM call, validate, persist the draft."""
     from my_crew.agent.task_decomposition import decomposition_content_hash
@@ -84,6 +122,13 @@ def preview_adjust_team_task(slots: dict[str, str]) -> str:
         task = store.get(task_id)
         if task is None:
             raise ValueError(f"không tìm thấy việc #{task_id}")
+        # Chuyến sprint đang chạy không có bước nào "đang chờ" để đổi: cả việc là MỘT
+        # bước, và bước ấy đang chạy. Luồng amend dưới đây sẽ từ chối đúng theo hợp
+        # đồng của nó — nhưng với CEO thì "việc đang chạy, tôi muốn dặn thêm" là yêu
+        # cầu hoàn toàn hợp lệ, nên rẽ sang chỉ đạo giữa chừng thay vì báo lỗi.
+        steer_reply = _steer_running_sprint(task, task_id, request)
+        if steer_reply is not None:
+            return steer_reply
         if not any(s.status == "pending" for s in task.steps):
             raise ValueError(f"việc #{task_id} không còn bước nào đang chờ để chỉnh")
 

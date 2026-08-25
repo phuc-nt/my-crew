@@ -633,6 +633,8 @@ def _run_graph(
             retry_round=int(getattr(step, "intervention_count", 0) or 0),
             # Bậc độ khó do intake chấm, đọc từ bản ghi định tuyến của chính task này.
             effort=effort_of_task(task_id),
+            # Để pipeline tìm được file chỉ đạo giữa chừng của CEO cho đúng việc này.
+            task_id=task_id,
         )
     graph = runtime.build_task(
         settings=settings, context=context, step_title=step.title,
