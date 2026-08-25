@@ -70,12 +70,20 @@ Script sẽ tự động:
 
 Lần đầu, trình duyệt tự mở trang **Setup Wizard**. Đi qua các bước, mỗi bước có nút "Kiểm tra kết nối":
 
+Wizard có **7 bước** (5 nhóm key + công ty + mật khẩu), thanh tiến độ hiện "Bước n/7":
+
 1. **OpenRouter (bộ não LLM)** — dán API key.
 2. **Atlassian (Jira + Confluence)** — site, email, token, mã Jira project (vd `SCRUM`).
 3. **Slack** — xoxc token, xoxd token, tên team, kênh đăng báo cáo.
 4. **GitHub** — repo + kiểm tra `gh auth`.
 5. **(Tùy chọn) Web search** — nếu dùng vai trò Nghiên cứu, bấm để bật Tavily hoặc Brave; điền API key. Không có = Nghiên cứu chỉ dùng nội bộ.
-6. **Đặt mật khẩu** đăng nhập dashboard.
+6. **Thông tin công ty** — tên công ty + chọn trưởng phòng điều phối từ danh sách.
+   Lần cài đầu danh sách này **rỗng** (chưa tuyển ai), cứ để trống rồi đặt sau ở
+   **Hệ thống → Công ty** — xem mục B về hai bước ẩn khi tuyển.
+7. **Đặt mật khẩu** đăng nhập dashboard.
+
+> **Bỏ qua wizard chỉ được sau khi đã đặt mật khẩu.** Nếu không, bỏ qua sẽ mở dashboard
+> khi auth còn TẮT (auth chỉ bật khi có `WEB_AUTH_PASSWORD_HASH`).
 
 > **An toàn:** bí mật **chỉ** đi qua wizard này (ghi vào `.env` cục bộ), **không bao giờ** qua terminal
 > hay URL. Sau khi hoàn tất, wizard tự khóa lại (không mở lại được để tránh chiếm quyền).
@@ -155,6 +163,14 @@ Vào **Đội** → bấm **"+ Tạo nhân sự ảo"**. Có 2 đường:
 Trang wizard hiện **bộ template nhân sự có sẵn** (6 vai trò: Trưởng phòng, Nghiên cứu, Nội dung, Phân tích, Kiểm định, PM-Coordinator). Mỗi template mang **tool gắn sẵn** (web search, academic search, lịch báo cáo mặc định, skills). Chọn card template → bấm **"Tạo ngay"** → xác nhận → nhân sự **được tạo NGAY** (chỉ 2 click, không qua form):
 
 - Nhân sự mới sẽ **TẮT** theo mặc định. Điền token `.env` cho vai trò (nếu cần) rồi bấm **bật** ở hub **Đội ngũ**.
+- **Tuyển ≠ bổ nhiệm.** Tuyển template điều phối viên KHÔNG tự đặt nó làm trưởng phòng:
+  vai này do `coordinator_id` quyết định, mà tuyển thì để trống. Văn phòng sẽ vẫn báo
+  "chưa cấu hình trưởng phòng… đội chưa thể nhận việc" và trang Đội ngũ vẫn khuyên đi
+  tuyển người bạn VỪA tuyển. Đặt ở **Hệ thống → Công ty**. (Wizard cài đặt có ô chọn này
+  ở bước 6, nhưng lần cài đầu danh sách còn rỗng nên hầu như luôn phải quay lại đặt sau.)
+- Điều phối viên **không nhận việc được** — `assignable_staff` cố tình loại điều phối viên
+  và admin vì họ điều phối chứ không làm; đúng thiết kế, nhưng tên "Trưởng phòng" trong
+  danh sách tuyển dễ gây hiểu nhầm.
 - Wizard **tuỳ-chỉnh** (chọn "Tạo tuỳ chỉnh") vẫn nguyên: full form nếu muốn đổi tên, báo cáo, hoặc cấu hình riêng.
 - **(v36) Skill của template nạp TRỰC TIẾP lúc chạy**, không copy một lần lúc tạo — sửa skill trong
   file template thì **mọi nhân sự cùng vai nhận ngay**, không cần xoá-tạo lại. (Nhân sự tạo từ
