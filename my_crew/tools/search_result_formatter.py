@@ -74,6 +74,10 @@ _INJECTION_MARKERS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bthực\s*thi\s+(lệnh|chỉ\s*thị|hướng\s*dẫn)\s+sau\b", re.I),
 )
 
+#: Dấu mở đã bị vô hiệu hoá: vẫn đọc được là người dùng đã gõ gì, nhưng không còn
+#: là một delimiter mà model có thể nhầm với cấu trúc prompt.
+_NEUTRALIZED_DELIM = "(dấu ===SEARCH-RESULT=== do người dùng gõ, đã vô hiệu hoá)"
+
 _QUARANTINE_PLACEHOLDER = "[nội dung bị giữ lại — nghi ngờ chèn lệnh (prompt injection)]"
 
 
@@ -236,7 +240,14 @@ def truncate_preserving_delimiters(text: str, limit: int) -> str:
     # Dấu mở cuối cùng đã có dấu đóng của chính nó nằm trong lát ⇒ lát này lành.
     if cut.find(_DELIM_END, last_start + len(_DELIM_START)) != -1:
         return cut
-    return cut[:last_start].rstrip()
+    head = cut[:last_start].rstrip()
+    # Bỏ cả khối hở thì an toàn, nhưng nếu khối hở nằm ngay đầu thì "bỏ cả khối" hoá ra
+    # là xoá sạch đề của CEO — một dấu `===SEARCH_RESULT===` CEO tự gõ vào đề luôn là
+    # dấu hở, nên trường hợp này không hiếm như vẻ ngoài của nó. Giữ lại phần chữ, chỉ
+    # vô hiệu hoá dấu mở: mất cấu trúc khối thì không sao, mất đề bài mới là mất việc.
+    if head:
+        return head
+    return cut.replace(_DELIM_START, _NEUTRALIZED_DELIM)
 
 
 def format_internal_content(text: str, *, label: str) -> str:

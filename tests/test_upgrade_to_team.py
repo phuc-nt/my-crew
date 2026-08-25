@@ -661,3 +661,21 @@ def test_a_route_that_says_upgraded_blocks_even_a_plan_that_says_otherwise():
         # nâng cấp thật rồi treo ở tầng model.
         with pytest.raises(ValueError, match="vốn đã là bản nâng cấp"):
             mod._load_upgradable(task_id)
+
+
+def test_a_stray_marker_at_the_very_start_costs_the_marker_not_the_brief():
+    """Bỏ cả khối hở là đúng, TRỪ khi khối hở nằm ngay đầu — lúc đó "bỏ cả khối" thành
+    xoá sạch đề của CEO. Mà một dấu `===SEARCH_RESULT===` do CEO tự gõ luôn là dấu hở,
+    nên đây không phải trường hợp hiếm như vẻ ngoài của nó."""
+    from my_crew.tools.search_result_formatter import (
+        _DELIM_END,
+        _DELIM_START,
+        truncate_preserving_delimiters,
+    )
+
+    brief = f"{_DELIM_START}\n" + "nội dung đề bài rất dài. " * 300
+    cut = truncate_preserving_delimiters(brief, 2000)
+
+    assert "nội dung đề bài" in cut, "đề bài không được biến mất"
+    # Dấu vẫn phải mất hiệu lực cấu trúc, chỉ là không kéo theo cả đề bài.
+    assert _DELIM_START not in cut and _DELIM_END not in cut

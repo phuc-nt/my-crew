@@ -201,7 +201,7 @@ Every LLM call resolves its model through three tiers — most specific wins:
    default for that agent only.
 3. **Per-role** — `role_models:` in the profile (or `OPENROUTER_ROLE_MODELS`
    in `.env` as a `role=model,role=model` string) overrides by work kind:
-   `content`, `review`, `aggregate`, `plan`, `util`.
+   `content`, `review`, `aggregate`, `plan`, `util`, `advisor`, `sprint_low`.
 
 ```yaml
 # profiles/<id>/profile.yaml
@@ -209,11 +209,14 @@ model: deepseek/deepseek-v4-pro-0813    # tier 2: this agent's fleet override
 role_models:                             # tier 3: per work kind
   review: your/cheaper-model
   util: your/cheaper-model
+  sprint_low: your/very-cheap-model     # applies only when intake scores a brief as "easy"
 ```
 
 The point of tier 3 is **cost shape, not capability**: the `content` role writes the
 deliverable a human reads (never downgrade it), while review verdicts and slot
-extraction are short mechanical calls that can run a cheaper model. A role override
+extraction are short mechanical calls that can run a cheaper model. The `sprint_low`
+role applies only when sprint intake scores a brief as easy (low effort) — unconfigured,
+easy briefs simply use the normal content model. A role override
 keeps the fleet chain as fallback — when the cheap model is rate-limited or errors,
 the role degrades *up* to the fleet model instead of failing. An unknown role name or
 a duplicate role fails at config load, not at 3 a.m. in a cron run.

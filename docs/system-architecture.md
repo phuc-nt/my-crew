@@ -186,7 +186,20 @@ dead-end ở `runtime/team_tick_collaborators.py`; cột `route_json` ở `team_
 | Heuristic cấu trúc | `classify_brief` | **Mặc định sprint**; chỉ đẩy team khi >1200 ký tự, >10 thực thể, hoặc ≥3 đầu việc tách dòng |
 | Downgrade | `downgrade_to_sprint` | Chạy SAU decompose: plan suy biến (≤2 bước, 1 người, tuyến tính) → sprint, 0 lượt gọi model thêm |
 | Dead-end | `_is_sprint_dead_end` | Sprint bế tắc (`gave_up`) → gợi ý CEO giao lại `team:`; `_mark_route_dead_end` ghi đè `source` nhưng giữ phán quyết gốc dưới `previous` |
-| Routing log | cột `route_json` | `mode`/`source`/`reason`/`signals` — chỉ số, không chứa nguyên văn đề |
+| Routing log | cột `route_json` | `mode`/`source`/`reason`/`signals`/`effort` — chỉ số, không chứa nguyên văn đề |
+
+**Effort tier** — `sprint_intake` chấm độ khó BẢN CHẤT của việc, ngay trong lượt gọi intake
+đã có sẵn nên KHÔNG tốn thêm lượt gọi model nào: "low" (rõ ràng, ít bước suy luận, dữ liệu
+đủ trong đề), "medium" (mặc định), "high" (tổng hợp nhiều nguồn trái chiều, phán đoán
+chuyên môn sâu). Ba bậc chứ không phải bốn — model nhẹ chấm 3 lớp đáng tin hơn hẳn — và
+phân vân giữa hai bậc thì chọn bậc THẤP hơn.
+
+Chỉ "low" đổi hành vi: dùng model role `sprint_low`, cắt budget tìm kiếm, và tối đa 1 vòng
+sửa lại thay vì `MAX_REVISE_ROUNDS`. "medium" là hành vi cũ nguyên vẹn, đồng thời là đích
+fail-open của mọi nhánh hỏng (intake chết, tier rác, tier lạ, hạ cấp từ team) — nên bán
+kính ảnh hưởng ngoài "low" bằng không. Bậc lưu trong `route_json` chứ không thành cột
+riêng: nó nằm sẵn cạnh kết cục của task, nên `route_stats` trả lời được "đề chấm khó bế
+tắc bao nhiêu phần trăm". Vòng này CHỈ ĐO — effort chưa được quyền đổi lane.
 
 `classify_brief` **lật chiều mặc định** (v77: nghi ngờ → team; v78: nghi ngờ → sprint).
 Căn cứ là chi phí route sai **bất đối xứng**, đo ở `benchmark-260810-1602`: sai về phía
@@ -246,10 +259,12 @@ cùng đề, team 31m12s/$0.0700 vs sprint 8m43s/$0.0169, chấm mù 8 vs 28 đi
 `Settings.model_for_role(role)` (`my_crew/config/settings.py`, call-site `llm/client.py`)
 trả về CHAIN: model override của role đứng đầu, đuôi là fleet chain — model rẻ là đúng
 loại hay bị rate-limit/5xx, nên role degrade LÊN fleet model thay vì chết bước. Role hợp
-lệ `MODEL_ROLES = ("content", "review", "aggregate", "plan", "util", "advisor")` — chia theo cost
+lệ `MODEL_ROLES = ("content", "review", "aggregate", "plan", "util", "advisor", "sprint_low")` — chia theo cost
 shape ("người có đọc output này không"), không phải capability; content là sản phẩm,
 không bao giờ hạ cấp; sanitizer deep-agent chủ ý KHÔNG vào bucket nào (fail-closed gate
-network sandbox, giữ nguyên fleet model). Cấu hình per-agent trong profile.yaml: `model`
+network sandbox, giữ nguyên fleet model). Role `sprint_low`: dành cho bước sprint khi
+intake chấm công việc là EASY — unconfigured thì degrade về fleet, cho phép cấu hình
+model rẻ chỉ cho công việc dễ thay vì toàn bộ content. Cấu hình per-agent trong profile.yaml: `model`
 / `model_chain` / `role_models` (yaml mapping hoặc chuỗi `"role=model,..."`, env fallback
 `OPENROUTER_ROLE_MODELS`; validate ở `config_builders._d_role_models` — role lạ/trùng
 raise rõ). Fleet default: `deepseek/deepseek-v4-pro-0813`
