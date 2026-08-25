@@ -325,7 +325,16 @@ def default_team_task_deps(
         except Exception:  # noqa: BLE001 — enrichment only
             brief = ""
         if brief:
-            head = f"YÊU CẦU GỐC CỦA CEO (toàn việc — bám sát chủ thể nêu ở đây):\n{brief[:2000]}"
+            # Cắt có nhận biết delimiter, không phải `brief[:2000]`: đề có thể mang theo
+            # khối đã bọc (`upgrade_to_team` gắn bản nháp của chuyến sprint đã chết vào
+            # cuối đề), và một lát thẳng rơi vào giữa khối đó để dấu mở lơ lửng — mọi
+            # thứ sau nó trong prompt của MỌI bước nằm trong một khối không bao giờ đóng.
+            from my_crew.tools.search_result_formatter import truncate_preserving_delimiters
+
+            head = (
+                "YÊU CẦU GỐC CỦA CEO (toàn việc — bám sát chủ thể nêu ở đây):\n"
+                f"{truncate_preserving_delimiters(brief, 2000)}"
+            )
             handoff = f"{head}\n\n{handoff}" if handoff else head
         # v33 P4: answered CEO clarifications for THIS task ride into every later
         # step's context — that is the whole delivery contract of the standalone

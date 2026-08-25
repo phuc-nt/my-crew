@@ -285,7 +285,8 @@ const vi = {
   'agentDetail.roleModelsHelp':
     'Mỗi dòng là "loại_việc = model_id", ví dụ review = vendor/model-re. ' +
     'Loại việc hợp lệ: content (viết bài giao nộp), review (soát chéo), aggregate (gộp kết quả), ' +
-    'plan (chia việc), util (việc máy móc ngắn), advisor (ý kiến thứ hai). ' +
+    'plan (chia việc), util (việc máy móc ngắn), advisor (ý kiến thứ hai), ' +
+    'sprint_low (việc chạy nhanh mà máy đánh giá là dễ). ' +
     'Loại nào không khai thì chạy model chung. Xóa hết dòng = bỏ mọi cấu hình riêng.',
   'agentDetail.roleModelsEmptyDisplay': '(mọi loại việc dùng model chung)',
   'agentDetail.fieldAdvisor': 'Cố vấn theo sát',
@@ -1361,7 +1362,8 @@ const en = {
   'agentDetail.roleModelsHelp':
     'One "work_kind = model_id" per line, e.g. review = vendor/model-re. ' +
     'Valid kinds: content (writes the deliverable), review (cross-checks), aggregate (merges results), ' +
-    'plan (splits the work), util (short mechanical calls), advisor (second opinion). ' +
+    'plan (splits the work), util (short mechanical calls), advisor (second opinion), ' +
+    'sprint_low (fast-lane work the router judged easy). ' +
     'An unlisted kind runs the company-wide model. Clearing every line removes all overrides.',
   'agentDetail.roleModelsEmptyDisplay': '(every work kind uses the company model)',
   'agentDetail.fieldAdvisor': 'Ride-along advisor',

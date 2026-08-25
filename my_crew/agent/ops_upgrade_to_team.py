@@ -17,9 +17,13 @@ ghi lại:
     nội dung không tin cậy bậc hai (cùng lý do `_review_evidence_block` bọc verdict):
     cắt ngắn rồi bọc qua `format_internal_content`, và prompt nói thẳng rằng đội tự
     quyết kế hoạch chứ không chép lại hướng đi đã chết.
-  - Chuỗi nâng cấp chặn ở một lần. `previous_task` trong route record cho biết task
-    này VỐN ĐÃ là kết quả của một lần nâng; nâng tiếp là vòng lặp đốt tiền không có
-    đáy, nên tự động dừng lại và chỉ báo cho CEO.
+  - Chuỗi nâng cấp chặn ở một lần, và thực tế chặn ở HAI lớp. Lớp ngoài là
+    `_upgradable`: bản nâng cấp là team task, các bước có `step_type="work"`, nên nó
+    không còn "chuyến sprint đã chết" nào để nâng — đây là lớp thực sự cản đường trên
+    chuỗi thông thường. `_already_upgraded` (đọc `previous_task`/`source` trong route
+    record) nằm sau nó, cho trường hợp route ghi nhận đã nâng mà kế hoạch vẫn còn bước
+    sprint — tức là dữ liệu tự mâu thuẫn. Giữ cả hai vì chúng chặn hai thứ khác nhau:
+    một cái đọc kế hoạch, một cái đọc lịch sử.
 """
 
 from __future__ import annotations
@@ -107,8 +111,11 @@ def _reason_block(task) -> str:
 def _already_upgraded(store, task_id: str) -> bool:
     """Task này có phải chính nó đã là kết quả của một lần nâng cấp không?
 
-    Đây là cái chặn vòng lặp: nâng → chết → nâng → chết là chuỗi không đáy, mà mỗi
-    mắt xích tốn trọn một lượt decompose cộng cả một chuyến chạy.
+    Lớp chặn THỨ HAI, không phải lớp đầu: trên chuỗi thông thường `_upgradable` đã từ
+    chối trước (bản nâng cấp không còn bước sprint nào), nên hàm này không được gọi tới.
+    Nó bắt trường hợp lịch sử và kế hoạch nói ngược nhau — route ghi đã nâng nhưng kế
+    hoạch vẫn còn bước sprint — và trường hợp đó vẫn phải dừng, vì nâng → chết → nâng là
+    chuỗi không đáy mà mỗi mắt xích tốn trọn một lượt decompose cộng cả một chuyến chạy.
     """
     route = store.get_route(task_id)
     if not route:
@@ -214,9 +221,10 @@ def run_upgrade_to_team(slots: dict[str, str]) -> str:
 def _stamp_upgrade_route(task_id: str, *, previous_task: str) -> None:
     """Ghi vào bản ghi định tuyến rằng task này ra đời từ một lần nâng cấp.
 
-    Vừa là dữ liệu hồi cứu (`route_stats` đếm được), vừa là cái mà `_already_upgraded`
-    đọc để chặn vòng lặp — nên nó phải ghi được, nhưng ghi hỏng thì cũng chỉ mất khả
-    năng đếm chứ không được làm hỏng một task vừa dựng xong.
+    Chủ yếu là dữ liệu hồi cứu (`route_stats` đếm được); `_already_upgraded` cũng đọc
+    nó, nhưng chỉ ở lớp chặn thứ hai (xem docstring hàm đó). Vì thế ghi hỏng không mở
+    đường cho vòng lặp nâng cấp — `_upgradable` vẫn đứng nguyên — mà chỉ mất khả năng
+    đếm, và không bao giờ được làm hỏng một task vừa dựng xong.
     """
     try:
         from my_crew.runtime.team_task_paths import team_tasks_db_path

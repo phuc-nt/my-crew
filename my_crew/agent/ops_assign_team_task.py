@@ -464,8 +464,31 @@ def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str
         return _team_plan(reason, source)
 
     plan, cost = sprint_intake(brief, staff, pic_requested)
-    return (_build_sprint_task(plan, pic_requested), cost, True,
-            _route("sprint", source, reason))
+    route = _route("sprint", source, reason)
+    # Bậc độ khó đi cùng bản ghi định tuyến chứ không thành cột riêng trong `team_steps`:
+    # `route_json` vốn là chỗ chứa dữ liệu quan sát của chính lượt định tuyến này, nên
+    # không phải nâng cấp lược đồ, và câu hỏi cần trả lời — "đề chấm high chết bao nhiêu
+    # phần trăm" — được đọc từ đúng bảng đã giữ kết cục của task.
+    route["effort"] = plan.effort
+    if plan.effort == "high":
+        # Cờ riêng bên cạnh `effort` để `route_stats` đếm được mà không phải hiểu thang
+        # bậc; ở vòng này high CHỈ để đo, chưa được quyền đổi lane.
+        route["effort_high"] = True
+    return (_build_sprint_task(plan, pic_requested), cost, True, route)
+
+
+def _title_from_brief(brief: str) -> str:
+    """Tiêu đề task: CHỈ đoạn đầu của đề, cắt 120 ký tự.
+
+    Cắt ở ranh giới đoạn chứ không cắt thẳng 120 ký tự đầu vì đề có thể mang thêm khối
+    phụ do máy sinh ra ở đoạn sau — `upgrade_to_team` gắn bản nháp dở dang của chuyến
+    sprint đã chết vào cuối đề. Tiêu đề đi thẳng vào tin nhắn gửi CEO
+    (`milestone_mirror_runner` nội suy nguyên văn), nên một cửa sổ 120 ký tự thò được
+    vào khối ấy là đường đưa chữ do LLM viết ra tới CEO mà không qua lớp bọc nào.
+
+    Đề một đoạn — tức là gần như mọi đề CEO tự gõ — không đổi gì.
+    """
+    return brief.strip().split("\n\n", 1)[0].strip()[:120]
 
 
 def preview_assign_team_task(slots: dict[str, str]) -> str:
@@ -524,7 +547,8 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
 
     store = TeamTaskStore(team_tasks_db_path())
     try:
-        store.create_task(task_id=task_id, title=clean_brief[:120], original_request=brief,
+        store.create_task(task_id=task_id, title=_title_from_brief(clean_brief),
+                          original_request=brief,
                           assigned_by="ceo-chat", pic_id=task.pic_id,
                           room_id=slots.get("room_id", "").strip())
         store.set_draft_plan(task_id, step_dicts, plan_hash)

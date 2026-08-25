@@ -615,7 +615,7 @@ def _run_graph(
     # override took that node), so the ONLY node that can is `rework` — which is the
     # node that was starving, asked to close data gaps with no way to look anything up.
     if _is_sprint:
-        from my_crew.runtime.sprint_runner import build_sprint_work
+        from my_crew.runtime.sprint_runner import build_sprint_work, effort_of_task
 
         _extra["work_override"] = build_sprint_work(
             loaded=loaded, settings=settings, context=context,
@@ -631,6 +631,8 @@ def _run_graph(
             # 7ebfc0374c5c (2), both stalled. The count advances the angle rotation so
             # attempt N leads with phrasings attempt N-1 never sent.
             retry_round=int(getattr(step, "intervention_count", 0) or 0),
+            # Bậc độ khó do intake chấm, đọc từ bản ghi định tuyến của chính task này.
+            effort=effort_of_task(task_id),
         )
     graph = runtime.build_task(
         settings=settings, context=context, step_title=step.title,

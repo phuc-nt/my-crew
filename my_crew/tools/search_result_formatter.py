@@ -213,6 +213,32 @@ def format_search_results(results: list[SearchResult]) -> tuple[str, int, int]:
     return text, len(formatted), quarantined_count
 
 
+def truncate_preserving_delimiters(text: str, limit: int) -> str:
+    """Cắt `text` về tối đa `limit` ký tự mà KHÔNG bao giờ để lại một khối
+    `===SEARCH_RESULT===` mất dấu đóng `===END===`.
+
+    Cắt thẳng bằng lát `[:limit]` là an toàn khi văn bản là văn xuôi, nhưng không còn
+    an toàn khi nó CÓ THỂ chứa khối đã bọc: một lát rơi vào giữa khối để lại dấu mở
+    lơ lửng, và toàn bộ phần prompt phía sau nằm bên trong một khối không bao giờ đóng
+    — đúng thứ L1 tồn tại để ngăn. Chỗ cắt và chỗ bọc thường ở hai module cách xa nhau
+    (bọc lúc dựng đề, cắt lúc dựng prompt cho từng bước), nên chỗ cắt không thể giả
+    định đầu vào là văn xuôi thuần.
+
+    Khi lát rơi vào giữa khối, lùi về ngay TRƯỚC dấu mở của khối đó: thà mất cả khối
+    còn hơn giữ lại một khối hở.
+    """
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    last_start = cut.rfind(_DELIM_START)
+    if last_start == -1:
+        return cut
+    # Dấu mở cuối cùng đã có dấu đóng của chính nó nằm trong lát ⇒ lát này lành.
+    if cut.find(_DELIM_END, last_start + len(_DELIM_START)) != -1:
+        return cut
+    return cut[:last_start].rstrip()
+
+
 def format_internal_content(text: str, *, label: str) -> str:
     """L1/L2/L4 (not L3 — same as `format_search_results`, sandboxing is the caller's
     job) applied to a piece of INTERNAL content that nonetheless carries second-order

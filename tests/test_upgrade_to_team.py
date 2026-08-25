@@ -535,3 +535,129 @@ def test_autopilot_upgrades_a_chain_exactly_once(monkeypatch):
         assert len(store.list_recent_tasks(include_planning=True)) == 2
     finally:
         store.close()
+
+
+# --- khối context không được rò ra ngoài phạm vi của nó -------------------------------
+#
+# Hai lỗi dưới đây cùng một gốc: khối context đi nhờ trường `brief`, mà mọi tầng phía
+# sau coi `brief` là LỜI CEO tự viết — cắt 120 ký tự làm tiêu đề, cắt 2000 ký tự nhét
+# vào prompt của mọi bước. Đề bài dùng ở đây LÀNH (không chứa cụm chèn lệnh): một chuỗi
+# thù địch sẽ bị L2 cách ly thành placeholder ngắn, và chính cái ngắn đó giấu mất lỗi.
+
+
+def _benign_draft(n: int) -> str:
+    """Bản nháp dài, lành, không lặp một cụm nào đủ để bị L2 bắt."""
+    return " ".join(f"đoạn {i} nói về giá thuê máy chủ theo tháng." for i in range(n))
+
+
+def test_the_title_never_reaches_into_the_context_block(monkeypatch):
+    """Tiêu đề task đi thẳng vào tin nhắn gửi CEO (`milestone_mirror_runner` nội suy
+    nguyên văn). Đề gốc ngắn hơn 120 ký tự thì cửa sổ tiêu đề thò sang phần sau — tức
+    là chữ do LLM viết ra tới thẳng CEO mà không qua lớp bọc nào."""
+    _wire(monkeypatch)
+    original = "so sánh giá 3 dịch vụ"  # ngắn hơn 120 ký tự — đó là điều kiện gây lỗi
+    task = _seed_sprint("dead-40", brief=original)
+    _write_artifact(task, {"result_text": _benign_draft(60)})
+
+    slots = {"task_id": "dead-40"}
+    mod.run_upgrade_to_team(slots)
+
+    store = _store()
+    try:
+        title = store.get(slots["new_task_id"]).title
+    finally:
+        store.close()
+    assert title == original
+    assert "Bối cảnh" not in title
+    assert "===" not in title
+
+
+def test_every_step_prompt_gets_a_context_block_that_closes(monkeypatch):
+    """`_read_handoff` cắt `original_request` ở 2000 ký tự và nhét vào prompt của MỌI
+    bước. Đề mang khối đã bọc thì lát thẳng rơi vào giữa khối, để lại dấu mở lơ lửng —
+    phần prompt còn lại nằm trong một khối không bao giờ đóng."""
+    from my_crew.agent.team_task_graph import _team_task_db_path  # noqa: F401
+    from my_crew.tools.search_result_formatter import _DELIM_END, _DELIM_START
+
+    _wire(monkeypatch)
+    task = _seed_sprint("dead-41", brief="so sánh giá 3 dịch vụ lưu trữ")
+    _write_artifact(task, {"result_text": _benign_draft(60)})
+
+    slots = {"task_id": "dead-41"}
+    mod.run_upgrade_to_team(slots)
+
+    store = _store()
+    try:
+        brief = store.get(slots["new_task_id"]).original_request
+    finally:
+        store.close()
+    # Điều kiện gây lỗi phải thật sự có mặt: đề dài hơn cửa sổ cắt phía dưới.
+    assert len(brief) > 2000, "đề phải vượt 2000 ký tự thì test này mới bắt được lỗi"
+
+    from my_crew.tools.search_result_formatter import truncate_preserving_delimiters
+
+    head = truncate_preserving_delimiters(brief, 2000)
+    assert head.count(_DELIM_START) == head.count(_DELIM_END)
+
+
+def test_truncation_drops_a_block_it_cannot_close():
+    """Lùi về trước dấu mở chứ không cố giữ phần thân: thà mất cả khối còn hơn giữ một
+    khối hở."""
+    from my_crew.tools.search_result_formatter import (
+        _DELIM_END,
+        _DELIM_START,
+        format_internal_content,
+        truncate_preserving_delimiters,
+    )
+
+    text = "đề gốc\n\n" + format_internal_content("x" * 500, label="nháp")
+    cut = truncate_preserving_delimiters(text, 100)
+
+    assert cut == "đề gốc"
+    assert _DELIM_START not in cut and _DELIM_END not in cut
+
+
+def test_truncation_keeps_a_block_that_fits():
+    """Khối đóng trọn vẹn trong lát thì giữ nguyên — không cắt thừa."""
+    from my_crew.tools.search_result_formatter import (
+        format_internal_content,
+        truncate_preserving_delimiters,
+    )
+
+    block = format_internal_content("ngắn", label="nháp")
+    text = block + "\n" + "z" * 500
+    cut = truncate_preserving_delimiters(text, len(block) + 10)
+
+    assert cut.startswith(block)
+
+
+def test_truncation_leaves_plain_prose_alone():
+    """Không có khối nào thì hành vi phải trùng khít lát thẳng — đây là đường mà gần như
+    mọi đề CEO tự gõ đi qua."""
+    from my_crew.tools.search_result_formatter import truncate_preserving_delimiters
+
+    prose = "a" * 3000
+    assert truncate_preserving_delimiters(prose, 2000) == prose[:2000]
+    assert truncate_preserving_delimiters("ngắn", 2000) == "ngắn"
+
+
+def test_a_route_that_says_upgraded_blocks_even_a_plan_that_says_otherwise():
+    """Lớp chặn thứ hai, thử riêng: `_upgradable` đọc KẾ HOẠCH, `_already_upgraded` đọc
+    LỊCH SỬ. Chuỗi thông thường chỉ chạm lớp đầu, nên lớp sau không có test riêng thì
+    xoá đi cũng không ai biết — kể cả nhánh `previous_task`, thứ duy nhất bắt được một
+    task đã nâng mà route lại không mang `source="upgrade"`.
+    """
+    cases = {
+        "mixed-1": {"mode": "team", "source": "upgrade"},
+        "mixed-2": {"mode": "team", "source": "heuristic", "previous_task": "cũ-1"},
+        "mixed-3": {"mode": "team", "source": "heuristic",
+                    "previous": {"source": "upgrade"}},
+    }
+    for task_id, route in cases.items():
+        # Kế hoạch VẪN còn bước sprint ⇒ `_upgradable` cho qua, chỉ route chặn được.
+        _seed_sprint(task_id, route=route)
+        # `_load_upgradable` chứ không phải `run_upgrade_to_team`: gọi thẳng cửa kiểm
+        # tra thì một hàng rào thủng làm test TRƯỢT ngay, thay vì rơi xuống một lần
+        # nâng cấp thật rồi treo ở tầng model.
+        with pytest.raises(ValueError, match="vốn đã là bản nâng cấp"):
+            mod._load_upgradable(task_id)

@@ -17,6 +17,10 @@ Thuần đọc store, không gọi model, không ghi gì.
 
 from __future__ import annotations
 
+#: Dùng chung với `render_route_reason` chứ không chép lại: hai chỗ cùng đặt tên một
+#: khái niệm cho cùng một người đọc, lệch nhau là lỗi người dùng thấy được.
+from my_crew.agent.sprint_intake import _MODE_LABELS
+
 #: Nguồn quyết định → nhãn cho người đọc. Khớp đúng các giá trị `source` mà
 #: `_plan_for_brief` và `_mark_route_dead_end` ghi ra.
 _SOURCE_LABELS = {
@@ -25,9 +29,12 @@ _SOURCE_LABELS = {
     "heuristic": "bộ đoán tự động",
     "downgrade": "hạ từ team xuống sprint",
     "dead_end": "sprint bế tắc, cần chạy lại bằng đội",
+    "upgrade": "đã nâng lên đội (mang theo bối cảnh)",
 }
 
-_MODE_LABELS = {"sprint": "chạy nhanh (1 người)", "team": "cả đội"}
+#: Bậc độ khó intake chấm cho việc chạy nhanh → nhãn người đọc. Việc chạy đội không
+#: qua intake nên không có bậc; chúng bị bỏ khỏi bảng này thay vì gộp vào "medium".
+_EFFORT_LABELS = {"low": "dễ", "medium": "vừa", "high": "khó"}
 
 
 def run_route_stats(slots: dict[str, str]) -> str:
@@ -46,15 +53,26 @@ def run_route_stats(slots: dict[str, str]) -> str:
 
     by_mode: dict[str, int] = {}
     by_source: dict[str, int] = {}
-    # Chỉ đếm dead_end trên việc đã kết thúc: một việc đang chạy chưa bế tắc.
+    # `source == "dead_end"` chỉ được đóng vào lúc `_mark_route_dead_end` chạy, tức là
+    # việc đã dừng hẳn — nên không cần lọc thêm theo trạng thái task.
     dead_ends = 0
-    for route, _status in routes:
+    # Đếm theo bậc độ khó, kèm số bế tắc của từng bậc. Đây là con số phải có TRƯỚC khi
+    # cho `effort` quyền đổi lane: "đề chấm khó bế tắc bao nhiêu phần trăm" chỉ trả lời
+    # được khi bậc và kết cục nằm cùng một bản ghi.
+    by_effort: dict[str, int] = {}
+    dead_by_effort: dict[str, int] = {}
+    for route, _ in routes:
         mode = str(route.get("mode") or "?")
         source = str(route.get("source") or "?")
         by_mode[mode] = by_mode.get(mode, 0) + 1
         by_source[source] = by_source.get(source, 0) + 1
         if source == "dead_end":
             dead_ends += 1
+        effort = str(route.get("effort") or "").strip().lower()
+        if effort in _EFFORT_LABELS:
+            by_effort[effort] = by_effort.get(effort, 0) + 1
+            if source == "dead_end":
+                dead_by_effort[effort] = dead_by_effort.get(effort, 0) + 1
 
     total = len(routes)
     lines = [f"Định tuyến {total} việc gần nhất:"]
@@ -66,6 +84,17 @@ def run_route_stats(slots: dict[str, str]) -> str:
     lines.append("Ai quyết:")
     for source, count in sorted(by_source.items(), key=lambda kv: -kv[1]):
         lines.append(f"  • {_SOURCE_LABELS.get(source, source)}: {count}")
+
+    if by_effort:
+        lines.append("")
+        lines.append("Độ khó việc chạy nhanh (máy chấm lúc nhận việc):")
+        for effort in ("low", "medium", "high"):
+            count = by_effort.get(effort, 0)
+            if not count:
+                continue
+            stuck = dead_by_effort.get(effort, 0)
+            tail = f", {stuck} bế tắc" if stuck else ""
+            lines.append(f"  • {_EFFORT_LABELS[effort]}: {count}{tail}")
 
     downgrades = by_source.get("downgrade", 0)
     if downgrades or dead_ends:

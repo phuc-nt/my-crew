@@ -72,7 +72,13 @@ DEFAULT_MODEL = "deepseek/deepseek-v4-pro-0813"
 #               short note. Unlike the others this role wants a model that is not
 #               necessarily cheap — the whole point is a different, sharper reader
 #               than the one doing the work.
-MODEL_ROLES = ("content", "review", "aggregate", "plan", "util", "advisor")
+#   sprint_low — the sprint lane's draft call when intake judged the brief EASY. It is
+#               a `content` call by shape, and the "never downgrade content" rule still
+#               holds for everything else: this role exists so the cheap model applies
+#               ONLY where a code-side judgement said the work is easy, instead of to
+#               every deliverable at once. Leave it unset and easy briefs simply run
+#               the normal content model — the resolver degrades to the fleet chain.
+MODEL_ROLES = ("content", "review", "aggregate", "plan", "util", "advisor", "sprint_low")
 
 
 @dataclass(frozen=True)

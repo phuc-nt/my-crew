@@ -59,6 +59,20 @@ MAX_SPRINT_PREFETCH_QUERIES = 6
 #: are what keeps the CEO's per-task cost cap decidable when a brief lists 30 items.
 SCALED_PREFETCH_CAP = 12
 SCALED_TOTAL_CAP = 16
+#: What the "low" effort tier costs. Ceilings, not targets: the scaled budget still
+#: applies underneath, so a low-effort brief enumerating 6 subjects keeps a query per
+#: subject up to this cap rather than being cut to it.
+LOW_EFFORT_PREFETCH_CAP = 4
+LOW_EFFORT_TOTAL_CAP = 4
+#: One revise round instead of two. A brief intake judged easy that still fails its
+#: coverage check twice is not an easy brief — the dead-end path (which hands the work
+#: to the crew) is the right answer there, not a third round of the same pipeline.
+LOW_EFFORT_REVISE_ROUNDS = 1
+#: Model role used when effort is "low". Unconfigured, `Settings.model_for_role` falls
+#: through to the fleet chain, so a company that never sets it runs the normal model
+#: and the tier degrades to a budget-only change.
+LOW_EFFORT_MODEL_ROLE = "sprint_low"
+
 #: Longest goal (in words) still worth sending verbatim as the overview query. Live
 #: task 647ee49de19d is why: the provider rejected the raw-goal query with HTTP 422,
 #: so a long overview can only come back as a failure sentinel — buying no data and
@@ -756,6 +770,29 @@ def _fetch_official_pages(
     return fetched
 
 
+def effort_of_task(task_id: str) -> str:
+    """Bậc độ khó đã ghi cho task này, hoặc "medium" khi không đọc được.
+
+    Đọc từ `route_json` — bản ghi định tuyến — nên không cần thêm cột vào `team_steps`.
+    Nuốt mọi lỗi: đây là tham số TỐI ƯU, và hạ sai bậc thì mất tiền, còn để cả pipeline
+    chết vì không mở được sổ định tuyến thì mất việc.
+    """
+    try:
+        from my_crew.runtime.team_task_paths import team_tasks_db_path
+        from my_crew.runtime.team_task_store import TeamTaskStore
+
+        store = TeamTaskStore(team_tasks_db_path())
+        try:
+            route = store.get_route(task_id) or {}
+        finally:
+            store.close()
+        value = str(route.get("effort") or "").strip().lower()
+    except Exception:  # noqa: BLE001 — xem docstring
+        logger.warning("sprint: không đọc được effort từ route_json", exc_info=True)
+        return "medium"
+    return value if value in ("low", "medium", "high") else "medium"
+
+
 def build_sprint_work(
     *,
     loaded: Any,
@@ -767,6 +804,7 @@ def build_sprint_work(
     on_phase: Callable[[str], None] | None = None,
     needs_web: bool = True,
     retry_round: int = 0,
+    effort: str = "medium",
 ) -> Callable[[str, str, Any], tuple[str, float | None]]:
     """Return a `work_override` callable running the sprint pipeline for one step.
 
@@ -794,6 +832,13 @@ def build_sprint_work(
     the prefetch queries onto attribute angles the earlier attempt never sent, so a
     retry gathers DIFFERENT evidence instead of re-buying the bundle that already
     failed its coverage check.
+
+    `effort` is intake's ruling on how hard the brief actually is. Only "low" changes
+    anything: it names the `sprint_low` model role and trims the search/revise budget,
+    on the reasoning that three revise rounds on a brief the router judged easy buy
+    nothing. "medium" and "high" run the pipeline EXACTLY as before — high is measured
+    this round (via the route record), not yet acted on. Anything unrecognised reads as
+    medium, so a bad value costs nothing.
     """
     from my_crew.runtime.collect_prefetch import prefetch_queries
 
@@ -835,6 +880,12 @@ def build_sprint_work(
         _beat("sprint_prefetch")
         queries = entity_queries(goal, acceptance) if needs_web else []
         _prefetch_cap, total_queries_cap = sprint_query_budget(len(entities))
+        low_effort = effort == "low"
+        if low_effort:
+            queries = queries[:LOW_EFFORT_PREFETCH_CAP]
+            total_queries_cap = min(total_queries_cap, LOW_EFFORT_TOTAL_CAP)
+        revise_rounds = LOW_EFFORT_REVISE_ROUNDS if low_effort else MAX_REVISE_ROUNDS
+        draft_role = LOW_EFFORT_MODEL_ROLE if low_effort else "content"
         angles = attribute_angles(goal, acceptance, entities) if needs_web else []
         if retry_round > 0 and queries and angles:
             # Retry attempt: lead with an angle the earlier attempts never sent. The
@@ -875,11 +926,11 @@ def build_sprint_work(
             context=context, goal=goal, acceptance=acceptance, handoff=handoff, bundle=bundle,
         )
         _beat("sprint_draft")
-        result = client.complete(messages, role="content")
+        result = client.complete(messages, role=draft_role)
         draft = str(getattr(result, "content", "") or "")
         _tally(result)
 
-        for round_no in range(1, MAX_REVISE_ROUNDS + 1):
+        for round_no in range(1, revise_rounds + 1):
             _beat("sprint_check")
             gaps = coverage_gaps(draft, entities, bundle)
             if not gaps:
@@ -938,7 +989,9 @@ def build_sprint_work(
                 {"role": "user", "content": extra},
             ]
             _beat(f"sprint_revise_{round_no}")
-            result = client.complete(messages, role="content")
+            # Cùng vai với lượt nháp: đổi model giữa một mạch hội thoại tích luỹ nghĩa
+            # là bản sửa được viết bởi một model chưa từng viết bản nháp nó đang sửa.
+            result = client.complete(messages, role=draft_role)
             revised = str(getattr(result, "content", "") or "")
             _tally(result)
             if revised.strip():
