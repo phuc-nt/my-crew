@@ -1,16 +1,16 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v88, đã ship tới 0.11.0). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-08-19.
+> Lộ trình + trạng thái (as-built v92, đã ship tới 0.13.0; v0.14.0 làm dở tại v86–v92). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Cập nhật: 2026-08-26.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v85 (PyPI 0.11.0); arc v86–v88
-đã commit trên main, chưa release.** 3542 BE + 344 FE + 33 e2e test, ruff/tsc sạch. Mọi vòng
-lớn E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out parallelism,
-UAT đối kháng, benchmark sprint-vs-team chấm mù, release gate delta-UAT sống 4/4 hành vi).
+**Production-usable, single-user autonomy-first. Đã ship tới v0.13.0 (PyPI); arc v0.14.0
+(v86–v92) commit trên main, chưa release.** 3991 BE + 406 FE + 44 e2e test, ruff/tsc sạch.
+Mọi vòng E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out,
+UAT đối kháng, benchmark sprint-vs-team chấm mù, live e2e opt-in, release gate delta).
 
-**v86–v88 (arc vòng lặp gọn + dọn dẹp + redesign web — 08-18→08-19, chưa release):**
+**v86–v88 (arc vòng lặp gọn + dọn dẹp + redesign web — 08-18→08-19):**
 **v86 thin tool loop** (`runtime_backends/thin_tool_loop.py`): vòng tool-calling tự chủ
 trên OpenAI SDK thay `langchain.agents.create_agent` ở tier react, cờ `loop_engine:
 thin|langchain` giữ A/B; bench live 3+3 interleaved — pass-rate hòa 3/3, prompt token rẻ
@@ -27,6 +27,19 @@ SSE→invalidate; code theo `features/<hub>/`; 21 redirect giữ mọi URL cũ s
 registry mà bỏ cổng profile — template tạo agent `enabled: false` cố ý nên tuyển người đầu
 tiên không thể bật bằng UI; và chặn giao việc do rào escalation viết bằng từ vựng backend,
 không chỉ ra màn nào sửa được. Cả hai sửa, giữ nguyên rào an toàn.
+
+**v92 (fast/crew lane routing v2 — 08-25→08-26, v0.14.0 unreleased):** **Nâng cấp 2-lane routing v77**
+giữ lại mọi tiến bộ, lấp 4 gap: (1) **routing steering** — sprint dead-end → lật sang team giữ bối cảnh
+(`run_upgrade_to_team`, nháp dở đi theo làm tham khảo); (2) **effort tier** (`low|medium|high` lưu `route_json`)
+— chỉ `low` đổi hành vi: model role `sprint_low` + cắt budget search + tối đa 1 revise; `medium` hành vi
+cũ (fail-open); (3) **lane stats** — đo 3 miss-rate (`dead_end`/`downgrade`/`upgrade`) trên `routed_tasks`
+(không tất cả), thêm `cost_usd`/`wall_clock_seconds` per-lane; (4) **benchmark v2** — 4 mode:
+`routing` (0 call, offline so router), `release` (0 call, so chi phí), `tasks` (read live store),
+`judge` (blind A/B chất lượng). **Live fullflow suite** (`tests/fullflow_live/`, 18 case) end-to-end vs
+model thật **opt-in** (`pyproject.toml::addopts = ["-m", "not live"]`), assert trên `route_json` + DAG
+shape ổn định qua model nondeterminism. Cũng tìm ra 3 lỗi thực tế (tiền tố ép chế độ bị drop,
+`_parse_json_object` nhặt thêm sau dấu `}`, đếm dãy inline nhận đánh số DANH TỪ). Cổng: 3991 BE passed,
+1 skipped, 18 live deselected.
 
 **v80–v85 (arc quan sát bước + toàn vẹn nguồn — 08-16→08-18, chưa release):** **v80 step
 observability**: transcript JSONL per-attempt trong jail agent (`runtime/step_recorder.py`),

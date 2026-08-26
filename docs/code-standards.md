@@ -50,6 +50,10 @@
 - KHÔNG fake data/mock để giả pass. Mock chỉ dùng để **cô lập external API** trong unit test, phải rõ ràng là mock.
 - Tool layer thiết kế để mock được (cho test không cần API thật).
 - **Backend fullflow** — sửa hành vi pipeline giao việc (intake/decompose/tick/review/delivery) → chạy `tests/fullflow/` và thêm/cập nhật scenario nếu hành vi user-facing đổi (guide: `docs/fullflow-testing-guide.md`).
+- **Live fullflow suite (opt-in)** — `tests/fullflow_live/` chạy end-to-end vs model thật; **tốn tiền**.
+  Mặc định skip (`pyproject.toml::addopts = ["-m", "not live"]`). Chọn `-m live` để chạy.
+  Không `OPENROUTER_API_KEY` → skip ngay. Gate dùng `pytest_collection_modifyitems` (đúc từ v92).
+  Mỗi case assert trên `route_json` + DAG hình dạng, không prose → ổn định qua model nondeterminism.
 - **Frontend e2e fixture** — `web/e2e/support/mock-api.ts` là mock chung cho toàn bộ `/api`.
   Thêm route BE mà e2e chạm tới → phải mock luôn, và gọi `expectNoUnmockedRoutes(mock)` cuối
   test. Lý do: route thiếu mock chỉ log `[mock-api] UNMOCKED` ra console, app vẫn render như

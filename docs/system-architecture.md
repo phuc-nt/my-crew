@@ -1,9 +1,9 @@
 # System Architecture — my-crew
 
-> Kiến trúc kỹ thuật (as-built, v88 — redesign web FE; backend ở mức 0.11.0). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
+> Kiến trúc kỹ thuật (as-built, v92 — two-lane routing v2; backend ở mức 0.14.0 unreleased, last released 0.13.0). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
 > (vì sao) + [action-gateway-explainer](action-gateway-explainer.md) (mô hình an toàn) +
 > [codebase-summary](codebase-summary.md) (cái gì ở file nào).
-> Cập nhật: 2026-08-19.
+> Cập nhật: 2026-08-26.
 
 ## 1. Nguyên tắc kiến trúc
 
@@ -319,6 +319,33 @@ config nào phải sửa để giữ hành vi cũ.
 - **Giới hạn có chủ đích**: chỉ endpoint OpenAI-compatible (DeepSeek, Moonshot, Groq,
   Together, server local). API không tương thích nằm ngoài phạm vi. Chỉ provider dùng
   API key — KHÔNG OAuth subscription (quyết định ToS ghi trong plan).
+
+### 3.5f Lane stats, effort tier, & benchmark v2 (v92)
+
+**Effort tier** (`low|medium|high`, v92): LLM intake tự chấm trong JSON kế hoạch
+(`sprint_intake()` → `SprintPlan.effort`); lưu trong `route_json` (không thêm cột), cùng với
+`mode`/`source`/`reason`/`signals`. Chỉ `low` đổi hành vi: dùng model role `sprint_low` (rẻ hơn
+nếu cấu hình), cắt budget tìm kiếm, tối đa 1 vòng revise. `medium` là hành vi cũ nguyên vẹn và
+là fail-open của mọi nhánh hỏng (effort rác ép về medium, không cảnh báo). `high` vòng này CHỈ
+để đo — đóng thêm cờ `route["effort_high"]` trong route record, chưa được quyền đổi lane và
+chưa có chỗ nào trong runtime đọc lại (mới chỉ test đọc).
+
+**Lane stats** (`my_crew/bench/task_metrics.py::load_lane_stats`, v92): đo thực tế trên live store.
+Ba tỉ lệ lỗi tính TRÊN `routed_tasks` (chỉ task CÓ bản ghi định tuyến `route_json`), không tất cả
+— task cũ trước v77 vào lane `unknown`, không đoán bừa: `dead_end` (sprint nhận việc rồi bế tắc),
+`downgrade` (heuristic gọi team quá tay, lưới an toàn hạ xuống sprint), `upgrade` (một dead-end đã
+được trả tiền lần hai để chạy lại bằng đội). Thêm `cost_usd` + `wall_clock_seconds` per-lane để so bản.
+
+**Benchmark v2** (`my_crew/bench/`): bốn mode đo công việc sprint/team:
+1. **routing** — offline, 0 model call. Chạy quyết định router trên bộ đề, diff hai bản (`routing_bench.py`).
+2. **release** — offline, 0 model call. Tính chi phí dự định ở mỗi effort tier, diff hai bản.
+3. **tasks** — online, read-only. Đọc store live, trả bảng per-lane cost/delivery/miss-rates.
+4. **judge** — online, chi phí. Blind A/B chấm chất lượng deliverable (model độc lập từ task runner).
+
+Live fullflow suite (`tests/fullflow_live/`, v92): 18 case end-to-end vs model thật, **opt-in**. 
+`pyproject.toml` đặt `addopts = ["-m", "not live"]` nên `uv run pytest` mặc định skip; chọn với 
+`-m live`. Không `OPENROUTER_API_KEY` → skip ngoài lỗi xác thực. Case assert trên `route_json` 
+(route record chứ không prose), ổn định qua model nondeterminism.
 
 ### 3.6 Action Gateway (`my_crew/actions/`, v30–v31, v67–v68 learned rules)
 `action_gateway.py` = cửa duy nhất. `hard_block.py` = Lớp A (chặn cứng, không duyệt được).

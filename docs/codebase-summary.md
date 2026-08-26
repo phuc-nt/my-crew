@@ -1,9 +1,12 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-08-21 — as-built sau v91 "UX real-use journeys"** (5 phase + vòng e2e full-flow tới `9d586e2`,
-> chi tiết `journals/260820-v91-ux-real-use-journeys.md`): cold-start hardening · dry-run UX visibility · one-click unstick + task control · agent config forms round-trip · assign + manage quick wins. Trên nền v88 web FE redesign (IA 5 hub với `/chat` `/office` `/work` `/team` `/system`, mỗi cũ → tab URL; TanStack Query `query-keys.ts` duy nhất; SSE→invalidate; 21 redirect). Entry bundle 475.37 kB (cổng ≤560).
-> Cổng: 3690 BE (1 skipped) · 406 vitest (59 file) · 44 e2e playwright (39 chromium + 5 mobile) · tsc/ruff sạch.
+> Status: **2026-08-26 — as-built sau v92 "fast-crew lane routing v2"** (6 phase,
+> chi tiết `plans/260825-1509-fast-crew-lane-routing-v2/`): routing upgrade + effort tier + live fullflow suite + benchmark v2.
+> v92 thêm: 2-lane routing steering (sprint→team lúc chạy), effort tier chấm độ khó (`low|medium|high` lưu `route_json`),
+> three miss-rates (dead_end/downgrade/upgrade), 4 benchmark modes (routing/release/tasks/judge), 18 live e2e case opt-in.
+> Trên nền v88 web FE redesign (IA 5 hub với `/chat` `/office` `/work` `/team` `/system`, mỗi cũ → tab URL; TanStack Query `query-keys.ts` duy nhất; SSE→invalidate; 21 redirect). Entry bundle 476 kB (cổng ≤560).
+> Cổng: 3991 BE (1 skipped, 18 live deselected) · 406 vitest (59 file) · 44 e2e playwright (39 chromium + 5 mobile) · tsc/ruff sạch.
 > Arc trước — **v74 "tốc độ đa-agent" 08-08→08-09** (chi tiết
 > `journals/260808-v74-multi-agent-speed.md`, 7 vòng benchmark sống): tier theo bước
 > `needs_web` (bước không-web + review row → native one-shot; split-sub kế thừa cờ cha);
@@ -622,6 +625,45 @@ gần nhất: `agent-desk` 900 kB (94% `three`+r3f, chỉ sau `/office`) · `cha
 **Cổng.** vitest 406/406 (59 file) · playwright 44/44 (39 chromium + 5 mobile) · `npx tsc -b` sạch · BE 3690 passed, 1 skipped.
 
 **Đổi mật khẩu web (v90).** Endpoint `POST /api/auth/change-password` (`my_crew/server/routes_auth_password.py`) ghi phía BE. Giao diện ở tab Cài đặt Hub Hệ thống (`web/src/features/system/change-password-box.tsx`). Thiết kế: đổi mật khẩu xoay luôn `WEB_SESSION_SECRET` nên **mọi phiên đăng nhập bị đá ra** (kể cả phiên hiện tại) — đây là chủ ý để cưỡng chế login lại an toàn. UI nút "Về màn đăng nhập". Tối thiểu 6 ký tự, phải khác mật khẩu cũ.
+
+### v92: Fast/crew lane routing v2 — steering + effort tier + benchmark suite (2026-08-26, xong)
+
+Plan 6 phase `plans/260825-1509-fast-crew-lane-routing-v2/`. v77 đã có 2 lane (sprint/team);
+v92 hoàn thiện: routing steering lúc chạy, effort tier chấm độ khó, lane stats đo thực tế, live e2e suite.
+
+**Routing steering** (`my_crew/agent/ops_upgrade_to_team.py::run_upgrade_to_team`, v78):
+sprint lúc chạy bị dead-end → 1 lệnh (hoặc 0 nếu autopilot) lật sang team, **mang theo bối
+cảnh**. Dựng task MỚI qua tiền tố `team:` của chính CEO, không hồi sinh task cũ: kế hoạch
+sprint là DAG suy biến một đỉnh, sửa nó giữa chừng là đúng thứ đường confirm-time tồn tại
+để cấm. Bản nháp dở đi vào prompt như THAM KHẢO (cắt ngắn + `format_internal_content`),
+không phải kế hoạch — đội tự quyết hướng đi thay vì chép lại hướng đã chết. Task cũ giữ
+nguyên lịch sử; route record của task mới đóng dấu `source="upgrade"` + `previous_task`.
+
+**Effort tier** (`my_crew/agent/sprint_intake.py::sprint_intake` → `SprintPlan.effort`):
+3 mức `low|medium|high`, do chính LLM intake tự chấm trong JSON kế hoạch dựa trên độ khó BẢN
+CHẤT của việc — không phải hàm heuristic, và độc lập với `route_signals` của bộ định tuyến.
+Lưu trong `route_json` (không thêm cột `team_steps`). Chỉ `low` đổi hành vi: dùng model role
+`sprint_low` (nếu cấu hình), cắt budget tìm kiếm, tối đa 1 vòng revise. `medium` = hành vi cũ
+(fail-open; effort rác ép về medium). `high` vòng này chỉ đóng cờ `effort_high` để đo.
+
+**Lane stats** (`my_crew/bench/task_metrics.py::load_lane_stats`): đo trên live store.
+Ba miss-rate tính trên `routed_tasks` (task có bản ghi định tuyến), không tất cả:
+`dead_end` (sprint nhận rồi bế tắc), `downgrade` (heuristic gọi team quá tay, lưới hạ xuống
+sprint), `upgrade` (dead-end được trả tiền lần hai chạy lại bằng đội); task cũ không có route
+record vào lane `unknown`. Thêm `cost_usd` + `wall_clock_seconds` per-lane để so bản, ngoài miss rates.
+
+**Benchmark v2** — 4 mode offline/online (`my_crew/bench/`):
+- `routing_bench.py` — 0 model call, so quyết định router trên bộ đề.
+- `quality_judge.py` — blind A/B chấm chất lượng deliverable (model độc lập).
+- `task_metrics.py::load_lane_stats` — read-only, trả bảng per-lane metrics từ store.
+- `run-sprint-benchmark.py` — giao diện thống nhất: `routing` / `release` / `tasks` / `judge`.
+
+**Live fullflow suite** (`tests/fullflow_live/`, 18 case): end-to-end vs model thật.
+**Opt-in**: `pyproject.toml::addopts = ["-m", "not live"]` → mặc định skip;
+chọn `-m live`. Không `OPENROUTER_API_KEY` → skip. Case assert trên `route_json` + DAG shape.
+Gate trước đây dùng `pytestmark` bị pytest bỏ qua — nay dùng `pytest_collection_modifyitems`.
+
+**Cổng.** 3991 BE passed (1 skipped, 18 live deselected) · ruff sạch. Không phá test trước.
 
 ## Deferred
 
