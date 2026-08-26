@@ -683,8 +683,16 @@ OPS_COMMANDS: dict[str, dict] = {
                        "và phân công cho từng người",
         "readonly": False,
         "slots": {
+            # Tiền tố `sprint:`/`team:` phải được CHÉP NGUYÊN vào slot này. Bộ tách
+            # slot đọc "mô tả việc" là lời kể, nên nó coi tiền tố như lời dẫn của
+            # cuộc trò chuyện và bỏ đi — đo thật thấy `sprint: khảo sát 5 đối thủ...`
+            # tới `assign_team_task` đã mất tiền tố và bị bộ đoán định tuyến lại.
+            # Nghĩa là lệnh ép chế độ của CEO im lặng không có tác dụng ở đúng bề mặt
+            # nó sinh ra để phục vụ.
             "brief": {"prompt": "Mô tả việc cần giao cho đội (mình sẽ tự chia thành các "
-                                "bước và phân công cho từng người)?",
+                                "bước và phân công cho từng người)? Nếu câu của CEO mở "
+                                "đầu bằng \"sprint:\" hoặc \"team:\" thì GIỮ NGUYÊN "
+                                "tiền tố đó ở đầu mô tả, đừng bỏ đi.",
                       "required": True, "max_len": 1000},
         },
         "run": run_assign_team_task,

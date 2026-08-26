@@ -103,6 +103,86 @@ def test_classify_re_asks_once_when_the_first_completion_does_not_parse():
     assert out["command_id"] == "create_agent"
 
 
+def test_a_question_verdict_has_no_code_level_prefix_override(tmp_path, monkeypatch):
+    """Tiền tố ép chế độ KHÔNG có lưới đỡ trong code — luật prompt là chỗ duy nhất.
+
+    `_restore_mode_prefix` chỉ chạy SAU khi bộ phân loại đã trả về một command; bộ phân
+    loại phán `question` thì luồng thoát ra ở nhánh trả lời suông và tiền tố không bao
+    giờ tới chỗ được khôi phục. Ghi lại bằng một bài đo để người sau không tưởng rằng
+    đã có sẵn đường lùi rồi nới luật trong `_INTENT_SYSTEM`.
+
+    Đây cũng là câu trả lời cho đề nghị "viết một bài ngoại tuyến đo hành vi tiền tố":
+    không có seam nào để đo. Chỗ duy nhất quyết định là chính model, nên phần đó thuộc
+    live suite. Nếu sau này muốn một lưới đỡ thật thì phải THÊM nó vào `_start_new`
+    trước, và khi đó bài này sẽ đỏ — đúng lúc cần đỏ.
+    """
+    from my_crew.agent import ops_chat
+
+    monkeypatch.setattr(ops_chat, "classify_ops_intent",
+                        lambda *_a, **_k: {"intent": "question"})
+
+    reply, _cost = ops_chat._start_new(
+        message="sprint: soạn 3 câu mô tả hạng mục",
+        conversation_key="c", store=_store(tmp_path), llm=_FakeLlm("không dùng tới"),
+        now=0.0, commands=OPS_COMMANDS,
+    )
+    # Rơi thẳng ra nhánh hỏi-đáp: không có command, nên không có chỗ nào khôi phục tiền tố.
+    assert reply == "", reply
+
+
+def test_the_classifier_is_told_that_a_mode_prefix_is_always_a_delegation():
+    """Tiền tố ép chế độ phải được nêu THẲNG trong prompt phân loại.
+
+    Đo thật: đề `sprint:` NGẮN và dễ ("soạn 3 câu mô tả hạng mục") bị chính agent đáp
+    suông kèm lời khuyên "liên hệ với writer" — bộ phân loại thấy việc nhỏ nên tự nhận
+    là question. Cùng lúc đó đề `sprint:` to thì qua. Nghĩa là quyết định đang phụ thuộc
+    ĐỘ LỚN của việc, trong khi CEO đã chỉ định thẳng chế độ chạy — không còn gì để đoán.
+
+    Bài này chốt phần kiểm chứng được ngoại tuyến: luật có mặt trong prompt. Việc model
+    có tuân hay không thuộc về live suite (nhóm C), nên ở đây không giả vờ đo cái đó —
+    xem `test_a_question_verdict_has_no_code_level_prefix_override` về lý do KHÔNG có
+    đường ngoại tuyến nào đo được nó.
+    """
+    from my_crew.agent.ops_chat import _INTENT_SYSTEM
+
+    assert "sprint:" in _INTENT_SYSTEM and "team:" in _INTENT_SYSTEM, _INTENT_SYSTEM
+    assert "assign_team_task" in _INTENT_SYSTEM, _INTENT_SYSTEM
+
+
+def test_a_sentence_written_after_the_json_does_not_discard_the_classification():
+    """Model trả object hợp lệ RỒI viết thêm một câu — vẫn phải đọc được.
+
+    Đo thật ở live suite: cả hai lượt của bộ phân loại cùng ném
+    `Extra data: line 4 column 1`, rơi về `question`, và lời uỷ nhiệm của CEO bị đáp
+    suông thay vì thành việc. `json.loads` đòi TOÀN BỘ chuỗi là JSON nên một câu giải
+    thích viết sau object đúng cũng đủ ném đi một kết quả phân loại vốn đã chính xác.
+
+    Cấp một item thôi: nếu lượt đầu đã đọc được thì không có lượt hai. Cấp hai item sẽ
+    khiến bài này vẫn xanh kể cả khi lượt đầu bị vứt đi — đúng lỗi cần bắt.
+    """
+    llm = _FakeLlm(
+        '{"intent":"command","command_id":"assign_team_task",'
+        '"slots":{"brief":"khảo sát 5 công cụ quản lý dự án"}}\n\n'
+        "Tôi sẽ giao việc này cho đội nhé anh."
+    )
+    out = classify_ops_intent(llm, "khảo sát giúp anh 5 công cụ quản lý dự án")
+
+    assert out["intent"] == "command", out
+    assert out["command_id"] == "assign_team_task", out
+    assert out["slots"]["brief"] == "khảo sát 5 công cụ quản lý dự án", out
+
+
+@pytest.mark.parametrize("garbage", ["chỉ là lời nói thường", "[1,2] rồi thêm chữ", ""])
+def test_output_that_does_not_start_with_an_object_still_falls_back(garbage):
+    """Đọc phần thừa phía sau KHÔNG được nới lỏng nhánh fail-safe.
+
+    Bỏ qua chữ viết sau một object hợp lệ là một chuyện; nhận bừa một đầu ra không hề
+    mở đầu bằng object lại là chuyện khác — cái sau sẽ biến lỗi thật thành hành động.
+    """
+    out = classify_ops_intent(_FakeLlm(garbage, garbage), "msg")
+    assert out["intent"] == "question"
+
+
 def test_classify_bills_every_attempt_it_made():
     """The retry costs a real completion — the turn must not under-report by dropping
     the failed attempt's cost."""
@@ -570,3 +650,54 @@ def test_advance_or_confirm_skips_draft_after_auto_confirm(tmp_path, monkeypatch
     )
     assert reply == "ĐÃ TỰ XÁC NHẬN"
     assert store.load("ceo", now=time.time()) is None  # no awaiting_confirm draft parked
+
+
+# --- v78: tiền tố ép chế độ phải sống sót qua lớp tách slot ---
+
+
+def test_a_mode_prefix_dropped_by_the_classifier_reaches_the_command(tmp_path, monkeypatch):
+    """Bài live A5 bắt được: bộ tách slot đọc "mô tả việc cần giao" là lời kể nên bỏ
+    `sprint:` đi, và `assign_team_task` nhận đề đã sạch tiền tố rồi định tuyến lại bằng
+    bộ đoán — lệnh ép chế độ của CEO im lặng vô hiệu.
+
+    Chốt ở seam `handle_ops_message` chứ không chỉ ở hàm vá: lỗi thật là chỗ GỌI hàm vá
+    bị thiếu, mà một bài chỉ gọi thẳng hàm vá vẫn xanh khi seam không gọi nó."""
+    seen: dict[str, str] = {}
+    monkeypatch.setitem(
+        OPS_COMMANDS["assign_team_task"], "preview",
+        lambda slots: seen.setdefault("brief", slots.get("brief", "")) or "xem trước",
+    )
+    store = _store(tmp_path)
+    try:
+        handle_ops_message(
+            message="sprint: khảo sát 5 công cụ quản lý dự án",
+            conversation_key="ceo", store=store, now=1.0,
+            # Bộ phân loại trả về đề ĐÃ MẤT tiền tố — đúng như model thật đã làm.
+            llm=_FakeLlm('{"intent":"command","command_id":"assign_team_task",'
+                         '"slots":{"brief":"khảo sát 5 công cụ quản lý dự án"}}'),
+        )
+    finally:
+        store.close()
+
+    assert seen.get("brief") == "sprint: khảo sát 5 công cụ quản lý dự án", seen
+
+
+def test_a_brief_with_no_prefix_is_not_given_one(tmp_path, monkeypatch):
+    """Vế còn lại: không được tự ép chế độ cho đề mà CEO không hề ép."""
+    seen: dict[str, str] = {}
+    monkeypatch.setitem(
+        OPS_COMMANDS["assign_team_task"], "preview",
+        lambda slots: seen.setdefault("brief", slots.get("brief", "")) or "xem trước",
+    )
+    store = _store(tmp_path)
+    try:
+        handle_ops_message(
+            message="khảo sát 5 công cụ quản lý dự án",
+            conversation_key="ceo", store=store, now=1.0,
+            llm=_FakeLlm('{"intent":"command","command_id":"assign_team_task",'
+                         '"slots":{"brief":"khảo sát 5 công cụ quản lý dự án"}}'),
+        )
+    finally:
+        store.close()
+
+    assert seen.get("brief") == "khảo sát 5 công cụ quản lý dự án", seen
