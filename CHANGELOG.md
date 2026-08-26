@@ -3,15 +3,50 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
-## [0.14.0] — 2026-08-25
+## [0.14.0] — 2026-08-26
 
-A second model now rides along with running work and can flag a problem mid-step, and a
+Work now picks its own lane. Simple jobs run as a one-process sprint and finish in
+minutes for cents; jobs that need the crew get the crew — and a sprint that hits a wall
+can be handed to the crew mid-flight instead of being retyped from scratch. On the real
+fleet the fast lane delivers 97% of its tasks at half the cost and a sixth of the wall
+time of the crew lane.
+
+A second model also rides along with running work and can flag a problem mid-step, and a
 fleet is no longer confined to one vendor — chains can route per-role to any
 OpenAI-compatible endpoint. Both are configurable from the agent page rather than by
-hand-editing YAML. The rest of the release is what a cold-start UAT found: four defects
-that only appear on a fresh install, which is exactly the path CI never walks.
+hand-editing YAML.
+
+The fixes come from two sources that CI cannot reach: a cold-start UAT (four defects that
+only appear on a fresh install) and a new suite that runs the whole flow against the real
+model, which caught the CEO's own lane instruction being silently discarded.
 
 ### Added
+- **Two lanes, and a way out when the wrong one was picked.** Simple work runs as a
+  `sprint` (one process, one degenerate step); work that needs the crew runs as a
+  `team`. A sprint that hits a wall mid-flight is no longer a dead end the CEO has to
+  retype: `upgrade_to_team` rebuilds it as a crew task carrying the dead run's draft
+  along as *reference* — the crew decides its own plan rather than inheriting a failed
+  one. Measured on the real fleet: the fast lane delivers 97% of its tasks at half the
+  cost and a sixth of the wall time of the crew lane.
+- **Effort tier at intake.** The intake call already reads the brief, so it now also
+  scores the work `low`/`medium`/`high` at no extra model call. Only `low` changes
+  behaviour — a cheaper model role, a trimmed search budget, at most one revise round.
+  `medium` is the previous behaviour untouched and the fail-open target of every broken
+  path, so a garbage tier costs nothing. `high` is measured but not yet acted on.
+- **The lane no longer depends on where you press Enter.** Three tasks written as three
+  lines routed to the crew; the same three written inline as "(1) … (2) … (3) …" routed
+  to a sprint. Inline enumeration now counts the same. It deliberately ignores a bare
+  "N." mid-sentence, which in Vietnamese is nearly always a numbered noun — "Điều 1.
+  Điều 2." is one job, not three, and used to be billed as three.
+- **Benchmarks for release decisions.** `scripts/run-sprint-benchmark.py` gains four
+  modes: `routing` and `release` compare two builds with zero model calls (so one can
+  run inside a worktree at the previous tag), `tasks` reads the live store for what the
+  fleet actually paid per lane, and `judge` blind-scores deliverable quality. The two
+  comparing modes refuse to diff reports of differing `format_version` rather than
+  silently mismatching them.
+- **Router miss rates.** `dead_end`, `downgrade` and `upgrade` are measured over tasks
+  that actually carry a route record; tasks predating routing are reported as lane
+  `unknown` rather than folded into the denominator.
 - **Advisor ride-along review.** Each team tick, a second model reads the transcript
   delta a running step just wrote and either stays silent (the default) or leaves one
   note — `nit` lands in the office room, `concern` becomes guidance for the step's next
@@ -38,6 +73,32 @@ that only appear on a fresh install, which is exactly the path CI never walks.
   checkpointer/store/postgres_dsn unreachable from the web.
 
 ### Fixed
+- **The routing lane the CEO explicitly asked for was silently discarded.** A message
+  opening with `sprint:` or `team:` is a direct instruction, but the slot extractor read
+  the brief as narration and dropped the prefix before it reached assignment — so the
+  one surface built to let the CEO force a lane had no effect, and the guesser re-decided
+  anyway. Found by the live suite; invisible to every offline test.
+- **A correct classification was thrown away whenever the model added a sentence.**
+  `json.loads` requires the entire response to be JSON, so a valid object followed by
+  "I'll assign this to the team" raised `Extra data`, and both classification attempts
+  failed into `question` — the CEO's delegation answered with chat instead of becoming
+  work. Now reads the leading object and ignores trailing prose; genuinely malformed
+  output still fails safe.
+- **Miss rates were diluted by tasks that were never routed.** Dividing by every task in
+  the store meant the rates improved on their own as history grew. Over the real fleet
+  the corrected denominator moves the dead-end rate from 0.033 to 0.098 — the same
+  failures, previously reported three times better than they were.
+- **The live test suite's safety gate had never run.** A `pytestmark` declared in
+  `conftest.py` is ignored by pytest silently — no error, no warning — so the `live`
+  marker reached none of the 18 cases: a machine without an API key would fail with auth
+  errors instead of skipping, and a machine with one would spend real money on a plain
+  `pytest`. The marker is now applied in `pytest_collection_modifyitems`, and `addopts`
+  deselects `live` by default so running the suite is a deliberate choice.
+- **The quality judge randomised presentation order per vote**, which left roughly a
+  quarter of three-vote runs sharing a single order — precisely the case where "position
+  bias averages out" is false. Order now alternates deterministically.
+- **Benchmark routing decisions drifted from the real path** by not stripping the
+  `@agent` prefix before measuring, so its brief-length signal disagreed with production.
 - **MCP integrations died on any fresh install.** `langchain-mcp-adapters` imports
   `mcp.shared.context.RequestContext` and declares no upper bound; mcp 2.0.0 removed
   that symbol, so a clean resolve took 2.0.0 and Jira, Confluence and Slack all failed

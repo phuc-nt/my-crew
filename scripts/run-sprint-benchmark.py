@@ -206,7 +206,11 @@ def _lane_table(db: Path, limit: int) -> int:
 
     rates = report["rates"]
     print(
-        f"\nrouter misses over {report['total_tasks']} tasks — "
+        # Mẫu số phải là `routed_tasks`, không phải `total_tasks`: tỉ lệ được TÍNH trên
+        # số task có bản ghi định tuyến, nên in kèm tổng số sẽ khiến người đọc chia lại
+        # bằng con số sai — đúng thứ mẫu số pha loãng vừa được sửa để tránh.
+        f"\nrouter misses over {report['routed_tasks']} routed tasks "
+        f"({report['total_tasks']} total) — "
         f"dead end: {rates['dead_end'] if rates['dead_end'] is not None else 'n/a'}  ·  "
         f"downgrade: {rates['downgrade'] if rates['downgrade'] is not None else 'n/a'}  ·  "
         f"upgrade: {rates['upgrade'] if rates['upgrade'] is not None else 'n/a'}"
