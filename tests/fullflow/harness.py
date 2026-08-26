@@ -75,6 +75,7 @@ class FullFlowHarness:
         rules: list[LlmRule] | None = None,
         autopilot: bool = False,
         auto_confirm: bool = False,
+        live: bool = False,
     ):
         self.data_dir = tmp_path / "data"
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -86,7 +87,8 @@ class FullFlowHarness:
         self._pid_seq = _FAKE_PID_BASE
         self._sent_message_id = 5000
 
-        self.cast = make_cast(self.data_dir)
+        self.live = live
+        self.cast = make_cast(self.data_dir, live=live)
         self.company = make_company(autopilot=autopilot, auto_confirm=auto_confirm)
         self._install(monkeypatch)
 
@@ -94,7 +96,10 @@ class FullFlowHarness:
 
     def _install(self, monkeypatch) -> None:
         monkeypatch.setenv(BOT_TOKEN_ENV, "scripted-token")
-        monkeypatch.setenv("OPENROUTER_API_KEY", "scripted-key")
+        if not self.live:
+            # Live keeps the REAL key: the whole point of the live suite is that the
+            # model rung is not patched, so a stub key here would fail every call.
+            monkeypatch.setenv("OPENROUTER_API_KEY", "scripted-key")
 
         # Path isolation: every store/artifact/log the product opens routes here.
         import my_crew.runtime.agent_paths as agent_paths
@@ -104,20 +109,26 @@ class FullFlowHarness:
         monkeypatch.setattr(agent_paths, "DATA_DIR", self.data_dir)
 
         # LLM rung: one class-level patch covers every LlmClient() construction.
-        from my_crew.llm.client import LlmClient
+        # LIVE leaves this rung ALONE — real model, real prompts, real cost. That is the
+        # one difference that makes this suite able to catch what the scripted suite
+        # structurally cannot: behaviour of the model under the real prompt.
+        if not self.live:
+            from my_crew.llm.client import LlmClient
 
-        scripted = self.llm
+            scripted = self.llm
 
-        def _complete(_self, messages, *, model=None, role=None):
-            return scripted.complete(messages, model=model, role=role)
+            def _complete(_self, messages, *, model=None, role=None):
+                return scripted.complete(messages, model=model, role=role)
 
-        monkeypatch.setattr(LlmClient, "complete", _complete)
+            monkeypatch.setattr(LlmClient, "complete", _complete)
 
-        # Same class-level patch for the thin loop's tool-capable seam (v86).
-        def _complete_with_tools(_self, messages, tools, *, model=None, role=None):
-            return scripted.complete_with_tools(messages, tools, model=model, role=role)
+            # Same class-level patch for the thin loop's tool-capable seam (v86).
+            def _complete_with_tools(_self, messages, tools, *, model=None, role=None):
+                return scripted.complete_with_tools(
+                    messages, tools, model=model, role=role
+                )
 
-        monkeypatch.setattr(LlmClient, "complete_with_tools", _complete_with_tools)
+            monkeypatch.setattr(LlmClient, "complete_with_tools", _complete_with_tools)
 
         # Telegram HTTP seam: capture instead of urllib; gateway logic stays real.
         import my_crew.actions.telegram_write as telegram_write

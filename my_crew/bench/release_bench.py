@@ -56,6 +56,18 @@ class ReleaseMetric:
     has_thieu_note: bool
     output_chars: int
     queries: tuple[str, ...]
+    #: Which effort tier this row was run at. The suite runs every brief at "medium"
+    #: (the pre-P3 behaviour, so the numbers stay comparable to older reports) and every
+    #: brief AGAIN at "low", because what P3 claims is a saving and a saving is a delta
+    #: between two tiers — one tier alone cannot show it.
+    effort: str = "medium"
+    #: Revise rounds actually run. `llm_calls` already implies it, but only if the
+    #: reader knows the pipeline is draft-plus-revises; naming it makes a budget change
+    #: legible without that knowledge.
+    revise_rounds: int = 0
+    #: The model ROLE the tier selects — the mechanism by which "low" is cheaper. A tier
+    #: that stopped naming its cheap role would keep every other number identical.
+    model_role: str = ""
 
 
 def simulated_web(subjects: list[str]):
@@ -106,8 +118,15 @@ class _FaithfulLlm:
         return SimpleNamespace(content=reply, cost_usd=0.0, prompt_tokens=0, completion_tokens=0)
 
 
-def bench_case(case: BriefCase) -> ReleaseMetric:
-    """Run one brief through the real pipeline against the simulated web."""
+def bench_case(case: BriefCase, *, effort: str = "medium") -> ReleaseMetric:
+    """Run one brief through the real pipeline against the simulated web.
+
+    `effort` is passed straight to the runner rather than simulated here: the tier's
+    whole effect lives inside `build_sprint_work` (which model role it names, how much
+    search/revise budget it allows), so measuring it any other way would be measuring a
+    reimplementation.
+    """
+    from my_crew.runtime.sprint_runner import LOW_EFFORT_MODEL_ROLE
     parsed = resolve_entities(case.goal, case.acceptance)
     # The simulated web's knowledge is the suite's expected subjects — fixed across
     # revisions so a revision that fails to PARSE them also fails to FIND them, which
@@ -128,6 +147,7 @@ def bench_case(case: BriefCase) -> ReleaseMetric:
             settings=SimpleNamespace(),
             acceptance=case.acceptance,
             prefetch=_prefetch,
+            effort=effort,
         )
         text, _cost = work(case.goal, "", None)
 
@@ -143,7 +163,33 @@ def bench_case(case: BriefCase) -> ReleaseMetric:
         has_thieu_note="PHẦN THIẾU" in (text or ""),
         output_chars=len(text or ""),
         queries=tuple(seen),
+        effort=effort,
+        # draft is call 1; every call after it is a revise round.
+        revise_rounds=max(0, llm.calls - 1),
+        model_role=LOW_EFFORT_MODEL_ROLE if effort == "low" else "content",
     )
+
+
+#: Effort tiers the suite measures. "high" is deliberately absent: P3 runs it exactly as
+#: medium, so a third identical column would be noise standing in for a signal.
+BENCHED_EFFORTS = ("medium", "low")
+
+#: Bumped whenever a compared field is added or its meaning changes, so `compare_reports`
+#: can refuse a stale baseline instead of silently reading a missing field as a change.
+FORMAT_VERSION = 2
+
+
+def _run_once(cases: tuple[BriefCase, ...]) -> dict[str, Any]:
+    """One full pass: every brief at every benched tier.
+
+    Keyed `<case>@<effort>` so the low and medium rows of one brief sit side by side in
+    a sorted report and diff against their own counterpart, never against each other.
+    """
+    return {
+        f"{case.name}@{effort}": asdict(bench_case(case, effort=effort))
+        for case in cases
+        for effort in BENCHED_EFFORTS
+    }
 
 
 def run_suite(cases: tuple[BriefCase, ...] = ALL_CASES, *, repeats: int = 1) -> dict[str, Any]:
@@ -152,12 +198,11 @@ def run_suite(cases: tuple[BriefCase, ...] = ALL_CASES, *, repeats: int = 1) -> 
     The pipeline is supposed to be deterministic — scripted model, stubbed web, no
     clock — so any run-to-run difference is itself a defect worth failing loudly on.
     """
-    first = {case.name: asdict(bench_case(case)) for case in cases}
+    first = _run_once(cases)
     for _ in range(max(0, repeats - 1)):
-        again = {case.name: asdict(bench_case(case)) for case in cases}
-        if again != first:
+        if _run_once(cases) != first:
             raise RuntimeError("release bench is non-deterministic between repeats")
-    return {"schema": 1, "cases": first}
+    return {"schema": 1, "format_version": FORMAT_VERSION, "cases": first}
 
 
 #: The axes a release comparison reports on. `queries` stays out — it is evidence for
@@ -170,14 +215,44 @@ COMPARED_FIELDS = (
     "gaps_open",
     "has_thieu_note",
     "output_chars",
+    "revise_rounds",
+    "model_role",
 )
 
 
 def compare_reports(baseline: dict[str, Any], candidate: dict[str, Any]) -> list[dict[str, Any]]:
-    """Per-case, per-axis rows where the two reports differ, plus cases only one has."""
+    """Per-case, per-axis rows where the two reports differ, plus cases only one has.
+
+    A version mismatch is refused rather than compared. The one exception is a baseline
+    with NO `format_version` at all: that is a report from before the field existed, and
+    refusing it would block exactly the comparison this mode exists for — measuring the
+    current revision against an older tag. What must never happen is two reports that
+    BOTH claim a version, disagree, and get compared field by field anyway.
+
+    Such an old baseline has flat `case` keys, while the current one has `case@effort`.
+    Comparing them raw turns every case into two "shape changed" rows and buries the
+    question actually being asked — did spend move. The old runs measured what is now
+    the `medium` tier, so its keys are read as `case@medium`; the `low` rows then show
+    as candidate-only, which is true (that tier did not exist) and is one row per case
+    instead of three.
+    """
+    b_ver = baseline.get("format_version")
+    c_ver = candidate.get("format_version")
+    if b_ver is not None and c_ver is not None and b_ver != c_ver:
+        raise ValueError(
+            f"release report format_version lệch nhau ({b_ver} vs {c_ver}) — "
+            "chạy lại baseline bằng bản script hiện tại trước khi so"
+        )
+
     rows: list[dict[str, Any]] = []
     base_cases = dict(baseline.get("cases", {}))
     cand_cases = dict(candidate.get("cases", {}))
+    # Chỉ bắc cầu khi baseline là bản CŨ còn candidate là bản MỚI. Hai bên cùng không
+    # khai phiên bản là hai báo cáo cùng thời — đổi tên khoá một bên khi đó là tự tạo
+    # ra lệch khoá chứ không phải xoá lệch khoá.
+    if b_ver is None and c_ver is not None:
+        base_cases = {(k if "@" in k else f"{k}@medium"): v
+                      for k, v in base_cases.items()}
     for name in sorted(set(base_cases) | set(cand_cases)):
         a, b = base_cases.get(name), cand_cases.get(name)
         if a is None or b is None:

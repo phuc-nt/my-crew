@@ -46,12 +46,55 @@ def make_registry() -> tuple[RegistryEntry, ...]:
     return tuple(RegistryEntry(id=i, enabled=True) for i in ids)
 
 
-def _settings(data_dir: Path):
-    return build_settings_from_dict({
-        "openrouter_api_key": "scripted-key",
+#: Model tier for the LIVE cast. Fixed and cheap on purpose: the suite exists to catch
+#: prompt/behaviour regressions, and it has to be affordable enough to run repeatedly.
+#: The user's real production models are a release-acceptance concern, not a suite one —
+#: pinning here also keeps run-to-run cost comparable across releases.
+#: `sprint_low` stays a separate (cheaper) entry because the low-effort tier picking a
+#: cheaper model is itself part of what the C-group cases assert — collapsing every role
+#: onto one model would make that assertion vacuous.
+LIVE_MODEL = "anthropic/claude-haiku-4.5"
+LIVE_ROLE_MODELS = {
+    "content": LIVE_MODEL,
+    "review": LIVE_MODEL,
+    "aggregate": LIVE_MODEL,
+    "plan": LIVE_MODEL,
+    "util": LIVE_MODEL,
+    "sprint_low": "anthropic/claude-haiku-4.5",
+}
+
+
+def _settings(data_dir: Path, *, live: bool = False):
+    """Harness settings. Offline uses a dummy key (the LLM rung is patched before any
+    call can leave the process); live reads the REAL key from the environment and must
+    fail loudly rather than silently running against a placeholder."""
+    if not live:
+        return build_settings_from_dict({
+            "openrouter_api_key": "scripted-key",
+            "data_dir": data_dir,
+            "dry_run": False,
+        })
+
+    from my_crew.config.config_builders import build_settings_from_env
+
+    env_settings = build_settings_from_env()
+    key = getattr(env_settings, "openrouter_api_key", "") or ""
+    if not key:
+        raise RuntimeError("live cast needs a real OPENROUTER_API_KEY")
+    payload: dict = {
+        "openrouter_api_key": key,
         "data_dir": data_dir,
         "dry_run": False,
-    })
+        "openrouter_model": LIVE_MODEL,
+        "role_models": dict(LIVE_ROLE_MODELS),
+    }
+    # Search runs live too when the environment can do it; without a key the sprint
+    # takes its existing NO_SEARCH path rather than the suite inventing one.
+    for attr in ("brave_api_key", "firecrawl_api_key", "tavily_api_key"):
+        value = getattr(env_settings, attr, "") or ""
+        if value:
+            payload[attr] = value
+    return build_settings_from_dict(payload)
 
 
 def _config(*, with_telegram: bool):
@@ -72,7 +115,8 @@ def _config(*, with_telegram: bool):
     return build_reporting_config_from_dict(d)
 
 
-def make_profile(profile_id: str, *, domain: str, data_dir: Path) -> LoadedProfile:
+def make_profile(profile_id: str, *, domain: str, data_dir: Path,
+                 live: bool = False) -> LoadedProfile:
     """A real LoadedProfile. The admin agent alone carries the Telegram block —
     it is the CEO's ops gateway; workers/coordinator never talk to the CEO chat
     directly (operator notify resolves through the admin profile)."""
@@ -83,7 +127,7 @@ def make_profile(profile_id: str, *, domain: str, data_dir: Path) -> LoadedProfi
         profile_id=profile_id,
         name=profile_id,
         enabled=True,
-        settings=_settings(data_dir),
+        settings=_settings(data_dir, live=live),
         config=_config(with_telegram=is_admin),
         soul=f"Bạn là {profile_id} trong một công ty agent thử nghiệm.",
         project="",
@@ -94,12 +138,14 @@ def make_profile(profile_id: str, *, domain: str, data_dir: Path) -> LoadedProfi
     )
 
 
-def make_cast(data_dir: Path) -> dict[str, LoadedProfile]:
+def make_cast(data_dir: Path, *, live: bool = False) -> dict[str, LoadedProfile]:
     """{agent_id: LoadedProfile} for every registry agent."""
     cast = {
-        ADMIN_ID: make_profile(ADMIN_ID, domain="admin", data_dir=data_dir),
-        COORDINATOR_ID: make_profile(COORDINATOR_ID, domain="pm", data_dir=data_dir),
+        ADMIN_ID: make_profile(ADMIN_ID, domain="admin", data_dir=data_dir, live=live),
+        COORDINATOR_ID: make_profile(COORDINATOR_ID, domain="pm", data_dir=data_dir,
+                                     live=live),
     }
     for worker_id, domain in WORKERS:
-        cast[worker_id] = make_profile(worker_id, domain=domain, data_dir=data_dir)
+        cast[worker_id] = make_profile(worker_id, domain=domain, data_dir=data_dir,
+                                       live=live)
     return cast

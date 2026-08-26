@@ -19,6 +19,13 @@ Chosen so each one can only pass for the right reason:
 - `intake_no_connector` is the intake's SECOND rephrase of the same brief (live task
   847cefe9b088, verbatim): the list lost its "và", the shape the prose parser's
   connector requirement used to reject back to one kitchen-sink query.
+
+`ROUTING_CASES` is a SECOND, disjoint group. The eight above all route the same way
+(`sprint`/`heuristic`) because they were chosen to measure what a sprint SPENDS — which
+makes them useless for measuring what the ROUTER decides. Every branch a routing report
+should be able to see a change in needs at least one brief that takes it, so the routing
+group covers the four refusal kinds, both forced prefixes, the multi-ask shape and the
+entity cap. They carry no spend budget: nothing runs them through a pipeline.
 """
 
 from __future__ import annotations
@@ -117,6 +124,77 @@ INTAKE_NO_CONNECTOR = BriefCase(
     acceptance="Đủ 5 công cụ: giá theo tháng, giảm giá/gói miễn phí, mỗi mục có nguồn.",
     expected_entities=("Notion", "Figma", "Obsidian", "Canva", "Google Workspace"),
     max_searches=11,
+)
+
+# --- routing group: one brief per router branch ---------------------------------------
+
+REFUSAL_EXTERNAL_WRITE = BriefCase(
+    name="refusal_external_write",
+    goal="Tổng hợp báo giá 3 nhà cung cấp rồi gửi email cho khách hàng chốt đơn.",
+)
+
+REFUSAL_SHELL = BriefCase(
+    name="refusal_shell",
+    goal="Clone repo về máy rồi chạy test suite, báo lại kết quả build.",
+)
+
+REFUSAL_MULTI_STAFF = BriefCase(
+    name="refusal_multi_staff",
+    goal="Việc này cần cả đội cùng làm: khảo sát thị trường và dựng bản chào giá.",
+)
+
+REFUSAL_LONG_HORIZON = BriefCase(
+    name="refusal_long_horizon",
+    goal="Xây dựng lộ trình 6 tháng cho mảng nội dung, chia theo từng giai đoạn.",
+)
+
+PREFIX_SPRINT = BriefCase(
+    name="prefix_sprint",
+    goal=(
+        "sprint: khảo sát 5 đối thủ chính, viết bản tóm tắt định vị, và dựng kế "
+        "hoạch truyền thông 2 tuần tới"
+    ),
+)
+
+PREFIX_TEAM = BriefCase(
+    name="prefix_team",
+    goal="team: tóm tắt tin tức ngành xe điện tuần này",
+)
+
+MULTI_ASK = BriefCase(
+    name="multi_ask",
+    goal=(
+        "Làm giúp anh mấy việc:\n"
+        "- khảo sát 5 đối thủ chính trong mảng giao đồ ăn\n"
+        "- viết bản tóm tắt định vị sản phẩm\n"
+        "- dựng kế hoạch truyền thông 2 tuần tới"
+    ),
+)
+
+#: Cùng ba đầu việc của `multi_ask`, viết liền một câu. Cặp này tồn tại để bảng delta
+#: nhìn thấy được một lỗi đã xảy ra thật: bản đầu chỉ đếm đánh số ĐẦU DÒNG, nên cách
+#: viết liền câu ra sprint còn cách viết xuống dòng ra team — lane phụ thuộc việc CEO
+#: có bấm Enter hay không. Giữ cả hai cách viết trong bộ đề thì lần lệch sau lộ ra ở
+#: đây thay vì phải chạy live mới thấy.
+MULTI_ASK_INLINE = BriefCase(
+    name="multi_ask_inline",
+    goal=(
+        "Làm giúp anh 3 việc: (1) khảo sát 5 đối thủ chính trong mảng giao đồ ăn, "
+        "(2) viết bản tóm tắt định vị sản phẩm của mình, "
+        "(3) dựng kế hoạch truyền thông 2 tuần tới."
+    ),
+)
+
+ROUTING_CASES = (
+    REFUSAL_EXTERNAL_WRITE,
+    REFUSAL_SHELL,
+    REFUSAL_MULTI_STAFF,
+    REFUSAL_LONG_HORIZON,
+    PREFIX_SPRINT,
+    PREFIX_TEAM,
+    MULTI_ASK,
+    MULTI_ASK_INLINE,
+    OVER_CAP,
 )
 
 ALL_CASES = (

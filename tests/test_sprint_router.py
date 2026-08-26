@@ -126,6 +126,101 @@ def test_classify_refuses_a_brief_that_lists_three_separate_asks():
     assert "đầu việc" in reason
 
 
+def test_the_same_three_asks_route_the_same_written_inline_or_on_lines():
+    """Xuống dòng hay không KHÔNG được đổi quyết định định tuyến.
+
+    Đo thật trên live A2: ba đầu việc viết liền một câu ("(1)... (2)... (3)...") ra
+    sprint, cũng ba việc đó xuống dòng thì ra team. Khi đó thứ quyết định lane là CEO
+    có bấm Enter hay không — không phải tính chất công việc. Bài này chốt cả hai cách
+    viết cho ra cùng một con số.
+    """
+    from my_crew.agent.sprint_intake import _distinct_asks
+
+    inline = ("Làm giúp anh 3 việc: (1) khảo sát 5 đối thủ chính, "
+              "(2) viết bản tóm tắt định vị sản phẩm, "
+              "(3) dựng kế hoạch truyền thông 2 tuần tới.")
+    lined = "\n".join([
+        "Làm giúp anh 3 việc:",
+        "1. khảo sát 5 đối thủ chính",
+        "2. viết bản tóm tắt định vị sản phẩm",
+        "3. dựng kế hoạch truyền thông 2 tuần tới",
+    ])
+
+    assert _distinct_asks(inline) == _distinct_asks(lined) == 3
+    assert classify_brief(inline)[0] is False
+    assert classify_brief(lined)[0] is False
+    assert "đầu việc" in classify_brief(inline)[1]
+
+
+@pytest.mark.parametrize("brief", [
+    "Anh cần (1) báo giá thôi",
+    "Xem mục (2) trong hợp đồng giúp anh",
+    "Điều 3. và điều 7. trong hợp đồng nói gì?",
+])
+def test_a_lone_number_in_a_sentence_is_not_a_list_of_asks(brief):
+    """Một chỉ số ĐỨNG LẺ là lời nói thường hoặc lời trỏ ngược, không phải liệt kê.
+
+    Đây là cái giá phải trả cho việc đếm đánh số giữa câu, nên bằng chứng đặt ở DÃY
+    LIÊN TIẾP từ 1 chứ không ở sự hiện diện của chỉ số. Không có hàng rào này thì mọi
+    câu nhắc "mục (2)" đều bị đẩy sang team.
+    """
+    from my_crew.agent.sprint_intake import _distinct_asks
+
+    assert _distinct_asks(brief) == 1
+    assert classify_brief(brief)[0] is True
+
+
+@pytest.mark.parametrize(
+    "brief",
+    [
+        "Rà soát Điều 1. Điều 2. Điều 3. của hợp đồng NDA giúp anh",
+        "Đọc hợp đồng rồi tóm tắt Chương 1. Phạm vi Chương 2. Giá Chương 3. Phạt",
+        "Ngày 1. 8 họp, ngày 2. 9 nghỉ lễ, ngày 3. 10 báo cáo",
+        "Kiểm tra bảng giá: gói 1. 200k, gói 2. 500k, gói 3. 900k xem gói nào lời nhất",
+    ],
+)
+def test_a_run_of_numbered_nouns_is_not_a_list_of_asks(brief):
+    """Dãy liên tiếp từ 1 CHƯA đủ: dạng đánh dấu cũng phải là dạng liệt kê.
+
+    Tiếng Việt viện dẫn danh từ có đánh số bằng đúng dạng "1." trần — Điều, Chương,
+    gói, ngày — nên một đề chỉ đọc hợp đồng lại trông y hệt một đề ba đầu việc. Bốn
+    câu này đều là MỘT việc; trước khi siết `_ASK_INLINE_RE` cả bốn đều bị đẩy sang
+    lane team, tốn tiền và thời gian cho thứ một agent làm xong trong một lượt.
+
+    Hướng sai ở đây là tốn kém chứ không hỏng (team vẫn ra kết quả đúng), nên hàng rào
+    đặt ở dạng ký hiệu — "(1)", "[1]", "1)" mở một mục, "1." trần thì không — chứ không
+    ở việc đoán nghĩa của danh từ đứng trước.
+    """
+    from my_crew.agent.sprint_intake import _distinct_asks
+
+    assert _distinct_asks(brief) == 1, brief
+    assert classify_brief(brief)[0] is True, classify_brief(brief)
+
+
+def test_a_stray_number_before_the_list_does_not_hide_it():
+    """Dãy được dò ở bất kỳ đâu, không bắt buộc bắt đầu ở chỉ số ĐẦU TIÊN tìm thấy.
+
+    Một con số lạ đứng trước phần liệt kê ("Ngân sách 5. 000 rồi ...") từng làm dãy
+    1-2-3 phía sau tắt hẳn, vì vòng dò khi đó neo vào phần tử đầu danh sách. Đây đúng
+    là kiểu trượt âm thầm mà `_distinct_asks` tồn tại để chặn: đề ba đầu việc rơi về
+    sprint chỉ vì trong câu có sẵn một con số khác.
+    """
+    from my_crew.agent.sprint_intake import _inline_asks
+
+    brief = "Ngân sách 5. 000 rồi 1) khảo sát 2) so sánh 3) đề xuất"
+    assert _inline_asks(brief) == 3, brief
+    assert classify_brief(brief)[0] is False, classify_brief(brief)
+
+
+def test_two_inline_asks_stay_under_the_cap():
+    """Ngưỡng là "nhiều hơn 2", và đếm inline không được lặng lẽ siết nó lại."""
+    from my_crew.agent.sprint_intake import _distinct_asks
+
+    brief = "Anh cần (1) báo giá của 3 bên và (2) bản so sánh ngắn"
+    assert _distinct_asks(brief) == 2
+    assert classify_brief(brief)[0] is True
+
+
 def test_attributes_after_a_colon_are_criteria_not_separate_asks():
     """Một việc kèm ba tiêu chí vẫn là MỘT việc.
 

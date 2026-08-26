@@ -85,6 +85,18 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Live phải là lựa chọn CÓ CHỦ Ý: `pytest` trần trên máy đã cấu hình key sẽ gọi model
+# thật và tiêu tiền thật mà không hỏi ai. Gate skipif không đủ — nó chỉ chặn máy KHÔNG
+# có key, tức là bảo vệ CI chứ không bảo vệ máy lập trình viên. Chạy live bằng `-m live`.
+addopts = ["-m", "not live"]
+markers = [
+    # Real model, real search, real money. Gated on OPENROUTER_API_KEY, so an
+    # unconfigured machine (CI included) skips rather than fails.
+    "live: needs a real provider key; spends money",
+    # A live case that drives a whole task lifecycle — minutes, not seconds. The
+    # pre-release quick subset is `live and not live_slow` plus a couple of these.
+    "live_slow: long live case (full task lifecycle)",
+]
 
 [dependency-groups]
 dev = [

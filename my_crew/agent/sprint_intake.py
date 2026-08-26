@@ -13,7 +13,7 @@ audit) vì sprint task VẪN LÀ một team task — chỉ là DAG suy biến c�
 Hai lớp quyết định, cố ý tách rời:
   - `classify_brief` (thuần code, 0 lượt gọi model): mặc định sprint, chỉ đẩy sang
     team khi chạm rào an toàn (`sprint_refusal`) hoặc có tín hiệu CẤU TRÚC cần đội
-    (đề quá dài, quá nhiều thực thể, nhiều đầu việc tách dòng). Rẻ và kiểm chứng được
+    (đề quá dài, quá nhiều thực thể, đề liệt kê nhiều đầu việc). Rẻ và kiểm chứng được
     bằng test. Nó không cần đoán đúng: hai chiều sai đều có lưới đỡ —
     `downgrade_to_sprint` (team→sprint) và `sprint_dead_end` (sprint→team).
   - `sprint_intake` (1 lượt gọi model nhẹ): chỉ rút gọn đề thành mục tiêu + tiêu chí
@@ -137,17 +137,60 @@ _MAX_DISTINCT_ASKS = 2
 #: Dòng liệt kê đầu việc: "- ", "* ", "• ", "1. ", "2) ".
 _ASK_LINE_RE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+\S", re.M)
 
+#: Đánh số CHÈN GIỮA CÂU: "(1) ... (2) ...", "[1] ... [2] ...", "1) ... 2) ...".
+#: Chỉ số phải CÓ NGOẶC hoặc đóng bằng ")" — xem `_inline_asks` về việc vì sao dạng
+#: "1." trần bị loại.
+_ASK_INLINE_RE = re.compile(r"[(\[](\d+)[.)\]]\s+\S|(?<![\w.])(\d+)\)\s+\S")
+
+
+def _inline_asks(brief: str) -> int:
+    """Số đầu việc của một đề đánh số NGAY TRONG CÂU, không xuống dòng.
+
+    Hai lớp bằng chứng, cả hai đều cần:
+
+    1. **Dạng đánh dấu phải là dạng LIỆT KÊ.** "(1)", "[1]", "1)" là ký hiệu người ta
+       dùng để mở một mục. "1." trần thì không: giữa câu tiếng Việt nó gần như luôn là
+       số thứ tự của một DANH TỪ được viện dẫn — "Điều 1. Điều 2. Điều 3.", "Chương 1.
+       ... Chương 2. ...", "gói 1. 200k, gói 2. 500k" — hoặc đơn thuần là dấu chấm câu
+       giữa hai con số. Đo thật: cả ba đề trên đều bị đếm thành ba đầu việc rồi đẩy
+       nhầm sang lane team. Dạng "1." ĐẦU DÒNG vẫn tính, nhưng đó là việc của
+       `_ASK_LINE_RE` — neo đầu dòng chính là thứ làm nó hết mơ hồ.
+    2. **Phải là một DÃY LIÊN TIẾP từ 1** (`1,2,3`). Một "(1)" đứng lẻ là lời nói
+       thường ("anh cần (1) báo giá thôi") và một "(2)" đứng lẻ thường trỏ ngược sang
+       mục khác ("xem mục (2) trong hợp đồng").
+
+    Dãy được dò ở BẤT KỲ đâu trong danh sách chỉ số, không bắt buộc bắt đầu ngay ở
+    phần tử đầu: một con số lạ đứng trước ("Ngân sách 5. 000 rồi 1) a 2) b 3) c") không
+    được phép tắt luôn khả năng phát hiện. Tất cả vẫn là đếm hình thức, không đoán ngữ
+    nghĩa — đúng nguyên tắc của hàm gọi.
+    """
+    nums = [int(a or b) for a, b in _ASK_INLINE_RE.findall(brief or "")]
+    best = 0
+    for start in range(len(nums)):
+        run = 0
+        for expected, got in enumerate(nums[start:], start=1):
+            if got != expected:
+                break
+            run = got
+        best = max(best, run)
+    return best if best >= 2 else 0
+
 
 def _distinct_asks(brief: str) -> int:
     """Số ĐẦU VIỆC mà đề này liệt kê ra, đếm thuần hình thức.
 
-    Chỉ đếm dòng bullet/đánh số. Thuộc tính sau dấu hai chấm trên MỘT dòng không phải
-    đầu việc — "So sánh 5 X: giá, chứng chỉ, hoàn tiền" là một việc với ba tiêu chí,
-    không phải ba việc (cùng bài học ngoặc-vs-hai-chấm của `listed_entities`). Đề văn
-    xuôi không xuống dòng luôn trả 1: không có tín hiệu cấu trúc thì không suy diễn.
+    Đếm dòng bullet/đánh số, HOẶC dãy đánh số chèn giữa câu. Đo thật thấy cùng ba đầu
+    việc: viết xuống dòng thì ra team, viết liền một câu thì ra sprint — quyết định
+    khi đó phụ thuộc việc CEO có bấm Enter hay không, mà đó không phải tính chất của
+    công việc. Hai cách viết là cùng một tín hiệu cấu trúc nên phải đếm như nhau.
+
+    Thuộc tính sau dấu hai chấm trên MỘT dòng vẫn không phải đầu việc — "So sánh 5 X:
+    giá, chứng chỉ, hoàn tiền" là một việc với ba tiêu chí, không phải ba việc (cùng
+    bài học ngoặc-vs-hai-chấm của `listed_entities`). Văn xuôi không có đánh số nào
+    vẫn trả 1: không có tín hiệu cấu trúc thì không suy diễn.
     """
     lines = len(_ASK_LINE_RE.findall(brief or ""))
-    return lines if lines else 1
+    return max(lines, _inline_asks(brief), 1)
 
 
 def route_signals(brief: str) -> dict[str, int]:
@@ -205,7 +248,7 @@ def classify_brief(brief: str) -> tuple[bool, str]:
 
     asks = _distinct_asks(brief)
     if asks > _MAX_DISTINCT_ASKS:
-        return False, f"nhiều đầu việc tách dòng ({asks})"
+        return False, f"đề liệt kê nhiều đầu việc ({asks})"
 
     shape = _hit(text, _SPRINT_SHAPE_HINTS)
     if shape:
