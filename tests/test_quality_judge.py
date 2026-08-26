@@ -219,3 +219,47 @@ def test_the_presentation_order_alternates_every_vote():
     assert baseline_first.count(True) == baseline_first.count(False) == 3, baseline_first
     # Luân phiên chứ không phải "gộp lại thì cân": hai phiếu liền nhau luôn ngược nhau.
     assert all(a != b for a, b in zip(baseline_first, baseline_first[1:], strict=False))
+
+
+def test_the_cli_puts_the_real_brief_into_the_judging_prompt(tmp_path, monkeypatch):
+    """Đề gốc phải tới tay giám khảo, không phải tên file.
+
+    `run_judging` mặc định lấy TÊN CASE làm đề khi không ai truyền `goals`. Chạy qua
+    CLI mà thiếu dây nối thì giám khảo chấm tiêu chí `dung_de` ("trả lời đúng câu CEO
+    hỏi") dựa trên chuỗi "no_enumeration" — một trong bốn tiêu chí bị mù mà bảng kết
+    quả vẫn in ra đủ số, nên không có gì để người đọc nghi ngờ. Test này canh đúng
+    sợi dây đó: nội dung đề thật phải xuất hiện trong prompt.
+    """
+    import importlib.util
+
+    from my_crew.bench.brief_suite import NO_ENUMERATION
+
+    base, cand = tmp_path / "base", tmp_path / "cand"
+    for d in (base, cand):
+        d.mkdir()
+        (d / f"{NO_ENUMERATION.name}.md").write_text("nội dung", encoding="utf-8")
+
+    stub = _StubLlm(lambda _p: '{"winner":"hoa","ly_do":"r"}')
+    spec = importlib.util.spec_from_file_location(
+        "_bench_cli", "scripts/run-sprint-benchmark.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+
+    monkeypatch.setattr(cli, "_git_revision", lambda: "test", raising=False)
+    monkeypatch.setattr(
+        "my_crew.config.config_builders.build_settings_from_env",
+        lambda: SimpleNamespace(openrouter_api_key="k"),
+    )
+    monkeypatch.setattr("my_crew.llm.client.LlmClient", lambda _s: stub)
+
+    rc = cli._judge(SimpleNamespace(
+        baseline_dir=str(base), candidate_dir=str(cand),
+        votes=1, model=None, out=None,
+    ))
+
+    assert rc == 0
+    assert stub.prompts, "giám khảo phải được gọi"
+    assert NO_ENUMERATION.goal in stub.prompts[0], (
+        "đề gốc phải nằm trong prompt chấm, không phải tên case:\n"
+        f"{stub.prompts[0][:400]}"
+    )

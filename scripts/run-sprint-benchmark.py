@@ -277,6 +277,7 @@ def _judge(args: argparse.Namespace) -> int:
     than degrading, because a judging run that silently produced no verdict looks exactly
     like a tie and would be read as "no quality change".
     """
+    from my_crew.bench.brief_suite import ALL_CASES, ROUTING_CASES
     from my_crew.bench.quality_judge import run_judging
     from my_crew.config.config_builders import build_settings_from_env
     from my_crew.llm.client import LlmClient
@@ -286,9 +287,16 @@ def _judge(args: argparse.Namespace) -> int:
         print("judge mode needs OPENROUTER_API_KEY", file=sys.stderr)
         return 2
 
+    # Đề gốc phải đi vào prompt chấm. Thiếu nó, `run_judging` lấy TÊN CASE làm đề, nên
+    # tiêu chí `dung_de` ("trả lời đúng câu CEO hỏi") chấm dựa trên chuỗi
+    # "no_enumeration" thay vì câu hỏi thật — một tiêu chí trong bốn tiêu chí bị mù.
+    # Tên file deliverable khớp `BriefCase.name` theo quy ước của `load_deliverables`,
+    # nên bộ đề của bench tra được thẳng bằng tên; case ngoài bộ vẫn lùi về tên như cũ.
+    goals = {case.name: case.goal for case in (*ALL_CASES, *ROUTING_CASES)}
+
     report = run_judging(
         LlmClient(settings), Path(args.baseline_dir), Path(args.candidate_dir),
-        votes=args.votes, model=args.model,
+        goals=goals, votes=args.votes, model=args.model,
     )
     report["revision"] = _git_revision()
 
