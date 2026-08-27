@@ -41,7 +41,13 @@ RUBRIC = (
 
 #: Họ model của judge phải khác họ model đã chạy task. Mặc định này giả định task chạy
 #: bằng anthropic/openai (mặc định của repo) — `--model` để đổi khi giả định đó sai.
-DEFAULT_JUDGE_MODEL = "google/gemini-3-flash"
+#:
+#: Provider GỠ model cũ mà không báo: `google/gemini-3-flash` (mặc định trước đây) trả
+#: HTTP 400 "not a valid model ID", làm mọi lượt chấm hỏng ngay phiếu đầu. Judge là mode
+#: duy nhất tiêu tiền và chỉ chạy tay, nên không có test nào chạm tới hằng số này — hỏng
+#: chỉ lộ khi có người chạy thật. Khi đổi, kiểm chứng bằng danh sách model sống:
+#: `curl -s https://openrouter.ai/api/v1/models -H "Authorization: Bearer $OPENROUTER_API_KEY"`.
+DEFAULT_JUDGE_MODEL = "google/gemini-3.7-flash"
 
 _SYSTEM = (
     "Bạn là giám khảo chấm chất lượng hai bản trả lời cho cùng một yêu cầu công việc. "
