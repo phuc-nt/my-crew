@@ -73,6 +73,24 @@ model, which caught the CEO's own lane instruction being silently discarded.
   checkpointer/store/postgres_dsn unreachable from the web.
 
 ### Fixed
+- **A fix round never saw what the reviewer asked it to fix.** A rework step read its
+  predecessor's artifact by the review row's own sequence number, but a review writes
+  only `step-<graded_seq>-review-<round>.json` — so the read missed, the handoff came
+  back empty, and the step redrafted from nothing but its own title. Measured across the
+  live fleet the defect list reached 0 of 87 rework rows; it now reaches 87 of 87. The
+  same row that read 0 characters at runtime yields 1296 with the failure list when
+  replayed against the fixed code. Rework rounds that previously stalled on the same
+  missing cells now pass review.
+- **The reviewer's findings lost to the draft they rejected.** The search query is capped
+  at 44 words (Brave rejects more with HTTP 422 and the step sees zero results), and the
+  prior draft sat ahead of the defect list in the brief — so a fix round spent its whole
+  budget re-searching the text that had just failed. The defect list now leads the query.
+  It only helps where the step title leaves room: titles longer than the budget still
+  crowd it out, tracked separately.
+- **The blind judge pointed at a model the provider had removed.** `google/gemini-3-flash`
+  returned HTTP 400 on the first vote, failing every judging run. `judge` is the only
+  benchmark mode that spends money and only runs by hand, so no test covered the
+  constant and the breakage surfaced only on a real run.
 - **The routing lane the CEO explicitly asked for was silently discarded.** A message
   opening with `sprint:` or `team:` is a direct instruction, but the slot extractor read
   the brief as narration and dropped the prefix before it reached assignment — so the
