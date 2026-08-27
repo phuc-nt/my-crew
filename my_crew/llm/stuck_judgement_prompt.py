@@ -39,6 +39,14 @@ STUCK_JUDGE_SYSTEM = (
     "một câu tiếng Việt nói thẳng vì sao không làm được, để báo lại cho CEO.\n"
     "Chỉ chọn `give_up` khi thật sự bế tắc — nhưng cũng ĐỪNG cố retry khi rõ ràng là "
     "không thể; một câu 'không làm được vì X' trung thực tốt hơn là vòng lặp vô ích.\n"
+    "QUY TẮC CHO `guidance` (bắt buộc): chỉ dẫn KHÔNG được nâng chuẩn cao hơn 'Tiêu chí "
+    "đạt' của bước — người chấm vòng sau sẽ chấm theo đúng chỉ dẫn của bạn, nên mỗi đòi "
+    "hỏi bạn tự thêm là một cách mới để bước trượt mãi. Đặc biệt: người làm chỉ có đoạn "
+    "trích kết quả tìm kiếm, KHÔNG mở được từng trang, nên tuyệt đối đừng đòi siêu dữ "
+    "liệu nguồn mà đoạn trích không có (ngày truy cập, ngày đăng, tác giả, số trang) hay "
+    "'URL kiểm chứng độc lập được'; tiêu chí nói 'nêu rõ nguồn' thì tên trang hoặc link "
+    "là đủ, và đừng chỉ định đích danh nguồn 'uy tín' (Statista...) khi tiêu chí không "
+    "đòi.\n"
     "Trả về DUY NHẤT một JSON (không markdown, không giải thích ngoài JSON) đúng dạng: "
     '{"decision": "retry_with_guidance"|"reassign"|"give_up", "guidance": "...", '
     '"assign_to": "...", "reason": "..."}. '
@@ -86,8 +94,15 @@ def build_stuck_judge_messages(brief: str, roster: list[str]) -> list[dict]:
     re-checks `roster_ok` no matter what comes back.
     """
     who = ", ".join(roster) if roster else "(không có ai khác nhận được)"
+    # Same temporal anchor as both graders, same producer. Without it the judge rules
+    # from its training cutoff — observed live (lanes5, team/music): a run on
+    # 27/08/2026 got the guidance "Ngày truy cập 27/08/2026 là ngày tương lai — hôm nay
+    # là 27/08/2024 hoặc trước đó", ordering the worker to CORRUPT a correct date, and
+    # the next grading round failed the step over exactly that.
+    from my_crew.llm.team_task_prompt import grader_today_line
+
     return [
-        {"role": "system", "content": STUCK_JUDGE_SYSTEM},
+        {"role": "system", "content": f"{STUCK_JUDGE_SYSTEM}\n{grader_today_line()}"},
         {
             "role": "user",
             "content": f"DANH SÁCH NGƯỜI CÓ THỂ NHẬN: {who}\n\n{brief}",

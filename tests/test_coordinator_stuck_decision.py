@@ -433,3 +433,35 @@ def test_a_brief_stays_well_formed_when_the_artifact_has_no_failure_list(tmp_pat
     assert "Bước tự chấm trượt" not in brief
     assert "ket qua cu" in brief
     assert "Số lần đã can thiệp:" in brief
+
+
+# --- the judge's own prompt: anchored to today, forbidden to raise the bar ------------
+
+
+def test_the_judge_is_told_todays_date_like_every_grader():
+    """Measured live (lanes5, team/music, run on 27/08/2026): an un-anchored judge
+    ruled from its training cutoff and wrote guidance ordering the worker to change a
+    CORRECT access date to "27/08/2024 hoặc trước đó" — manufacturing the very defect
+    the next grading round then failed. Same anchor producer as both graders, so the
+    three prompts cannot drift apart."""
+    from my_crew.llm.stuck_judgement_prompt import build_stuck_judge_messages
+    from my_crew.llm.team_task_prompt import grader_today_line
+
+    system = build_stuck_judge_messages("brief", ["ana"])[0]["content"]
+
+    assert grader_today_line() in system
+
+
+def test_the_judge_may_not_demand_source_metadata_beyond_the_acceptance():
+    """Provenance trace over lanes5: every metadata demand that killed a sprint task
+    ("báo cáo uy tín như Statista", "tác giả", "URL kiểm chứng độc lập") entered via
+    this judge's `guidance` — acceptance criteria were clean in both cases — and the
+    next round's grader graded against the guidance verbatim. The prompt must carry
+    the same snippet-reality rule intake and decompose have: workers only see search
+    excerpts, so "nêu rõ nguồn" stops at a site name or link."""
+    from my_crew.llm.stuck_judgement_prompt import STUCK_JUDGE_SYSTEM
+
+    assert "KHÔNG được nâng chuẩn" in STUCK_JUDGE_SYSTEM
+    assert "ngày truy cập" in STUCK_JUDGE_SYSTEM
+    assert "tên trang hoặc link" in STUCK_JUDGE_SYSTEM
+    assert "Statista" in STUCK_JUDGE_SYSTEM
