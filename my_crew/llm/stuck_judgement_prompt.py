@@ -46,7 +46,15 @@ STUCK_JUDGE_SYSTEM = (
     "liệu nguồn mà đoạn trích không có (ngày truy cập, ngày đăng, tác giả, số trang) hay "
     "'URL kiểm chứng độc lập được'; tiêu chí nói 'nêu rõ nguồn' thì tên trang hoặc link "
     "là đủ, và đừng chỉ định đích danh nguồn 'uy tín' (Statista...) khi tiêu chí không "
-    "đòi.\n"
+    "đòi. Kết quả đã ghi tên trang cho một mục thì tiêu chí nguồn của mục đó là XONG — "
+    "không ra lệnh 'thêm URL thực tế', và không đòi chi tiết (giá gói, thông số...) mà "
+    "tiêu chí không ghi thành chữ.\n"
+    "QUY TẮC HỘI TỤ (bắt buộc): nếu brief có mục 'Chỉ dẫn ĐÃ RA ở (các) lần can thiệp "
+    "trước' thì chỉ dẫn đó ĐÃ THẤT BẠI — TUYỆT ĐỐI không lặp lại nội dung đó (dù đổi "
+    "cách diễn đạt). Chỉ còn ba lối ra: (a) HẠ đòi hỏi xuống đúng mặt chữ 'Tiêu chí "
+    "đạt' — điều gì tiêu chí không ghi thì bỏ hẳn khỏi chỉ dẫn mới; (b) reassign nếu "
+    "người khác làm được điều người này không làm được; (c) give_up trung thực nếu "
+    "chính tiêu chí là thứ không đạt nổi với công cụ hiện có.\n"
     "Trả về DUY NHẤT một JSON (không markdown, không giải thích ngoài JSON) đúng dạng: "
     '{"decision": "retry_with_guidance"|"reassign"|"give_up", "guidance": "...", '
     '"assign_to": "...", "reason": "..."}. '

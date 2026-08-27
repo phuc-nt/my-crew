@@ -86,12 +86,25 @@ def build_stuck_brief(deps: CoordinatorDeps, task: TeamTask, step: TeamStep) -> 
         + "\n".join(f"- {f}" for f in failures)
         if failures else ""
     )
+    # The judge's OWN earlier orders, accumulated by `append_step_guidance`. Without
+    # them the second ruling cannot know what the first one demanded, so it re-derives
+    # the same direction from the same inputs — measured live (lanes6, both music
+    # cases): attempt-2 and attempt-3 work orders carried near-verbatim identical
+    # guidance, burning the intervention cap on a repeat. Like `failures`, this is our
+    # own system's text, not fetched content, so it stays unwrapped.
+    prior_guidance = (step.guidance or "").strip()
+    guidance_block = (
+        f"\nChỉ dẫn ĐÃ RA ở (các) lần can thiệp trước — bước vẫn trượt sau khi làm "
+        f"theo:\n{prior_guidance}"
+        if prior_guidance else ""
+    )
     return (
         f"Việc: {task.title}\n"
         f"Bước đang kẹt: {step.title}\n"
         f"Người đang làm: {step.assigned_to}\n"
         f"Tiêu chí đạt: {step.acceptance or '(không ghi rõ)'}\n"
         f"Số lần đã can thiệp: {step.intervention_count}"
+        f"{guidance_block}"
         f"{failure_block}\n"
         f"Kết quả bước đã nộp (KHÔNG đạt tiêu chí trên):\n{body or '(trống)'}"
     )

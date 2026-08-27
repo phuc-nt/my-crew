@@ -465,3 +465,55 @@ def test_the_judge_may_not_demand_source_metadata_beyond_the_acceptance():
     assert "ngày truy cập" in STUCK_JUDGE_SYSTEM
     assert "tên trang hoặc link" in STUCK_JUDGE_SYSTEM
     assert "Statista" in STUCK_JUDGE_SYSTEM
+
+
+def test_the_judge_is_shown_its_own_prior_guidance(tmp_path):
+    """Measured live (lanes6, both music cases): attempt-2 and attempt-3 work orders
+    carried near-verbatim identical guidance, because the brief never showed the judge
+    what it had already ordered — it re-derived the same direction from the same
+    inputs and burned the intervention cap on a repeat. The accumulated
+    `step.guidance` has to be in the brief, labeled as a FAILED order."""
+    from my_crew.agent.team_task_artifact import write_step_artifact
+
+    store = _stuck_store(tmp_path)
+    step = store.get_step("t1", "s1")
+    write_step_artifact(tmp_path, "t1", step.seq, {
+        "status": "needs_decision", "result_text": "ket qua lan hai",
+    })
+    store.append_step_guidance("t1", "s1", "Thêm URL cho từng nguồn đã nêu.")
+    seen: list[str] = []
+
+    def _judge(brief, step):
+        seen.append(brief)
+        return {"decision": "give_up", "reason": "x"}
+
+    run_one_tick(_deps(store, judge_stuck_step=_judge))
+
+    assert seen
+    assert "Chỉ dẫn ĐÃ RA" in seen[0]
+    assert "Thêm URL cho từng nguồn đã nêu." in seen[0]
+
+
+def test_a_brief_with_no_prior_guidance_omits_the_failed_orders_section(tmp_path):
+    """First ruling on a step: nothing was ordered yet, so the section must be absent
+    — an empty 'đã ra chỉ dẫn' block would tell the judge a failure happened that
+    never did."""
+    brief = _brief_for(tmp_path, {
+        "status": "needs_decision", "result_text": "ket qua lan dau",
+    })
+
+    assert "Chỉ dẫn ĐÃ RA" not in brief
+
+
+def test_the_judge_carries_a_convergence_rule_against_repeating_failed_guidance():
+    """The structural fix (showing prior guidance) only helps if the prompt says what
+    to do with it: a repeated order already failed once, so the only legal moves are
+    lowering the demand to the acceptance's literal text, reassigning, or an honest
+    give_up. Also locks the lanes6 escalation flavor the source-metadata rule did not
+    cover: upgrading an accepted site name into a demand for 'real URLs'."""
+    from my_crew.llm.stuck_judgement_prompt import STUCK_JUDGE_SYSTEM
+
+    assert "QUY TẮC HỘI TỤ" in STUCK_JUDGE_SYSTEM
+    assert "không lặp lại" in STUCK_JUDGE_SYSTEM
+    assert "HẠ đòi hỏi" in STUCK_JUDGE_SYSTEM
+    assert "thêm URL thực tế" in STUCK_JUDGE_SYSTEM
