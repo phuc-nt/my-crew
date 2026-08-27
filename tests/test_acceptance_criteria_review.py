@@ -245,3 +245,29 @@ def test_parsers_tolerate_markdown_fences_and_leading_prose():
     import pytest as _pt
     with _pt.raises(DecompositionError):
         parse_decomposed_task("không JSON")
+
+
+def test_decompose_prompt_forbids_named_entity_lists_from_model_memory():
+    """Measured live (lanes6, both music cases): decompose listed 'Zing MP3, NCT,
+    NhacCuaTui' from memory and demanded 'ít nhất 3 nền tảng nội địa' — but NCT IS
+    NhacCuaTui, so the acceptance was impossible before any worker ran. Named-entity
+    lists come from the CEO's own words or from a lookup step, never from the
+    planner's recall; the CEO-named escape hatch keeps the parallel-split rule (which
+    names entities the brief itself listed) intact."""
+    from my_crew.llm.team_task_prompt import _DECOMPOSE_SYSTEM
+
+    assert "THỰC THỂ CÓ TÊN RIÊNG" in _DECOMPOSE_SYSTEM
+    assert "TỪ TRÍ NHỚ" in _DECOMPOSE_SYSTEM
+    assert "CEO tự nêu tên trong đề thì giữ NGUYÊN" in _DECOMPOSE_SYSTEM
+
+
+def test_worker_prompt_caps_qa_steps_at_the_original_request():
+    """Measured live (lanes6, team/ecommerce): the QA step invented standards the
+    brief never asked for (Executive Summary, GMV net of refunds, margin), the grader
+    correctly failed the invented demands via the request ceiling, and the task
+    give_up'd with a finished report stranded. QA grades against the original request
+    and the step's criteria — never a bar of its own making."""
+    from my_crew.llm.team_task_prompt import _SYSTEM
+
+    assert "QUY TẮC TRẦN YÊU CẦU" in _SYSTEM
+    assert "KHÔNG tự đặt chuẩn mới" in _SYSTEM
