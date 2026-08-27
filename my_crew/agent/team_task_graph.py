@@ -167,6 +167,10 @@ class TeamStepState(TypedDict, total=False):
     # step delivers that best draft instead of the latest one.
     best_result_text: str
     best_failure_count: int
+    # The failures of whichever draft `best_result_text` holds. Reported instead of the
+    # accumulated `check_reasons`, which describe drafts the rework loop already
+    # replaced — see `deliver`.
+    best_failures: list[str]
     # --- consult (M33, all primitives, reset per attempt by design) ---
     consult_count: int  # how many ask_colleague calls this attempt has made so far
     consult_log: list[str]  # short "asked <id>: <question>" lines, observability-only
@@ -867,6 +871,9 @@ def _make_team_task_nodes(deps: TeamTaskDeps, *, interrupt_on_clarify: bool = Fa
             if result_text.strip() and (best_count < 0 or len(failures) <= best_count):
                 out["best_result_text"] = result_text
                 out["best_failure_count"] = len(failures)
+                # Bound to the draft, not appended to a running list: these are the
+                # findings against THIS text, and this text is what deliver ships.
+                out["best_failures"] = list(failures)
             elif exhausted:
                 best_text = state.get("best_result_text", "")
                 if best_text.strip():
@@ -953,7 +960,19 @@ def _make_team_task_nodes(deps: TeamTaskDeps, *, interrupt_on_clarify: bool = Fa
                 return {"status": "awaiting_approval", "delivered": False, "room_message": ""}
         # 4-arg shape carries the failure reasons into the artifact; older fakes/callers
         # on the 3-arg shape keep working (they simply persist no reasons, as before).
-        reasons = tuple(state.get("check_reasons", ()))
+        #
+        # `best_failures`, NOT the accumulated `check_reasons`. Each rework round is
+        # graded fresh, so concatenating rounds ships complaints about drafts that no
+        # longer exist: live on task 74e16044cb6f the artifact listed 8 findings from 3
+        # rounds and 4 were provably false against the delivered text. `stuck_decision`
+        # hands this list to the coordinator NEXT TO that text, so stale entries make it
+        # grade a step against defects already fixed — that task burned 4 interventions
+        # and stalled. Keyed off the same keep-best swap that picks `result_text`, so
+        # the reported failures always describe the draft actually delivered. Falls back
+        # to `check_reasons` only when keep-best never ran (no non-blank failing draft).
+        reasons = tuple(state.get("best_failures", ())) or tuple(
+            state.get("check_reasons", ())
+        )
         try:
             delivered, room_message = deps.deliver_step(
                 result_text, version, self_check_failed, reasons

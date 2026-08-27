@@ -354,3 +354,68 @@ def test_rework_without_a_search_hook_still_reworks(tmp_path, monkeypatch):
 
     assert result["rework_count"] == 1
     assert result["self_check_failed"] is False
+
+
+def test_the_artifact_records_only_the_final_rounds_defects(tmp_path, monkeypatch):
+    """The defect this closes: `self_check_failures` carried every round's complaints
+    concatenated, so a draft that HAD fixed round 1's findings still shipped them.
+
+    Live on task 74e16044cb6f the artifact listed 8 failures from 3 grading rounds, and
+    4 of them were provably false against the delivered text (they claimed Slack had no
+    sources and only Discord was present, in a draft that carried all three tools with
+    14 dated citations). `stuck_decision` feeds this list to the coordinator next to the
+    very draft that fixed them, so the coordinator grades the step against defects that
+    no longer exist — that task burned 4 interventions and stalled.
+
+    Only the grading round that actually rejected the delivered draft describes it.
+    """
+    settings = build_settings_from_dict({"data_dir": tmp_path})
+
+    class _FakeResult:
+        content = "bản nháp đã sửa"
+        cost_usd = None
+
+    class _FakeLlm:
+        def __init__(self, _settings):
+            pass
+
+        def complete(self, _messages, **_kw):
+            return _FakeResult()
+
+    import my_crew.llm.client as llm_client_mod
+
+    monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)
+
+    rounds: list[list[str]] = [
+        ["thiếu mục Telegram"],           # round 1 — the rework then adds Telegram
+        ["thiếu ngày truy cập"],          # round 2 — the rework then adds dates
+        ["thiếu giá Discord"],            # final round — the only one describing what shipped
+    ]
+    calls = {"n": 0}
+
+    def _grader(_t, _a, _h=""):
+        i = min(calls["n"], len(rounds) - 1)
+        calls["n"] += 1
+        return (False, list(rounds[i]), 0.9)
+
+    deps = default_team_task_deps(
+        settings=settings, step_title="draft", data_dir=tmp_path,
+        task_id="task-stale", step_seq=1,
+    )
+    deps = replace(
+        deps,
+        run_self_check=_grader,
+        run_rework=lambda *_a, **_k: ("bản nháp đã sửa", None),
+    )
+    graph = build_team_task_graph(deps=deps)
+    graph.invoke({
+        "step_title": "draft", "acceptance": "- đủ 3 công cụ", "max_rework": 2,
+    })
+
+    artifact = read_step_artifact(tmp_path, "task-stale", 1)
+    failures = artifact["self_check_failures"]
+
+    assert failures == ["thiếu giá Discord"], (
+        "only the round that rejected the DELIVERED draft may be reported; earlier "
+        f"rounds describe drafts that no longer exist, got {failures}"
+    )
