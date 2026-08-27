@@ -944,6 +944,32 @@ def _resolve_search_hook(loaded: Any, settings: Any) -> Callable[[str], str] | N
 
     audit_log = AuditLog(team_tasks_root() / "audit" / "audit.jsonl")
 
+    def _record_search(query: str, status: str, text: str) -> None:
+        """Leave this search in the STEP TRANSCRIPT, not only in the audit trail.
+
+        Review grades the process from the transcript (`extract_review_evidence`), and
+        this hook is the only search path that used to write nothing there. The audit
+        row proves egress happened; it is not what the reviewer reads. So a rework round
+        that searched, got 5 results, and cited them was shown to its reviewer as "KHÔNG
+        có tool call / prefetch nào" — and the reviewer, reasoning correctly on that,
+        ruled every sourced figure fabricated. Measured across two bench runs: 160 real
+        provider calls, 40 recorded — 8/8 rework rounds invisible, every one of them
+        graded as invented.
+
+        Same event shape as `collect_prefetch`'s launcher (`t: "prefetch"`), so
+        `extract_review_evidence` renders it through the path it already has; and the
+        same reason for `content_head`: a byte count proves a page opened, it does not
+        let a reviewer check `77%` against anything. Non-success outcomes are recorded
+        too — "the provider failed" and "this step never looked" are opposite facts, and
+        the transcript must not flatten them into a shared silence.
+        """
+        from my_crew.runtime.step_recorder import head, record_event
+
+        record_event({
+            "t": "prefetch", "queries": [query], "status": status,
+            "bytes": len(text), "content_head": head(text),
+        })
+
     def _hook(query: str) -> str:
         actor = Path(str(getattr(settings, "data_dir", ""))).name
         results, status = web_search_outcome(
@@ -951,7 +977,9 @@ def _resolve_search_hook(loaded: Any, settings: Any) -> Callable[[str], str] | N
         )
         if results:
             text, _count, _quarantined = format_search_results(results)
+            _record_search(query, status or "ok", text)
             return text
+        _record_search(query, status or "empty", "")
         # v75 silent-success guard: "the web says nothing" and "we never reached the
         # web" are OPPOSITE conclusions for a research step — a provider outage
         # rendered as an empty context made steps report 'dữ liệu không tồn tại' for

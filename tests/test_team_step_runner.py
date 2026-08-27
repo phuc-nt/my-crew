@@ -234,6 +234,132 @@ def test_resolve_search_hook_writes_audit_row_with_redacted_query(tmp_path, monk
     assert raw_query not in full_text
 
 
+# --- the search a step really ran must reach the transcript, not only the audit ------
+
+
+def _hook_transcript(tmp_path, monkeypatch, payload):
+    """Run `_resolve_search_hook`'s hook inside a real step recorder; return the rows."""
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.step_recorder import open_step_recorder
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda req, timeout=None: _FakeHttpResponse(payload),  # noqa: ARG005
+    )
+
+    settings = SimpleNamespace(
+        tavily_api_key="tavily-key", brave_api_key=None,
+        data_dir=str(tmp_path), step_transcripts=True,
+    )
+    hook = _resolve_search_hook(_loaded(web_search=True), settings)
+    assert hook is not None
+
+    with open_step_recorder(
+        settings, agent_id="analyst", task_id="t1", step_id="rework-1", attempt_id="v1",
+    ) as recorder:
+        text = hook("thị trường nhạc số Việt Nam nền tảng dẫn đầu")
+        assert recorder is not None
+        path = recorder._path
+
+    raw = path.read_text(encoding="utf-8").splitlines()
+    rows = [json.loads(line) for line in raw if line.strip()]
+    return text, rows
+
+
+def test_a_search_through_the_hook_lands_in_the_step_transcript(tmp_path, monkeypatch):
+    """The defect this replaces: the hook wrote an audit row and nothing else.
+
+    Review grades the process from the TRANSCRIPT, so a rework round that searched and
+    cited what it found was shown to its reviewer as "KHÔNG có tool call / prefetch nào"
+    — and the reviewer ruled every sourced figure fabricated. The audit row proved the
+    egress happened but is not what review reads.
+    """
+    _text, rows = _hook_transcript(
+        tmp_path, monkeypatch,
+        {"results": [{"title": "Zing MP3 dẫn đầu", "content": "28 triệu người dùng",
+                      "url": "https://vietnamnet.vn/x"}]},
+    )
+
+    searches = [r for r in rows if r.get("t") == "prefetch"]
+    assert len(searches) == 1, "a real provider call must leave exactly one row"
+    assert searches[0]["bytes"] > 0
+
+
+def test_the_transcript_carries_what_the_page_said_not_just_a_byte_count(tmp_path, monkeypatch):
+    """A byte count proves a page opened; it does not let a reviewer check a FIGURE
+    against it. The reviewer's job is exactly that cross-check, so the snippet text has
+    to ride along — the same reason `collect_prefetch`'s launcher records `content_head`.
+    """
+    _text, rows = _hook_transcript(
+        tmp_path, monkeypatch,
+        {"results": [{"title": "Zing MP3 dẫn đầu", "content": "28 triệu người dùng",
+                      "url": "https://vietnamnet.vn/x"}]},
+    )
+
+    head = next(r for r in rows if r.get("t") == "prefetch")["content_head"]
+    assert "28 triệu" in head, "the figure a reviewer must verify has to be visible"
+
+
+def test_the_evidence_view_no_longer_claims_a_searching_step_opened_nothing(tmp_path, monkeypatch):
+    """End to end, through the exact function that builds the reviewer's evidence."""
+    from my_crew.runtime.transcript_evidence import extract_review_evidence
+
+    _text, rows = _hook_transcript(
+        tmp_path, monkeypatch,
+        {"results": [{"title": "Zing MP3 dẫn đầu", "content": "28 triệu người dùng",
+                      "url": "https://vietnamnet.vn/x"}]},
+    )
+    path = tmp_path / "artifacts" / "team-tasks" / "t1" / "transcripts"
+    transcript = next(iter(path.glob("*.jsonl")))
+
+    evidence = extract_review_evidence(transcript, 8000)
+
+    assert "KHÔNG có tool call" not in evidence
+    assert "28 triệu" in evidence
+
+
+def test_a_provider_outage_is_not_recorded_as_a_step_that_found_nothing(tmp_path, monkeypatch):
+    """"The provider failed" and "the web says nothing" are opposite facts about a step.
+    Flattening them into one silent 0-byte row hands the reviewer an outage as if it
+    were the step's own empty-handed result."""
+    _text, rows = _hook_transcript(tmp_path, monkeypatch, {"results": []})
+
+    searches = [r for r in rows if r.get("t") == "prefetch"]
+    assert len(searches) == 1, "a search that returned nothing still happened"
+    assert searches[0]["status"] == "empty"
+    assert searches[0]["bytes"] == 0
+
+
+def test_the_recorded_query_is_redacted_like_the_audit_row_is(tmp_path, monkeypatch):
+    """The transcript is a second copy of the query — it must not become the place a
+    secret survives after the audit trail redacted it."""
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.step_recorder import open_step_recorder
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(
+        "urllib.request.urlopen",
+        lambda req, timeout=None: _FakeHttpResponse({"results": []}),  # noqa: ARG005
+    )
+    settings = SimpleNamespace(
+        tavily_api_key="tavily-key", brave_api_key=None,
+        data_dir=str(tmp_path), step_transcripts=True,
+    )
+    hook = _resolve_search_hook(_loaded(web_search=True), settings)
+
+    with open_step_recorder(
+        settings, agent_id="analyst", task_id="t1", step_id="s1", attempt_id="v1",
+    ) as recorder:
+        hook("token sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+        path = recorder._path
+
+    assert "sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" not in path.read_text(
+        encoding="utf-8"
+    )
+
+
+
 # --- v75 f1: wake-context line rides the guidance channel ---------------------------
 
 

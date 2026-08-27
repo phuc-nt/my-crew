@@ -243,8 +243,14 @@ def extract_review_evidence(path: Path, max_chars: int) -> str | None:
             tool_lines.append(f"  → kết quả {event.get('name')}: {content}")
         elif kind == "prefetch":
             queries = ", ".join(str(q) for q in (event.get("queries") or []))
+            # `status` rides only on the search-hook path (the launcher omits it). A
+            # 0-byte row with no reason reads like "found nothing", which a reviewer
+            # scores against the step; a provider outage is not the step's fault and
+            # must be visibly different from an empty result set.
+            status = str(event.get("status") or "")
+            suffix = f" [{status}]" if status and status != "ok" else ""
             tool_lines.append(
-                f"- prefetch web ({event.get('bytes')} bytes): {queries}"
+                f"- prefetch web ({event.get('bytes')} bytes){suffix}: {queries}"
             )
             _append_content(tool_lines, event)
         elif kind == "fetch":
