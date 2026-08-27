@@ -213,6 +213,21 @@ def test_decompose_prompt_demands_a_data_freshness_criterion_for_web_steps():
     assert "KHÔNG loại số liệu chỉ vì cũ" in _DECOMPOSE_SYSTEM
 
 
+def test_decompose_prompt_carries_the_same_source_rule_intake_has():
+    """Measured on the two-lane bench (team/music, task 1eeec47223ea): decompose wrote
+    "kèm link và ngày truy cập" into a step's acceptance from attempt 0 — the exact
+    criterion `_INTAKE_SYSTEM` forbids, because a worker only sees search snippets and
+    can never produce source metadata the excerpt does not carry. Both lanes must hold
+    one source bar: "nêu rõ nguồn" stops at a site name or link."""
+    from my_crew.agent.sprint_intake import _INTAKE_SYSTEM
+    from my_crew.llm.team_task_prompt import _DECOMPOSE_SYSTEM
+
+    for prompt in (_DECOMPOSE_SYSTEM, _INTAKE_SYSTEM):
+        assert "ngày truy cập" in prompt
+        assert "tác giả" in prompt
+        assert "tên trang hoặc link" in prompt
+
+
 def test_parsers_tolerate_markdown_fences_and_leading_prose():
     """v34 UAT finding: a reviewer model wrapped its verdict in ```json fences →
     parse died → review step failed → whole task stalled. Every LLM-JSON parser now
