@@ -286,6 +286,41 @@ def _reassign(
     )
 
 
+#: The bar for "this done step produced something worth handing the CEO anyway".
+#: Same order of magnitude as the lane-judge's minimum-deliverable threshold (600
+#: chars) but deliberately lower: salvage accompanies an honest failure note, so a
+#: shorter-but-real intermediate result still beats delivering nothing.
+_MIN_SALVAGE_CHARS = 400
+
+#: Ceiling on how much salvaged text rides the delivery summary — the summary lands
+#: in a chat room, not a file store, so a full report is trimmed at a line boundary
+#: rather than posted wholesale.
+_MAX_SALVAGE_CHARS = 6000
+
+
+def _best_done_result(task: TeamTask) -> tuple[str, str] | None:
+    """The most-downstream substantive result this task actually produced.
+
+    Walks the task's steps from highest `seq` down and returns `(step title,
+    result_text)` for the first `done` step whose artifact carries at least
+    `_MIN_SALVAGE_CHARS` of result text — or None when nothing qualifies. Highest seq
+    wins because later steps consume earlier ones: a finished draft outranks the raw
+    source list it was built from.
+    """
+    from my_crew.agent.team_task_artifact import read_step_artifact
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    root = team_tasks_root()
+    for s in sorted(task.steps, key=lambda s: s.seq, reverse=True):
+        if s.status != "done":
+            continue
+        artifact = read_step_artifact(root, task.id, s.seq) or {}
+        text = str(artifact.get("result_text") or "").strip()
+        if len(text) >= _MIN_SALVAGE_CHARS:
+            return s.title, text
+    return None
+
+
 def _give_up(
     deps: CoordinatorDeps, task: TeamTask, step: TeamStep, reason: str,
 ) -> TickResult:
@@ -298,6 +333,24 @@ def _give_up(
     from my_crew.agent.coordinator_graph import TickResult, _reflect_safely
 
     summary = f"Việc '{task.title}' KHÔNG LÀM ĐƯỢC: bước '{step.title}' — {reason}."
+    # Measured live (lanes6, team/ecommerce): a finished report sat in the step-3
+    # artifact while the QA step stalled the task, and this delivery carried only the
+    # abandonment note — the CEO never saw work that already existed. Attach the best
+    # done result AFTER the failure line: the first sentence must keep saying the task
+    # failed (humans and the lane judge both read that line to classify the outcome).
+    salvage = _best_done_result(task)
+    if salvage is not None:
+        salvage_title, salvage_text = salvage
+        if len(salvage_text) > _MAX_SALVAGE_CHARS:
+            cut = salvage_text.rfind("\n", 0, _MAX_SALVAGE_CHARS)
+            salvage_text = (
+                salvage_text[: cut if cut > 0 else _MAX_SALVAGE_CHARS].rstrip()
+                + "\n[... đã cắt bớt cho vừa bản tin]"
+            )
+        summary = (
+            f"{summary}\n\nPhần đã làm được trước khi kẹt (bước '{salvage_title}'):\n"
+            f"{salvage_text}"
+        )
     # attempt-guarded like every other ticker-side terminal write: `step` is a snapshot
     # read at the top of this tick, so a concurrent re-reservation (a CEO's manual
     # retry, a second ticker) must make this a clean no-op rather than clobber the

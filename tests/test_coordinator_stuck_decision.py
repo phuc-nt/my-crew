@@ -517,3 +517,100 @@ def test_the_judge_carries_a_convergence_rule_against_repeating_failed_guidance(
     assert "không lặp lại" in STUCK_JUDGE_SYSTEM
     assert "HẠ đòi hỏi" in STUCK_JUDGE_SYSTEM
     assert "thêm URL thực tế" in STUCK_JUDGE_SYSTEM
+
+
+# --- salvage delivery on give_up -----------------------------------------------------
+
+
+def _two_step_stuck_store(tmp_path) -> TeamTaskStore:
+    """A task whose first step finished (`done`) and whose second came back
+    `needs_decision` — the lanes6 team/ecommerce shape: a finished report stranded
+    behind a stuck QA step."""
+    steps = [
+        {"step_id": "s0", "title": "soan bao cao", "assigned_to": "agent-a", "deps": []},
+        {"step_id": "s1", "title": "tham dinh", "assigned_to": "agent-a", "deps": ["s0"]},
+    ]
+    store = TeamTaskStore(tmp_path / "team_tasks.sqlite3")
+    store.create_task(task_id="t1", title="demo task", original_request="lam demo")
+    store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    a0 = store.reserve_step("t1", "s0")
+    store.mark_done("t1", "s0", attempt_id=a0, outcome_ref="ref-0")
+    a1 = store.reserve_step("t1", "s1")
+    store.mark_needs_decision("t1", "s1", attempt_id=a1, outcome_ref="ref-1")
+    return store
+
+
+def _give_up_summary(store) -> str:
+    """Run one tick with a judge that gives up; return the delivered summary."""
+    delivered: list[str] = []
+    result = run_one_tick(_deps(
+        store,
+        judge_stuck_step=lambda brief, step: {"decision": "give_up", "reason": "bế tắc"},
+        deliver_room=lambda task, summary: delivered.append(summary),
+    ))
+    assert result.action == "gave_up"
+    assert delivered
+    return delivered[0]
+
+
+def test_give_up_delivers_the_best_done_result_after_the_failure_line(tmp_path):
+    """Measured live (lanes6, team/ecommerce): a finished report sat in the step-3
+    artifact while give_up delivered only the abandonment note — the CEO never saw
+    work that already existed. The salvage rides BEHIND the failure line, which must
+    stay first (humans and the lane judge classify the outcome by that line)."""
+    from my_crew.agent.team_task_artifact import write_step_artifact
+
+    store = _two_step_stuck_store(tmp_path)
+    report = "Báo cáo thị trường hoàn chỉnh.\n" + ("Dòng dữ liệu có nguồn.\n" * 30)
+    write_step_artifact(
+        tmp_path, "t1", store.get_step("t1", "s0").seq,
+        {"status": "done", "result_text": report},
+    )
+    write_step_artifact(
+        tmp_path, "t1", store.get_step("t1", "s1").seq,
+        {"status": "needs_decision", "result_text": "bản thẩm định trượt"},
+    )
+
+    summary = _give_up_summary(store)
+
+    assert summary.startswith("Việc 'demo task' KHÔNG LÀM ĐƯỢC")
+    assert "Phần đã làm được trước khi kẹt (bước 'soan bao cao'):" in summary
+    assert "Báo cáo thị trường hoàn chỉnh." in summary
+
+
+def test_give_up_without_a_substantive_done_step_delivers_the_plain_note(tmp_path):
+    """A done step whose artifact is thin (below the salvage bar) must not be dressed
+    up as a deliverable — the summary stays exactly the honest abandonment note."""
+    from my_crew.agent.team_task_artifact import write_step_artifact
+
+    store = _two_step_stuck_store(tmp_path)
+    write_step_artifact(
+        tmp_path, "t1", store.get_step("t1", "s0").seq,
+        {"status": "done", "result_text": "vài dòng ngắn"},
+    )
+
+    summary = _give_up_summary(store)
+
+    assert "Phần đã làm được" not in summary
+    assert summary.startswith("Việc 'demo task' KHÔNG LÀM ĐƯỢC")
+
+
+def test_salvage_is_capped_at_a_line_boundary(tmp_path):
+    from my_crew.agent.coordinator_nodes.stuck_decision import _MAX_SALVAGE_CHARS
+    from my_crew.agent.team_task_artifact import write_step_artifact
+
+    store = _two_step_stuck_store(tmp_path)
+    long_report = "\n".join(f"dòng {i}: nội dung có nguồn kèm theo" for i in range(500))
+    write_step_artifact(
+        tmp_path, "t1", store.get_step("t1", "s0").seq,
+        {"status": "done", "result_text": long_report},
+    )
+
+    summary = _give_up_summary(store)
+    salvage = summary.split("Phần đã làm được trước khi kẹt", 1)[1]
+
+    assert "[... đã cắt bớt cho vừa bản tin]" in salvage
+    assert len(salvage) <= _MAX_SALVAGE_CHARS + 200  # header + marker allowance
+    # cut landed on a line boundary: the line right before the marker is intact
+    body = salvage.split("\n[... đã cắt bớt cho vừa bản tin]", 1)[0]
+    assert body.endswith("nội dung có nguồn kèm theo")
