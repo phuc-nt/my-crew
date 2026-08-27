@@ -37,3 +37,41 @@ def test_every_step_call_carries_both_rules_in_its_system_message():
     system = messages[0]["content"]
     assert "KHÔNG viết quá trình suy nghĩ" in system
     assert "TUYỆT ĐỐI không được bịa" in system
+
+
+# --- the worker must know today's date, exactly like its graders do -------------------
+
+def test_the_worker_is_told_todays_date_before_its_work_input():
+    """The graders were date-anchored; the worker was not. A date-blind worker invents
+    access dates from training priors (measured live: a step that searched on
+    27/08/2026 stamped its citations "ngày truy cập 08/01/2025") and the date-anchored
+    grader then fails the round over a date the producer could never have gotten right.
+    """
+    from datetime import datetime
+
+    from my_crew.llm.team_task_prompt import worker_today_line
+
+    messages = build_team_step_messages(
+        step_title="tra cứu giá", handoff_context="dữ liệu bước trước"
+    )
+
+    user = messages[1]["content"]
+    today = datetime.now().strftime("%d/%m/%Y")
+    assert today in user
+    # The anchor leads the step's own input: it must precede both the title line and
+    # the prior-step handoff, so an over-long handoff cannot push it out of view.
+    assert user.index(today) < user.index("Đầu việc:")
+    assert user.index(today) < user.index("dữ liệu bước trước")
+    # The worker line tells the producer what to DO with the date, not how to grade one.
+    assert "KHÔNG tự suy ngày" in worker_today_line()
+
+
+def test_both_graders_share_one_anchor_producer():
+    """Review and self-check must carry the SAME anchor string — one producer, so the
+    two grader prompts cannot drift apart the way the worker drifted from them."""
+    from my_crew.llm.team_task_check_prompt import build_self_check_messages
+    from my_crew.llm.team_task_prompt import grader_today_line
+
+    check = build_self_check_messages(result_text="r", acceptance="- a")
+
+    assert grader_today_line() in check[1]["content"]

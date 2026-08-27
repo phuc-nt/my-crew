@@ -17,6 +17,7 @@ import json
 from pydantic import BaseModel, Field, field_validator
 
 from my_crew.llm.grading_rules import EVIDENCE_RULES
+from my_crew.llm.team_task_prompt import grader_today_line
 from my_crew.profile.context import prepend_persona
 from my_crew.tools.search_result_formatter import format_internal_content
 
@@ -145,17 +146,12 @@ def build_self_check_messages(
     hostile phrase carried in upstream content cannot borrow the result's framing.
     Blank (a first step, no deps) ⇒ omitted entirely and grading is output-only.
     """
-    from datetime import datetime
-
     wrapped_result = format_internal_content(result_text, label="kết quả cần thẩm định")
     wrapped_acceptance = format_internal_content(acceptance, label="tiêu chí chấp nhận")
     wrapped_handoff = format_internal_content(handoff, label="ĐẦU VÀO bước này nhận được")
-    # Temporal anchor: without "today" the grader judges dates against its TRAINING
-    # cutoff — observed live (task dfdc472c423c): genuinely fresh August-2026 data was
-    # failed as "thời gian tương lai, dữ liệu bị bịa". Same lesson the v57 chat
-    # classifier already paid for.
-    today = f"HÔM NAY là {datetime.now().strftime('%d/%m/%Y')} — ngày trong kết quả " \
-            "mới hơn kiến thức của bạn KHÔNG phải bằng chứng bịa đặt."
+    # Temporal anchor (shared producer — see `grader_today_line` for the incident
+    # that made it necessary; one literal so the two graders cannot drift apart).
+    today = grader_today_line()
     user = "\n\n".join(
         p for p in (today, wrapped_acceptance, wrapped_handoff, wrapped_result) if p
     )

@@ -14,6 +14,45 @@ from my_crew.llm.grading_rules import EVIDENCE_RULES
 from my_crew.profile.context import build_context_block, prepend_persona
 from my_crew.tools.search_result_formatter import format_internal_content
 
+
+def _today() -> str:
+    from datetime import datetime
+
+    return datetime.now().strftime("%d/%m/%Y")
+
+
+def grader_today_line() -> str:
+    """Temporal anchor for GRADER prompts (review + self-check).
+
+    Without "today" a grader judges dates against its TRAINING cutoff — observed
+    live (task dfdc472c423c): genuinely fresh August-2026 data was failed as
+    "thời gian tương lai, dữ liệu bị bịa". One producer for both graders so the
+    review prompt and `team_task_check_prompt` cannot drift apart.
+    """
+    return (
+        f"HÔM NAY là {_today()} — ngày trong kết quả mới hơn kiến thức của bạn "
+        "KHÔNG phải bằng chứng bịa đặt."
+    )
+
+
+def worker_today_line() -> str:
+    """Temporal anchor for the WORKER prompt.
+
+    The graders were anchored; the worker was not. An un-anchored worker does not
+    know the current date, so when its acceptance criteria mention access dates or
+    data timestamps it INVENTS one from training-data priors — measured live
+    (lanes5, music-streaming brief): a step that searched on 27/08/2026 stamped its
+    citations "ngày truy cập 08/01/2025", and the date-anchored grader then failed
+    the round over the wrong date. Producer blind, judge sighted — the asymmetry
+    itself manufactures defects. Same anchor, worker-facing tail: say what to do
+    with the date, not how to grade one.
+    """
+    return (
+        f"HÔM NAY là {_today()}. Nếu cần ghi ngày truy cập hay thời điểm dữ liệu, "
+        "dùng đúng ngày này hoặc thời điểm nguồn tự ghi — KHÔNG tự suy ngày từ "
+        "kiến thức nền."
+    )
+
 _DECOMPOSE_SYSTEM = (
     "Bạn là bộ phân rã công việc cho một đội ngũ agent nội bộ. Cho một yêu cầu của CEO "
     "và danh sách nhân sự (mã + vai trò) có thể giao việc, hãy trả về DUY NHẤT một JSON "
@@ -164,7 +203,7 @@ def build_team_step_messages(
     not a new instruction, and any injection phrasing it carries is neutralized before
     the model ever sees it.
     """
-    parts: list[str] = [f"Đầu việc: {step_title.strip()}"]
+    parts: list[str] = [worker_today_line(), f"Đầu việc: {step_title.strip()}"]
     wrapped_handoff = format_internal_content(handoff_context, label="kết quả bước trước")
     if wrapped_handoff:
         parts.append(wrapped_handoff)
@@ -274,8 +313,6 @@ def build_review_messages(
     instruction explicitly forbids penalizing MISSING evidence — only CONTRADICTING
     evidence counts against the result.
     """
-    from datetime import datetime
-
     wrapped_result = format_internal_content(result_text, label="kết quả cần soát")
     wrapped_acceptance = format_internal_content(acceptance, label="tiêu chí chấp nhận")
     wrapped_handoff = format_internal_content(handoff, label="ĐẦU VÀO bước này nhận được")
@@ -291,10 +328,8 @@ def build_review_messages(
             "theo cap — THIẾU bằng chứng KHÔNG phải lỗi và không được trừ điểm vì thiếu; "
             "chỉ tính khi bằng chứng MÂU THUẪN với kết quả.\n\n" + wrapped_evidence
         )
-    # Same temporal anchor as `build_self_check_messages`: an un-anchored grader fails
-    # genuinely fresh dates as "future/fabricated" against its training cutoff.
-    today = f"HÔM NAY là {datetime.now().strftime('%d/%m/%Y')} — ngày trong kết quả " \
-            "mới hơn kiến thức của bạn KHÔNG phải bằng chứng bịa đặt."
+    # Same temporal anchor as `build_self_check_messages`, via the shared producer.
+    today = grader_today_line()
     user = "\n\n".join(
         p for p in (today, wrapped_acceptance, wrapped_handoff, wrapped_result,
                     evidence_section) if p
