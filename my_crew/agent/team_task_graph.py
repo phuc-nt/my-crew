@@ -589,10 +589,24 @@ def _read_deps_handoff(data_dir: Any, task_id: str, step_deps: tuple[str, ...]) 
     No deps ⇒ "" (first step / a step with nothing to read). Multiple deps ⇒ each
     dep's result_text, concatenated with a blank-line separator (in `deps` order) so a
     fan-in step sees every upstream producer's output, not just one.
+
+    A `review` dep is read from its VERDICT artifact, not `step-<seq>.json`. A review
+    step never writes the latter — `run_review_step` writes `step-<parent_seq>-review-
+    <round>.json`, keyed by the step it GRADED and by round (so a re-review never
+    clobbers an earlier verdict). Resolving a review dep the ordinary way therefore
+    found nothing and silently skipped it, which is precisely the dep a rework row
+    depends on: `deps` is minted as `[review_step] + parent's source deps`, so the
+    skip dropped the prior draft AND the reviewer's `Danh sách lỗi cần sửa:` list,
+    leaving the fix round to re-derive from the CEO brief alone. Measured on task
+    51ad15207896: seven rework rows, three rounds, 0 chars of handoff every time,
+    while each verdict sat on disk complete.
     """
     if not step_deps:
         return ""
-    from my_crew.agent.team_task_artifact import read_step_artifact
+    from my_crew.agent.team_task_artifact import (
+        read_review_verdict_artifact,
+        read_step_artifact,
+    )
     from my_crew.runtime.team_task_store import TeamTaskStore
 
     store = TeamTaskStore(_team_task_db_path(data_dir))
@@ -602,7 +616,19 @@ def _read_deps_handoff(data_dir: Any, task_id: str, step_deps: tuple[str, ...]) 
             dep_step = store.get_step(task_id, dep_step_id)
             if dep_step is None:
                 continue
-            artifact = read_step_artifact(data_dir, task_id, dep_step.seq)
+            if (dep_step.step_type or "") == "review":
+                # Keyed by the GRADED step's seq (`parent_step_id`), not the review
+                # row's own — that is the filename `write_review_verdict_artifact`
+                # uses. `review_round` picks this round's verdict, so a round-2 fix
+                # reads round 2's defects rather than ones it already addressed.
+                graded = store.get_step(task_id, dep_step.parent_step_id or "")
+                if graded is None:
+                    continue
+                artifact = read_review_verdict_artifact(
+                    data_dir, task_id, graded.seq, dep_step.review_round
+                )
+            else:
+                artifact = read_step_artifact(data_dir, task_id, dep_step.seq)
             if artifact is None:
                 continue
             text = str(artifact.get("result_text", ""))

@@ -113,3 +113,100 @@ def test_the_title_survives_the_cut_when_the_brief_overflows_it():
 def test_multiline_whitespace_is_squashed_to_a_single_line():
     query = build_search_query("a", "b\n\n\n   c   \n\td")
     assert query == "a b c d"
+
+
+# -- rework rounds: the defect list outranks the draft ---------------------------------
+
+def _rework_brief(draft: str, failures: list[str]) -> str:
+    """A rework brief in its real shape, built by the same producer the runtime uses."""
+    from my_crew.agent.review_graph import _rework_handoff_text
+
+    return _rework_handoff_text(draft, failures)
+
+
+def test_a_fix_round_searches_the_defects_not_the_draft_that_failed():
+    """The point of the fix round: search what the reviewer said was MISSING.
+
+    The brief is `prior draft + defect list`, and the draft is both longer and first,
+    so plain document order spends the 44-word budget re-searching the text that had
+    just been rejected — returning the sources that produced it. Measured on task
+    51ad15207896, that put the defect list into only 3 of 7 rework queries.
+    """
+    query = build_search_query(
+        "Khảo sát giải pháp langmem",
+        _rework_brief(
+            "LangMem là thư viện quản lý bộ nhớ. " + "nội dung nháp dài dòng " * 60,
+            ["Thiếu 2 nhược điểm cụ thể của LangMem", "Chưa có nguồn cho số liệu"],
+        ),
+    )
+
+    assert "nhược điểm" in query, "the reviewer's defect must reach the query"
+    assert "nguồn" in query, "every defect must fit, not just the first"
+    # Both defects precede any draft text — the draft may still fill the leftover
+    # budget (ordering, not exclusion), but never ahead of what must be fixed.
+    assert query.index("nguồn") < query.index("nháp")
+    assert len(query.split()) <= MAX_QUERY_WORDS
+
+
+def test_the_step_title_still_leads_a_rework_query():
+    """Failures outrank the draft, but never the title — it names the subject, and a
+    defect list alone ("Thiếu 2 nhược điểm") does not say what the topic is."""
+    query = build_search_query(
+        "Khảo sát giải pháp zep",
+        _rework_brief("nháp cũ", ["Thiếu nhược điểm"]),
+    )
+
+    assert query.startswith("Khảo sát giải pháp zep")
+
+
+def test_the_draft_still_contributes_once_the_defects_are_in():
+    """Ordering, not exclusion. The draft is demoted behind the failures, not dropped —
+    within the word budget it is still legitimate context for the query."""
+    query = build_search_query(
+        "Khảo sát Zep",
+        _rework_brief("Zep dùng kiến trúc graph memory", ["Thiếu nhược điểm"]),
+    )
+
+    assert "nhược điểm" in query
+    assert "graph memory" in query
+    assert query.index("nhược điểm") < query.index("graph memory")
+
+
+def test_an_ordinary_brief_is_unaffected_by_the_rework_rule():
+    """No failures heading ⇒ byte-identical to the previous behaviour. The rule must
+    not perturb the ordinary `work` path, which is every non-rework step."""
+    brief = "Chủ đề: thanh toán không tiền mặt\nMốc thời gian: 2026"
+
+    assert build_search_query("Tra cứu xu hướng", brief) == (
+        "Tra cứu xu hướng Chủ đề: thanh toán không tiền mặt Mốc thời gian: 2026"
+    )
+
+
+def test_the_placeholder_failure_list_does_not_starve_the_query():
+    """A failed verdict with no itemised failures writes "(không có chi tiết)". That
+    placeholder must not become the query's leading terms and displace real context."""
+    query = build_search_query(
+        "Khảo sát Zep",
+        _rework_brief("Zep dùng kiến trúc graph memory", []),
+    )
+
+    assert "graph memory" in query
+
+
+def test_blocks_appended_after_the_failure_list_are_not_treated_as_failures():
+    """`perceive` appends further blocks after the deps handoff (CEO clarifications,
+    coordinator guidance). The failures section is a run of `- ` bullets and must end
+    there — otherwise every trailing block inherits top priority in the query merely by
+    sitting below the list."""
+    handoff = (
+        "nháp cũ\n\n"
+        "Danh sách lỗi cần sửa:\n"
+        "- Thiếu nhược điểm\n\n"
+        "CHỈ DẪN CỦA ĐIỀU PHỐI (lần trước chưa đạt):\n"
+        "làm lại phần B"
+    )
+
+    query = build_search_query("Khảo sát Zep", handoff)
+
+    assert query.index("Thiếu nhược điểm") < query.index("nháp cũ")
+    assert query.index("nháp cũ") < query.index("làm lại phần B")

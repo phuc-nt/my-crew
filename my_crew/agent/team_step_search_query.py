@@ -70,6 +70,12 @@ _BOILERPLATE_PREFIXES = (
 #: the worker to reason over, never query terms.
 _DELIMITER_RE = re.compile(r"^\s*(<[^>]+>|-{3,}|={3,}|`{3,})")
 
+#: Heading `review_graph._rework_handoff_text` writes above the reviewer's defect list.
+#: Defined here rather than there because this module PARSES it: producer and parser
+#: sharing one literal is what stops a reworded heading from silently reverting a fix
+#: round to searching its own prior draft. `review_graph` imports it back.
+REWORK_FAILURES_HEADING = "Danh sách lỗi cần sửa:"
+
 
 def _is_useful(line: str) -> bool:
     stripped = line.strip()
@@ -91,13 +97,40 @@ def build_search_query(title: str, handoff: str = "") -> str:
 
     A blank title with a blank brief returns "" — the caller must treat that as "no
     search", since an empty query would spend an API call to learn nothing.
+
+    One exception to "then the brief's own useful lines": when the brief carries a
+    `REWORK_FAILURES_HEADING` section, those lines lead instead. A fix round's brief is
+    `prior draft + defect list`, and the draft is both longer and first, so the plain
+    order spends the whole word budget re-searching the text that ALREADY failed review
+    — the query that comes back is the one that produced the rejected draft. What makes
+    a fix round specific is what the reviewer said was missing. Measured across the
+    seven rework rows of task 51ad15207896: leading with the draft put the defect list
+    into 3/7 queries, and in one case sent a serialized tool-call blob from the draft to
+    the provider; leading with the failures puts it in 7/7. This mirrors what the
+    graph's internal `rework` node already does when it builds its query from
+    `failures` rather than from the handoff.
     """
     parts: list[str] = []
     if title.strip():
         parts.append(title.strip())
+    failure_lines: list[str] = []
+    other_lines: list[str] = []
+    in_failures = False
     for line in (handoff or "").splitlines():
+        stripped = line.strip()
+        if stripped.startswith(REWORK_FAILURES_HEADING):
+            in_failures = True
+            continue
+        # The failures section is a run of `- ` bullets. Anything else ends it —
+        # `perceive` appends further blocks (CEO clarifications, coordinator guidance)
+        # after the deps handoff, and those must not be silently reclassified as
+        # reviewer findings just because they trail the list.
+        if in_failures and not stripped.startswith("-"):
+            in_failures = False
         if _is_useful(line):
-            parts.append(line.strip())
+            (failure_lines if in_failures else other_lines).append(stripped)
+    parts.extend(failure_lines)
+    parts.extend(other_lines)
     words = " ".join(parts).split()[:MAX_QUERY_WORDS]
     query = " ".join(words)
     if len(query) <= MAX_QUERY_CHARS:

@@ -302,8 +302,10 @@ def _rework_handoff_text(prior_output: str, failures: list[str]) -> str:
     artifact write, not an LLM prompt; the wrap happens exactly once, downstream, when
     the rework step's own `work` node turns this into `handoff_context`.
     """
+    from my_crew.agent.team_step_search_query import REWORK_FAILURES_HEADING
+
     failures_text = "\n".join(f"- {f}" for f in failures) if failures else "(không có chi tiết)"
-    return f"{prior_output.strip()}\n\nDanh sách lỗi cần sửa:\n{failures_text}"
+    return f"{prior_output.strip()}\n\n{REWORK_FAILURES_HEADING}\n{failures_text}"
 
 
 def _artifact_version(artifact: dict[str, Any] | None) -> str | None:
