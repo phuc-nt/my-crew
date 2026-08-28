@@ -38,14 +38,17 @@ multiple ticks is always a safe no-op:
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from my_crew.runtime.office_room_append import append_office_event, room_for_task
-from my_crew.runtime.team_task_steps import is_content_step
+from my_crew.runtime.team_task_steps import is_content_step, is_dropped_step
 from my_crew.runtime.team_task_store import TeamStep, TeamTask
 
 if TYPE_CHECKING:
     from my_crew.agent.coordinator_graph import CoordinatorDeps
+
+logger = logging.getLogger(__name__)
 
 #: Peer review is capped at this many rework rounds (`review_round` col, 0-indexed) —
 #: round `MAX_REVIEW_ROUNDS` still failing means the ticker stalls + escalates instead
@@ -127,6 +130,14 @@ def effective_needs_review(task: TeamTask, step: TeamStep) -> bool:
     file ⇒ normal, broken store ⇒ supervised — fail-strict)."""
     from my_crew.runtime.band_store import BAND_SUPERVISED, BAND_TRUSTED, band_for
 
+    # A dropped step (skip-with-gap / CEO drop) outranks every band, supervised
+    # included: its artifact is a placeholder, and the drop already retired the
+    # attempt lease — so a review minted over it locks version "" against an artifact
+    # that keeps the pre-drop version, a mismatch no re-review can ever clear. Seen
+    # live (lanes9): six stale re-reviews per skipped step until the review budget
+    # stalled a task whose content steps were ALL done.
+    if is_dropped_step(step):
+        return False
     band = band_for(step.assigned_to)
     if band == BAND_SUPERVISED:
         return True
@@ -206,6 +217,17 @@ def maybe_handle_review_done(deps: CoordinatorDeps, task: TeamTask, review_step:
         # new reviewer run grades the CURRENT artifact. Idempotent: only mints once
         # (guarded by `_review_child` returning this exact row as the newest match
         # would prevent a second mint on the next tick once the fresh one exists).
+        if is_dropped_step(content_step):
+            # The parent was dropped AFTER this review was minted (or the review
+            # predates the fix): its placeholder artifact will read stale forever.
+            # Ending the chain here lets the row count as handled and the task reach
+            # aggregate instead of burning the review budget on re-mints.
+            logger.info(
+                "review-step %s/%s: parent %s da bi bo qua (dropped) — khong mint lai "
+                "review, ket thuc chuoi soat", task.id, review_step.step_id,
+                content_step_id,
+            )
+            return False
         if _review_child(task, content_step_id, "review") is review_step:
             _insert_review_step(
                 deps, task, content_step, reviewer=review_step.assigned_to,

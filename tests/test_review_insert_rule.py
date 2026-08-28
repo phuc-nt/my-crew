@@ -53,6 +53,7 @@ def _plan_one_step(store: TeamTaskStore, *, needs_review: bool = True, task_id="
     ]
     store.create_task(task_id=task_id, title="demo task", original_request="lam demo")
     store.set_plan(task_id, steps, plan_hash=_content_hash(steps))
+    store.reserve_step(task_id, "s1")
     store.mark_done(task_id, "s1", outcome_ref="x", cost_usd=0.0)
 
 
@@ -150,6 +151,7 @@ def _mint_review(store, task_id="t1", content_step_id="s1", *, reviewer="agent-q
         "parent_step_id": content_step_id, "review_round": review_round,
     })
     step_id = f"{content_step_id}-review-{review_round}"
+    store.reserve_step(task_id, step_id)
     store.mark_done(task_id, step_id, outcome_ref="x", cost_usd=0.0)
 
 
@@ -210,6 +212,7 @@ def test_rework_inherits_the_web_grant_of_the_step_it_redoes(tmp_path, monkeypat
     ]
     store.create_task(task_id="t1", title="demo task", original_request="lam demo")
     store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    store.reserve_step("t1", "s1")
     store.mark_done("t1", "s1", outcome_ref="x", cost_usd=0.0)
     _mint_review(store)
     from my_crew.runtime.team_task_paths import team_tasks_root
@@ -296,6 +299,7 @@ def test_round_cap_stalls_when_reached_by_actually_reworking_each_round(
         )
         if rework is None:
             break
+        store.reserve_step("t1", rework.step_id)
         store.mark_done("t1", rework.step_id, outcome_ref="x", cost_usd=0.0)
         maybe_insert_review_after_rework(deps, store.get("t1"), rework)
 
@@ -326,6 +330,7 @@ def test_task_review_budget_stalls_before_round_cap_when_whole_task_churns(
     store.create_task(task_id="t1", title="demo task", original_request="lam demo")
     store.set_plan("t1", steps, plan_hash=_content_hash(steps))
     for i in (1, 2, 3):
+        store.reserve_step("t1", f"s{i}")
         store.mark_done("t1", f"s{i}", outcome_ref="x", cost_usd=0.0)
 
     # 3 bước nội dung → ngân sách 6. Dồn 6 row soát/sửa: s1 churn trọn 2 vòng
@@ -337,6 +342,7 @@ def test_task_review_budget_stalls_before_round_cap_when_whole_task_churns(
             "deps": [f"s1-review-{rnd}"], "step_type": "rework",
             "parent_step_id": "s1", "review_round": rnd,
         })
+        store.reserve_step("t1", f"s1-rework-{rnd}")
         store.mark_done("t1", f"s1-rework-{rnd}", outcome_ref="x", cost_usd=0.0)
     _mint_review(store, content_step_id="s1", review_round=1)
     _mint_review(store, content_step_id="s2", review_round=0)
@@ -420,6 +426,7 @@ def test_rework_done_mints_next_review_round(tmp_path, monkeypatch):
         "deps": ["s1-review-0"], "step_type": "rework", "parent_step_id": "s1",
         "review_round": 0,
     })
+    store.reserve_step("t1", "s1-rework-0")
     store.mark_done("t1", "s1-rework-0", outcome_ref="x", cost_usd=0.0)
     _wire_roster(monkeypatch, [("agent-a", "pm"), ("agent-qa", "pm")])
 
@@ -442,6 +449,7 @@ def test_rework_done_next_round_no_reviewer_skips_without_stalling(tmp_path, mon
         "deps": ["s1-review-0"], "step_type": "rework", "parent_step_id": "s1",
         "review_round": 0,
     })
+    store.reserve_step("t1", "s1-rework-0")
     store.mark_done("t1", "s1-rework-0", outcome_ref="x", cost_usd=0.0)
     _wire_roster(monkeypatch, [("agent-a", "pm")])  # no peer this round
 
@@ -468,7 +476,9 @@ def test_rework_step_inherits_content_step_source_deps(tmp_path, monkeypatch):
     ]
     store.create_task(task_id="t1", title="demo task", original_request="lam demo")
     store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    store.reserve_step("t1", "src")
     store.mark_done("t1", "src", outcome_ref="x", cost_usd=0.0)
+    store.reserve_step("t1", "s1")
     store.mark_done("t1", "s1", outcome_ref="x", cost_usd=0.0)
     _mint_review(store)
     from my_crew.runtime.team_task_paths import team_tasks_root

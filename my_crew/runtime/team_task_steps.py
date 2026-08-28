@@ -153,6 +153,24 @@ def is_content_step(step: object) -> bool:
     return str(getattr(step, "step_type", "work") or "work") in CONTENT_STEP_TYPES
 
 
+def is_dropped_step(step: object) -> bool:
+    """True iff this `done` row got there via `mark_step_dropped` (CEO drop or the
+    coordinator's skip-with-gap), not via a worker's `mark_done`.
+
+    The drop is the ONLY writer that leaves a `done` row with no attempt lease
+    (`attempt_id = NULL` — the retirement that makes stale-lease writes no-op); every
+    worker-delivered `done` keeps the attempt that produced it. Read by the review
+    gate: a dropped step's artifact is a KHÔNG CÓ KẾT QUẢ placeholder, so grading it
+    can only fail it back into the rework loop or spin on a version that will never
+    match — no review may ever be minted over one, in any autonomy band.
+    """
+    # `hasattr` guard: pre-persist objects (`TeamStepPlan`, bare test fixtures) carry
+    # no lease field at all — absence of the column is not a retired lease, and the
+    # safe direction for "can't tell" is "not dropped" (worst case: one review runs).
+    return (str(getattr(step, "status", "") or "") == "done"
+            and hasattr(step, "attempt_id") and not step.attempt_id)
+
+
 def create_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE TABLE IF NOT EXISTS team_steps ("

@@ -45,6 +45,7 @@ def _plan_one_step(store: TeamTaskStore, task_id="t1") -> None:
     ]
     store.create_task(task_id=task_id, title="demo task", original_request="lam demo")
     store.set_plan(task_id, steps, plan_hash=_content_hash(steps))
+    store.reserve_step(task_id, "s1")
     store.mark_done(task_id, "s1", outcome_ref="x", cost_usd=0.0)
 
 
@@ -73,6 +74,7 @@ def _fail_newest_review(store, tmp_path) -> None:
         (s for s in task.steps if s.step_type == "review" and s.status != "done"),
         key=lambda s: s.seq,
     )
+    store.reserve_step("t1", review.step_id)
     store.mark_done("t1", review.step_id, outcome_ref="x", cost_usd=0.0)
     write_review_verdict_artifact(
         team_tasks_root(), "t1", 1, review.review_round,
@@ -87,6 +89,7 @@ def _complete_newest_rework(store) -> None:
         (s for s in task.steps if s.step_type == "rework" and s.status != "done"),
         key=lambda s: s.seq,
     )
+    store.reserve_step("t1", rework.step_id)
     store.mark_done("t1", rework.step_id, outcome_ref="x", cost_usd=0.0)
 
 

@@ -157,6 +157,7 @@ def test_review_insert_rule_still_runs_before_dispatch_under_parallel_cap(tmp_pa
     ]
     store.create_task(task_id="t1", title="demo", original_request="lam demo")
     store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    store.reserve_step("t1", "s1")
     store.mark_done("t1", "s1")
 
     spawned = []
