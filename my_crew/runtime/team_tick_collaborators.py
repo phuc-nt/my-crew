@@ -289,6 +289,10 @@ def make_aggregate(loaded: Any, settings: Any):
     """
 
     def _aggregate(task: TeamTask) -> tuple[str, float | None]:
+        from my_crew.agent.ops_stalled_task import (
+            DROP_PLACEHOLDER_PREFIX,
+            DROP_REASON_PREFIX,
+        )
         from my_crew.agent.team_task_artifact import (
             read_review_verdict_artifact,
             read_step_artifact,
@@ -311,6 +315,7 @@ def make_aggregate(loaded: Any, settings: Any):
         }
         parts: list[str] = []
         note_lines: list[str] = []
+        gap_lines: list[str] = []
         for step in sorted(task.steps, key=lambda s: s.seq):
             if step.step_type == "review":
                 # v63 "đạt kèm góp ý": a passed review's notes are worth surfacing in
@@ -335,6 +340,22 @@ def make_aggregate(loaded: Any, settings: Any):
             text = ""
             if artifact:
                 text = str(artifact.get("result_text") or artifact.get("status") or "")
+            # A dropped step's placeholder means the delivery has a real hole in it.
+            # Naming the hole is done in CODE (deterministic header below), not by
+            # hoping the summarizer LLM mentions it — and the header must NEVER use
+            # the abandonment phrase "KHÔNG LÀM ĐƯỢC": that is the give_up marker for
+            # a task that delivered nothing, while this task DID deliver.
+            if text.startswith(DROP_PLACEHOLDER_PREFIX):
+                skip_reason = next(
+                    (line[len(DROP_REASON_PREFIX):].strip()
+                     for line in text.splitlines()
+                     if line.startswith(DROP_REASON_PREFIX)),
+                    "",
+                )
+                gap_lines.append(
+                    f"bước '{step.title}' bỏ qua vì {skip_reason}" if skip_reason
+                    else f"bước '{step.title}' đã chủ động bỏ qua"
+                )
             # A rework rides on its parent's terminality: it REPLACES that step's
             # output, so cutting it would re-open the same hole one round later.
             is_terminal = (
@@ -346,7 +367,13 @@ def make_aggregate(loaded: Any, settings: Any):
             else:
                 snippet = text if is_terminal else text[:500]
             parts.append(f"- {step.title}: {snippet}")
-        fallback_summary = f"Việc '{task.title}' đã hoàn tất:\n" + "\n".join(parts)
+        gap_header = (
+            "Hoàn thành với khoảng trống: " + "; ".join(gap_lines) + ".\n\n"
+            if gap_lines else ""
+        )
+        fallback_summary = (
+            gap_header + f"Việc '{task.title}' đã hoàn tất:\n" + "\n".join(parts)
+        )
 
         # A task converging on ONE terminal content step delivers that artifact
         # verbatim — see `_direct_result_text` for why summarizing it is the wrong
@@ -360,8 +387,8 @@ def make_aggregate(loaded: Any, settings: Any):
             # only path its advisory notes have to the CEO — handing back the artifact
             # alone would silently drop them (v63 behaviour, kept intact here).
             if note_lines:
-                return direct + "\n\n" + "\n".join(note_lines), None
-            return direct, None
+                return gap_header + direct + "\n\n" + "\n".join(note_lines), None
+            return gap_header + direct, None
 
         if not settings.openrouter_api_key:
             return fallback_summary, None
@@ -390,7 +417,9 @@ def make_aggregate(loaded: Any, settings: Any):
             result = client.complete(
                 [{"role": "user", "content": prompt}], role="aggregate"
             )
-            return result.content or fallback_summary, result.cost_usd
+            if result.content:
+                return gap_header + result.content, result.cost_usd
+            return fallback_summary, result.cost_usd
         except Exception:  # noqa: BLE001 — never let a summarizer failure block delivery
             logger.exception("team-tick: aggregate LLM call failed for task %s", task.id)
             return fallback_summary, None

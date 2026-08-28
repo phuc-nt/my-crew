@@ -51,6 +51,9 @@ _RETRY_SIDECAR_NAME = "team_tick_retries.json"
 _POKE_WORTHY_ACTIONS = frozenset({
     "spawned", "aggregated", "stuck_retry", "stuck_reassigned",
     "review_inserted", "fanout_inserted",
+    # A skipped step counts as done, so its dependents became dispatchable THIS tick —
+    # same minted-then-wait shape as a review/fanout insert.
+    "step_skipped",
 })
 
 

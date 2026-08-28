@@ -952,10 +952,13 @@ class TeamTaskStore:
 
     def mark_step_dropped(self, task_id: str, step_id: str, *, outcome_ref: str | None = None,
                           attempt_id: str | None = None) -> bool:
-        """v63 stall recovery (`drop_stalled_step`): mark a dead step `done` AND clear
-        its `needs_review` in the same write — a CEO-dropped step delivers a placeholder
-        artifact, and minting a peer review over a placeholder would immediately fail it
-        back into the rework loop this command exists to break."""
+        """Mark a given-up-on step `done` AND clear its `needs_review` in the same
+        write — a dropped step delivers a placeholder artifact, and minting a peer
+        review over a placeholder would immediately fail it back into the rework loop
+        dropping exists to break. Two callers: v63 stall recovery (`drop_stalled_step`,
+        dead `failed`/`timeout` rows) and the coordinator's skip-with-gap (a
+        `needs_decision` row its judge ruled unrecoverable). The write also retires
+        the attempt lease — see `_steps.mark_step_dropped` for why."""
         updated = _steps.mark_step_dropped(
             self._conn, task_id, step_id, outcome_ref=outcome_ref, attempt_id=attempt_id,
         )

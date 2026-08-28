@@ -48,3 +48,13 @@ def test_each_grader_keeps_the_contract_that_is_its_own():
     assert "confidence" in _CHECK_SYSTEM and "confidence" not in _REVIEW_SYSTEM
     assert '"notes"' in _REVIEW_SYSTEM
     assert "đổi người phụ trách" in _REVIEW_SYSTEM
+
+
+def test_both_graders_carry_the_inherited_gap_rule():
+    """A step downstream of a skipped one receives a 'KHÔNG CÓ KẾT QUẢ' handoff. The
+    worker side already has the honesty rule (name the gap, don't fabricate); without
+    the symmetric grading rule, both graders would fail the honest result for the very
+    gap it honestly named — turning every skip into a review-death one step later."""
+    marker = "QUY TẮC KHOẢNG TRỐNG THỪA KẾ"
+    assert marker in _CHECK_SYSTEM
+    assert marker in _REVIEW_SYSTEM

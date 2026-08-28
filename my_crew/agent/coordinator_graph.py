@@ -269,6 +269,9 @@ class TickResult:
 
     task_id: str | None
     action: str  # "none" | "spawned" | "failed" | "timeout_escalated" | "aggregated" |
+    #               "step_skipped" — a non-terminal stuck step converted to a
+    #               skip-with-gap (`stuck_decision._skip_step_with_gap`), task keeps
+    #               running |
     #               "cap_exceeded" | "stalled" — plan_hash mismatch at dispatch-read,
     #               OR a dead-end step (failed/timeout, no retry left) with no other
     #               actionable step this tick (see `_dead_end_result`); both share the

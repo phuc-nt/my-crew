@@ -321,17 +321,111 @@ def _best_done_result(task: TeamTask) -> tuple[str, str] | None:
     return None
 
 
+def _is_skippable(task: TeamTask, step: TeamStep) -> bool:
+    """May this stuck step be skipped (dropped with a gap note) instead of killing
+    the task?
+
+    Measured (bench lanes5-8): every team-lane stall hit `_give_up` on the FIRST
+    research step, so 0/5 rounds ever delivered anything — the all-or-nothing pipeline
+    was the team lane's whole failure mode. A non-terminal step's gap can ride the
+    handoff honestly (the placeholder text forbids downstream fabrication), so the
+    task should degrade and continue instead of dying.
+
+    Deliberately narrow: plain `work` steps only. A terminal step (no other content
+    step consumes it) IS the deliverable — skipping it delivers nothing, so it keeps
+    the real give_up + salvage. Review/rework rows are excluded because a rework
+    REPLACES its parent's artifact: a placeholder at the rework's seq would leave the
+    parent's rejected content as the surviving handoff, delivering exactly what the
+    review refused. And there must be at least one other live step left — skipping the
+    only remaining work just delays the same conclusion by one tick.
+    """
+    if step.step_type != "work":
+        return False
+    content_dep_targets = {
+        d for s in task.steps if s.step_type in ("work", "sprint") for d in s.deps
+    }
+    if step.step_id not in content_dep_targets:
+        return False  # terminal: nothing downstream consumes it — it IS the delivery
+    # `needs_decision` counts as live: a stuck sibling may itself be skipped or
+    # resumed on its own tick (same liveness set the dispatcher uses) — two stuck
+    # steps must not talk each other into killing a task the skip path could save.
+    return any(
+        s.step_id != step.step_id
+        and s.status in ("pending", "running", "awaiting_approval",
+                         "waiting_clarify", "needs_decision")
+        for s in task.steps
+    )
+
+
+def _skip_step_with_gap(
+    deps: CoordinatorDeps, task: TeamTask, step: TeamStep, reason: str,
+) -> TickResult | None:
+    """Convert a non-terminal give_up ruling into a skip: placeholder artifact with
+    the judge's reason, step dropped, task keeps running. Returns None when the step
+    must not (or could not) be skipped — the caller then falls through to the real
+    give_up. A refused store write (attempt guard matched no row) also returns None:
+    the legacy path's pending-pinned fallback already knows how to terminate safely.
+    """
+    from my_crew.agent.coordinator_graph import TickResult, _reflect_safely
+    from my_crew.agent.ops_stalled_task import drop_step_with_placeholder
+
+    if not _is_skippable(task, step):
+        return None
+    if not drop_step_with_placeholder(deps.store, task, step, reason=reason):
+        # Refused write: this snapshot's attempt lease is stale. Re-read before
+        # falling back — if the row is already `done`, a CONCURRENT decider (their
+        # tick overlapped ours across the judge LLM call) skipped it first, and the
+        # legacy give_up would stall a task whose pipeline is validly running. The
+        # drop clears attempt_id, so acknowledging the sibling's skip is the only
+        # correct move. Any other status means a genuine reset/reassign happened:
+        # fall through to the legacy path, whose pending-pinned fallback knows how
+        # to terminate safely.
+        fresh = deps.store.get_step(task.id, step.step_id)
+        if fresh is not None and fresh.status == "done":
+            logger.info(
+                "team-tick: skip-with-gap on %s/%s already done by a concurrent "
+                "decider — acknowledging", task.id, step.step_id,
+            )
+            return TickResult(
+                task_id=task.id, action="step_skipped",
+                detail=f"{step.step_id}: đã bỏ qua bởi phiên điều phối song song",
+            )
+        logger.warning(
+            "team-tick: skip-with-gap on %s/%s refused by attempt guard — falling "
+            "back to give_up", task.id, step.step_id,
+        )
+        return None
+    note = (
+        f"Bước '{step.title}' bỏ qua vì {reason} — đội chạy tiếp các bước còn lại, "
+        "kết quả cuối sẽ ghi rõ khoảng trống này."
+    )
+    deps.escalate(task, step, "stuck", note)
+    _reflect_safely(deps, task, "stuck", f"skipped step '{step.title}': {reason}")
+    return TickResult(
+        task_id=task.id, action="step_skipped",
+        detail=f"{step.step_id}: {reason}"[:80],
+    )
+
+
 def _give_up(
     deps: CoordinatorDeps, task: TeamTask, step: TeamStep, reason: str,
 ) -> TickResult:
-    """Conclude that the task cannot be completed, and say why.
+    """Conclude that the step cannot be completed — and decide whether the TASK dies
+    with it.
 
-    The step is marked `failed` (it is genuinely over) and the TASK is stalled with a
-    `final_summary` naming the reason, so the existing delivery path carries an honest
-    "không làm được vì X" to the CEO rather than silence or a fake success.
+    Non-terminal work step → degrade-and-continue: the step is skipped with a gap
+    note (see `_skip_step_with_gap`) and the pipeline keeps going; the delivery will
+    say "hoàn thành với khoảng trống" instead of nothing. Terminal step (or a
+    review/rework, or the last live step) → the original ending: the step is marked
+    `failed` and the TASK is stalled with a `final_summary` naming the reason, so the
+    existing delivery path carries an honest "không làm được vì X" to the CEO rather
+    than silence or a fake success.
     """
     from my_crew.agent.coordinator_graph import TickResult, _reflect_safely
 
+    skipped = _skip_step_with_gap(deps, task, step, reason)
+    if skipped is not None:
+        return skipped
     summary = f"Việc '{task.title}' KHÔNG LÀM ĐƯỢC: bước '{step.title}' — {reason}."
     # Measured live (lanes6, team/ecommerce): a finished report sat in the step-3
     # artifact while the QA step stalled the task, and this delivery carried only the

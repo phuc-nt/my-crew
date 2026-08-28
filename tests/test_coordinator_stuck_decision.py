@@ -627,3 +627,147 @@ def test_salvage_is_capped_at_a_line_boundary(tmp_path):
     # cut landed on a line boundary: the line right before the marker is intact
     body = salvage.split("\n[... đã cắt bớt cho vừa bản tin]", 1)[0]
     assert body.endswith("nội dung có nguồn kèm theo")
+
+
+# --- degrade-and-continue: a non-terminal give_up becomes a skip-with-gap -------------
+
+
+def _three_step_stuck_store(tmp_path) -> TeamTaskStore:
+    """A linear 3-step chain whose FIRST step came back `needs_decision` — the
+    lanes5-8 team shape: every bench stall died at the opening research step while
+    two runnable steps sat behind it."""
+    steps = [
+        {"step_id": "s1", "title": "tra cuu", "assigned_to": "agent-a", "deps": []},
+        {"step_id": "s2", "title": "phan tich", "assigned_to": "agent-a", "deps": ["s1"]},
+        {"step_id": "s3", "title": "soan bao cao", "assigned_to": "agent-a", "deps": ["s2"]},
+    ]
+    store = TeamTaskStore(tmp_path / "team_tasks.sqlite3")
+    store.create_task(task_id="t1", title="demo task", original_request="lam demo")
+    store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    attempt = store.reserve_step("t1", "s1")
+    store.mark_needs_decision("t1", "s1", attempt_id=attempt, outcome_ref="ref-1")
+    return store
+
+
+def test_give_up_on_a_non_terminal_step_skips_it_and_the_task_keeps_running(tmp_path):
+    from my_crew.agent.team_task_artifact import read_step_artifact
+
+    store = _three_step_stuck_store(tmp_path)
+    notes = []
+    result = run_one_tick(_deps(
+        store,
+        judge_stuck_step=lambda brief, step: {
+            "decision": "give_up", "reason": "nguồn cần thiết không công khai",
+        },
+        escalate=lambda task, step, kind, msg: notes.append((kind, msg)),
+    ))
+
+    assert result.action == "step_skipped"
+    assert store.get_step("t1", "s1").status == "done"  # dropped counts as done
+    task = store.get("t1")
+    assert task.status != "stalled"
+    assert not task.final_summary  # no abandonment delivery was minted
+    artifact = read_step_artifact(tmp_path, "t1", 1) or {}
+    text = artifact.get("result_text") or ""
+    assert text.startswith("KHÔNG CÓ KẾT QUẢ")
+    assert "Lý do bỏ qua (phán quyết điều phối): nguồn cần thiết không công khai" in text
+    assert any("bỏ qua vì" in msg for _kind, msg in notes)
+
+
+def test_after_a_skip_the_dependent_step_dispatches_on_the_next_tick(tmp_path):
+    store = _three_step_stuck_store(tmp_path)
+    run_one_tick(_deps(store, judge_stuck_step=lambda brief, step: {
+        "decision": "give_up", "reason": "bế tắc",
+    }))
+
+    result = run_one_tick(_deps(store))
+
+    assert result.action == "spawned"
+    assert store.get_step("t1", "s2").status == "running"
+
+
+def test_give_up_on_the_terminal_step_still_ends_the_task_honestly(tmp_path):
+    """The terminal step IS the deliverable — skipping it would deliver nothing, so
+    the original give_up (failed step, stalled task, abandonment note) stands."""
+    store = _two_step_stuck_store(tmp_path)  # stuck step s1 is the chain's last
+    delivered = []
+    result = run_one_tick(_deps(
+        store,
+        judge_stuck_step=lambda brief, step: {"decision": "give_up", "reason": "bế tắc"},
+        deliver_room=lambda task, summary: delivered.append(summary) or True,
+    ))
+
+    assert result.action == "gave_up"
+    assert store.get("t1").status == "stalled"
+    assert delivered and "KHÔNG LÀM ĐƯỢC" in delivered[0]
+
+
+def test_a_skip_refused_by_the_attempt_guard_falls_back_to_the_legacy_give_up(tmp_path):
+    """The snapshot's lease is stale (step re-reserved since the tick's read): the
+    drop write must be a no-op — never clobber the live attempt's row to `done` —
+    and the ruling degrades to the legacy give_up path, whose own guards already
+    know how to leave a re-reserved step alone."""
+    store = _three_step_stuck_store(tmp_path)
+    task = store.get("t1")
+    stale_step = next(s for s in task.steps if s.step_id == "s1")
+    store.reset_step_to_pending("t1", "s1")
+    store.reserve_step("t1", "s1")
+
+    from my_crew.agent.coordinator_nodes.stuck_decision import _give_up
+
+    _give_up(_deps(store), task, stale_step, "hết cách")
+
+    assert store.get_step("t1", "s1").status == "running"
+
+
+def test_a_concurrent_deciders_give_up_cannot_reverse_a_completed_skip(tmp_path):
+    """Two coordinator ticks can overlap on the same stuck step (the window spans the
+    judge LLM call). The first one's skip lands: row `done`, attempt retired. The
+    loser's give_up — still holding a snapshot with the ORIGINAL attempt lease — must
+    acknowledge the sibling's skip, not flip the dropped row back to `failed` and
+    stall a task whose dependents are already dispatching."""
+    store = _three_step_stuck_store(tmp_path)
+    stale_task = store.get("t1")
+    stale_step = next(s for s in stale_task.steps if s.step_id == "s1")
+
+    from my_crew.agent.coordinator_nodes.stuck_decision import _give_up
+
+    winner = _give_up(_deps(store), stale_task, stale_step, "nguồn không công khai")
+    assert winner.action == "step_skipped"
+    assert store.get_step("t1", "s1").attempt_id is None  # lease retired by the drop
+
+    loser = _give_up(_deps(store), stale_task, stale_step, "nguồn không công khai")
+
+    assert loser.action == "step_skipped"
+    assert store.get_step("t1", "s1").status == "done"
+    refreshed = store.get("t1")
+    assert refreshed.status != "stalled"
+    assert not refreshed.final_summary
+
+
+def test_a_sibling_stuck_step_still_counts_as_live_for_skippability(tmp_path):
+    """Two steps stuck at once must not talk each other into killing the task: a
+    `needs_decision` sibling is still live — its own tick may skip or resume it —
+    so the first ruling skips instead of falling into the terminal give_up."""
+    steps = [
+        {"step_id": "s1", "title": "tra cuu A", "assigned_to": "agent-a", "deps": []},
+        {"step_id": "s2", "title": "tra cuu B", "assigned_to": "agent-a", "deps": []},
+        {"step_id": "s3", "title": "tong hop", "assigned_to": "agent-a",
+         "deps": ["s1", "s2"]},
+    ]
+    store = TeamTaskStore(tmp_path / "team_tasks.sqlite3")
+    store.create_task(task_id="t1", title="demo task", original_request="lam demo")
+    store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    for sid in ("s1", "s2"):
+        attempt = store.reserve_step("t1", sid)
+        store.mark_needs_decision("t1", sid, attempt_id=attempt, outcome_ref=f"ref-{sid}")
+    task = store.get("t1")
+    step = next(s for s in task.steps if s.step_id == "s1")
+
+    from my_crew.agent.coordinator_nodes.stuck_decision import _give_up
+
+    result = _give_up(_deps(store), task, step, "hết cách")
+
+    assert result.action == "step_skipped"
+    assert store.get_step("t1", "s1").status == "done"
+    assert store.get("t1").status != "stalled"

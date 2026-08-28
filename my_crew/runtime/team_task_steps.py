@@ -607,15 +607,24 @@ def mark_step_dropped(
 ) -> bool:
     """v63 stall recovery: `done` + `needs_review = 0` in one write (see
     `TeamTaskStore.mark_step_dropped` for why the review flag must fall with it).
-    Same dead-only status guard as `reset_step_to_pending` — only a `failed`/`timeout`
-    row can be dropped."""
-    where = "WHERE task_id = ? AND step_id = ? AND status IN ('failed', 'timeout')"
+    Status guard: a dead row (`failed`/`timeout` — the CEO's `drop_stalled_step`
+    prey) or a judged-unrecoverable one (`needs_decision` — the coordinator's
+    skip-with-gap converts a give_up ruling into a drop). WHICH steps qualify is the
+    caller's decision; this guard only refuses statuses where dropping would clobber
+    live or already-good work (`running`, `done`, ...)."""
+    where = ("WHERE task_id = ? AND step_id = ? "
+             "AND status IN ('failed', 'timeout', 'needs_decision')")
     params: tuple[Any, ...] = (task_id, step_id)
     if attempt_id is not None:
         where += " AND attempt_id = ?"
         params = (*params, attempt_id)
+    # The drop also RETIRES the attempt (attempt_id = NULL): a dropped row is a
+    # terminal outcome, and every later stale-lease write (`mark_failed`, `halt_step`,
+    # ...) guards on attempt_id — clearing it turns a second decider's whole write
+    # ladder into no-ops instead of letting a same-attempt `mark_failed` flip the
+    # dropped row back to `failed` while its dependents are already dispatching.
     cur = conn.execute(
-        "UPDATE team_steps SET status = 'done', needs_review = 0, "
+        "UPDATE team_steps SET status = 'done', needs_review = 0, attempt_id = NULL, "
         "outcome_ref = COALESCE(?, outcome_ref) " + where,
         (outcome_ref, *params),
     )

@@ -39,12 +39,55 @@ logger = logging.getLogger(__name__)
 #: old bland "(bước bị bỏ qua)" filled the gap with FABRICATED measurements presented as
 #: real. The work-step SYSTEM prompt carries the same rule (`team_task_prompt._SYSTEM`)
 #: since the content wrapper marks handoff text as data-not-instructions.
+#: Stable prefix of that placeholder — the aggregate step detects a dropped step by
+#: this prefix (not the full text) so wording tweaks after the prefix don't break the
+#: "hoàn thành với khoảng trống" delivery header.
+DROP_PLACEHOLDER_PREFIX = "KHÔNG CÓ KẾT QUẢ — bước này đã bị chủ động bỏ qua"
+
+#: Line prefix carrying WHY a step was skipped (coordinator give_up converted to a
+#: skip). The aggregate parses this line back out to name the gap in the delivery.
+DROP_REASON_PREFIX = "Lý do bỏ qua (phán quyết điều phối): "
+
 _DROPPED_RESULT_TEXT = (
-    "KHÔNG CÓ KẾT QUẢ — bước này đã bị chủ động bỏ qua, không tạo ra bất kỳ dữ liệu "
+    DROP_PLACEHOLDER_PREFIX + ", không tạo ra bất kỳ dữ liệu "
     "hay số liệu nào. Bước sau TUYỆT ĐỐI không được suy diễn/ước lượng/bịa kết quả "
     "thay cho bước này; nếu sản phẩm cuối phụ thuộc nó, phải ghi rõ 'thiếu dữ liệu "
     "từ bước bị bỏ qua'."
 )
+
+
+def drop_step_with_placeholder(
+    store: TeamTaskStore, task: TeamTask, step: TeamStep, *, reason: str = "",
+) -> bool:
+    """Mark one step dropped and write its honest placeholder artifact.
+
+    The single primitive both drop paths share: the CEO's `drop_stalled_step` (no
+    reason — the placeholder text is the whole message) and the coordinator's
+    skip-with-gap on a non-terminal give_up (reason = the stuck judge's ruling, so
+    dependents and the final delivery can name WHY the gap exists). Returns False when
+    the attempt-guarded store write matched no row — the caller decides what a refused
+    drop means (skip the step in a batch, or fall back to a full give_up).
+    """
+    from my_crew.agent.team_task_artifact import write_step_artifact
+
+    outcome_ref = f"team-tasks/{task.id}/step-{step.seq}.json"
+    if not store.mark_step_dropped(
+        task.id, step.step_id, outcome_ref=outcome_ref, attempt_id=step.attempt_id,
+    ):
+        return False
+    text = _DROPPED_RESULT_TEXT
+    # The reason is one LINE by contract: the aggregate finds it back with a
+    # line-prefix scan, so a multiline judge verdict would silently lose everything
+    # after its first newline. Collapse whitespace instead of trusting the LLM.
+    reason_line = " ".join(reason.split())
+    if reason_line:
+        text = f"{text}\n{DROP_REASON_PREFIX}{reason_line}"
+    write_step_artifact(
+        team_tasks_root(), task.id, step.seq,
+        {"result_text": text, "version": step.attempt_id or "ceo-drop",
+         "status": "done"},
+    )
+    return True
 
 
 class _StalledTaskContext:
@@ -243,8 +286,6 @@ def _dead_step_replacement(step: TeamStep) -> str:
 
 def run_drop_stalled_step(slots: dict[str, str]) -> str:
     """Give up on a dead step so the rest of the DAG can finish without it."""
-    from my_crew.agent.team_task_artifact import write_step_artifact
-
     ctx = _StalledTaskContext(slots["task_id"])
     try:
         task = ctx.task
@@ -264,17 +305,8 @@ def run_drop_stalled_step(slots: dict[str, str]) -> str:
             )
         dropped: list[str] = []
         for s in dead:
-            outcome_ref = f"team-tasks/{task.id}/step-{s.seq}.json"
-            if not ctx.store.mark_step_dropped(
-                task.id, s.step_id, outcome_ref=outcome_ref, attempt_id=s.attempt_id,
-            ):
-                continue
-            write_step_artifact(
-                team_tasks_root(), task.id, s.seq,
-                {"result_text": _DROPPED_RESULT_TEXT,
-                 "version": s.attempt_id or "ceo-drop", "status": "done"},
-            )
-            dropped.append(s.title)
+            if drop_step_with_placeholder(ctx.store, task, s):
+                dropped.append(s.title)
         if not dropped:
             raise ValueError(f"không bỏ được bước nào của việc `{task.id}` — thử lại sau")
         ctx.store.reopen_stalled(task.id)

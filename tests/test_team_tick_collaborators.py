@@ -765,3 +765,100 @@ def test_a_coordinator_without_a_binding_never_claims_direct_delivery(
     escalate(_task(), _step(), "step_failed", "bước draft thất bại")
 
     assert _milestone_body(tmp_path).get("delivered_direct") is not True
+
+
+# --- degrade-and-continue: a dropped step surfaces as a gap header, not a failed task
+
+
+def _dropped_text(reason=""):
+    from my_crew.agent.ops_stalled_task import (
+        DROP_PLACEHOLDER_PREFIX,
+        DROP_REASON_PREFIX,
+    )
+
+    text = DROP_PLACEHOLDER_PREFIX + ", không tạo ra dữ liệu."
+    if reason:
+        text += f"\n{DROP_REASON_PREFIX}{reason}"
+    return text
+
+
+def test_a_dropped_step_opens_the_fallback_summary_with_a_gap_header(
+    tmp_path, monkeypatch,
+):
+    """The hole in the delivery is named by CODE, up front — not left for the
+    summarizer LLM to maybe mention. And the header must never contain the give_up
+    phrase "KHÔNG LÀM ĐƯỢC": that marks a task that delivered nothing, while a
+    skip-with-gap task DID deliver (judge_lanes filters on exactly that phrase)."""
+    from my_crew.agent.team_task_artifact import write_step_artifact
+
+    rows = (_step_row("s1", 1, title="thu thập số liệu"),
+            _step_row("s2", 2, title="phân tích", deps=("s1",)),
+            _step_row("s3", 3, title="tổng hợp", deps=("s1",)))
+    task = _task()
+    task = type(task)(**{**task.__dict__, "steps": rows})
+    write_step_artifact(
+        tmp_path, "t1", 1,
+        {"result_text": _dropped_text("nguồn cần thiết không công khai"),
+         "version": "attempt-1"},
+    )
+    write_step_artifact(tmp_path, "t1", 2, {"result_text": "phân tích trên phần có",
+                                            "version": "attempt-2"})
+    write_step_artifact(tmp_path, "t1", 3, {"result_text": "tổng hợp cuối",
+                                            "version": "attempt-3"})
+
+    summary = _aggregate_fallback(tmp_path, monkeypatch, task)
+
+    assert summary.startswith(
+        "Hoàn thành với khoảng trống: bước 'thu thập số liệu' bỏ qua vì "
+        "nguồn cần thiết không công khai.\n\n"
+    )
+    assert "KHÔNG LÀM ĐƯỢC" not in summary
+
+
+def test_the_gap_header_also_precedes_a_verbatim_terminal_delivery(
+    tmp_path, monkeypatch,
+):
+    """The single-terminal direct path hands back the artifact untouched — except the
+    gap header, which must survive it: the verbatim artifact is exactly the delivery
+    that would otherwise hide the hole."""
+    from my_crew.agent.team_task_artifact import write_step_artifact
+
+    rows = (_step_row("s1", 1, title="thu thập"),
+            _step_row("s2", 2, title="viết bài", deps=("s1",)))
+    task = _task()
+    task = type(task)(**{**task.__dict__, "steps": rows})
+    write_step_artifact(
+        tmp_path, "t1", 1,
+        {"result_text": _dropped_text("API trả 422"), "version": "attempt-1"},
+    )
+    draft = "BÀI VIẾT. " + ("nội dung " * 100) + "HẾT."
+    write_step_artifact(tmp_path, "t1", 2, {"result_text": draft,
+                                            "version": "attempt-2"})
+
+    summary = _aggregate_fallback(tmp_path, monkeypatch, task)
+
+    header = "Hoàn thành với khoảng trống: bước 'thu thập' bỏ qua vì API trả 422.\n\n"
+    assert summary == header + draft
+
+
+def test_a_ceo_drop_without_a_reason_reads_as_deliberately_skipped(
+    tmp_path, monkeypatch,
+):
+    """The CEO drop path writes the placeholder with no reason line — the header still
+    names the gap, phrased as a deliberate skip rather than an empty 'vì '."""
+    from my_crew.agent.team_task_artifact import write_step_artifact
+
+    rows = (_step_row("s1", 1, title="thu thập"),
+            _step_row("s2", 2, title="viết bài", deps=("s1",)))
+    task = _task()
+    task = type(task)(**{**task.__dict__, "steps": rows})
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": _dropped_text(),
+                                            "version": "attempt-1"})
+    write_step_artifact(tmp_path, "t1", 2, {"result_text": "bản chốt",
+                                            "version": "attempt-2"})
+
+    summary = _aggregate_fallback(tmp_path, monkeypatch, task)
+
+    assert summary.startswith(
+        "Hoàn thành với khoảng trống: bước 'thu thập' đã chủ động bỏ qua.\n\n"
+    )
