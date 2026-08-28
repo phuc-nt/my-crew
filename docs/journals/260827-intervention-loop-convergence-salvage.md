@@ -41,3 +41,6 @@
 - Nút thắt còn lại lanes8: worker snippet-only không gom nổi nguồn kiểm chứng
   được cho đề thị trường VN trong 2 lần can thiệp — trần năng lực tra cứu,
   không phải lỗi prompt.
+- ~~Task chết một bước là stall trắng tay~~ ĐÃ VÁ 28/08: degrade-and-continue
+  (skip-with-gap `fc6ebf4`) + fix vòng review đè bước đã drop (`213f119`,
+  `ee57ce3`) — chi tiết ở entry 260828-degrade-and-continue-review-drop-guard.
