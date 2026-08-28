@@ -32,7 +32,12 @@
   Việt không công khai — lớp "tiêu chí bất khả thi với dữ liệu tồn tại".
 
 ## Mở / sang sau
-- Câu hỏi gốc v2 (lane nhanh có kém hơn?) vẫn chưa chấm được: 4 vòng bench chưa
+- Câu hỏi gốc v2 (lane nhanh có kém hơn?) vẫn chưa chấm được: 5 vòng bench chưa
   từng có cặp deliverable cả 2 lane cùng giao.
-- Ứng viên vá tiếp: cấm judge chốt danh-sách-nguồn-đóng; decompose đừng đặt
-  acceptance đòi số đo mà đề không cam kết có.
+- ~~Ứng viên vá tiếp~~ ĐÃ VÁ 28/08 (`39cf188`): cấm judge chốt danh-sách-nguồn-đóng
+  + QUY TẮC SỐ ĐO ĐỊNH LƯỢNG cho decompose. Lanes8 xác nhận cả hai giữ được:
+  0 danh sách đóng, acceptance 4/4 case mang escape hatch "nếu nguồn công bố /
+  ghi rõ không công khai"; tên→URL dịu thành có lối thoát "Link: [tên miền]".
+- Nút thắt còn lại lanes8: worker snippet-only không gom nổi nguồn kiểm chứng
+  được cho đề thị trường VN trong 2 lần can thiệp — trần năng lực tra cứu,
+  không phải lỗi prompt.
