@@ -60,12 +60,15 @@ def _plan_with_final_round_review(store, tmp_path) -> None:
     ]
     store.create_task(task_id="t1", title="demo task", original_request="lam demo")
     store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    store.reserve_step("t1", "s1")
     store.mark_done("t1", "s1", outcome_ref="x", cost_usd=0.0)
     store.insert_step("t1", {
         "step_id": f"s1-review-{MAX_REVIEW_ROUNDS}", "title": "soat",
         "assigned_to": "agent-qa", "deps": ["s1"], "step_type": "review",
         "parent_step_id": "s1", "review_round": MAX_REVIEW_ROUNDS,
     })
+    store.reserve_step(
+        "t1", f"s1-review-{MAX_REVIEW_ROUNDS}")
     store.mark_done(
         "t1", f"s1-review-{MAX_REVIEW_ROUNDS}", outcome_ref="x", cost_usd=0.0,
     )

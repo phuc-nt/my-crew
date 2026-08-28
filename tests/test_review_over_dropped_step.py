@@ -174,3 +174,77 @@ def test_a_review_minted_before_the_drop_ends_instead_of_reminting_forever(
     assert len(reviews) == 1  # no fresh mint — the chain ended at the dropped parent
     assert [s for s in task.steps if s.step_type == "rework"] == []
     assert task.status == "done"
+
+
+def _delivered_single_step_task(store) -> None:
+    """One-step plan whose content step finished NORMALLY (lease kept) — the parent
+    for the dynamic-row drop cases, where only the review/rework row got dropped."""
+    steps = [
+        {"step_id": "s1", "title": "nghiên cứu thị trường", "assigned_to": "agent-a",
+         "deps": [], "needs_review": True},
+    ]
+    store.create_task(task_id="t1", title="demo", original_request="làm demo")
+    store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    attempt = store.reserve_step("t1", "s1")
+    store.mark_done("t1", "s1", outcome_ref="x", cost_usd=0.0, attempt_id=attempt)
+
+
+def _drop_row(store, step_id: str) -> None:
+    """Run a dynamic row into needs_decision and CEO-drop it through the real
+    primitive (`drop_stalled_step` has no step_type filter, so review/rework rows
+    are legitimate prey)."""
+    store.reserve_step("t1", step_id)
+    store.mark_needs_decision("t1", step_id, outcome_ref="x", cost_usd=0.0)
+    task = store.get("t1")
+    step = next(s for s in task.steps if s.step_id == step_id)
+    assert drop_step_with_placeholder(store, task, step)
+
+
+def test_a_dropped_rework_row_never_mints_the_next_review_round(tmp_path, monkeypatch):
+    """CEO drops a dead rework: the next-round review would lock onto its placeholder
+    (guaranteed stale), and that round's failure would mint yet another rework —
+    resurrecting the row the drop meant to end."""
+    import my_crew.agent.team_task_roster as roster_mod
+    from my_crew.agent.coordinator_nodes.review_insert import maybe_insert_review_after_rework
+
+    store = _store(tmp_path)
+    _delivered_single_step_task(store)
+    store.insert_step("t1", {
+        "step_id": "s1-review-0-0", "title": "Soát chéo", "assigned_to": "agent-qa",
+        "deps": ["s1"], "step_type": "review", "parent_step_id": "s1", "review_round": 0,
+    })
+    store.insert_step("t1", {
+        "step_id": "s1-rework-0", "title": "Sửa lại", "assigned_to": "agent-a",
+        "deps": ["s1-review-0-0"], "step_type": "rework", "parent_step_id": "s1",
+        "review_round": 0,
+    })
+    _drop_row(store, "s1-rework-0")
+    monkeypatch.setattr(roster_mod, "assignable_staff",
+                        lambda: [("agent-a", "pm"), ("agent-qa", "pm")])
+
+    task = store.get("t1")
+    rework = next(s for s in task.steps if s.step_id == "s1-rework-0")
+    assert maybe_insert_review_after_rework(_deps(store), task, rework) is False
+    reviews = [s for s in store.get("t1").steps if s.step_type == "review"]
+    assert [s.review_round for s in reviews] == [0]  # no round-1 mint
+
+
+def test_a_dropped_review_row_ends_its_chain_instead_of_reminting(tmp_path):
+    """CEO drops a dead review row: its placeholder yields no verdict, and the old
+    verdict-None branch would immediately re-mint the exact row the CEO just killed."""
+    from my_crew.agent.coordinator_nodes.review_insert import maybe_handle_review_done
+
+    store = _store(tmp_path)
+    _delivered_single_step_task(store)
+    store.insert_step("t1", {
+        "step_id": "s1-review-0-0", "title": "Soát chéo", "assigned_to": "agent-qa",
+        "deps": ["s1"], "step_type": "review", "parent_step_id": "s1", "review_round": 0,
+    })
+    _drop_row(store, "s1-review-0-0")
+
+    task = store.get("t1")
+    review = next(s for s in task.steps if s.step_id == "s1-review-0-0")
+    assert maybe_handle_review_done(_deps(store), task, review) is False
+    refreshed = store.get("t1")
+    assert len([s for s in refreshed.steps if s.step_type == "review"]) == 1
+    assert [s for s in refreshed.steps if s.step_type == "rework"] == []

@@ -43,6 +43,7 @@ def _task_with_failed_review(store: TeamTaskStore, *, task_id="t1", review_round
               "deps": [], "needs_review": True}]
     store.create_task(task_id=task_id, title="demo", original_request="lam demo")
     store.set_plan(task_id, steps, plan_hash="h")
+    store.reserve_step(task_id, "s1")
     store.mark_done(task_id, "s1", outcome_ref="x", cost_usd=0.0)
     review_id = f"s1-review-{review_round}-{review_round}"
     store.insert_step(task_id, {
@@ -50,6 +51,7 @@ def _task_with_failed_review(store: TeamTaskStore, *, task_id="t1", review_round
         "assigned_to": "agent-b", "deps": ["s1"], "step_type": "review",
         "parent_step_id": "s1", "review_round": review_round,
     })
+    store.reserve_step(task_id, review_id)
     store.mark_done(task_id, review_id, outcome_ref="y", cost_usd=0.0)
     return review_id
 
@@ -94,6 +96,7 @@ def test_each_review_round_reads_its_own_verdict_not_an_earlier_one(store, tmp_p
         "assigned_to": "agent-b", "deps": ["s1"], "step_type": "review",
         "parent_step_id": "s1", "review_round": 1,
     })
+    store.reserve_step("t1", review_1)
     store.mark_done("t1", review_1, outcome_ref="y2", cost_usd=0.0)
 
     for rnd, marker in ((0, "LOI-VONG-0"), (1, "LOI-VONG-1")):
@@ -123,7 +126,9 @@ def test_rework_row_still_reads_its_parents_source_deps(store, tmp_path):
     ]
     store.create_task(task_id="t2", title="demo", original_request="lam demo")
     store.set_plan("t2", steps, plan_hash="h2")
+    store.reserve_step("t2", "src")
     store.mark_done("t2", "src", outcome_ref="a", cost_usd=0.0)
+    store.reserve_step("t2", "s1")
     store.mark_done("t2", "s1", outcome_ref="b", cost_usd=0.0)
 
     from my_crew.agent.team_task_artifact import write_step_artifact
@@ -135,6 +140,7 @@ def test_rework_row_still_reads_its_parents_source_deps(store, tmp_path):
         "step_id": review_id, "title": "Soát chéo", "assigned_to": "agent-b",
         "deps": ["s1"], "step_type": "review", "parent_step_id": "s1", "review_round": 0,
     })
+    store.reserve_step("t2", review_id)
     store.mark_done("t2", review_id, outcome_ref="c", cost_usd=0.0)
     content_seq = store.get_step("t2", "s1").seq
     write_review_verdict_artifact(tmp_path, "t2", content_seq, 0, {

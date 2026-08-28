@@ -151,7 +151,10 @@ def test_content_rerun_after_review_minted_forces_stale_artifact_reject_and_remi
     # `maybe_handle_review_done` "verdict is None" branch can react to it).
     review_task = store.get("t1")
     live_review_step = next(s for s in review_task.steps if s.step_type == "review")
-    store.mark_done("t1", live_review_step.step_id, attempt_id=live_review_step.attempt_id)
+    # reserve first — real dispatch always leases the row, and a done row with NO
+    # lease is the drop signature, which would (correctly) end the review chain here
+    review_attempt = store.reserve_step("t1", live_review_step.step_id)
+    store.mark_done("t1", live_review_step.step_id, attempt_id=review_attempt)
 
     # Ticker's next tick: review-step is `done` with no verdict artifact -> re-mints a
     # FRESH review-step at the SAME round, never stalls, never double-mints beyond one.

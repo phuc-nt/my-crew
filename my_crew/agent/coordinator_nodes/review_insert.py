@@ -199,6 +199,12 @@ def maybe_handle_review_done(deps: CoordinatorDeps, task: TeamTask, review_step:
     continuing)."""
     if review_step.step_type != "review" or review_step.parent_step_id is None:
         return False
+    if is_dropped_step(review_step):
+        # The CEO dropped this dead review row (`drop_stalled_step` has no step_type
+        # filter): its "done" is a placeholder, so the verdict read below would come
+        # back None and the re-mint branch would resurrect the exact row the CEO just
+        # killed. A dropped review ends its chain.
+        return False
     content_step_id = review_step.parent_step_id
     content_step = next((s for s in task.steps if s.step_id == content_step_id), None)
     if content_step is None:
@@ -299,6 +305,12 @@ def maybe_insert_review_after_rework(
     parent is the ORIGINAL content step, not the rework row itself — `review_round`
     increments so the new verdict artifact never clobbers the prior round's)."""
     if rework_step.step_type != "rework" or rework_step.parent_step_id is None:
+        return False
+    if is_dropped_step(rework_step):
+        # Same rule as the other two gates, one row-type over: the CEO can drop a dead
+        # rework row, and the next-round review would lock onto its placeholder — a
+        # guaranteed-stale grade whose failure would mint yet another rework,
+        # resurrecting what the drop meant to end.
         return False
     content_step_id = rework_step.parent_step_id
     content_step = next((s for s in task.steps if s.step_id == content_step_id), None)
