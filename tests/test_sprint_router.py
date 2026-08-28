@@ -500,6 +500,27 @@ def test_downgrade_folds_a_linear_one_person_plan_into_a_sprint():
     assert plan.needs_web is True  # any() — một bước cần web là cả việc cần web
 
 
+def test_downgrade_folds_the_three_step_one_person_chain_seen_in_lanes8():
+    """The measured motivation for the 3-step ceiling: lanes8's music_streaming brief
+    decomposed into three analyst steps in single file — no cross-review, no
+    coordination, just orchestration cost — and then stalled. That shape is one
+    person's work wearing a team plan."""
+    task = _plan(
+        _step("s1", "agent-b", acceptance="- Đủ 5 nền tảng", needs_web=True),
+        _step("s2", "agent-b", deps=("s1",), acceptance="- Có giá từng gói"),
+        _step("s3", "agent-b", deps=("s2",), acceptance="- Bảng so sánh cuối"),
+    )
+
+    plan = intake_mod.downgrade_to_sprint(_DOWNGRADE_BRIEF, task)
+
+    assert plan is not None
+    assert plan.assigned_to == "agent-b"
+    assert plan.acceptance.splitlines() == [
+        "- Đủ 5 nền tảng", "- Có giá từng gói", "- Bảng so sánh cuối",
+    ]
+    assert plan.needs_web is True
+
+
 def test_downgrade_folds_a_single_step_plan_too():
     plan = intake_mod.downgrade_to_sprint(
         _DOWNGRADE_BRIEF, _plan(_step("s1", "agent-a", acceptance="- Xong")))
@@ -513,8 +534,15 @@ def test_downgrade_folds_a_single_step_plan_too():
         (lambda: _plan(_step("s1", "agent-a"), _step("s2", "agent-b", deps=("s1",))),
          "hai người thật sự"),
         (lambda: _plan(_step("s1", "agent-a"), _step("s2", "agent-a", deps=("s1",)),
-                       _step("s3", "agent-a", deps=("s2",))),
-         "ba bước — chi phí điều phối đã thật"),
+                       _step("s3", "agent-a", deps=("s2",)),
+                       _step("s4", "agent-a", deps=("s3",))),
+         "bốn bước — quá trần degenerate"),
+        (lambda: _plan(_step("s1", "agent-a"), _step("s2", "agent-a", deps=("s1",)),
+                       _step("s3", "agent-a", deps=("s1",))),
+         "bước 3 nhảy cóc về bước 1 — không phải chuỗi tuyến tính"),
+        (lambda: _plan(_step("s1", "agent-a"), _step("s2", "agent-a", deps=("s1",)),
+                       _step("s3", "agent-b", deps=("s2",))),
+         "ba bước nhưng hai người — có bàn giao chéo thật"),
         (lambda: _plan(_step("s1", "agent-a", needs_shell=True),
                        _step("s2", "agent-a", deps=("s1",))),
          "cần shell → tier sandbox"),

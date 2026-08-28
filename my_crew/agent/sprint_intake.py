@@ -445,9 +445,11 @@ def sprint_intake(
 
 
 #: Kế hoạch nhiều hơn ngần này bước thì không còn là "một người làm trọn" dù cùng tên
-#: người: mỗi dòng bước là một tiến trình context lạnh, và từ 3 dòng trở lên phần
-#: chi phí điều phối đã đủ lớn để việc chạy team đúng hình dạng của nó.
-_MAX_DEGENERATE_STEPS = 2
+#: người: mỗi dòng bước là một tiến trình context lạnh. Trần 3 lấy từ bằng chứng
+#: lanes8 — chuỗi 3 bước một-analyst vẫn là việc một người đội lốt team (và đã stall
+#: vì chính chi phí điều phối đó); từ 4 bước trở lên phần điều phối đủ lớn để chạy
+#: team đúng hình dạng của nó.
+_MAX_DEGENERATE_STEPS = 3
 
 
 def downgrade_to_sprint(brief: str, task) -> SprintPlan | None:
@@ -478,12 +480,16 @@ def downgrade_to_sprint(brief: str, task) -> SprintPlan | None:
     if any(s.needs_shell or s.external_write for s in steps):
         return None
 
-    # Với 2 bước: chỉ nhận chuỗi tuyến tính bước-1 → bước-2. Hình dạng khác (hai bước
-    # rời nhau, hoặc bước 2 phụ thuộc thứ gì đó không có trong plan) nghĩa là ta chưa
-    # đọc đúng ý đồ của kế hoạch — trả None thay vì đoán.
-    if len(steps) == 2:
-        first, second = steps
-        if tuple(first.deps) or tuple(second.deps) != (first.step_id,):
+    # Nhiều bước: chỉ nhận CHUỖI TUYẾN TÍNH thuần — bước đầu không phụ thuộc gì, mỗi
+    # bước sau phụ thuộc đúng bước liền trước. Hình dạng khác (bước rời nhau, nhảy cóc,
+    # rẽ nhánh) nghĩa là ta chưa đọc đúng ý đồ của kế hoạch — trả None thay vì đoán.
+    # Trần 3 bước lấy từ bằng chứng lanes8: brief music_streaming decompose ra 3 bước
+    # ĐỀU một analyst nối đuôi nhau — không phối hợp, không review chéo, chỉ còn chi
+    # phí điều phối — rồi stall; trong khi plan ecommerce 5 bước / 3 người là việc
+    # team thật và phải giữ nguyên.
+    for i, step in enumerate(steps):
+        expected = () if i == 0 else (steps[i - 1].step_id,)
+        if tuple(step.deps) != expected:
             return None
 
     # Acceptance giữ NGUYÊN VĂN từng dòng của mọi bước: chúng là tiêu chí model đã cân
