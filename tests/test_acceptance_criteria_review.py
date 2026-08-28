@@ -261,6 +261,19 @@ def test_decompose_prompt_forbids_named_entity_lists_from_model_memory():
     assert "CEO tự nêu tên trong đề thì giữ NGUYÊN" in _DECOMPOSE_SYSTEM
 
 
+def test_decompose_prompt_forbids_unrequested_quantitative_metric_demands():
+    """Measured live (lanes7, both music cases): acceptance demanded MAU/thị phần
+    numbers for the Vietnamese market that no public source publishes, so the step
+    could never pass regardless of worker quality. Hard numbers enter the acceptance
+    only when the CEO asked for them; otherwise the criterion must accept "data not
+    public" plus qualitative evidence."""
+    from my_crew.llm.team_task_prompt import _DECOMPOSE_SYSTEM
+
+    assert "QUY TẮC SỐ ĐO ĐỊNH LƯỢNG" in _DECOMPOSE_SYSTEM
+    assert "CEO không đòi đích danh" in _DECOMPOSE_SYSTEM
+    assert "dữ liệu không công khai" in _DECOMPOSE_SYSTEM
+
+
 def test_worker_prompt_caps_qa_steps_at_the_original_request():
     """Measured live (lanes6, team/ecommerce): the QA step invented standards the
     brief never asked for (Executive Summary, GMV net of refunds, margin), the grader

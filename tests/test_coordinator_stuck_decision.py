@@ -519,6 +519,19 @@ def test_the_judge_carries_a_convergence_rule_against_repeating_failed_guidance(
     assert "thêm URL thực tế" in STUCK_JUDGE_SYSTEM
 
 
+def test_the_judge_may_not_freeze_found_sources_into_a_mandatory_list():
+    """Measured live (lanes7, team/ecommerce): guidance enumerated the five domains the
+    worker had already cited and ordered full URLs "cho từng nguồn được trích dẫn" —
+    the next grading round then failed the worker for citing other legitimate sources.
+    A source list the worker discovered is evidence, not a closed spec: any source
+    meeting the acceptance stays acceptable."""
+    from my_crew.llm.stuck_judgement_prompt import STUCK_JUDGE_SYSTEM
+
+    assert "KHÔNG phải danh sách" in STUCK_JUDGE_SYSTEM
+    assert "danh sách nguồn BẮT BUỘC" in STUCK_JUDGE_SYSTEM
+    assert "nguồn hợp lệ khác" in STUCK_JUDGE_SYSTEM
+
+
 # --- salvage delivery on give_up -----------------------------------------------------
 
 
