@@ -99,6 +99,40 @@ def test_classify_refuses_team_shaped_briefs(brief, why):
     assert reason, why
 
 
+# --- material_transform: tín hiệu đo, chưa đổi lane ----------------------------------
+
+
+@pytest.mark.parametrize(
+    ("brief", "expected"),
+    [
+        # Hai dạng đề team từng thắng judge mù (lanes11/12): chất liệu cấp sẵn +
+        # phân tích + sản phẩm.
+        ("Phân tích số liệu bán hàng dưới đây và đề xuất hành động — không cần "
+         "tra cứu web. Sản phẩm A: 120tr...", 1),
+        ("Dưới đây là bản nháp email. Nêu rõ 3 điểm yếu rồi viết lại bản "
+         "hoàn chỉnh.", 1),
+        # Thiếu một trong ba chân thì không bắt: research thường (không chất liệu),
+        # sáng tạo thuần (không tầng phân tích).
+        ("Tóm tắt xu hướng thanh toán không tiền mặt và đề xuất hướng đi", 0),
+        ("Soạn bộ tài liệu ra mắt tính năng mới theo dàn ý sau đây: email, "
+         "post, FAQ", 0),
+    ],
+)
+def test_material_transform_signal_detects_only_the_full_triplet(brief, expected):
+    signals = intake_mod.route_signals(brief)
+    assert signals["material_transform"] == expected
+
+
+def test_material_transform_signal_does_not_change_the_lane():
+    """Vòng này tín hiệu CHỈ ĐỂ ĐO (lộ trình effort_high): một đề khớp cả ba chân
+    vẫn phải route như cũ — sprint theo mặc định — cho tới khi đủ số đo trao quyền."""
+    brief = ("Phân tích số liệu bán hàng dưới đây và đề xuất hành động: "
+             "A 120tr, B 95tr, C 30tr")
+    assert intake_mod.route_signals(brief)["material_transform"] == 1
+    is_sprint, _reason = classify_brief(brief)
+    assert is_sprint is True
+
+
 def test_classify_refuses_a_very_long_brief():
     long_brief = "khảo sát thị trường. " * 100
     assert len(long_brief) > 1200
@@ -677,7 +711,8 @@ def test_every_router_branch_records_which_layer_decided(monkeypatch, brief, mod
     route = _route_of(slots["task_id"])
     assert (route["mode"], route["source"]) == (mode, source)
     assert route["reason"]
-    assert set(route["signals"]) == {"brief_len", "entities", "distinct_asks"}
+    assert set(route["signals"]) == {"brief_len", "entities", "distinct_asks",
+                                     "material_transform"}
 
 
 def test_a_downgraded_plan_is_logged_as_a_downgrade_not_a_heuristic_win(monkeypatch):

@@ -10,6 +10,7 @@ that self-check would have failed. These tests fail if the copies ever come back
 from my_crew.llm.grading_rules import (
     COUNTABLE_RULE,
     EVIDENCE_RULES,
+    NONPUBLIC_RULE,
     REQUEST_CEILING_RULE,
     SOURCE_LABEL_RULE,
     SOURCE_RULE,
@@ -17,7 +18,8 @@ from my_crew.llm.grading_rules import (
 from my_crew.llm.team_task_check_prompt import _CHECK_SYSTEM
 from my_crew.llm.team_task_prompt import _REVIEW_SYSTEM
 
-RULES = (SOURCE_RULE, COUNTABLE_RULE, SOURCE_LABEL_RULE, REQUEST_CEILING_RULE)
+RULES = (SOURCE_RULE, COUNTABLE_RULE, SOURCE_LABEL_RULE, REQUEST_CEILING_RULE,
+         NONPUBLIC_RULE)
 
 
 def test_both_graders_carry_every_evidence_rule():
@@ -58,3 +60,19 @@ def test_both_graders_carry_the_inherited_gap_rule():
     marker = "QUY TẮC KHOẢNG TRỐNG THỪA KẾ"
     assert marker in _CHECK_SYSTEM
     assert marker in _REVIEW_SYSTEM
+
+
+def test_every_layer_accepts_an_honest_nonpublic_cell():
+    """A grid brief whose data is partly unpublished ('liên hệ bán hàng' pricing) can
+    only complete if EVERY layer that touches the result agrees an honestly marked
+    'không công khai (đã tra: nguồn)' cell is finished work: the worker must write it,
+    both graders must pass it, the stuck judge must not give the step up over it, and
+    the decompose planner must leave the escape hatch in the criteria. One dissenting
+    layer re-creates the measured 0/6 grid-brief death."""
+    from my_crew.llm.stuck_judgement_prompt import STUCK_JUDGE_SYSTEM
+    from my_crew.llm.team_task_prompt import _DECOMPOSE_SYSTEM, _SYSTEM
+
+    assert "QUY TẮC DỮ LIỆU KHÔNG CÔNG KHAI" in NONPUBLIC_RULE
+    assert "QUY TẮC Ô KHÔNG CÔNG KHAI" in _SYSTEM
+    assert "QUY TẮC DỮ LIỆU KHÔNG CÔNG KHAI" in STUCK_JUDGE_SYSTEM
+    assert "kèm nguồn đã tra là ĐẠT ô đó" in _DECOMPOSE_SYSTEM

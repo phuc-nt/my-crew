@@ -52,7 +52,8 @@ def test_signals_are_numbers_only_and_never_carry_the_brief():
     """Bản ghi định tuyến nằm cạnh outcome trong DB, nên nó phải rẻ và KHÔNG mang theo
     nội dung việc của CEO."""
     _, _, _, signals = bench.decide("So sánh Shopee, Lazada và Tiki về phí sàn")
-    assert set(signals) == {"brief_len", "entities", "distinct_asks"}
+    assert set(signals) == {"brief_len", "entities", "distinct_asks",
+                            "material_transform"}
     assert all(isinstance(v, int) for v in signals.values()), signals
 
 

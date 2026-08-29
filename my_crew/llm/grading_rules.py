@@ -70,8 +70,23 @@ REQUEST_CEILING_RULE = (
     "kề + ghi rõ THIẾU cho phần không tìm được là ĐẠT với đề như vậy."
 )
 
+#: A cell that honestly reports "not public" with a trace of the attempted lookup is
+#: finished work, not a gap. Without this rule a grid brief whose data is partly
+#: unpublished ("liên hệ bán hàng" pricing) can never pass any grader — measured on
+#: live grid briefs: both lanes 0/6 completions, with the honest partial answer
+#: produced and then failed precisely for being honest.
+NONPUBLIC_RULE = (
+    "QUY TẮC DỮ LIỆU KHÔNG CÔNG KHAI: một ô/mục ghi rõ 'không công khai' hay 'không "
+    "tìm thấy công bố' KÈM dấu vết đã tra (tên trang/nguồn đã kiểm, vd 'trang giá "
+    "chính thức ghi liên hệ bán hàng') là ô ĐÃ HOÀN THÀNH — chấm ĐẠT cho ô đó kể cả "
+    "khi tiêu chí đòi con số hay nguồn từng ô; ghi chú đó CHÍNH LÀ nguồn của ô. Chỉ "
+    "chấm KHÔNG ĐẠT khi ô bỏ trống, ghi thiếu mà không nói đã tra ở đâu, hoặc dữ "
+    "liệu đó thật ra có sẵn trong ĐẦU VÀO."
+)
+
 #: The whole evidence bar, in the order a grader should apply it: provenance first,
 #: then the checks that keep it from grading prose instead of substance.
 EVIDENCE_RULES = " ".join(
-    (SOURCE_RULE, COUNTABLE_RULE, SOURCE_LABEL_RULE, REQUEST_CEILING_RULE)
+    (SOURCE_RULE, COUNTABLE_RULE, SOURCE_LABEL_RULE, REQUEST_CEILING_RULE,
+     NONPUBLIC_RULE)
 )

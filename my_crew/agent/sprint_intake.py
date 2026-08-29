@@ -193,6 +193,27 @@ def _distinct_asks(brief: str) -> int:
     return max(lines, _inline_asks(brief), 1)
 
 
+#: Dạng đề DUY NHẤT team từng thắng judge mù (bench lanes11/12: data_analysis 3-0,
+#: draft_critique 3-0): đề CẤP SẴN chất liệu (số liệu, bản nháp) và đòi chuỗi biến
+#: đổi hai tầng — phân tích chất liệu đó rồi tạo sản phẩm từ phân tích. Nhưng cùng
+#: dạng vẫn có case thua (decision_tradeoff: một bước giữa chuỗi chết, sprint thắng
+#: 3-0), nên tín hiệu này đi đúng lộ trình effort_high: vòng này CHỈ ĐỂ ĐO — ghi vào
+#: route_json cạnh outcome, chưa được quyền đổi lane.
+_MATERIAL_HINTS = ("dưới đây", "sau đây", "trong đề", "không cần tra cứu",
+                   "cấp sẵn", "đính kèm", "bản nháp")
+_ANALYZE_HINTS = ("phân tích", "đánh giá", "nhận xét", "điểm yếu", "xu hướng")
+_PRODUCE_HINTS = ("đề xuất", "khuyến nghị", "viết lại", "soạn lại", "hành động",
+                  "kết luận")
+
+
+def material_transform_signal(brief: str) -> bool:
+    """Đề có cấp sẵn chất liệu VÀ đòi cả tầng phân tích lẫn tầng sản phẩm không?"""
+    text = " " + (brief or "").strip().lower() + " "
+    return (any(h in text for h in _MATERIAL_HINTS)
+            and any(h in text for h in _ANALYZE_HINTS)
+            and any(h in text for h in _PRODUCE_HINTS))
+
+
 def route_signals(brief: str) -> dict[str, int]:
     """Các SỐ LIỆU mà bộ định tuyến đọc để quyết, tách riêng để ghi vào log routing.
 
@@ -206,6 +227,8 @@ def route_signals(brief: str) -> dict[str, int]:
         "brief_len": len(brief or ""),
         "entities": len(listed_entities(brief or "")),
         "distinct_asks": _distinct_asks(brief),
+        # Đo-trước-trao-quyền-sau: xem docstring cụm _MATERIAL_HINTS phía trên.
+        "material_transform": int(material_transform_signal(brief)),
     }
 
 
