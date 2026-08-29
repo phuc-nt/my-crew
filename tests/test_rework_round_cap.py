@@ -1,6 +1,7 @@
 """M32 rework round cap end-to-end via `run_one_tick`: three consecutive "needs_rework"
-verdicts against the SAME content step mint exactly 2 rework rounds (round 0, round 1)
-then stall on the would-be 3rd — never a round-2 rework row. `review_round` persists
+verdicts against the SAME content step mint exactly 2 rework rounds (round 0, round 1);
+the would-be 3rd ends the review chain and the task DELIVERS with the reviewer's
+objections instead of stalling — never a round-2 rework row. `review_round` persists
 across a fresh store handle (reload), proving it survives a reboot/amend the same way
 every other persisted column does.
 """
@@ -93,7 +94,7 @@ def _complete_newest_rework(store) -> None:
     store.mark_done("t1", rework.step_id, outcome_ref="x", cost_usd=0.0)
 
 
-def test_three_consecutive_failures_cap_at_two_rework_rounds_then_stall(tmp_path, monkeypatch):
+def test_three_consecutive_failures_cap_at_two_rework_rounds_then_deliver(tmp_path, monkeypatch):
     store = _store(tmp_path)
     _plan_one_step(store)
     _wire_roster(monkeypatch, [("agent-a", "pm"), ("agent-qa", "pm")])
@@ -131,14 +132,15 @@ def test_three_consecutive_failures_cap_at_two_rework_rounds_then_stall(tmp_path
     review_rounds = sorted({s.review_round for s in task.steps if s.step_type == "review"})
     assert review_rounds == [0, 1, 2]
 
-    # Round-2 review ALSO fails -> this is round == MAX_REVIEW_ROUNDS -> EXPLICIT stall,
-    # never a 3rd rework round.
+    # Round-2 review ALSO fails -> this is round == MAX_REVIEW_ROUNDS -> the review
+    # chain ends with zero side effects; every step is done, so the SAME tick falls
+    # through to aggregate_and_deliver — never a 3rd rework round, never a stall.
     _fail_newest_review(store, tmp_path)
     result = run_one_tick(deps)
-    assert result.action == "stalled"
+    assert result.action == "aggregated"
 
     task = store.get("t1")
-    assert task.status == "stalled"
+    assert task.status == "done"
     rework_rounds_final = sorted(s.review_round for s in task.steps if s.step_type == "rework")
     assert rework_rounds_final == [0, 1]  # never a round-2 rework
     assert MAX_REVIEW_ROUNDS == 2

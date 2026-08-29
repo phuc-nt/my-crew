@@ -107,6 +107,17 @@ class FullFlowHarness:
 
         monkeypatch.setattr(team_task_paths, "DATA_DIR", self.data_dir)
         monkeypatch.setattr(agent_paths, "DATA_DIR", self.data_dir)
+        # The two patches above cover load-time importers only. Several stores resolve
+        # `settings.DATA_DIR` at CALL time (`band_store._db_path`, `tick_poke`,
+        # `band_loop`, the service heartbeat) and were still opening the REPO's real
+        # `.data/` — the band leak was measurable: the repo's agent_bands.sqlite3 held
+        # analyst+researcher=supervised, which silently minted review rows inside
+        # bench lanes that never asked for them (killed sprint-music in lanes9b).
+        # Fail-direction is preserved: an absent store file means every agent reads
+        # "normal", the default posture.
+        import my_crew.config.settings as config_settings
+
+        monkeypatch.setattr(config_settings, "DATA_DIR", self.data_dir)
 
         # LLM rung: one class-level patch covers every LlmClient() construction.
         # LIVE leaves this rung ALONE — real model, real prompts, real cost. That is the

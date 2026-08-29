@@ -1,9 +1,11 @@
-"""Full-flow scenario: autopilot tự gỡ việc kẹt thay CEO.
+"""Full-flow scenario: trần soát chéo không còn tạo việc cho autopilot.
 
-Cùng một tình huống với `test_review_exhausted_stalls_and_escalates_once` (reviewer
-trượt mọi vòng) nhưng công ty BẬT autopilot. Vision "tự chủ có kỷ luật": máy tự leo
-thang (thử lại → chỉnh kế hoạch → chấp nhận kết quả) trong trần cho phép thay vì đẩy
-hết sang CEO — nhưng vẫn có trần, vẫn ghi nhật ký quyết định.
+Cùng một tình huống với `test_review_exhausted_delivers_with_reviewer_objections`
+(reviewer trượt mọi vòng) nhưng công ty BẬT autopilot. Trước đây trần soát stall task
+và autopilot phải leo thang gỡ hộ; giờ trần soát kết thúc chuỗi và task tự giao kèm
+ý kiến reviewer — autopilot không có gì để gỡ và không được đốt lượt nào. Thang leo
+của autopilot cho các nguồn stall còn lại vẫn được pin ở `test_autopilot.py`
+(`test_sweep_rung1_retry_rung2_replan_rung3_accept_then_stops`).
 """
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ from . import scenario_rules as rules
 from .test_fullflow_team_task import _dag_email_steps
 
 
-def test_autopilot_resolves_review_stall_without_ceo(fullflow):
+def test_review_cap_leaves_autopilot_nothing_to_resolve(fullflow):
     h = fullflow(autopilot=True, rules=[
         rules.intent_assign_team_task(),
         rules.propose_no_consult(),
@@ -35,17 +37,20 @@ def test_autopilot_resolves_review_stall_without_ceo(fullflow):
 
     final = h.task_rows()[0]
 
-    # 1. Autopilot đã thực sự leo thang — không nằm im chờ CEO.
-    assert final["autopilot_attempts"] > 0, f"autopilot phải vào cuộc: {final}"
-    assert final["autopilot_attempts"] <= 3, f"phải tôn trọng trần leo thang: {final}"
+    # 1. Không còn stall để gỡ: trần soát tự kết thúc chuỗi và task giao được.
+    assert final["status"] == "done", f"phải giao được, không kẹt: {final}"
+    assert final["autopilot_attempts"] == 0, (
+        f"trần soát không stall thì autopilot không được đốt lượt nào: {final}"
+    )
 
-    # 2. Không kẹt vĩnh viễn: hoặc về đích, hoặc dừng hẳn sau khi cạn trần.
-    assert final["status"] in ("done", "stalled"), final
+    # 2. Ý kiến reviewer còn bỏ ngỏ vẫn đến tay CEO — qua chính bản giao.
+    done_msgs = [t for t in h.sent_texts() if "HOÀN THÀNH" in t]
+    assert len(done_msgs) == 1, f"đúng 1 tin giao: {h.sent_texts()}"
+    assert "Soát chéo chưa đạt" in done_msgs[0]
 
-    # 3. Có trần thật: pump thêm cũng không đốt thêm lượt autopilot nào.
-    attempts_before = final["autopilot_attempts"]
+    # 3. Ổn định: pump thêm không đốt lượt autopilot, không flood tin.
     sent_before = len(h.sent_texts())
     h.pump(6)
     after = h.task_rows()[0]
-    assert after["autopilot_attempts"] == attempts_before, f"vượt trần: {after}"
-    assert len(h.sent_texts()) == sent_before, "không flood sau khi autopilot cạn lượt"
+    assert after["autopilot_attempts"] == 0, f"autopilot vào cuộc vô cớ: {after}"
+    assert len(h.sent_texts()) == sent_before, "không flood sau khi giao"

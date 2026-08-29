@@ -497,9 +497,10 @@ def _maybe_insert_review_rows(deps: CoordinatorDeps, task: TeamTask) -> TickResu
 
     Order matches the phase's three sub-rules (`review_insert.py`'s module docstring):
     a `done` `work` step may need a review minted; a `done` `review` step may need a
-    rework minted (or the task stalled); a `done` `rework` step may need its next
-    review round minted. Each check is independently idempotent (see that module), so
-    scanning ALL `done` steps every tick — not just the one that just transitioned —
+    rework minted (or, at the cap, its chain quietly ended); a `done` `rework` step
+    may need its next review round minted. Each check is independently idempotent
+    (see that module), so scanning ALL `done` steps every tick — not just the one
+    that just transitioned —
     is safe and simple (KISS): a step already fully handled (review/rework already
     minted) is a fast no-op re-check.
     """
@@ -509,14 +510,11 @@ def _maybe_insert_review_rows(deps: CoordinatorDeps, task: TeamTask) -> TickResu
         if maybe_insert_review(deps, task, step):
             return TickResult(task_id=task.id, action="review_inserted", detail=step.step_id)
         if step.step_type == "review":
-            before_status = task.status
+            # True means a rework (or a verdict-None review re-mint) was inserted;
+            # at the review cap the handler returns False with zero side effects,
+            # so the tick simply falls through toward aggregate_and_deliver.
             if maybe_handle_review_done(deps, task, step):
-                refreshed = deps.store.get(task.id)
-                action = "stalled" if refreshed is not None and refreshed.status == "stalled" \
-                    else "rework_inserted"
-                if action == "stalled" and before_status == "stalled":
-                    continue  # already stalled by an earlier iteration this tick
-                return TickResult(task_id=task.id, action=action, detail=step.step_id)
+                return TickResult(task_id=task.id, action="rework_inserted", detail=step.step_id)
         if maybe_insert_review_after_rework(deps, task, step):
             return TickResult(task_id=task.id, action="review_inserted", detail=step.step_id)
     return None

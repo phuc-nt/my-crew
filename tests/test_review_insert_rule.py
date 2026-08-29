@@ -1,6 +1,6 @@
 """M32 review-insert ticker rule (`coordinator_nodes.review_insert`): a `done` `work`
 step with `needs_review=True` mints a review-step child; a `done` `review` step's
-verdict drives rework-insert / stall-escalate; a `done` `rework` step mints the next
+verdict drives rework-insert (or, at the cap, ends the chain); a `done` `rework` step mints the next
 review round. Exercised directly against the pure functions with a real
 `TeamTaskStore` (SQLite) + a fake `CoordinatorDeps`, mirroring `test_coordinator_graph
 .py`'s fixture style.
@@ -229,7 +229,9 @@ def test_rework_inherits_the_web_grant_of_the_step_it_redoes(tmp_path, monkeypat
     assert rework.needs_web is True
 
 
-def test_rework_round_cap_stalls_and_escalates_after_max_rounds(tmp_path, monkeypatch):
+def test_rework_round_cap_ends_the_chain_after_max_rounds(tmp_path, monkeypatch):
+    """No stall, no escalate, no further mint — the task proceeds to delivery, where
+    the aggregate quotes the unresolved verdict (tested in team_tick_collaborators)."""
     store = _store(tmp_path)
     _plan_one_step(store, needs_review=True)
     _mint_review(store, review_round=MAX_REVIEW_ROUNDS)
@@ -247,14 +249,14 @@ def test_rework_round_cap_stalls_and_escalates_after_max_rounds(tmp_path, monkey
     )
 
     deps = _deps(store, escalate=lambda t, s, kind, msg: escalated.append(kind))
-    assert maybe_handle_review_done(deps, task, review_step) is True
+    assert maybe_handle_review_done(deps, task, review_step) is False
     task = store.get("t1")
-    assert task.status == "stalled"
-    assert escalated == ["review_rounds_exhausted"]
+    assert task.status != "stalled"
+    assert escalated == []
     assert not [s for s in task.steps if s.step_type == "rework"]
 
 
-def test_round_cap_stalls_when_reached_by_actually_reworking_each_round(
+def test_round_cap_holds_when_reached_by_actually_reworking_each_round(
     tmp_path, monkeypatch
 ):
     """The cap must hold on the path production actually takes: every round's rework is
@@ -262,11 +264,8 @@ def test_round_cap_stalls_when_reached_by_actually_reworking_each_round(
 
     The sibling test above reaches `MAX_REVIEW_ROUNDS` with NO rework rows on the step,
     which cannot happen in a real run -- getting to round N requires rounds 0..N-1 to
-    each have minted and finished a rework. Pinning the reachable path matters because
-    the stall depends on the CEO-override check ("a rework exists at >= this round")
-    being FALSE here; only `retry_stalled_step` may make it true. A live task observed
-    reworking at the exhausted round did so because the autopilot sweep called that
-    override for the CEO -- one bounded extra round, not a cap failure.
+    each have minted and finished a rework. The final round's failure must end the
+    chain quietly: no round-`MAX_REVIEW_ROUNDS` rework, no stall, no escalate.
     """
     store = _store(tmp_path)
     _plan_one_step(store, needs_review=True)
@@ -309,18 +308,18 @@ def test_round_cap_stalls_when_reached_by_actually_reworking_each_round(
         f"rework minted at rounds {rounds}; the cap allows at most "
         f"{MAX_REVIEW_ROUNDS} (rounds 0..{MAX_REVIEW_ROUNDS - 1})"
     )
-    assert task.status == "stalled"
-    assert escalated == ["review_rounds_exhausted"]
+    assert task.status != "stalled"
+    assert escalated == []
 
 
-def test_task_review_budget_stalls_before_round_cap_when_whole_task_churns(
+def test_task_review_budget_ends_chains_before_round_cap_when_whole_task_churns(
     tmp_path, monkeypatch
 ):
     """Trần TẦNG TASK: trần theo-từng-bước không thấy tổng — một task nhiều bước có thể
     hợp lệ đốt hàng chục row soát/sửa mà không bước nào cạn round riêng (đo live: 6 bước
     → 11 review + 7 rework). Khi tổng row review+rework chạm ngân sách (2× số bước nội
-    dung, sàn 5), verdict fail tiếp theo phải stall + escalate dù round của bước đó
-    chưa cạn — dừng đốt tiền, đưa người vào."""
+    dung, sàn 5), verdict fail tiếp theo phải kết thúc chuỗi (không mint thêm) dù round
+    của bước đó chưa cạn — dừng đốt tiền; ý kiến reviewer đi theo bản giao."""
     store = _store(tmp_path)
     steps = [
         {"step_id": f"s{i}", "title": f"buoc {i}", "assigned_to": "agent-a",
@@ -363,10 +362,10 @@ def test_task_review_budget_stalls_before_round_cap_when_whole_task_churns(
     assert review_step.review_round < MAX_REVIEW_ROUNDS  # round riêng CHƯA cạn
 
     deps = _deps(store, escalate=lambda t, s, kind, msg: escalated.append(kind))
-    assert maybe_handle_review_done(deps, task, review_step) is True
+    assert maybe_handle_review_done(deps, task, review_step) is False
     task = store.get("t1")
-    assert task.status == "stalled"
-    assert escalated == ["task_review_budget_exhausted"]
+    assert task.status != "stalled"
+    assert escalated == []
     assert not [
         s for s in task.steps if s.step_type == "rework" and s.parent_step_id == "s3"
     ]
@@ -412,6 +411,48 @@ def test_stale_artifact_remints_a_fresh_review_at_same_round(tmp_path, monkeypat
     review_steps = [s for s in task.steps if s.step_type == "review"]
     assert len(review_steps) == 2  # original + freshly re-minted
     assert all(s.review_round == 0 for s in review_steps)
+
+
+def test_stale_remint_at_round_one_keeps_locking_the_rework_artifact(
+    tmp_path, monkeypatch
+):
+    """A round-≥1 review locks the latest REWORK's artifact (`_insert_review_step`
+    docstring); its verdict-None re-mint must reproduce that lock, not fall back to
+    the content step — a re-review graded against the artifact round 0 already
+    rejected would re-litigate the wrong document."""
+    store = _store(tmp_path)
+    _plan_one_step(store, needs_review=True)
+    store.insert_step("t1", {
+        "step_id": "s1-rework-0", "title": "sua", "assigned_to": "agent-a",
+        "deps": ["s1"], "step_type": "rework", "parent_step_id": "s1",
+        "review_round": 0,
+    })
+    store.reserve_step("t1", "s1-rework-0")
+    store.mark_done("t1", "s1-rework-0", outcome_ref="x", cost_usd=0.0)
+    # The round-1 review as `maybe_insert_review_after_rework` mints it: deps lock
+    # onto the rework row. No verdict artifact is written → stale/missing.
+    store.insert_step("t1", {
+        "step_id": "s1-review-1", "title": "soat", "assigned_to": "agent-qa",
+        "deps": ["s1-rework-0"], "step_type": "review", "parent_step_id": "s1",
+        "review_round": 1,
+    })
+    store.reserve_step("t1", "s1-review-1")
+    store.mark_done("t1", "s1-review-1", outcome_ref="x", cost_usd=0.0)
+
+    task = store.get("t1")
+    review_step = next(
+        s for s in task.steps if s.step_type == "review" and s.review_round == 1
+    )
+    assert maybe_handle_review_done(_deps(store), task, review_step) is True
+
+    task = store.get("t1")
+    reminted = [
+        s for s in task.steps
+        if s.step_type == "review" and s.step_id != "s1-review-1"
+    ]
+    assert len(reminted) == 1
+    assert reminted[0].review_round == 1
+    assert reminted[0].deps == ("s1-rework-0",)
 
 
 # --- rule 3: rework done -> next review round -----------------------------------------

@@ -316,6 +316,13 @@ def make_aggregate(loaded: Any, settings: Any):
         parts: list[str] = []
         note_lines: list[str] = []
         gap_lines: list[str] = []
+        # parent step_id → one "unresolved objection" line. A failed verdict whose
+        # round never minted a rework is exactly "review cap exhausted" (below the cap
+        # a failed review ALWAYS mints one), and since the ticker no longer stalls at
+        # the cap, this delivery is the objection's only path to the CEO. Keyed by
+        # content step so the NEWEST failed round wins (seq order) — round 0's failure
+        # was already answered by its rework; quoting it again would be stale.
+        unresolved_by_step: dict[str, str] = {}
         for step in sorted(task.steps, key=lambda s: s.seq):
             if step.step_type == "review":
                 # v63 "đạt kèm góp ý": a passed review's notes are worth surfacing in
@@ -335,6 +342,22 @@ def make_aggregate(loaded: Any, settings: Any):
                     line = f"- {step.title}: đạt — góp ý thêm: {joined}"
                     parts.append(line)
                     note_lines.append(line)
+                elif verdict and not bool(verdict.get("passed")) and not any(
+                    s.step_type == "rework" and s.parent_step_id == step.parent_step_id
+                    and s.review_round >= step.review_round for s in task.steps
+                ):
+                    failures = [str(f).strip()[:200]
+                                for f in (verdict.get("failures") or []) if str(f).strip()]
+                    shown = " | ".join(failures[:3]) or "không ghi rõ lý do"
+                    extra = (f" (và {len(failures) - 3} điểm nữa)"
+                             if len(failures) > 3 else "")
+                    content = next(
+                        (s for s in task.steps if s.step_id == step.parent_step_id), None,
+                    )
+                    title = content.title if content is not None else step.title
+                    unresolved_by_step[step.parent_step_id or step.step_id] = (
+                        f"bước '{title}' — {shown}{extra}"
+                    )
                 continue
             artifact = read_step_artifact(team_tasks_root(), task.id, step.seq)
             text = ""
@@ -371,8 +394,17 @@ def make_aggregate(loaded: Any, settings: Any):
             "Hoàn thành với khoảng trống: " + "; ".join(gap_lines) + ".\n\n"
             if gap_lines else ""
         )
+        # Same contract as the gap header: named in CODE, never delegated to the
+        # summarizer LLM — and never phrased "KHÔNG LÀM ĐƯỢC" (the give_up marker for
+        # a task that delivered nothing; this one delivered).
+        review_header = (
+            "Soát chéo chưa đạt (đã hết lượt soát/sửa): "
+            + "; ".join(unresolved_by_step.values()) + ".\n\n"
+            if unresolved_by_step else ""
+        )
+        headers = gap_header + review_header
         fallback_summary = (
-            gap_header + f"Việc '{task.title}' đã hoàn tất:\n" + "\n".join(parts)
+            headers + f"Việc '{task.title}' đã hoàn tất:\n" + "\n".join(parts)
         )
 
         # A task converging on ONE terminal content step delivers that artifact
@@ -387,8 +419,8 @@ def make_aggregate(loaded: Any, settings: Any):
             # only path its advisory notes have to the CEO — handing back the artifact
             # alone would silently drop them (v63 behaviour, kept intact here).
             if note_lines:
-                return gap_header + direct + "\n\n" + "\n".join(note_lines), None
-            return gap_header + direct, None
+                return headers + direct + "\n\n" + "\n".join(note_lines), None
+            return headers + direct, None
 
         if not settings.openrouter_api_key:
             return fallback_summary, None
@@ -414,11 +446,21 @@ def make_aggregate(loaded: Any, settings: Any):
                 "meta, không tiếng Anh.\n\n"
                 + "\n\n".join(wrapped_parts)
             )
+            # The "Soát chéo chưa đạt" header above the summary is code-built; without
+            # this note the summarizer — which never sees failed review rows — could
+            # write an unqualified "hoàn thành tốt đẹp" right beneath it.
+            if unresolved_by_step:
+                prompt += (
+                    "\n\nLƯU Ý: soát chéo KHÔNG đạt và đã hết lượt sửa — "
+                    + "; ".join(unresolved_by_step.values())
+                    + ". Bản tóm tắt phải thừa nhận các điểm này, không được "
+                    "khẳng định mọi thứ đều ổn."
+                )
             result = client.complete(
                 [{"role": "user", "content": prompt}], role="aggregate"
             )
             if result.content:
-                return gap_header + result.content, result.cost_usd
+                return headers + result.content, result.cost_usd
             return fallback_summary, result.cost_usd
         except Exception:  # noqa: BLE001 — never let a summarizer failure block delivery
             logger.exception("team-tick: aggregate LLM call failed for task %s", task.id)

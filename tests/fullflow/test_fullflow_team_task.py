@@ -148,9 +148,12 @@ def test_review_fail_then_rework_then_pass(fullflow):
     assert sum("HOÀN THÀNH" in t for t in h.sent_texts()) == 1
 
 
-def test_review_exhausted_stalls_and_escalates_once(fullflow):
-    """Reviewer trượt mãi → hết ngân sách soát (MAX_REVIEW_ROUNDS) → task stalled
-    + đúng MỘT tin escalate tới CEO, sau đó im lặng (chống flood — bài học v64)."""
+def test_review_exhausted_delivers_with_reviewer_objections(fullflow):
+    """Reviewer trượt mãi → hết ngân sách soát (MAX_REVIEW_ROUNDS) → task VẪN giao:
+    nội dung đã xong hết, chuỗi soát kết thúc lặng lẽ và bản giao mang header
+    "Soát chéo chưa đạt" nêu ý kiến reviewer còn bỏ ngỏ. Hành vi cũ (stall + escalate)
+    để một reviewer dao động giữ con tin cả task đã xong 100% — đo được lanes9b 3/4
+    case. Vẫn chống flood: đúng MỘT tin giao, pump thêm không bắn lại."""
     h = fullflow(rules=[
         rules.intent_assign_team_task(),
         rules.propose_no_consult(),
@@ -168,16 +171,18 @@ def test_review_exhausted_stalls_and_escalates_once(fullflow):
     h.pump(14)
 
     final = h.task_rows()[0]
-    assert final["status"] == "stalled", f"phải stalled sau khi hết vòng soát: {final}"
+    assert final["status"] == "done", f"phải giao được dù soát trượt mọi vòng: {final}"
 
-    stall_msgs = [t for t in h.sent_texts() if "bị dừng" in t]
-    assert len(stall_msgs) == 1, f"đúng 1 tin escalate: {h.sent_texts()}"
-    assert "cần CEO xem lại" in stall_msgs[0]
-    assert not any("HOÀN THÀNH" in t for t in h.sent_texts())
+    done_msgs = [t for t in h.sent_texts() if "HOÀN THÀNH" in t]
+    assert len(done_msgs) == 1, f"đúng 1 tin giao: {h.sent_texts()}"
+    # Ý kiến reviewer còn bỏ ngỏ phải đi theo bản giao — header dựng trong code.
+    assert "Soát chéo chưa đạt" in done_msgs[0]
+    assert "Sai định dạng ngày" in done_msgs[0]
+    assert not any("bị dừng" in t for t in h.sent_texts())
 
     before = h.sent_texts()
-    h.pump(4)  # daemon chạy tiếp — không được bắn lại escalate (dedup gateway thật)
-    assert h.sent_texts() == before, "không flood sau escalate"
+    h.pump(4)  # daemon chạy tiếp — không được bắn lại tin giao (dedup gateway thật)
+    assert h.sent_texts() == before, "không flood sau khi giao"
 
 
 def test_duplicate_trigger_same_ts_is_dropped(fullflow):

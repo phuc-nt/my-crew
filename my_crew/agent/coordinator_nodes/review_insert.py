@@ -23,11 +23,16 @@ multiple ticks is always a safe no-op:
          to gate whether a rework is needed).
        - "needs_rework" AND `review_round < MAX_REVIEW_ROUNDS` -> mint a rework-step
          (same original author, carries prior output + failures).
-       - "needs_rework" AND `review_round >= MAX_REVIEW_ROUNDS` -> EXPLICIT stall +
-         escalate (v12's `_dead_end_result` cannot see this: every step here is `done`,
-         never `failed`/`timeout`). Cùng nhánh đó còn một trần TẦNG TASK
+       - "needs_rework" AND `review_round >= MAX_REVIEW_ROUNDS` -> the chain ENDS with
+         no further mint: the content is done, so the task delivers normally and the
+         aggregate surfaces the unresolved objections as a deterministic "Soát chéo
+         chưa đạt" header (`team_tick_collaborators`). Stalling here instead was the
+         pre-lanes10 behaviour and it turned reviewer flip-flop (ambiguous ground
+         truth, verdict oscillating each round) into a task that delivered NOTHING
+         despite every content step being done — measured 3/4 stalled cases in
+         lanes9b. Cùng nhánh đó còn một trần TẦNG TASK
          (`_task_review_budget_exhausted`): tổng row review+rework của cả task vượt
-         ngân sách -> stall + escalate dù round của bước này chưa cạn.
+         ngân sách -> cũng kết thúc chuỗi như trên dù round của bước này chưa cạn.
        - verdict artifact missing/stale (`stale_artifact`, the reviewed content re-ran
          since this review was queued) -> mint a FRESH review-step (round unchanged) so
          a new reviewer run grades the CURRENT artifact instead of leaving the task stuck
@@ -51,9 +56,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 #: Peer review is capped at this many rework rounds (`review_round` col, 0-indexed) —
-#: round `MAX_REVIEW_ROUNDS` still failing means the ticker stalls + escalates instead
-#: of ever minting a 3rd rework attempt (R "oscillation rework" in the phase's risk
-#: register).
+#: round `MAX_REVIEW_ROUNDS` still failing means the ticker stops minting (no 3rd
+#: rework attempt — R "oscillation rework" in the phase's risk register) and the task
+#: delivers with the reviewer's unresolved objections quoted in the summary.
 MAX_REVIEW_ROUNDS = 2
 
 #: Trần TẦNG TASK cho tổng số row review+rework đã mint — chốt chặn thứ hai bên trên
@@ -73,32 +78,6 @@ def _task_review_budget_exhausted(task: TeamTask) -> tuple[bool, int, int]:
     floor = (MAX_REVIEW_ROUNDS + 1) + MAX_REVIEW_ROUNDS
     budget = max(_TASK_REVIEW_LOAD_FACTOR * content, floor)
     return minted >= budget, minted, budget
-
-
-#: How many of the final verdict's failures the stall message quotes. The point is to
-#: name WHAT kept failing, not to reproduce the verdict — a CEO reading a push
-#: notification needs the reason in a glance, and the full artifact is one click away.
-_STALL_NOTE_FAILURES = 3
-
-
-def _last_failures_note(verdict: dict | None) -> str:
-    """The failures that outlasted every rework round, as a short suffix — or "".
-
-    Without this the stall message says only "review failed after 3 rounds", which is
-    the one thing the CEO can already see. Benchmark 210e3686daf5 is why it matters: all
-    three rounds failed on the SAME impossible criterion (a per-source access date that
-    search snippets never carry), and the report itself was complete and correct. Quoting
-    the failure turns "something went wrong, go dig" into "the reviewer wants access
-    dates" — which is the difference between the CEO fixing it and re-running it.
-    """
-    failures = [str(f).strip() for f in (verdict or {}).get("failures", []) if str(f).strip()]
-    if not failures:
-        return ""
-    shown = failures[:_STALL_NOTE_FAILURES]
-    note = " Soát chéo còn vướng: " + " | ".join(shown)
-    if len(failures) > len(shown):
-        note += f" (và {len(failures) - len(shown)} điểm nữa)"
-    return note
 
 
 def _review_child(task: TeamTask, content_step_id: str, step_type: str) -> TeamStep | None:
@@ -235,9 +214,15 @@ def maybe_handle_review_done(deps: CoordinatorDeps, task: TeamTask, review_step:
             )
             return False
         if _review_child(task, content_step_id, "review") is review_step:
+            # `deps[0]` is `locked_on` — the exact row the lost review was grading
+            # (content step at round 0, the latest rework at round >=1). Omitting it
+            # made every re-mint fall back to the CONTENT step, so a round-1 re-review
+            # graded the artifact the round-0 failure already rejected instead of the
+            # rework that answered it.
             _insert_review_step(
                 deps, task, content_step, reviewer=review_step.assigned_to,
                 review_round=review_step.review_round,
+                source_step_id=review_step.deps[0] if review_step.deps else None,
             )
             return True
         return False
@@ -245,45 +230,21 @@ def maybe_handle_review_done(deps: CoordinatorDeps, task: TeamTask, review_step:
     if bool(verdict.get("passed")):
         return False  # normal DAG continuation — nothing more to insert.
 
-    budget_exhausted, minted, budget = _task_review_budget_exhausted(task)
+    budget_exhausted, _minted, _budget = _task_review_budget_exhausted(task)
     if review_step.review_round >= MAX_REVIEW_ROUNDS or budget_exhausted:
-        # v63 CEO-override guard (review-found C1): `retry_stalled_step` deliberately
-        # mints ONE rework row AT this exhausted round — that row IS the override
-        # signal. Without this check the ticker re-reads the same failed verdict on
-        # the very next tick and re-stalls BEFORE the override rework ever dispatches
-        # (review rules run ahead of dispatch), making the retry command futile. With
-        # it: the rework runs, `maybe_insert_review_after_rework` mints the next
-        # round's review, and a round beyond THAT failing has no rework at its own
-        # round → stalls again — exactly one extra round per retry, never a loop.
-        # Áp dụng chung cho cả trần theo bước lẫn trần tầng task.
-        override_pending = any(
-            s.step_type == "rework" and s.parent_step_id == content_step_id
-            and s.review_round >= review_step.review_round for s in task.steps
-        )
-        if override_pending:
-            return False
-        deps.store.set_task_status(task.id, "stalled")
-        if review_step.review_round >= MAX_REVIEW_ROUNDS:
-            reason = "review_rounds_exhausted"
-            message = (
-                f"Việc '{task.title}' bị dừng: bước '{content_step.title}' soát chéo "
-                f"không đạt sau {MAX_REVIEW_ROUNDS + 1} lượt sửa — cần CEO xem lại."
-            )
-        else:
-            reason = "task_review_budget_exhausted"
-            message = (
-                f"Việc '{task.title}' bị dừng: cả task đã dùng {minted}/{budget} lượt "
-                f"soát/sửa cho phép mà bước '{content_step.title}' vẫn chưa đạt — "
-                f"dừng đốt thêm, cần CEO xem lại."
-            )
-        deps.escalate(task, content_step, reason, message + _last_failures_note(verdict))
-        from my_crew.agent.coordinator_graph import _reflect_safely
-
-        # The richest lesson in the system: work that was specified clearly enough to
-        # dispatch but not clearly enough to pass review, repeatedly.
-        _reflect_safely(deps, task, "stalled",
-                        f"{reason} on '{content_step.title}'")
-        return True
+        # Cap reached (per-step rounds or task-level budget): the chain ENDS, with
+        # deliberately ZERO side effects. This branch re-runs on the same done row
+        # every tick, so anything it did (a status write, an escalate, a reflection)
+        # would repeat forever — and the pre-lanes10 alternative, stalling the task,
+        # meant a reviewer flip-flopping over ambiguous ground truth could hold a
+        # fully-done task hostage (lanes9b: 3/4 cases stalled at review-2-2 with all
+        # content steps done). The objection still reaches the CEO: the delivery
+        # aggregate reads this failed verdict — a failed review with no rework at its
+        # own round or later is exactly "cap exhausted" — and prepends a deterministic
+        # "Soát chéo chưa đạt" header quoting the failures. This also subsumes the
+        # old v63 override guard: with no stall there is no re-stall race for a
+        # CEO-override rework to lose.
+        return False
 
     # Scoped to THIS review's own round — a prior round's rework row (e.g. round 0's,
     # already `done` and superseded by this round-1 review) must never be mistaken for

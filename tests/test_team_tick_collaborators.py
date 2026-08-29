@@ -259,6 +259,118 @@ def test_aggregate_omits_review_rows_without_notes(tmp_path, monkeypatch):
     assert "Soát chéo" not in summary
 
 
+def test_aggregate_flags_a_failed_review_whose_round_never_got_a_rework(
+    tmp_path, monkeypatch,
+):
+    """The cap-exhausted case: below the cap a failed verdict always mints a rework,
+    so "failed + no rework at ≥ its round" means the review budget ran out — and since
+    the ticker no longer stalls there, this header is the objection's ONLY path to the
+    CEO. Built in code, never left to the summarizer LLM."""
+    from my_crew.agent.team_task_artifact import (
+        write_review_verdict_artifact,
+        write_step_artifact,
+    )
+
+    content = _step_row("s1", 1, title="draft báo cáo")
+    review = _step_row("s1-review-2-2", 2, step_type="review", parent="s1",
+                       review_round=2, title="Soát chéo: draft báo cáo")
+    extra = _step_row("s2", 3, title="bước hai")
+    task = _task()
+    task = type(task)(**{**task.__dict__, "steps": (content, review, extra)})
+
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": "nội dung",
+                                            "version": "attempt-1"})
+    write_step_artifact(tmp_path, "t1", 3, {"result_text": "phần hai",
+                                            "version": "attempt-1"})
+    write_review_verdict_artifact(
+        tmp_path, "t1", 1, 2,
+        {"passed": False, "failures": ["thiếu số liệu quý 2", "sai nguồn"],
+         "notes": [], "reviewed_version": "attempt-1", "round": 2,
+         "result_text": "x"},
+    )
+
+    summary = _aggregate_fallback(tmp_path, monkeypatch, task)
+    assert "Soát chéo chưa đạt" in summary
+    assert "bước 'draft báo cáo'" in summary
+    assert "thiếu số liệu quý 2" in summary
+    assert "sai nguồn" in summary
+    # Never phrased as abandonment — this task DID deliver.
+    assert "KHÔNG LÀM ĐƯỢC" not in summary
+
+
+def test_aggregate_skips_a_failed_review_that_a_rework_already_answered(
+    tmp_path, monkeypatch,
+):
+    """Round 0 failed but its rework was minted (and round 1 passed): quoting the
+    round-0 objection again would be stale — only a failure NO rework answered counts."""
+    from my_crew.agent.team_task_artifact import (
+        write_review_verdict_artifact,
+        write_step_artifact,
+    )
+
+    content = _step_row("s1", 1, title="draft báo cáo")
+    review0 = _step_row("s1-review-0-0", 2, step_type="review", parent="s1",
+                        review_round=0)
+    rework0 = _step_row("s1-rework-0", 3, step_type="rework", parent="s1",
+                        review_round=0)
+    review1 = _step_row("s1-review-1-1", 4, step_type="review", parent="s1",
+                        review_round=1)
+    task = _task()
+    task = type(task)(
+        **{**task.__dict__, "steps": (content, review0, rework0, review1)})
+
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": "nội dung",
+                                            "version": "attempt-1"})
+    write_review_verdict_artifact(
+        tmp_path, "t1", 1, 0,
+        {"passed": False, "failures": ["thiếu số liệu"], "notes": [],
+         "reviewed_version": "attempt-1", "round": 0, "result_text": "x"},
+    )
+    write_review_verdict_artifact(
+        tmp_path, "t1", 1, 1,
+        {"passed": True, "failures": [], "notes": [],
+         "reviewed_version": "attempt-2", "round": 1, "result_text": "y"},
+    )
+
+    summary = _aggregate_fallback(tmp_path, monkeypatch, task)
+    assert "Soát chéo chưa đạt" not in summary
+
+
+def test_direct_delivery_carries_the_unresolved_review_header(tmp_path, monkeypatch):
+    """The single-terminal shortcut returns the artifact verbatim — the header must
+    ride on that path too, or exactly the tasks that deliver cleanest would hide the
+    reviewer's standing objection."""
+    from my_crew.agent.team_task_artifact import (
+        write_review_verdict_artifact,
+        write_step_artifact,
+    )
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_tick_collaborators import make_aggregate
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    rows = (_step_row("s1", 1, title="viết bài"),
+            _step_row("s1-review-2-2", 2, step_type="review", parent="s1",
+                      review_round=2, title="Soát chéo: viết bài"))
+    task = _task()
+    task = type(task)(**{**task.__dict__, "steps": rows})
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": "toàn văn bài viết",
+                                            "version": "attempt-1"})
+    write_review_verdict_artifact(
+        tmp_path, "t1", 1, 2,
+        {"passed": False, "failures": ["thiếu nguồn"], "notes": [],
+         "reviewed_version": "attempt-1", "round": 2, "result_text": "x"},
+    )
+
+    aggregate = make_aggregate(
+        _loaded_no_telegram(), settings=SimpleNamespace(openrouter_api_key=""),
+    )
+    summary, _cost = aggregate(task)
+
+    assert summary.startswith("Soát chéo chưa đạt")
+    assert "thiếu nguồn" in summary
+    assert "toàn văn bài viết" in summary
+
+
 # --- v63 stall escalation: evidence pack + one-touch suggestions ----------------------
 
 
