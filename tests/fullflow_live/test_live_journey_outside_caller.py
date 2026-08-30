@@ -86,7 +86,7 @@ def test_j1_outside_caller_drives_a_brief_to_a_settled_state(fleet, journey_budg
     # -- real work, really paid for ---------------------------------------------------
     cost = (final.get("cost") or {}).get("total_cost_usd") or 0.0
     assert cost > 0, f"settled with cost {cost} — no model was called"
-    journey_budget.note_cost(cost)
+    journey_budget.note_cost(cost, final)
 
     steps = final.get("steps") or []
     assert steps, f"a confirmed task produced no steps: {final!r}"
@@ -139,4 +139,4 @@ def test_j1b_a_stale_plan_hash_is_refused(fleet, journey_budget):
     # per-journey ceiling. It is bounded here (one decomposition, cents) and the suite
     # total is watched separately, so this case does not pretend to meter it.
     status = task_status(fleet, task_id)
-    journey_budget.note_cost((status.get("cost") or {}).get("total_cost_usd") or 0.0)
+    journey_budget.note_cost((status.get("cost") or {}).get("total_cost_usd") or 0.0, status)

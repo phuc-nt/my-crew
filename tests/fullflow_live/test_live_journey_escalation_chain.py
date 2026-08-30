@@ -153,7 +153,7 @@ def test_j2_an_escalation_runs_in_a_real_fleet_and_keeps_its_source(fleet, journ
     steps = final.get("steps") or []
     assert len(steps) == 1, f"an escalation is a ONE-step vehicle, got {len(steps)}: {steps}"
 
-    journey_budget.note_cost((final.get("cost") or {}).get("total_cost_usd") or 0.0)
+    journey_budget.note_cost((final.get("cost") or {}).get("total_cost_usd") or 0.0, final)
 
 
 def test_j2b_an_escalation_task_cannot_escalate_again(fleet, journey_budget):

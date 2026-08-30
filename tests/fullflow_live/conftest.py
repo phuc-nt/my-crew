@@ -17,7 +17,11 @@ Three things this file owns and no test should re-implement:
 
 from __future__ import annotations
 
+import json
+import os
 import time
+from collections import Counter
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -110,13 +114,116 @@ class JourneyBudget:
         self.name = name
         self.started = time.monotonic()
         self.costs: list[float] = []
+        #: The last task-status payload this journey observed, kept whole rather than
+        #: picked apart here: the baseline recorder reads terminal state, lane spread and
+        #: call count off it, and a journey should not have to know which of those the
+        #: baseline happens to want this month.
+        self.status: dict[str, Any] | None = None
 
-    def note_cost(self, usd: float) -> None:
+    def note_cost(self, usd: float, status: dict[str, Any] | None = None) -> None:
+        """Record spend, and optionally the task-status payload it came from.
+
+        `status` is optional so the negative-control cases — which have no single task to
+        be the journey's subject — keep working unchanged and simply contribute no
+        baseline row. Passing it is what puts a journey INTO the baseline.
+        """
         self.costs.append(float(usd or 0.0))
+        if status:
+            self.status = dict(status)
 
     @property
     def total(self) -> float:
         return round(sum(self.costs), 6)
+
+    @property
+    def llm_calls(self) -> int:
+        """Captured model calls for this journey's task.
+
+        One row per capture, so this counts calls the fleet actually made — not the
+        number of steps, which hides retries and reviews behind a single row.
+        """
+        cost = (self.status or {}).get("cost") or {}
+        return len(cost.get("steps") or [])
+
+
+#: Set to a path to also WRITE what the journeys measured into a baseline JSON. Off by
+#: default on purpose: an ordinary live run must not rewrite the committed baseline as a
+#: side effect, or "compare against baseline" quietly becomes "compare against whatever
+#: ran last" and can never fail.
+BASELINE_OUT_ENV = "MY_CREW_JOURNEY_BASELINE_OUT"
+
+
+def _record_baseline(budget: JourneyBudget, wall_s: float) -> None:
+    """Append this journey's numbers to the baseline file named by the env var.
+
+    Appends across the whole session rather than writing once at the end, so a suite that
+    dies halfway still leaves the journeys that DID finish. A partial baseline is honest
+    and obvious (missing journeys show up as one-sided rows in the delta table); losing
+    a 20-minute paid run because the last case failed is neither.
+    """
+    out = os.environ.get(BASELINE_OUT_ENV, "").strip()
+    if not out or budget.status is None:
+        # No status means the case never got far enough to observe a terminal state.
+        # Recording a placeholder would put a fabricated number in a file whose whole
+        # job is to be trusted later.
+        return
+
+    from my_crew.bench.journey_bench import build_baseline, make_metric
+
+    path = Path(out)
+    existing: dict[str, Any] = {}
+    if path.exists():
+        existing = json.loads(path.read_text(encoding="utf-8")).get("journeys", {})
+
+    metric = make_metric(
+        budget.name,
+        cost_usd=budget.total,
+        wall_s=wall_s,
+        llm_calls=budget.llm_calls,
+        terminal_state=_terminal_state(budget.status),
+        lanes=Counter(s.get("step_type") or "?" for s in budget.status.get("steps", [])),
+    )
+    merged = build_baseline([], version=os.environ.get("MY_CREW_VERSION", "") or _version())
+    merged["journeys"] = {**existing, budget.name: asdict(metric)}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _terminal_state(status: dict[str, Any]) -> str:
+    """How this journey ended, as `is_settled` actually decided it.
+
+    `state.status` alone is NOT enough. A task settles by either of two independent
+    routes: its own status reaches a terminal value, or every step parks on a human while
+    the task row still reads `open`. Journeys really do finish the second way, so
+    recording `state.status` verbatim writes `open` for a journey that ended — and then a
+    release that made the task row say `done` would read as a regression when it was a
+    fix. Naming the parked case keeps the two apart, because "finished" and "waiting on
+    the CEO" are different outcomes to regress between.
+    """
+    from tests.fullflow_live.topology import SETTLED_STEP_STATES, SETTLED_TASK_STATES
+
+    state = (status.get("state") or {}).get("status") or ""
+    if state in SETTLED_TASK_STATES:
+        return state
+    steps = status.get("steps") or []
+    if steps and all(s.get("status") in SETTLED_STEP_STATES for s in steps):
+        return f"parked:{state or 'open'}"
+    return state
+
+
+def _version() -> str:
+    """Installed distribution version, same lookup `mpm` uses.
+
+    A checkout without an install has no metadata, and the fallback says so out loud
+    rather than guessing a number — a baseline mislabelled with a version it was not cut
+    from is worse than one labelled "uninstalled".
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("my-crew")
+    except PackageNotFoundError:
+        return "0.0.0+uninstalled"
 
 
 @pytest.fixture
@@ -125,6 +232,7 @@ def journey_budget(request):
     yield budget
     wall = round(time.monotonic() - budget.started, 1)
     print(f"\n[journey {budget.name}] cost_usd={budget.total} wall_s={wall}")
+    _record_baseline(budget, wall)
     assert budget.total <= MAX_COST_PER_JOURNEY_USD, (
         f"journey spent ${budget.total} > ${MAX_COST_PER_JOURNEY_USD} ceiling"
     )

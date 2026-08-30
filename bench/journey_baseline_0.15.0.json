@@ -1,0 +1,47 @@
+{
+  "format_version": 1,
+  "version": "0.15.0",
+  "journeys": {
+    "test_j2_an_escalation_runs_in_a_real_fleet_and_keeps_its_source": {
+      "journey": "test_j2_an_escalation_runs_in_a_real_fleet_and_keeps_its_source",
+      "cost_usd": 0.002446,
+      "wall_s": 33.4,
+      "llm_calls": 1,
+      "terminal_state": "parked:open",
+      "lanes": {
+        "work": 1
+      }
+    },
+    "test_j5_work_survives_a_hard_kill_and_the_next_fleet_finishes_it": {
+      "journey": "test_j5_work_survives_a_hard_kill_and_the_next_fleet_finishes_it",
+      "cost_usd": 0.005067,
+      "wall_s": 68.9,
+      "llm_calls": 2,
+      "terminal_state": "done",
+      "lanes": {
+        "sprint": 1,
+        "review": 1
+      }
+    },
+    "test_j1_outside_caller_drives_a_brief_to_a_settled_state": {
+      "journey": "test_j1_outside_caller_drives_a_brief_to_a_settled_state",
+      "cost_usd": 0.003002,
+      "wall_s": 62.4,
+      "llm_calls": 1,
+      "terminal_state": "parked:open",
+      "lanes": {
+        "sprint": 1
+      }
+    },
+    "test_j1b_a_stale_plan_hash_is_refused": {
+      "journey": "test_j1b_a_stale_plan_hash_is_refused",
+      "cost_usd": 0.0,
+      "wall_s": 30.6,
+      "llm_calls": 0,
+      "terminal_state": "open",
+      "lanes": {
+        "sprint": 1
+      }
+    }
+  }
+}

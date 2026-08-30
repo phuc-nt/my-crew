@@ -101,7 +101,7 @@ def test_j5_work_survives_a_hard_kill_and_the_next_fleet_finishes_it(home, live_
             f"recovered task settled having spent {cost} — the spend record from before "
             "the crash was lost, so the company cannot account for money it paid"
         )
-        journey_budget.note_cost(cost)
+        journey_budget.note_cost(cost, final)
 
         # 3. Recovery did not proceed by swallowing exceptions on every tick.
         #
