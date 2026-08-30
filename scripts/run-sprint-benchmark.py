@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Print the sprint benchmark tables, from live tasks or from the offline briefs.
 
-Five modes, because the five things worth measuring fail differently:
+Seven modes, because the seven things worth measuring fail differently:
 
     # what the ROUTER decides — offline, 0 model calls, runs without a key
     .venv/bin/python scripts/run-sprint-benchmark.py routing --out cand-route.json
@@ -17,6 +17,13 @@ Five modes, because the five things worth measuring fail differently:
     # what a real pair of runs actually cost — reads the live store
     .venv/bin/python scripts/run-sprint-benchmark.py tasks --baseline <id> --candidate <id>
 
+    # whether the router decides the SAME thing twice — live, k repeats per case
+    .venv/bin/python scripts/run-sprint-benchmark.py reliability --out cand-rel.json --k 5
+    .venv/bin/python scripts/run-sprint-benchmark.py reliability --compare base.json cand.json
+
+    # what SHAPE the work took — hops, humans, where it parked. Compare-only.
+    .venv/bin/python scripts/run-sprint-benchmark.py journey --compare base.json cand.json
+
     # which revision DELIVERS better, judged blind by a model of a different family
     .venv/bin/python scripts/run-sprint-benchmark.py judge \
         --baseline-dir base-out/ --candidate-dir cand-out/
@@ -28,7 +35,14 @@ the cheapest first look when a threshold changed.
 
 The `tasks` mode never starts work. It only reads rows the runtime already wrote, so
 running it is safe at any time and its numbers are the same ones the CEO experienced.
-`judge` is the only mode that spends money, and it spends it on reading, not running.
+
+`journey` has no run half on purpose: journey baselines are cut by the live suite, which
+already owns the fixtures and the budget ceilings, so re-cutting them here would be a
+second, weaker path to the same JSON. Cut with the suite, diff with `--compare`.
+
+`reliability` and `judge` are the two modes that spend money. `reliability` spends it
+running the router k times per case to see whether it decides the same thing twice;
+`judge` spends it on reading, not running.
 
 Full release procedure: `docs/releasing.md`.
 """

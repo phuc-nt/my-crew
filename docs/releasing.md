@@ -67,13 +67,14 @@ MY_CREW_HOME=/tmp/crew-home /tmp/v/bin/my-crew serve --web-only  # /health → 2
 ## Benchmarking a release (routing + sprint lanes)
 
 Two lanes carry every task — `sprint` (one process) and `team` (a process per step) —
-so "is this release better" is really four questions, and each fails differently. Run
+so "is this release better" is really six questions, and each fails differently. Run
 them in the order below: the cheap ones can reject a release before the paid ones run.
 
 `scripts/run-sprint-benchmark.py` has seven modes. The comparable ones (`routing`,
-`release`, `reliability`, `journey`) write JSON via `--out` and diff two files via
-`--compare`; all refuse to compare reports that declare different `format_version`,
-because a silently-mismatched comparison is worse than none.
+`release`, `reliability`, `journey`) all diff two saved reports via `--compare`, and all
+refuse to compare reports that declare different `format_version`, because a
+silently-mismatched comparison is worse than none. The first three cut their own JSON
+with `--out`; `journey` is compare-only — the live suite cuts its baselines (see step 4).
 
 ### 1. Router decisions — free, runs anywhere
 
@@ -124,7 +125,7 @@ work sprint could not finish), `downgrade` (the heuristic over-called team and t
 safety net caught it), `upgrade` (a dead end someone paid a second time to redo).
 Tasks with no route record are counted as lane `unknown`, never guessed at.
 
-### 4. Delivery quality — the only mode that spends money
+### 4. Delivery quality — spends money, judges blind
 
 ```bash
 OPENROUTER_API_KEY=... uv run python scripts/run-sprint-benchmark.py judge \
