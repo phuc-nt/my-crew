@@ -56,8 +56,14 @@ _INTENT_SYSTEM = (
     "LỆNH và một tin nhắn, trả về DUY NHẤT một JSON (không markdown):\n"
     '- {"intent":"command","command_id":"<id>","slots":{...}} — yêu cầu khớp một lệnh; '
     "điền các slot bạn trích được từ tin nhắn (bỏ trống slot chưa rõ), KHÔNG bịa.\n"
-    '- {"intent":"question"} — HỎI để biết một thông tin, trả lời xong là hết.\n'
-    '- {"intent":"unsupported"} — muốn hành động nhưng không khớp lệnh nào.\n'
+    '- {"intent":"question"} — hỏi một thông tin bạn trả lời được NGAY: hoặc tra trong '
+    "dữ liệu nội bộ (đội ngũ, agent, việc đang chạy, ngân sách), hoặc là chuyện vặt "
+    "hiển nhiên (hôm nay thứ mấy, chào hỏi). Trả lời xong là hết.\n"
+    '- {"intent":"unsupported"} — muốn hành động nhưng không giao được cho ai làm. Hiếm. '
+    "Một việc mà một người có thể ngồi làm KHÔNG BAO GIỜ là unsupported: nếu không có "
+    "lệnh chuyên biệt thì nó thuộc assign_team_task, kể cả khi việc đó đụng tới bên "
+    "ngoài (chạy lệnh, clone repo, gửi mail, đăng bài) — hệ thống có sẵn chốt duyệt cho "
+    "những việc đó, việc của bạn chỉ là giao đúng chỗ.\n"
     "PHÂN BIỆT question và command: người nhắn là CEO, bạn là cửa điều phối — CEO nhờ "
     "bạn thì nghĩa là nhờ ĐỘI, không phải bạn tự trả lời. Một tin nhắn giao ra VIỆC cần "
     "làm (tra cứu, khảo sát, nghiên cứu, thu thập, so sánh, tổng hợp, lập bảng, viết báo "
@@ -66,6 +72,12 @@ _INTENT_SYSTEM = (
     "có tiêu chí/hạng mục cần thu thập, hoặc phải tra dữ liệu ngoài mới trả lời được. "
     "Chỉ chọn question khi bạn trả lời được ngay bằng hiểu biết sẵn có mà không phải làm "
     "gì thêm.\n"
+    "HIỂU BIẾT SẴN CÓ CỦA BẠN LÀ DỮ LIỆU CŨ. Hỏi về thứ thay đổi theo thời gian — giá "
+    "cả, tỷ giá, tin tức, tình hình thị trường, phiên bản mới nhất, ai đang giữ vị trí "
+    "gì — LUÔN là command (assign_team_task), không bao giờ là question, kể cả khi bạn "
+    "thấy mình biết câu trả lời: cái bạn nhớ có thể đã lỗi thời, chỉ người tra được "
+    "nguồn ngoài mới trả lời đúng. Ví dụ đều là command: \"Giá bán lẻ iPhone 17 Pro ở "
+    "VN?\", \"Tỷ giá USD hôm nay?\", \"Tin mới nhất về đối thủ X?\".\n"
     "TIN NHẮN MỞ ĐẦU BẰNG \"sprint:\" HOẶC \"team:\" LUÔN LÀ command giao việc "
     "(assign_team_task), không bao giờ là question — đó là CEO chỉ định thẳng chế độ "
     "chạy, nên không còn gì để phân vân, kể cả khi phần việc còn lại trông nhỏ và bạn "

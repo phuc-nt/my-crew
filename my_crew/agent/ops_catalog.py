@@ -462,7 +462,8 @@ OPS_COMMANDS: dict[str, dict] = {
                            "(vd 'sales-pm')"},
             "domain": {"prompt": "Vai trò của agent? (pm = quản lý dự án, hr = nhân sự, "
                                  "admin = giám sát đội, office = nhân viên văn phòng, "
-                                 "personal = thư ký riêng)",
+                                 "personal = thư ký riêng, ads = theo dõi quảng cáo, "
+                                 "accounting = kế toán)",
                        "required": True, "max_len": 20,
                        "choices": {
                            "pm": ("quản lý dự án", "quan ly du an", "project", "dự án", "du an"),
@@ -472,8 +473,13 @@ OPS_COMMANDS: dict[str, dict] = {
                                       "nhan vien van phong", "office"),
                            "personal": ("thư ký", "thu ky", "thư ký riêng", "thu ky rieng",
                                         "trợ lý riêng", "tro ly rieng"),
+                           "ads": ("quảng cáo", "quang cao", "theo dõi quảng cáo",
+                                   "theo doi quang cao", "ads"),
+                           "accounting": ("kế toán", "ke toan", "sổ quỹ", "so quy",
+                                          "accounting", "cashflow"),
                        },
-                       "hint": "đúng MỘT mã: pm, hr, admin, office, hoặc personal"},
+                       "hint": "đúng MỘT mã: pm, hr, admin, office, personal, ads, hoặc "
+                               "accounting"},
             "reports": {"prompt": "Loại báo cáo agent sẽ làm (vd 'daily' cho pm, "
                                   "'headcount' cho hr, 'briefing' cho personal; nếu agent "
                                   "chỉ nhận việc qua giao "
@@ -677,10 +683,18 @@ OPS_COMMANDS: dict[str, dict] = {
         # đẻ ra thẻ việc nào. Liệt kê thẳng các động từ việc thường tới và nói "không cần
         # to tát" thì nó mới khớp.
         "description": "Giao việc cho đội làm — tra cứu, khảo sát, nghiên cứu, thu thập "
-                       "số liệu, so sánh, tổng hợp, lập bảng, viết báo cáo, phân tích. "
-                       "Dùng cho MỌI việc cần làm mà không có lệnh chuyên biệt hơn, "
-                       "không cần phải là việc to tát. Hệ thống tự chia thành các bước "
-                       "và phân công cho từng người",
+                       "số liệu, so sánh, tổng hợp, lập bảng, viết báo cáo, phân tích, "
+                       "soạn thảo, gửi email/tin cho khách, liên hệ đối tác, chuẩn bị "
+                       "tài liệu. Đây cũng là lệnh dùng khi CEO hỏi một con số/thông tin "
+                       "bên ngoài mà PHẢI TRA NGUỒN mới biết và có thể đã đổi (giá thị "
+                       "trường, tỷ giá, tin tức, đối thủ) — câu hỏi đó là một việc tra "
+                       "cứu, giao qua đây. Không áp dụng cho chuyện vặt trả lời được "
+                       "ngay (hôm nay thứ mấy, chào hỏi). Dùng cho MỌI việc "
+                       "cần làm mà không có lệnh chuyên biệt "
+                       "hơn, không cần phải là việc to tát, KỂ CẢ việc đụng tới bên "
+                       "ngoài (gửi mail, đăng bài, chạy lệnh) — những việc đó vẫn giao "
+                       "qua đây, hệ thống tự chặn lại chờ CEO duyệt trước khi thực thi. "
+                       "Hệ thống tự chia thành các bước và phân công cho từng người",
         "readonly": False,
         "slots": {
             # Tiền tố `sprint:`/`team:` phải được CHÉP NGUYÊN vào slot này. Bộ tách

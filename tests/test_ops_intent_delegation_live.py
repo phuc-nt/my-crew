@@ -94,6 +94,34 @@ def test_a_plain_question_is_not_swallowed_into_a_team_task():
     assert result.get("command_id") != "assign_team_task"
 
 
+#: Câu hỏi ngắn về thứ THAY ĐỔI THEO THỜI GIAN. Model tin là nó biết câu trả lời, nên
+#: mặc định nó chọn `question` rồi tự đáp bằng trí nhớ đã lỗi thời — đúng cái xảy ra
+#: trong live A1: "Giá bán lẻ iPhone 17 Pro..." nhận về "Không đủ dữ liệu để trả lời",
+#: không task nào được tạo. Đây là lỗi ĐẮT theo cách khó thấy: CEO nhận một câu trả lời
+#: nghe trôi chảy mà không ai tra nguồn.
+_TIME_SENSITIVE_LOOKUPS = [
+    pytest.param("Giá bán lẻ hiện tại của iPhone 17 Pro và Galaxy S26 Ultra ở VN?",
+                 id="gia-thi-truong"),
+    pytest.param("Tỷ giá USD/VND hôm nay bao nhiêu em?", id="ty-gia"),
+]
+
+
+@pytest.mark.parametrize("message", _TIME_SENSITIVE_LOOKUPS)
+def test_a_time_sensitive_lookup_is_delegated_not_answered_from_memory(message):
+    """Một câu hỏi mà chỉ nguồn ngoài mới trả lời đúng phải thành việc tra cứu.
+
+    Ranh giới với `test_a_plain_question_is_not_swallowed_into_a_team_task`: chuyện vặt
+    trả lời được ngay ("hôm nay thứ mấy") vẫn là question; thứ có thể đã đổi kể từ lúc
+    model được huấn luyện thì không."""
+    result = _classify(message)
+
+    assert result.get("intent") == "command", (
+        f"câu hỏi cần tra nguồn bị phân loại {result.get('intent')!r} — CEO sẽ nhận câu "
+        "trả lời từ trí nhớ cũ của model, hoặc một lời từ chối, thay vì một việc tra cứu"
+    )
+    assert result.get("command_id") == "assign_team_task"
+
+
 def test_a_readonly_fleet_query_still_routes_to_its_own_command():
     """`assign_team_task` names "so sánh"/"tổng hợp" now — the neighbouring commands must
     still win on their own turf rather than being absorbed by the broad one."""
