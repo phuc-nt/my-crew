@@ -3,7 +3,7 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
-## [0.14.0] — 2026-08-26
+## [0.14.0] — 2026-08-30
 
 Work now picks its own lane. Simple jobs run as a one-process sprint and finish in
 minutes for cents; jobs that need the crew get the crew — and a sprint that hits a wall
@@ -20,7 +20,41 @@ The fixes come from two sources that CI cannot reach: a cold-start UAT (four def
 only appear on a fresh install) and a new suite that runs the whole flow against the real
 model, which caught the CEO's own lane instruction being silently discarded.
 
+The crew lane then went through seven rounds of blind-judged benchmarking against the
+sprint lane, and the theme of every round was the same: the crew rarely lost on the
+quality of what it wrote, it lost by dying halfway through. A step that gave up killed
+the whole task; a failed draft was thrown away; a review budget ran out and held a
+finished task hostage; and a fix round was handed the coordinator's stale note over and
+over, told to fix what it had just fixed. Each of those is now a degrade-and-continue
+path with the gap declared honestly rather than a dead end. Re-running the four tasks
+that died in round six: three now finish clean where none did, and the crew lane's cost
+fell by 60% — the wasted rounds were the expense.
+
 ### Added
+- **A step that gives up no longer kills the task.** A non-terminal step that honestly
+  cannot finish becomes a *skip with a declared gap*: downstream steps run, and every
+  prompt layer carries one shared rule for what a gap means — a result built on missing
+  input must say so, in the deliverable, rather than inventing the missing piece. The
+  failed draft is no longer discarded either: it travels forward under a
+  `BẢN NHÁP CHƯA ĐẠT SOÁT` marker, and a downstream step may use it only if it labels
+  the material as unreviewed. Verified on a real run where two steps died and the final
+  deliverable came back complete and labelled.
+- **Running out of review rounds delivers instead of stalling.** When the cross-review
+  cap is spent, the chain ends quietly and the task delivers itself with a code-written
+  header quoting the reviewer's remaining objections. Before, a task whose content was
+  100% done could sit stalled waiting for a review round that would never come.
+- **The crew stops splitting work that does not need splitting.** Decompose must now
+  declare *why* each step deserves to be its own node (five boundary kinds, recorded but
+  never trusted on their own), and a structural fold merges any step with exactly one
+  dependency, the same assignee and the same permissions — inferred from the graph, so
+  declaring a boundary that isn't there gains nothing. A three-step single-assignee
+  linear plan folds all the way back to a sprint. The crew lane now runs 1–3 steps at
+  roughly sprint cost, where earlier rounds cost three to four times as much.
+- **Code checks the countable things before the model does.** Entity coverage and item
+  counts are measured in code ahead of the LLM grader; a gap found this way fails
+  immediately at full confidence without spending a call. Sprint keeps its own
+  `coverage_gaps` path, which understands that a source refusing to publish a number is
+  not a gap the writer can close.
 - **Two lanes, and a way out when the wrong one was picked.** Simple work runs as a
   `sprint` (one process, one degenerate step); work that needs the crew runs as a
   `team`. A sprint that hits a wall mid-flight is no longer a dead end the CEO has to
@@ -73,6 +107,42 @@ model, which caught the CEO's own lane instruction being silently discarded.
   checkpointer/store/postgres_dsn unreachable from the web.
 
 ### Fixed
+- **A fix round was told to fix what it had just fixed.** The coordinator's note is
+  written once per attempt, but the step re-read it on every rework round — so round two
+  was handed round one's instruction, redid work already done, exhausted its budget and
+  dropped. Only the first rework round of an attempt consumes the note now; later rounds
+  strip it while keeping the standing wake-context line, which is the step's situation
+  rather than a stale instruction. Re-running the four tasks that died in the previous
+  benchmark round: three finish clean where none did (drops 2→0, salvages 2→0), and the
+  crew lane's cost fell 60% because the wasted rounds were what it was paying for. Two
+  further defects in the same strip were caught in review before release: the standing
+  wake line was being deleted along with the note, and the anchor matched the first
+  occurrence of the header, so a draft quoting the header truncated its own handoff.
+- **A dropped step still spawned reviews of nothing.** A review row could be minted over
+  a step that had already been dropped, and a dropped review or rework row left its
+  chain open forever. Both now end the chain.
+- **The stuck judge could not see its own previous guidance,** so it repeated the same
+  advice at a step that had already followed it. It now reads its prior notes and is
+  held to the step's acceptance criteria rather than raising the bar each round.
+- **Graders demanded evidence nobody asked for.** Three prompt-level rules landed from
+  live rounds: a source list frozen into the criteria at plan time cannot be treated as
+  the only acceptable sources; a grader may not invent a metric the CEO never requested;
+  and a cell honestly marked "not published", with the sources checked, is a passing
+  cell rather than a blank. The last one turned a canary task from an empty table into a
+  complete one.
+- **The worker prompt was not anchored to today's date** while both its graders were, so
+  a step could be marked as inventing data that was simply newer than its training. The
+  same source-metadata rule the sprint intake follows is now also in the crew's decompose
+  prompt.
+- **Web search results never reached the step transcript,** so a reviewer reading the
+  transcript concluded a step had fabricated what it had actually looked up.
+- **A harmless phrase in a draft quarantined the entire artifact.** A salvaged draft
+  containing wording that resembled an injection marker caused the whole handoff to be
+  isolated. Fixed at the writing side by scanning markers when the draft is stored,
+  rather than by loosening the quarantine.
+- **A re-review graded the wrong draft.** A re-minted verdict pointed at the original
+  step rather than the rework that replaced it, so round two of review scored round
+  one's text.
 - **A fix round never saw what the reviewer asked it to fix.** A rework step read its
   predecessor's artifact by the review row's own sequence number, but a review writes
   only `step-<graded_seq>-review-<round>.json` — so the read missed, the handoff came
