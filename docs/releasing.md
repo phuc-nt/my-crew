@@ -70,10 +70,10 @@ Two lanes carry every task — `sprint` (one process) and `team` (a process per 
 so "is this release better" is really four questions, and each fails differently. Run
 them in the order below: the cheap ones can reject a release before the paid ones run.
 
-`scripts/run-sprint-benchmark.py` has five modes. The comparable ones (`routing`,
-`release`) write JSON via `--out` and diff two files via `--compare`; both refuse to
-compare reports that declare different `format_version`, because a silently-mismatched
-comparison is worse than none.
+`scripts/run-sprint-benchmark.py` has seven modes. The comparable ones (`routing`,
+`release`, `reliability`, `journey`) write JSON via `--out` and diff two files via
+`--compare`; all refuse to compare reports that declare different `format_version`,
+because a silently-mismatched comparison is worse than none.
 
 ### 1. Router decisions — free, runs anywhere
 
@@ -136,6 +136,58 @@ cheaper release delivers worse work. The judge is blind (no version labels in th
 prompt), shuffles the two answers per vote so a position-biased judge averages out, and
 defaults to a model of a different family from the one that ran the tasks. Cases present
 in only one directory are reported as skipped, never judged.
+
+### 5. Intake stability — spends money, measures dispersion
+
+```bash
+OPENROUTER_API_KEY=... uv run python scripts/run-sprint-benchmark.py reliability \
+    --k 5 --out /tmp/cand-reliability.json
+uv run python scripts/run-sprint-benchmark.py reliability \
+    --compare /tmp/base-reliability.json /tmp/cand-reliability.json
+```
+
+Every mode above runs each case ONCE, which rounds model noise into "the result": a
+release that made intake flaky still passes them all as long as the sampled run happened
+to be good. This mode runs each brief `k` times and reports the spread.
+
+`pass_rate` means "share of runs that did NOT fall through to fail-open" — not "share of
+correct answers". `sprint_intake` calls the model and, on any failure, silently returns a
+minimal plan built from the CEO's brief verbatim. Nothing goes red; the plan just gets
+worse. A release that moves a case from 5/5 to 2/5 is a real regression no other mode
+sees. Watch `flake` (pass_rate strictly between 0 and 1) and `assignee_mode` — work
+quietly reassigned to a different agent is a behaviour change even at an unchanged rate.
+
+Both sides of a `--compare` must have used the same `k`; the mode refuses otherwise,
+since pass_rates over different denominators are not comparable. Runs that *raised* are
+reported separately from fail-open ones, so a provider outage never reads as a quality
+regression.
+
+### 6. Journey baselines — compare-only
+
+```bash
+uv run python scripts/run-sprint-benchmark.py journey \
+    --compare bench/journey_baseline_0.15.0.json /tmp/cand-journey.json
+```
+
+There is no "run" half: journey numbers come from the live suite below, which owns the
+fleet boot, the temp home, and the budget ceilings. To cut a new baseline, point the live
+journeys at an output path:
+
+```bash
+MY_CREW_JOURNEY_BASELINE_OUT=bench/journey_baseline_X.Y.Z.json \
+    uv run pytest tests/fullflow_live -q -m live -k journey
+```
+
+Unset, that variable writes nothing — an ordinary live run must never overwrite the
+committed baseline, or "compare against baseline" quietly becomes "compare against
+whatever ran last" and can never fail.
+
+Journeys run through the real model, so no two runs match. Discrete axes
+(`terminal_state`, lane set) compare exactly; continuous ones (`cost_usd`, `wall_s`,
+`llm_calls`) compare against deliberately wide relative thresholds. The point is catching
+a release that made a journey half again as expensive or that now dies in a different
+state — not micro-variance. A table that is always red gets ignored, which is worse than
+no table.
 
 ### Live full-flow suite
 

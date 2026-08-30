@@ -652,13 +652,18 @@ Ba miss-rate tính trên `routed_tasks` (task có bản ghi định tuyến), kh
 sprint), `upgrade` (dead-end được trả tiền lần hai chạy lại bằng đội); task cũ không có route
 record vào lane `unknown`. Thêm `cost_usd` + `wall_clock_seconds` per-lane để so bản, ngoài miss rates.
 
-**Benchmark v2** — 4 mode offline/online (`my_crew/bench/`):
+**Benchmark v3** — 6 mode offline/online (`my_crew/bench/`):
 - `routing_bench.py` — 0 model call, so quyết định router trên bộ đề.
 - `quality_judge.py` — blind A/B chấm chất lượng deliverable (model độc lập).
 - `task_metrics.py::load_lane_stats` — read-only, trả bảng per-lane metrics từ store.
-- `run-sprint-benchmark.py` — giao diện thống nhất: `routing` / `release` / `tasks` / `judge`.
+- `reliability_bench.py` — chạy `sprint_intake` k lượt/đề, đo tỉ lệ KHÔNG rơi fail-open.
+  Mọi mode khác chạy một lượt nên nhiễu model bị làm tròn thành "kết quả".
+- `journey_bench.py` — so hai journey baseline: trục rời rạc bằng `!=`, trục liên tục
+  theo ngưỡng tương đối (journey chạy model thật, so bằng `!=` sẽ đỏ mọi lượt).
+- `run-sprint-benchmark.py` — giao diện thống nhất: `routing` / `release` / `tasks` /
+  `judge` / `reliability` / `journey`.
 
-**Live fullflow suite** (`tests/fullflow_live/`, 18 case): end-to-end vs model thật.
+**Live fullflow suite** (`tests/fullflow_live/`, 54 case): end-to-end vs model thật.
 **Opt-in**: `pyproject.toml::addopts = ["-m", "not live"]` → mặc định skip;
 chọn `-m live`. Không `OPENROUTER_API_KEY` → skip. Case assert trên `route_json` + DAG shape.
 Gate trước đây dùng `pytestmark` bị pytest bỏ qua — nay dùng `pytest_collection_modifyitems`.
