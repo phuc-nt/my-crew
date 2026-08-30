@@ -150,6 +150,65 @@ def _routing(args: argparse.Namespace) -> int:
     return 0
 
 
+def _reliability(args: argparse.Namespace) -> int:
+    """How STABLE intake is across repeats — or the delta between two saved runs.
+
+    The only mode that measures dispersion rather than a single outcome. Every other
+    mode runs each case once, which silently rounds model noise into "the result": a
+    revision that made intake flaky still passes them all as long as the one sampled
+    run happened to be good.
+
+    Spends money (k model calls per case), so it is not part of the offline sweep.
+    """
+    from my_crew.bench.brief_suite import ALL_CASES
+    from my_crew.bench.reliability_bench import compare_reliability, run_suite
+
+    if args.compare:
+        return _print_delta(compare_reliability(*_load_pair(args.compare)))
+
+    from my_crew.config.config_builders import build_settings_from_env
+
+    settings = build_settings_from_env()
+    if not getattr(settings, "openrouter_api_key", ""):
+        # Loud, not degraded: an empty reliability report reads exactly like a perfect
+        # one, and "no flake detected" is the most dangerous wrong answer this mode can
+        # give.
+        print("reliability mode needs OPENROUTER_API_KEY", file=sys.stderr)
+        return 2
+
+    report = run_suite(ALL_CASES, k=args.k)
+    report["revision"] = _git_revision()
+    print(f"{'case':<24} {'pass_rate':<10} {'flake':<7} {'assignee':<12} web")
+    print("-" * 66)
+    for name, d in report["cases"].items():
+        print(f"{name:<24} {d['pass_rate']:<10.2f} {str(d['flake']):<7} "
+              f"{d['assignee_mode']:<12} {d['needs_web_mode']}")
+    flaky = [n for n, d in report["cases"].items() if d["flake"]]
+    print(f"\nk={report['k']}  ·  flaky: {', '.join(flaky) if flaky else 'none'}")
+    errors = {n: d["errors"] for n, d in report["cases"].items() if d["errors"]}
+    if errors:
+        # Raised runs are NOT fail-open and must not be read as one — surface them
+        # separately or a provider outage looks like a quality regression.
+        print(f"runs that raised: {errors}")
+    if args.out:
+        Path(args.out).write_text(json.dumps(report, ensure_ascii=False, indent=2))
+        print(f"written: {args.out}")
+    return 0
+
+
+def _journey(args: argparse.Namespace) -> int:
+    """Delta between two journey baselines. Compare-only by design.
+
+    There is no "run" half here, and that is deliberate: journey numbers come from the
+    live topology suite (`pytest -m live`), which owns the fleet boot, the temp home,
+    and the budget ceilings. Re-running journeys from this script would be a second,
+    divergent harness for the same thing.
+    """
+    from my_crew.bench.journey_bench import compare_journey
+
+    return _print_delta(compare_journey(*_load_pair(args.compare)))
+
+
 def _release(args: argparse.Namespace) -> int:
     """Deliverable-vs-spend table for this revision, or the delta between two JSONs."""
     from my_crew.bench.release_bench import COMPARED_FIELDS, compare_reports, run_suite
@@ -357,6 +416,30 @@ def main() -> int:
         help="data root holding transcripts/ and agents/ jails (default: the db's folder)",
     )
 
+    reliability = sub.add_parser(
+        "reliability", help="live model: how stable intake is across k repeats per case"
+    )
+    reliability.add_argument("--out", help="write the report JSON here as well as printing it")
+    # Literal rather than importing `reliability_bench.DEFAULT_K`: every bench module in
+    # this script is imported INSIDE its handler so `--help` and the offline modes work
+    # in a worktree where the package may not even import cleanly. Pinned by a test.
+    reliability.add_argument(
+        "--k", type=int, default=5,
+        help="repeats per case (default 5); both sides of a compare must match",
+    )
+    reliability.add_argument(
+        "--compare", nargs=2, metavar=("BASELINE_JSON", "CANDIDATE_JSON"),
+        help="print the per-axis delta between two saved reports instead of running",
+    )
+
+    journey = sub.add_parser(
+        "journey", help="compare two journey baselines cut from the live suite"
+    )
+    journey.add_argument(
+        "--compare", nargs=2, required=True, metavar=("BASELINE_JSON", "CANDIDATE_JSON"),
+        help="the two journey baseline JSONs to diff",
+    )
+
     judge = sub.add_parser(
         "judge", help="live model: blind A/B on two directories of deliverables"
     )
@@ -380,7 +463,8 @@ def main() -> int:
     # here would silently run the tasks mode against the wrong arguments.
     handlers = {
         "pipeline": _pipeline, "routing": _routing, "release": _release,
-        "tasks": _tasks, "judge": _judge,
+        "tasks": _tasks, "judge": _judge, "reliability": _reliability,
+        "journey": _journey,
     }
     return handlers[args.cmd](args)
 
