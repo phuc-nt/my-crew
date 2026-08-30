@@ -1,12 +1,12 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v94, đã ship tới 0.13.0; v0.14.0 làm dở tại v86–v94). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Lộ trình + trạng thái (as-built v94, đã ship tới 0.14.0 — arc v86–v94). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
 > Cập nhật: 2026-08-30.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v0.13.0 (PyPI); arc v0.14.0
-(v86–v94) commit trên main, chưa release.** 4091 BE + 406 FE + 44 e2e test, ruff/tsc sạch.
+**Production-usable, single-user autonomy-first. Đã ship tới v0.14.0 (PyPI, 2026-08-30 — arc
+v86–v94).** 4091 BE + 406 FE + 44 e2e test, ruff/tsc sạch.
 Mọi vòng E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out,
 UAT đối kháng, benchmark sprint-vs-team chấm mù, live e2e opt-in, release gate delta).
 
@@ -28,7 +28,7 @@ registry mà bỏ cổng profile — template tạo agent `enabled: false` cố 
 tiên không thể bật bằng UI; và chặn giao việc do rào escalation viết bằng từ vựng backend,
 không chỉ ra màn nào sửa được. Cả hai sửa, giữ nguyên rào an toàn.
 
-**v92 (fast/crew lane routing v2 — 08-25→08-26, v0.14.0 unreleased):** **Nâng cấp 2-lane routing v77**
+**v92 (fast/crew lane routing v2 — 08-25→08-26, trong v0.14.0):** **Nâng cấp 2-lane routing v77**
 giữ lại mọi tiến bộ, lấp 4 gap: (1) **routing steering** — sprint dead-end → lật sang team giữ bối cảnh
 (`run_upgrade_to_team`, nháp dở đi theo làm tham khảo); (2) **effort tier** (`low|medium|high` lưu `route_json`)
 — chỉ `low` đổi hành vi: model role `sprint_low` + cắt budget search + tối đa 1 revise; `medium` hành vi
@@ -41,7 +41,7 @@ shape ổn định qua model nondeterminism. Cũng tìm ra 3 lỗi thực tế (
 `_parse_json_object` nhặt thêm sau dấu `}`, đếm dãy inline nhận đánh số DANH TỪ). Cổng: 3991 BE passed,
 1 skipped, 18 live deselected.
 
-**v93 (graph-engineering crew lane — 08-30, v0.14.0 unreleased):** decompose theo triết lý
+**v93 (graph-engineering crew lane — 08-30, trong v0.14.0):** decompose theo triết lý
 graph-engineering "mỗi bước phải có ranh giới thật": (1) **nhãn ranh giới** — `TeamStepPlan.boundary`
 (5 loại `BOUNDARY_KINDS`), observational-only, phân bố ghi `route_json.signals.boundary_counts`;
 (2) **fold cấu trúc** — `fold_unjustified_steps` chạy sau fanout, gộp bước đúng-1-dep + cùng người
@@ -54,7 +54,7 @@ code-found fail ngay confidence 1.0, sprint tắt (`deterministic_precheck=False
 live** (nợ vòng 5): 2 bước chết → nháp salvage → bước cuối giao có dán nhãn 'chưa qua soát'. Fold
 kéo team-lane về 1–3 bước, cost sát sprint (1.19× vs 3–4× các vòng trước). Cổng: 4088 BE passed, ruff sạch.
 
-**v94 (crew reliability — guidance đóng băng, 08-30, v0.14.0 unreleased):** truy gốc bước chết
+**v94 (crew reliability — guidance đóng băng, 08-30, trong v0.14.0):** truy gốc bước chết
 vòng 6 bằng taxonomy trên transcript thật → nguyên nhân top: **guidance điều phối đóng băng cả
 attempt** (perceive chạy 1 lần/attempt, vòng rework 2 bị nhắc sửa đúng thứ vòng 1 vừa sửa) —
 fix: chỉ vòng rework đầu tiêu thụ guidance, các vòng sau strip (giữ dòng wake-context của
@@ -70,7 +70,7 @@ Việc vòng sau: xét lại tín hiệu `'trong tuần'`→nhiều-giai-đoạn
 phân rã bước review-and-finalize (tách "chốt bản cuối" khỏi "phán quyết" — case meeting_notes
 stalled vì mơ hồ này); bộ đề ≥30 case cho routing + đo lại tương quan sạch→thắng phi-cơ-học.
 
-**v80–v85 (arc quan sát bước + toàn vẹn nguồn — 08-16→08-18, chưa release):** **v80 step
+**v80–v85 (arc quan sát bước + toàn vẹn nguồn — 08-16→08-18, trong v0.14.0):** **v80 step
 observability**: transcript JSONL per-attempt trong jail agent (`runtime/step_recorder.py`),
 work-order + replay (`mpm step-replay`), evidence quá trình vào prompt review, reflection
 đọc hành vi tool (threat model chỉ tên + số đếm) · **v81 sprint lookup v2 + release bench**
