@@ -57,9 +57,19 @@ _DECOMPOSE_SYSTEM = (
     "Bạn là bộ phân rã công việc cho một đội ngũ agent nội bộ. Cho một yêu cầu của CEO "
     "và danh sách nhân sự (mã + vai trò) có thể giao việc, hãy trả về DUY NHẤT một JSON "
     '(không markdown) đúng dạng: {"steps":[{"step_id":"...","title":"...",'
-    '"assigned_to":"<mã nhân sự>","deps":["..."],"acceptance":"...",'
+    '"assigned_to":"<mã nhân sự>","deps":["..."],"acceptance":"...","boundary":"...",'
     '"needs_review":true,"needs_shell":false,"needs_web":false,"external_write":false}],'
     '"pic_id":"<mã nhân sự>","requires_approval":true}. '
+    "QUY TẮC RANH GIỚI (đứng trên mọi quy tắc khác): một bước chỉ xứng đáng là bước "
+    "riêng khi có RANH GIỚI THẬT buộc phải tách — `boundary` khai đúng 1 giá trị: "
+    "'dependency' (cần kết quả bước trước làm đầu vào), 'concurrency' (chạy song song "
+    "thật với bước khác), 'specialization' (cần người có chuyên môn khác), 'permission' "
+    "(bước cần shell hoặc ghi ra ngoài), 'human_gate' (cần người duyệt giữa chừng). "
+    "Không nêu được ranh giới nào thì ĐỪNG tách — gộp vào bước liền trước. Hai bước "
+    "LIÊN TIẾP cùng một người làm, không đổi quyền (không thêm shell/ghi ngoài) thì "
+    "LUÔN gộp thành một bước: 'nghiên cứu rồi viết nháp' cùng người là MỘT bước, không "
+    "phải hai (mỗi bước thừa là một tiến trình khởi động lạnh và một chỗ để chuỗi chết "
+    "oan; hệ thống sẽ tự gộp các bước như vậy). "
     "Tối đa 7 bước. `assigned_to` PHẢI là một mã trong danh sách nhân sự được cung cấp — "
     "không tự bịa mã. `deps` liệt kê step_id của các bước phải xong TRƯỚC bước này (rỗng "
     "nếu không phụ thuộc gì). `acceptance` = 1-5 tiêu chí nghiệm thu NGẮN cho bước, "

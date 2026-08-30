@@ -616,3 +616,157 @@ def test_find_terminals_reads_the_plan_shape():
         TeamStepPlan(step_id="two", title="t", assigned_to="x"),
     )
     assert {s.step_id for s in find_terminals(split)} == {"one", "two"}
+
+
+# --- boundary declaration + structural fold (graph-engineering, v93) ---------------
+
+
+def test_boundary_parses_normalized_and_defaults_empty():
+    task = _task_from([
+        {**_step("a"), "boundary": "  Specialization "},
+        _step("b", deps=["a"]),
+    ])
+    assert task.steps[0].boundary == "specialization"
+    assert task.steps[1].boundary == ""  # every pre-v93 plan parses unchanged
+
+
+def test_boundary_unknown_label_is_kept_not_rejected():
+    # Observational field: a light model inventing a label must not burn a retry.
+    task = _task_from([{**_step("a"), "boundary": "vibes"}])
+    assert task.steps[0].boundary == "vibes"
+
+
+def test_hash_ignores_boundary_labels_entirely():
+    # Back-compat pin: a labeled DAG hashes byte-identical to the same DAG unlabeled,
+    # exactly like `acceptance` — pre-v93 confirm flows must keep verifying.
+    plain = _task_from([_step("a"), _step("b", deps=["a"])])
+    labeled = _task_from([
+        {**_step("a"), "boundary": "concurrency"},
+        {**_step("b", deps=["a"]), "boundary": "dependency"},
+    ])
+    assert decomposition_content_hash(plain) == decomposition_content_hash(labeled)
+
+
+def test_boundary_label_counts_buckets_none_and_other():
+    from my_crew.agent.task_decomposition import boundary_label_counts
+
+    task = _task_from([
+        {**_step("a"), "boundary": "permission"},
+        {**_step("b", deps=["a"]), "boundary": "vibes"},
+        _step("c", deps=["b"]),
+    ])
+    assert boundary_label_counts(task) == {"permission": 1, "other": 1, "none": 1}
+
+
+def _fold(steps: list[dict]):
+    from my_crew.agent.task_decomposition import fold_unjustified_steps
+
+    return fold_unjustified_steps(_task_from(steps))
+
+
+def test_fold_collapses_same_person_linear_chain_to_one_step():
+    folded, count = _fold([
+        {**_step("research"), "acceptance": "- nguồn kèm link"},
+        {**_step("draft", deps=["research"]), "acceptance": "- đủ 3 mục"},
+        {**_step("polish", deps=["draft"]), "acceptance": "- đủ 3 mục"},
+    ])
+    assert count == 2
+    assert len(folded.steps) == 1
+    only = folded.steps[0]
+    assert only.step_id == "research"
+    assert "title-draft" in only.title and "title-polish" in only.title
+    # acceptance lines merged verbatim, deduped
+    assert only.acceptance.splitlines() == ["- nguồn kèm link", "- đủ 3 mục"]
+
+
+def test_fold_ors_needs_web_so_the_merged_step_keeps_its_tier():
+    folded, count = _fold([
+        {**_step("research"), "needs_web": True},
+        _step("draft", deps=["research"]),
+    ])
+    assert count == 1
+    assert folded.steps[0].needs_web is True
+
+
+def test_fold_skips_different_assignee():
+    # A change of person IS a specialization boundary — structural, label-free.
+    task, count = _fold([
+        _step("research", assigned_to="agent-a"),
+        _step("draft", assigned_to="agent-b", deps=["research"]),
+    ])
+    assert count == 0
+    assert len(task.steps) == 2
+
+
+def test_fold_skips_permission_flagged_steps():
+    for flag in ("needs_shell", "external_write"):
+        task, count = _fold([
+            _step("prep"),
+            {**_step("run", deps=["prep"]), flag: True},
+        ])
+        assert count == 0, flag
+        assert len(task.steps) == 2, flag
+
+
+def test_fold_skips_depless_and_multi_dep_steps():
+    # Dep-less parallel collects (the `fanout_split` shape) and join steps both
+    # have real boundaries (concurrency / dependency-on-many) — never folded.
+    task, count = _fold([
+        _step("r1"),
+        _step("r2"),
+        _step("join", deps=["r1", "r2"]),
+    ])
+    assert count == 0
+    assert len(task.steps) == 3
+
+
+def test_fold_rewires_dependents_to_the_absorbing_predecessor():
+    folded, count = _fold([
+        _step("research", assigned_to="agent-a"),
+        _step("draft", deps=["research"], assigned_to="agent-a"),
+        _step("review", deps=["draft", "research"], assigned_to="agent-b"),
+    ])
+    assert count == 1
+    review = next(s for s in folded.steps if s.step_id == "review")
+    assert review.deps == ("research",)  # B→A rewire deduped against existing A dep
+
+
+def test_fold_ignores_declared_labels_when_structure_disagrees():
+    # A model inventing a boundary label gains nothing: the fold is structural.
+    folded, count = _fold([
+        _step("research"),
+        {**_step("draft", deps=["research"]), "boundary": "specialization"},
+    ])
+    assert count == 1
+    assert len(folded.steps) == 1
+
+
+def test_folded_chain_then_downgrades_to_sprint():
+    # Composition pin: a 4-step same-person linear chain — the measured chain-death
+    # shape — folds to 1 step, which the UNCHANGED downgrade_to_sprint then catches.
+    from my_crew.agent.sprint_intake import downgrade_to_sprint
+    from my_crew.agent.task_decomposition import fold_unjustified_steps
+
+    chain = _task_from([
+        {**_step("s1"), "acceptance": "- mục 1"},
+        {**_step("s2", deps=["s1"]), "acceptance": "- mục 2"},
+        {**_step("s3", deps=["s2"]), "acceptance": "- mục 3"},
+        {**_step("s4", deps=["s3"]), "acceptance": "- mục 4"},
+    ])
+    folded, count = fold_unjustified_steps(chain)
+    assert count == 3 and len(folded.steps) == 1
+    plan = downgrade_to_sprint("Viết báo cáo ngắn về X.", folded)
+    assert plan is not None
+    assert plan.assigned_to == "agent-a"
+    for line in ("- mục 1", "- mục 4"):
+        assert line in plan.acceptance
+
+
+def test_decompose_prompt_pins_boundary_rule():
+    from my_crew.llm.team_task_prompt import _DECOMPOSE_SYSTEM
+
+    assert '"boundary"' in _DECOMPOSE_SYSTEM
+    assert "QUY TẮC RANH GIỚI" in _DECOMPOSE_SYSTEM
+    for kind in ("dependency", "concurrency", "specialization", "permission",
+                 "human_gate"):
+        assert kind in _DECOMPOSE_SYSTEM

@@ -41,6 +41,7 @@ from my_crew.agent.task_decomposition import (
     fanout_gap,
     fanout_split,
     find_terminals,
+    fold_unjustified_steps,
     parse_decomposed_task,
     validate_decomposition,
 )
@@ -283,6 +284,31 @@ def _decompose_with_retries(
                         "assign_team_task: accepting un-fanned plan after retries (%s)",
                         gap,
                     )
+            # Graph-engineering fold (v93): a step that runs after ONE other step,
+            # by the SAME person, with the SAME permissions has no real boundary
+            # justifying its own node — merge it into its predecessor before hashing,
+            # so the CEO confirms the plan that will actually run. Runs AFTER the
+            # fan-out block: folding first would erase the packed-collect+finalize
+            # shape `fanout_split` slices (measured live), while nothing the split
+            # mints is ever a fold candidate (its parallel steps are dep-less, its
+            # finalize multi-dep). Re-validated with the same cheap-proof-over-trust
+            # fail-open as `fanout_split`: a rejected fold keeps the unfolded plan.
+            folded, fold_count = fold_unjustified_steps(task)
+            if fold_count:
+                try:
+                    task = validate_decomposition(
+                        folded, staff_ids={a for a, _ in staff},
+                        pic_id=pic_requested if pic_requested else None,
+                    )
+                    logger.info(
+                        "assign_team_task: folded %d boundary-less step(s) — plan "
+                        "now has %d step(s)", fold_count, len(task.steps),
+                    )
+                except DecompositionError as fold_exc:
+                    logger.warning(
+                        "assign_team_task: fold rejected (%s) — keeping the "
+                        "unfolded plan", fold_exc,
+                    )
             return _widen_terminal_deps(task), total_cost
         except DecompositionError as exc:
             last_error = str(exc)
@@ -418,6 +444,18 @@ def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str
     def _route(mode: str, source: str, reason: str) -> dict:
         return {"mode": mode, "source": source, "reason": reason, "signals": signals}
 
+    def _team_route(source: str, reason: str, task) -> dict:
+        # Team routes carry the declared-boundary distribution of the ACCEPTED plan
+        # (post-fold) next to the brief signals: lane stats can then answer "what
+        # boundaries do our plans claim?" from the same table as the outcome.
+        # Copied, not mutated — `signals` is shared by every `_route` closure.
+        from my_crew.agent.task_decomposition import boundary_label_counts
+
+        route = _route("team", source, reason)
+        route["signals"] = {**signals,
+                            "boundary_counts": boundary_label_counts(task)}
+        return route
+
     def _team_plan(why_team: str, source: str) -> tuple:
         """Chạy decompose team, rồi hạ xuống sprint nếu kế hoạch hoá ra là việc 1 người.
 
@@ -429,7 +467,7 @@ def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str
         task, cost = _decompose_with_retries(brief, staff, pic_requested)
         plan = downgrade_to_sprint(brief, task)
         if plan is None:
-            return task, cost, False, _route("team", source, why_team)
+            return task, cost, False, _team_route(source, why_team, task)
         logger.info("assign_team_task: sprint mode (%s, nhưng kế hoạch suy biến %d bước "
                     "cùng %r)", why_team, len(task.steps), plan.assigned_to)
         return (_build_sprint_task(plan, pic_requested), cost, True,
@@ -440,8 +478,8 @@ def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str
         # CEO gõ "team:" là quyết định của người giao việc, không phải phỏng đoán —
         # không hạ chế độ ở đây kể cả khi kế hoạch trông suy biến.
         logger.info("assign_team_task: team mode (CEO ép bằng tiền tố)")
-        return (*_decompose_with_retries(brief, staff, pic_requested), False,
-                _route("team", "prefix", "CEO ép bằng tiền tố"))
+        task, cost = _decompose_with_retries(brief, staff, pic_requested)
+        return task, cost, False, _team_route("prefix", "CEO ép bằng tiền tố", task)
 
     if forced_mode == "sprint":
         # Tiền tố của CEO thắng bộ ĐOÁN, nhưng không gỡ được bốn loại trừ cứng: sprint
@@ -453,8 +491,9 @@ def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str
             # này, nên gọi vào đó chỉ tốn công — và đi thẳng giữ được ý "rào an toàn
             # thắng tiền tố" ở một chỗ đọc là thấy.
             logger.info("assign_team_task: team mode (CEO ép sprint nhưng %s)", refusal)
-            return (*_decompose_with_retries(brief, staff, pic_requested), False,
-                    _route("team", "refusal", f"CEO ép sprint nhưng {refusal}"))
+            task, cost = _decompose_with_retries(brief, staff, pic_requested)
+            return (task, cost, False,
+                    _team_route("refusal", f"CEO ép sprint nhưng {refusal}", task))
         want_sprint, reason, source = True, "CEO ép bằng tiền tố", "prefix"
     else:
         want_sprint, reason = classify_brief(brief)

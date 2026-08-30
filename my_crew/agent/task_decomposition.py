@@ -43,6 +43,16 @@ SMALL_TASK_MAX_STEPS = 3
 #: completion can never smuggle a system-reserved step_type into a CEO-confirmed plan.
 _STEP_TYPES = ("work", "review", "rework")
 
+#: The real split boundaries a step may declare (graph-engineering principle: a step
+#: exists as its own node ONLY because of a real boundary — dependency on another
+#: step's output, true concurrency, a different specialist, a permission/trust change,
+#: or a human approval point). The DECLARED label is observational (it rides into
+#: routing signals so lane stats can answer "what boundaries do our plans claim?");
+#: the ENFORCED justification is structural — see `fold_unjustified_steps`, which
+#: never trusts the label.
+BOUNDARY_KINDS = ("dependency", "concurrency", "specialization", "permission",
+                  "human_gate")
+
 
 class TeamStepPlan(BaseModel):
     """One proposed DAG step (pre-persistence — the store's own `TeamStep` is the
@@ -96,6 +106,20 @@ class TeamStepPlan(BaseModel):
     # runtime the step runs on, so the CEO's confirm covers it, while every flagless
     # DAG (all pre-v74 tasks) hashes byte-identical.
     needs_web: bool = False
+    # Graph-engineering boundary DECLARATION (v93): why this step deserves to be its
+    # own node — one of `BOUNDARY_KINDS`, or "" (every pre-v93 plan). Metadata like
+    # `acceptance`: NOT part of `decomposition_content_hash` (a labeled DAG hashes
+    # byte-identical to an unlabeled one), and deliberately NOT trusted for any
+    # decision — `fold_unjustified_steps` derives justification from DAG structure
+    # alone, so a model inventing labels to keep a step gains nothing. Unknown labels
+    # are kept as written (observational field; rejecting them would only add retry
+    # noise from light models) and bucketed by the routing-signal counter.
+    boundary: str = Field(default="", max_length=40)
+
+    @field_validator("boundary")
+    @classmethod
+    def _normalize_boundary(cls, v: str) -> str:
+        return v.strip().lower()
 
     @field_validator("step_id", "assigned_to")
     @classmethod
@@ -519,3 +543,115 @@ def fanout_split(brief: str, task: DecomposedTask) -> DecomposedTask | None:
             steps.append(s)
     return DecomposedTask(steps=tuple(steps), pic_id=task.pic_id,
                           requires_approval=task.requires_approval)
+
+
+def boundary_label_counts(task: DecomposedTask) -> dict[str, int]:
+    """Distribution of DECLARED boundary labels across a plan's steps — the
+    observational half of the boundary story, persisted into `route_json.signals`
+    so lane stats can answer "what boundaries do our plans claim?" without
+    replaying any plan. Unlabeled steps (every pre-v93 plan, and any step the
+    model left blank) count as "none"; labels outside `BOUNDARY_KINDS` count as
+    "other" instead of erroring — the field is never trusted for decisions, so
+    a bad label is a data point, not a failure."""
+    counts: dict[str, int] = {}
+    for s in task.steps:
+        if s.boundary in BOUNDARY_KINDS:
+            label = s.boundary
+        else:
+            label = "none" if not s.boundary else "other"
+        counts[label] = counts.get(label, 0) + 1
+    return counts
+
+
+def _merge_step_into_predecessor(pred: TeamStepPlan, step: TeamStepPlan) -> TeamStepPlan:
+    """The predecessor absorbs the folded step's scope: titles joined, acceptance
+    lines concatenated (verbatim, deduped — same no-rewrite rationale as
+    `downgrade_to_sprint`'s acceptance merge), and the routing hint `needs_web`
+    OR-ed so a merged lookup+produce step still gets its web tier. `needs_review`
+    is OR-ed only as a hint — `apply_review_policy` recomputes it from the folded
+    shape anyway. Permission flags need no merge: a step carrying one is never a
+    fold candidate (it has a real `permission` boundary)."""
+    acceptance_lines: list[str] = []
+    for text in (pred.acceptance, step.acceptance):
+        for line in (text or "").splitlines():
+            if line.strip() and line not in acceptance_lines:
+                acceptance_lines.append(line)
+    return pred.model_copy(update={
+        "title": f"{pred.title}; {step.title}"[:300],
+        "acceptance": "\n".join(acceptance_lines)[:2000],
+        "needs_web": pred.needs_web or step.needs_web,
+        "needs_review": pred.needs_review or step.needs_review,
+    })
+
+
+def fold_unjustified_steps(task: DecomposedTask) -> tuple[DecomposedTask, int]:
+    """Merge steps that no real boundary justifies as separate nodes. Returns the
+    folded task and how many steps were folded (0 ⇒ the exact input task).
+
+    The graph-engineering rule this enforces: a step earns its own node only through
+    a real boundary. Structurally, a step whose ONLY link to the plan is "runs after
+    one other step, done by the SAME person, with the SAME permissions" has none —
+    not concurrency (it was strictly sequential already, so merging loses no
+    parallelism), not specialization (same assignee), not permission (no flag change)
+    — it is one person's work split across two cold-start processes, the measured
+    chain-death shape of bench lanes8/12 (each extra row = one more cold context +
+    one more place for the chain to die).
+
+    Deliberately IGNORES the declared `boundary` label: justification is derived
+    from DAG structure alone, so a model inventing labels to keep a step gains
+    nothing (the label stays observational — see `BOUNDARY_KINDS`).
+
+    A candidate must have EXACTLY ONE dep, share `assigned_to` with that predecessor,
+    and carry no permission flag (`needs_shell`/`external_write` — those flags are a
+    real trust boundary AND bind into `decomposition_content_hash`, so folding them
+    would both erase a boundary and complicate the hash story). Dep-less steps are
+    never candidates (they are the parallel-collect shape `fanout_split` mints).
+    Dependents of a folded step are rewired to the absorbing predecessor (deduped,
+    order kept). Runs to fixpoint so a same-person linear chain of any length
+    collapses to one step — which then lets the existing `downgrade_to_sprint`
+    catch shapes its old ≤3-step guard could not see.
+
+    Every invariant `validate_decomposition` proved is preserved by construction
+    (folding only removes nodes and re-points edges at an ancestor — no cycle can
+    appear; assignees are untouched; the terminal's owner is unchanged because a
+    folded terminal's absorber shares its assignee), but callers re-validate the
+    result anyway — cheap proof beats trust, same policy as `fanout_split`.
+    """
+    steps = list(task.steps)
+    folds = 0
+    for _ in range(len(steps)):
+        by_id = {s.step_id: s for s in steps}
+        candidate = None
+        for s in steps:
+            if s.step_type != "work" or len(s.deps) != 1:
+                continue
+            if s.needs_shell or s.external_write:
+                continue
+            pred = by_id[s.deps[0]]
+            if pred.assigned_to == s.assigned_to:
+                candidate = (pred, s)
+                break
+        if candidate is None:
+            break
+        pred, step = candidate
+        merged = _merge_step_into_predecessor(pred, step)
+        rewired: list[TeamStepPlan] = []
+        for s in steps:
+            if s.step_id == step.step_id:
+                continue
+            if s.step_id == pred.step_id:
+                rewired.append(merged)
+                continue
+            if step.step_id in s.deps:
+                new_deps: list[str] = []
+                for d in s.deps:
+                    target = pred.step_id if d == step.step_id else d
+                    if target not in new_deps:
+                        new_deps.append(target)
+                s = s.model_copy(update={"deps": tuple(new_deps)})
+            rewired.append(s)
+        steps = rewired
+        folds += 1
+    if not folds:
+        return task, 0
+    return task.model_copy(update={"steps": tuple(steps)}), folds

@@ -711,8 +711,13 @@ def test_every_router_branch_records_which_layer_decided(monkeypatch, brief, mod
     route = _route_of(slots["task_id"])
     assert (route["mode"], route["source"]) == (mode, source)
     assert route["reason"]
-    assert set(route["signals"]) == {"brief_len", "entities", "distinct_asks",
-                                     "material_transform"}
+    expected = {"brief_len", "entities", "distinct_asks", "material_transform"}
+    if mode == "team":
+        # Team routes carry the accepted plan's declared-boundary distribution too
+        # (v93 graph-engineering) — sprint routes never pay for a decompose, so
+        # they have no plan to count.
+        expected |= {"boundary_counts"}
+    assert set(route["signals"]) == expected
 
 
 def test_a_downgraded_plan_is_logged_as_a_downgrade_not_a_heuristic_win(monkeypatch):
