@@ -665,6 +665,48 @@ Gate trước đây dùng `pytestmark` bị pytest bỏ qua — nay dùng `pytes
 
 **Cổng.** 3991 BE passed (1 skipped, 18 live deselected) · ruff sạch. Không phá test trước.
 
+### P6: ads-pack + accounting-pack + profile-home polish (2026-08-30)
+
+Plan `plans/260830-1311-zalo-business-fleet/`. Hai domain-pack mới, cùng shape push-graph
+kiểu personal-pack (perceive→analyze→compose→deliver, Telegram DM, không Slack/Confluence).
+
+**ads-pack** (`domain-packs/ads-pack/`): đọc Meta Marketing API v25.0 (`fetch_campaign_insights`,
+`urllib` thuần, không thêm dependency) — spend/reach/CTR theo campaign+ngày. Report kind
+`ads-weekly`. Token qua `resolve_service_credentials` (fallback `ADS_META_TOKEN`).
+ZERO writes trong MVP — `write_handlers.ALLOWLIST` rỗng. Lỗi API (HTTP/network/JSON) →
+`MetaInsightsError`, `AdsToolProvider.read` bắt và trả `None` (fail-degrade, render "THIẾU"
+từng số liệu — không bao giờ bịa số); thiếu `ADS_META_AD_ACCOUNT_ID` → raise (lỗi cấu hình,
+fail-loud).
+
+**accounting-pack** (`domain-packs/accounting-pack/`): đọc sổ quỹ (`accounting.ledger`) qua
+Google Sheets (gws CLI, transport giống hr-pack) HOẶC CSV cục bộ (`ACCOUNTING_LEDGER_CSV_PATH`
+— fallback offline vì "mỗi doanh nghiệp mỗi sheet khác nhau"). Report kind `cashflow-weekly`.
+Write DUY NHẤT `append_ledger_row` đi qua `commands.py::COMMANDS` (kiểu `gws_write`, giống
+hr-pack's `append_sheet_row`) — KHÔNG qua `write_handlers.ALLOWLIST` (để rỗng có chủ đích).
+Sheet đích bị PIN theo `ACCOUNTING_SHEET_ID` đã cấu hình, không cho chọn sheet khác. Guarded
+mặc định (Lớp B) — không tự động chạy dù ở autopilot. Cùng posture THIẾU/fail-loud như ads-pack.
+
+Cả hai domain đã được thêm vào `create_agent`'s domain choices
+(`my_crew/agent/ops_catalog.py`) để tạo được qua chat.
+
+**Templates** (`profiles/templates/ads/`, `profiles/templates/accountant/`): mỗi cái
+`template.yaml` + `SOUL.md` tiếng Việt, để wizard tạo agent theo mẫu (`recommended_runtime:
+native`, không schedule mặc định — chưa có token/sheet thật lúc tạo).
+
+**Agent storage** (`my_crew/runtime/agent_paths.py`): thêm `agent_media_dir(id)` (bền, không
+bị quét dọn) và `agent_tmp_dir(id)` (scratch, quét theo tuổi file — `storage_hygiene.py`
+thêm `RETENTION_DAYS["agent_tmp"] = 3` + `_sweep_agent_tmp`, cùng posture per-file-mtime với
+`_sweep_step_transcripts`; xoá file, không xoá thư mục `tmp/`).
+
+**GC dir mồ côi**: `mpm doctor` liệt kê (read-only) các `.data/agents/<id>/` không còn trong
+`registry.yaml`, kèm gợi ý lệnh xoá. `mpm agent purge-data <id> --confirm` xoá thật — luôn cần
+`--confirm` tường minh, KHÔNG BAO GIỜ tự động/autopilot, và TỪ CHỐI xoá id còn trong registry
+(chặn xoá nhầm agent đang hoạt động).
+
+**Cổng.** Full suite xanh (trừ 1 fail biết trước không liên quan — `test_community_loop_core.py`
+thiếu module `deepagents`) · ruff sạch · cold-start smoke 6/6, `_shipped` 97 file (packs +
+templates mới lên đúng wheel).
+
 ## Deferred
 
 - **Live-key integration E2E:** Linear/SMTP/LangSmith with real credentials (skipped M3/M5; scheduled separately).

@@ -62,6 +62,51 @@ attached to that key, so filling that key from the form emits the new children b
 those comment lines, making them read as the key's own children. A test guards the
 shipped `profiles/default/profile.yaml` against this for every replaceable block.
 
+### 3.1a Control-plane API (`my_crew/server/routes_control_plane.py`, phase 2 260830-1311)
+`/api/control-plane/*` — stable HTTP contract cho caller NGOÀI SPA (script, CLI, agent
+khác): `POST /delegate` (giao việc — 2 bước hash-bind mặc định, 1 bước khi
+`confirm: true`), `GET /tasks/{id}` (trạng thái hợp nhất: state/steps/cost/delivery/
+route), `GET /overview` (4 khối: registry/health/queue/approvals, MỖI khối fail-degrade
+độc lập qua `control_plane_views._safe`). Thin wrapper — KHÔNG viết lại hash-bind:
+`/delegate` gọi thẳng `ops_assign_team_task.preview_assign_team_task`/
+`run_assign_team_task`, cùng hàm SPA composer dùng. Mọi response có `"v": 1`
+(contract version). Auth: nằm trong `/api/*`, KHÔNG trong `auth._PUBLIC_PREFIXES` — được
+`AuthMiddleware` bảo vệ y hệt SPA, không cần code auth riêng. `mpm crew assign|status|
+overview` là CÙNG logic in-process (không qua HTTP) — hai bề mặt chỉ khác transport, gọi
+chung `control_plane_views.py`. Chi tiết field + ví dụ curl: `docs/control-plane-api.md`.
+
+### 3.1b Encrypted credential store (`my_crew/config/credential_store.py`, phase 4 260830-1311)
+Credential mã hoá at-rest cho tài khoản dịch vụ ngoài (Zalo OA, Meta, tương lai Gmail
+per-account): `.data/accounts/<account-id>/credentials.enc` — dict JSON (token/secret/
+refresh/meta) mã hoá NGUYÊN BLOB bằng Fernet (`cryptography`, thêm vào dependency core).
+Master key `MY_CREW_CRED_KEY` sinh tự động lần đầu dùng, ghi qua CHÍNH `env_writer
+.merge_env` (whitelist `CREDENTIAL_STORE_WRITABLE_KEYS`) — cùng choke-point mọi secret
+khác trong repo đi qua, không phải đường ghi `.env` mới. File mode 0600; ghi atomic
+(temp + `os.replace`, cùng pattern `env_writer`); rotation giữ đúng 1 bản `.bak.enc`.
+`account-id` validate cùng regex với agent-id (`runtime/agent_paths.py`) — chặn escape
+khỏi jail `.data/accounts/`. `get` sai key/hỏng file → `CredentialDecryptError` rõ ràng,
+KHÔNG bao giờ trả dict rỗng im lặng (rỗng trông giống "chưa cấu hình" → gọi API dịch vụ
+ngoài không có auth, tệ hơn crash).
+
+**Resolver chung** (`config/credential_resolver.py::resolve_service_credentials`):
+nhận bất kỳ dict config nào, thứ tự ưu tiên `block["account"]` (account-store) →
+`block["token_env"]` (tên biến env, indirection cũ từ `config/telegram_token.py`) →
+`None`. Generic — KHÔNG import Zalo hay bất kỳ adapter cụ thể nào; adapter (Zalo P1,
+ads-pack P6) tự gọi resolver thay vì tự đọc `.env`/store. Một reference CÓ MẶT nhưng
+hỏng (account id sai, env var rỗng) raise thay vì rơi xuống nhánh sau — tránh gửi
+request không xác thực bằng token cũ âm thầm.
+
+**Web UI**: `GET/PUT/DELETE /api/connections/accounts[/<id>]` (`server/
+routes_account_store.py`, mount vào `routes_connections.router` — không thêm router
+mới ở `server/app.py`). Giá trị credential KHÔNG BAO GIỜ echo lại trong response hay
+log — chỉ account-id + hành động, cùng posture với `env_writer.read_key_presence`.
+
+**Threat model**: master key vẫn plaintext trong `.env` — NGANG mức hiện tại (mọi
+secret khác trong repo cũng vậy), không tệ hơn. Store này KHÔNG chống lại kẻ tấn công
+đã có quyền đọc cả `.env` VÀ `.data/` trên cùng host (không HSM/KMS). Nó chống: token
+dịch vụ ngoài rơi vào backup `.data/`, log capture, hay `grep -r` toàn repo ở dạng
+plaintext — giá trị chỉ tồn tại trong memory lúc giải mã để dùng.
+
 ### 3.2 Coordinator daemon (`my_crew/runtime/service.py`)
 Vòng lặp mỗi phút: đọc registry, chạy scheduler (báo cáo định kỳ) + **team-tick**
 (điều phối đội). Ghi `coordinator.heartbeat` mỗi vòng (health API + banner đỏ đọc file
@@ -426,6 +471,16 @@ Kiến trúc pluggable: `pm-pack` (mặc định), `hr-pack`, `office-pack`, `ad
 briefing, gws Gmail/Calendar). Mỗi pack = graphs + tools + analyzers + write_handlers +
 allowlist. `my_crew/packs/registry.py` discover pack từ filesystem. Lõi (`my_crew/`)
 không chứa logic domain.
+
+**P6 — ads-pack + accounting-pack**: cùng shape push-graph kiểu personal-pack
+(perceive→analyze→compose→deliver, Telegram DM). `ads-pack`: đọc Meta Marketing API v25.0
+qua `urllib` thuần (không dependency mới) — report `ads-weekly`, ZERO writes
+(`write_handlers.ALLOWLIST` rỗng). `accounting-pack`: đọc sổ quỹ qua gws Sheets HOẶC CSV cục
+bộ (`ACCOUNTING_LEDGER_CSV_PATH`, fallback offline) — report `cashflow-weekly`, một write duy
+nhất `append_ledger_row` đi qua `commands.py::COMMANDS` (kiểu `gws_write`, không phải
+`write_handlers.ALLOWLIST`), sheet đích bị PIN theo cấu hình, guarded mặc định (Lớp B).
+Cả hai: lỗi nguồn ngoài → fail-degrade render sentinel "THIẾU" từng số liệu (không bao giờ
+bịa số); thiếu biến môi trường cấu hình → raise fail-loud.
 
 ### 3.8 Memory provider seam (`my_crew/memory/`, v19)
 `resolve_memory_text(loaded)` là MỘT cửa mọi prompt path lấy memory text (thay 6 call-site
