@@ -677,6 +677,13 @@ tải sau `/office`) · `chart-theme` 173 kB (chỉ Cost/Guardrail) · `agent-de
   ra đòi CAO HƠN đề gốc thì chấm theo đề gốc (`team_task_check_prompt`). Tiêu chí đếm
   được (link, N mục) phải kiểm thật. Lý do trượt lưu vào artifact
   (`self_check_failures`).
+- **Guidance không đóng băng**: khối "CHỈ DẪN CỦA ĐIỀU PHỐI" trong handoff chỉ được
+  vòng rework ĐẦU của attempt tiêu thụ; perceive các vòng sau strip nó đi (giữ lại dòng
+  wake-context `Bối cảnh:` của rework soát chéo — dòng đó là bối cảnh đứng, không phải
+  chỉ dẫn cũ; anchor strip bằng `rfind` để header bị nội dung nhại không cắt nhầm).
+  Trước fix, guidance sống cả attempt: vòng rework 2 bị nhắc sửa đúng thứ vòng 1 vừa
+  sửa → cascade drop/salvage (nguyên nhân top bước chết vòng 6, bench vòng 7 xác nhận
+  0/4→3/4 sống sạch) (`team_task_graph.GUIDANCE_HEADER/_strip_guidance`).
 - **Retry-first**: phán quyết ĐẦU TIÊN cho một step kẹt luôn là retry-with-guidance
   (đo 5/6 reassign-lần-đầu là sai); reassign chỉ từ phán quyết thứ hai, và gate năng
   lực xét cả TIER runtime (deep_agent sandbox không mạng ≠ biết search, dù cờ

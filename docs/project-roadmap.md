@@ -1,12 +1,12 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v93, đã ship tới 0.13.0; v0.14.0 làm dở tại v86–v93). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Lộ trình + trạng thái (as-built v94, đã ship tới 0.13.0; v0.14.0 làm dở tại v86–v94). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
 > Cập nhật: 2026-08-30.
 
 ## Trạng thái tổng
 
 **Production-usable, single-user autonomy-first. Đã ship tới v0.13.0 (PyPI); arc v0.14.0
-(v86–v93) commit trên main, chưa release.** 4088 BE + 406 FE + 44 e2e test, ruff/tsc sạch.
+(v86–v94) commit trên main, chưa release.** 4091 BE + 406 FE + 44 e2e test, ruff/tsc sạch.
 Mọi vòng E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out,
 UAT đối kháng, benchmark sprint-vs-team chấm mù, live e2e opt-in, release gate delta).
 
@@ -53,6 +53,22 @@ code-found fail ngay confidence 1.0, sprint tắt (`deterministic_precheck=False
 1.19× đậu) → routing giữ nguyên, signal tiếp tục đo-không-quyết. Salvage-draft hạ nguồn **verified
 live** (nợ vòng 5): 2 bước chết → nháp salvage → bước cuối giao có dán nhãn 'chưa qua soát'. Fold
 kéo team-lane về 1–3 bước, cost sát sprint (1.19× vs 3–4× các vòng trước). Cổng: 4088 BE passed, ruff sạch.
+
+**v94 (crew reliability — guidance đóng băng, 08-30, v0.14.0 unreleased):** truy gốc bước chết
+vòng 6 bằng taxonomy trên transcript thật → nguyên nhân top: **guidance điều phối đóng băng cả
+attempt** (perceive chạy 1 lần/attempt, vòng rework 2 bị nhắc sửa đúng thứ vòng 1 vừa sửa) —
+fix: chỉ vòng rework đầu tiêu thụ guidance, các vòng sau strip (giữ dòng wake-context của
+rework soát chéo; anchor `rfind` chống header bị nội dung nhại). **Bench vòng 7 (lanes15,
+re-run 4 case chết)**: gate khóa trước ≥2/4 sống sạch → **ĐẬU 3/4** (baseline 0/4; drop 2→0,
+salvage 2→0, failed 3→1; cost team −60% — hết đốt vòng rework vô ích). Judge mù: 2 case lật
+0-3→3-0 sau khi sạch. Giả thuyết chữ ký `multi_deliverable` **HỦY sau khi đo** (0 từ vựng tách
+được nhóm thắng/thua; biến dự báo judge-win là run có sạch hay không). Kèm: phát hiện + sửa bug
+bộ lọc judge (chấm cả bản giao hỏng — nhiễm verdict vòng 6, tally 7-4 cần chú thích); kiểm
+chứng routing thật trên 11 brief: đúng 7/11 = luôn-chọn-sprint, 2 tín hiệu hiện có giá trị
+ròng 0 (khớp-chuỗi sai nghĩa). Routing 0 diff. Cổng: 4091 BE passed, ruff sạch.
+Việc vòng sau: xét lại tín hiệu `'trong tuần'`→nhiều-giai-đoạn (bắt nhầm hạn chót); rõ hóa
+phân rã bước review-and-finalize (tách "chốt bản cuối" khỏi "phán quyết" — case meeting_notes
+stalled vì mơ hồ này); bộ đề ≥30 case cho routing + đo lại tương quan sạch→thắng phi-cơ-học.
 
 **v80–v85 (arc quan sát bước + toàn vẹn nguồn — 08-16→08-18, chưa release):** **v80 step
 observability**: transcript JSONL per-attempt trong jail agent (`runtime/step_recorder.py`),
