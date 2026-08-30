@@ -183,11 +183,11 @@ def listed_entities(text: str, *, prose: bool = False) -> list[str]:
     at the v78 acceptance: only the sprint's own resolver may see the prose branch.
     """
     paren = _longest_enumeration(re.finditer(r"\(([^)\n]+)\)", text or ""))
-    if paren:
-        return paren
     colon = _longest_enumeration(
         re.finditer(r":\s*([^.\n:?!]+)", text or ""), stop_at_attributes=True
     )
+    if paren and not _beaten_by_named_subjects(paren, colon):
+        return paren
     if not prose:
         return colon
     # An ALL-LOWERCASE colon list is the attribute clause, and the subjects are then
@@ -202,6 +202,33 @@ def listed_entities(text: str, *, prose: bool = False) -> list[str]:
     if colon and any(_capitalised_name_word(item) for item in colon):
         return colon
     return _prose_enumeration(text or "") or colon
+
+
+def _beaten_by_named_subjects(paren: list[str], colon: list[str]) -> bool:
+    """Whether a parenthesised list is really the ATTRIBUTE clause, not the subjects.
+
+    Parentheses normally name the subjects, which is why they win by default. But an
+    assistant-rewritten brief can invert that: live A8 (task 6c4be9af0bb0) produced
+    "So sánh 12 sàn ...: Shopee, Lazada, ... (hạng mục: thị trường chính, mô hình kinh
+    doanh, phí bán hàng, ...)" — twelve named subjects after the colon and an eight-item
+    criteria list in the brackets, self-labelled `hạng mục`. Preferring the brackets
+    there returned the eight ATTRIBUTES and discarded every subject, and because this
+    one parse feeds three consumers it broke all of them at once: the router counted 8
+    entities and kept a twelve-subject brief under the >10 team threshold, the sprint
+    would have searched "phí bán hàng" instead of "Shopee", and the team splitter would
+    have fanned out over attributes.
+
+    The discriminator is the one this module already uses on the colon branch and in
+    `_prose_enumeration`: Vietnamese attributes are lowercase, product names are not.
+    So the colon list only takes over when the brackets contain NO capitalised name and
+    the colon side does — both halves matter. Requiring a name on the colon side keeps
+    briefs whose subjects are common nouns ("(facebook, tiktok, shopee): chi phí") on
+    the bracketed list, which is still their only enumeration.
+    """
+    if not colon:
+        return False
+    return (not any(_capitalised_name_word(item) for item in paren)
+            and any(_capitalised_name_word(item) for item in colon))
 
 
 def _longest_enumeration(matches: Any, *, stop_at_attributes: bool = False) -> list[str]:

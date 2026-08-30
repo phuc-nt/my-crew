@@ -122,6 +122,40 @@ def test_a_parenthetical_aside_is_not_mistaken_for_an_entity_list():
     ]
 
 
+def test_an_all_lowercase_parenthesised_clause_does_not_beat_named_subjects():
+    """Live A8 (task 6c4be9af0bb0): the CEO listed 12 marketplaces, the assistant
+    rewrote the brief, and the rewrite put an eight-item ATTRIBUTE clause in
+    parentheses — "(hạng mục: thị trường chính, mô hình kinh doanh, phí bán hàng, ...)".
+
+    Parenthesis-beats-colon then returned those eight attributes and threw away all
+    twelve subjects, which broke three things at once off one parse: the router counted
+    8 entities (under the >10 team threshold, so a twelve-subject brief stayed on the
+    one-person lane), the sprint would have searched for "phí bán hàng" instead of
+    "Shopee", and the team splitter would have fanned out over attributes.
+
+    The discriminator is the one this module already trusts — Vietnamese attributes are
+    lowercase, product names are not — just applied to the parenthesised branch as well
+    as the colon one.
+    """
+    goal = ("So sánh 12 sàn thương mại điện tử: Shopee, Lazada, Tiki, Sendo, "
+            "TikTok Shop, Amazon, eBay, Alibaba, Taobao, Coupang, Rakuten, "
+            "Mercado Libre. Lập bảng so sánh chi tiết (hạng mục: thị trường chính, "
+            "mô hình kinh doanh, phí bán hàng, thế mạnh, điểm yếu, đối tượng bán "
+            "hàng, quy mô người dùng, tình hình hiện tại).")
+    assert listed_entities(goal) == [
+        "Shopee", "Lazada", "Tiki", "Sendo", "TikTok Shop", "Amazon", "eBay",
+        "Alibaba", "Taobao", "Coupang", "Rakuten", "Mercado Libre",
+    ]
+
+
+def test_a_lowercase_parenthesised_list_still_wins_when_nothing_else_names_subjects():
+    """The new rule must not swing too far: parentheses stay the anchor when the colon
+    side has no capitalised name either. Otherwise briefs whose subjects are common
+    nouns lose their only enumeration."""
+    goal = "Khảo sát các kênh bán (facebook, tiktok, shopee): chi phí, hiệu quả"
+    assert listed_entities(goal) == ["facebook", "tiktok", "shopee"]
+
+
 def test_a_prose_enumeration_after_a_preposition_is_recognised_when_asked_for():
     """The v78 C3 brief lists its five tools after "của" — no colon before the names,
     no parentheses. Without the prose branch the resolver returned [], the sprint ran
