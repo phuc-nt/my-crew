@@ -32,6 +32,7 @@ from my_crew.server import (
     routes_company,
     routes_company_docs,
     routes_connections,
+    routes_control_plane,
     routes_observability,
     routes_office_artifacts,
     routes_office_assign,
@@ -118,6 +119,10 @@ def create_app() -> FastAPI:
     # v16: workroom listing + chat-in-room (3 intent) + coordinator health.
     app.include_router(routes_office_room_chat.router)
     app.include_router(routes_office_room_chat.health_router)
+    # Phase 2 (260830-1311-zalo-business-fleet): control-plane API — a stable HTTP
+    # contract for callers OUTSIDE the SPA (delegate_work + unified task status +
+    # fleet overview). Thin wrapper over the SAME assign/store APIs the SPA uses.
+    app.include_router(routes_control_plane.router)
     # v17: read-only step-artifact viewer (the Kết quả column).
     app.include_router(routes_office_artifacts.router)
     # v6 M14b: CEO chat-ops web endpoint (same engine as the Telegram DM path).
