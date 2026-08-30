@@ -148,6 +148,27 @@ def test_an_all_lowercase_parenthesised_clause_does_not_beat_named_subjects():
     ]
 
 
+def test_an_opening_bracket_ends_a_colon_enumeration_item():
+    """Same live A8 brief, but as the model actually wrote it: no full stop between the
+    last name and the bracket that follows it.
+
+    The colon branch stops an item at `.`, `:`, `?`, `!` or a newline — a `(` used to
+    continue it, so the twelfth entity came back as "Nhà Thuốc Long Châu (hạng mục".
+    The routing count was still 12, which is why the A8 regression test above passes
+    either way; the damage is downstream, where the STRINGS are used rather than
+    counted. `_split_entities` puts entity names in a sub-step's title and acceptance
+    criteria, so a worker would have been told to research a company whose name has a
+    stray bracket clause welded on, and the sprint would have searched for it verbatim.
+
+    An opening bracket always starts a separate clause, so it never continues an item.
+    """
+    goal = ("Khảo sát 12 sàn thương mại điện tử lớn nhất Việt Nam: Shopee, Lazada, "
+            "Tiki, Sendo, TikTok Shop, Chợ Tốt, Thế Giới Di Động, Điện Máy Xanh, "
+            "FPT Shop, Bách Hoá Xanh, Con Cưng, Nhà Thuốc Long Châu (hạng mục: "
+            "thị trường chính, mô hình kinh doanh, phí bán hàng, thế mạnh)")
+    assert listed_entities(goal)[-1] == "Nhà Thuốc Long Châu"
+
+
 def test_a_lowercase_parenthesised_list_still_wins_when_nothing_else_names_subjects():
     """The new rule must not swing too far: parentheses stay the anchor when the colon
     side has no capitalised name either. Otherwise briefs whose subjects are common

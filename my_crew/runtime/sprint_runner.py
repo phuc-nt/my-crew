@@ -183,8 +183,10 @@ def listed_entities(text: str, *, prose: bool = False) -> list[str]:
     at the v78 acceptance: only the sprint's own resolver may see the prose branch.
     """
     paren = _longest_enumeration(re.finditer(r"\(([^)\n]+)\)", text or ""))
+    # `(` ends an item: a bracket always opens a separate clause, so without it the last
+    # name absorbs the clause that follows ("Nhà Thuốc Long Châu (hạng mục").
     colon = _longest_enumeration(
-        re.finditer(r":\s*([^.\n:?!]+)", text or ""), stop_at_attributes=True
+        re.finditer(r":\s*([^.\n:?!(]+)", text or ""), stop_at_attributes=True
     )
     if paren and not _beaten_by_named_subjects(paren, colon):
         return paren
