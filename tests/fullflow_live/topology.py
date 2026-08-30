@@ -284,6 +284,54 @@ def boot(home: Path, *, api_key: str, env_overrides: dict[str, str] | None = Non
     )
 
 
+#: Task-level states an UNATTENDED fleet will not leave on its own.
+#:
+#: `waiting_clarify`-equivalents belong here: measured live, an ordinary brief can run,
+#: spend real money, then park asking the CEO a question. Nobody answers in a test, so
+#: "settled" (finished OR parked on a human) is the only honest end condition.
+SETTLED_TASK_STATES = frozenset(
+    {"done", "done_with_gaps", "delivered", "cancelled", "failed", "blocked",
+     "needs_decision"}
+)
+#: The same idea one level down — a step parked on a human holds its task at `open`.
+SETTLED_STEP_STATES = frozenset({"waiting_clarify", "needs_decision", "blocked"})
+
+
+def audit_path(home: Path) -> Path:
+    """The audit trail inside a fixture home.
+
+    Built from the home rather than via `team_tasks_root()`: that helper resolves a
+    module-level DATA_DIR bound at import time in THIS process, which points at the
+    developer's real repo, not at the child's tmp home.
+    """
+    return home / ".data" / "audit" / "audit.jsonl"
+
+
+def task_status(server: ServeProcess, task_id: str) -> dict[str, Any]:
+    code, body = server.get(f"/api/control-plane/tasks/{task_id}", timeout=30)
+    if code != 200:
+        raise AssertionError(f"task status {task_id} returned {code}: {body!r}")
+    return body
+
+
+def is_settled(status: dict[str, Any]) -> bool:
+    state = (status.get("state") or {}).get("status")
+    if state in SETTLED_TASK_STATES:
+        return True
+    steps = status.get("steps") or []
+    return bool(steps) and all(s.get("status") in SETTLED_STEP_STATES for s in steps)
+
+
+def wait_until_settled(server: ServeProcess, task_id: str, *,
+                       timeout_s: float = 300.0) -> dict[str, Any]:
+    """Poll a task until it finishes or parks on a human. Returns the final status."""
+    return poll_until(
+        lambda: (lambda st: st if is_settled(st) else None)(task_status(server, task_id)),
+        timeout_s=timeout_s, interval_s=3.0,
+        what=f"task {task_id} to settle (finished, or parked awaiting the CEO)",
+    )
+
+
 def poll_until(predicate, *, timeout_s: float, interval_s: float = 1.0, what: str = "condition"):
     """Poll until `predicate()` returns something truthy; return it.
 
