@@ -46,6 +46,27 @@ def test_ordinary_run_to_run_noise_stays_silent(cost, wall, calls):
     assert bench.compare_journey(base, cand) == [], (cost, wall, calls)
 
 
+def test_the_wall_noise_actually_measured_between_two_identical_runs_stays_silent():
+    """Số ĐO THẬT, không phải phỏng đoán: hai lượt chạy cùng bản 0.15.0 cho journey j2
+    lệch 87.8s -> 33.4s (-62%) thuần do tải phía nhà cung cấp model.
+
+    Ngưỡng wall ban đầu đặt 0.60 bằng cảm tính nên kêu ngay ở phép đo thật ĐẦU TIÊN —
+    một dòng báo động giả sinh ra từ chính lượt cắt baseline. Ghim con số đã đo ở đây để
+    lần sau ai siết ngưỡng lại thì bài này chặn, kèm bằng chứng vì sao nó rộng thế.
+    """
+    base = _report(_metric(wall=87.8))
+    cand = _report(_metric(wall=33.4))
+    assert bench.compare_journey(base, cand) == []
+
+
+def test_a_journey_that_takes_more_than_twice_as_long_is_still_reported():
+    """Vế còn lại của việc nới ngưỡng wall: nới để bỏ qua nhiễu, không phải để bỏ qua
+    mọi thứ. Chậm gấp hơn đôi vẫn phải kêu."""
+    base = _report(_metric(wall=100.0))
+    cand = _report(_metric(wall=250.0))
+    assert "wall_s" in {r["field"] for r in bench.compare_journey(base, cand)}
+
+
 def test_two_near_zero_costs_do_not_report_a_giant_percentage():
     """$0.0001 so với $0.0002 là "gấp đôi" nhưng chỉ nói lên rằng cả hai đều ~0. Không
     có sàn thì mọi journey rẻ đều báo động giả vĩnh viễn."""

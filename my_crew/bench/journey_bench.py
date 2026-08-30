@@ -34,7 +34,12 @@ FORMAT_VERSION = 1
 #: TRƯỚC khi nó đủ lớn để lộ ra ở hoá đơn.
 TOLERANCE = {
     "cost_usd": 0.50,   # +50%: đắt gấp rưỡi là hồi quy, dao động 10-20% là chuyện thường
-    "wall_s": 0.60,     # thời gian nhiễu nhất — phụ thuộc tải phía nhà cung cấp model
+    # Thời gian nhiễu nhất, và ĐO ĐƯỢC là nhiễu tới đâu: hai lượt chạy CÙNG một bản
+    # 0.15.0 cho j2 lệch -62% (87.8s -> 33.4s) thuần do tải phía nhà cung cấp model.
+    # Ngưỡng 0.60 ban đầu đặt bằng phỏng đoán nên đã kêu ngay ở phép đo thật đầu tiên.
+    # 1.20 để một dòng wall_s nghĩa là "chậm gấp đôi", thứ đáng đọc — chứ không phải
+    # "hôm nay provider bận", thứ dạy người ta bỏ qua cả bảng.
+    "wall_s": 1.20,
     "llm_calls": 0.35,
 }
 
