@@ -660,8 +660,8 @@ record vào lane `unknown`. Thêm `cost_usd` + `wall_clock_seconds` per-lane đ�
   Mọi mode khác chạy một lượt nên nhiễu model bị làm tròn thành "kết quả".
 - `journey_bench.py` — so hai journey baseline: trục rời rạc bằng `!=`, trục liên tục
   theo ngưỡng tương đối (journey chạy model thật, so bằng `!=` sẽ đỏ mọi lượt).
-- `run-sprint-benchmark.py` — giao diện thống nhất: `routing` / `release` / `tasks` /
-  `judge` / `reliability` / `journey`.
+- `run-sprint-benchmark.py` — giao diện thống nhất, 7 mode: `pipeline` / `routing` /
+  `release` / `tasks` / `reliability` / `journey` / `judge`.
 
 **Live fullflow suite** (`tests/fullflow_live/`, 54 case): end-to-end vs model thật.
 **Opt-in**: `pyproject.toml::addopts = ["-m", "not live"]` → mặc định skip;
