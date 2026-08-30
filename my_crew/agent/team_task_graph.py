@@ -273,6 +273,7 @@ def default_team_task_deps(
     telemetry=None,
     allow_split: bool = False,
     guidance: str = "",
+    deterministic_precheck: bool = True,
 ) -> TeamTaskDeps:
     """Wire the real collaborators. Lazy imports keep graph-build network-free.
 
@@ -423,11 +424,34 @@ def default_team_task_deps(
             # grade against, so self-check trivially passes rather than inventing a
             # criteria-less judgment call.
             return True, [], 1.0
+        # Deterministic layer first (graph-engineering: not every decision belongs
+        # to an LLM). A machine-checkable miss — a named entity absent, an explicit
+        # item count unmet — fails HERE, feeding the existing rework loop without
+        # spending a checker call; a clean measurement becomes a FACT line the
+        # checker starts from. Both sides fail open inside the module: unparseable
+        # criteria contribute nothing and this call grades exactly as before.
+        # `deterministic_precheck=False` (sprint steps): the sprint pipeline already
+        # runs its own, SMARTER code coverage inside `work` (`coverage_gaps` knows a
+        # source-refused entity is not a closable gap; this layer does not), so a
+        # second dumber check here would fail honest sprint drafts forever —
+        # measured: broken-source fullflow delivered the missing-note alone.
+        code_facts = ""
+        if deterministic_precheck:
+            from my_crew.runtime.deterministic_step_check import (
+                checked_facts_line,
+                machine_checkable_gaps,
+            )
+
+            code_gaps = machine_checkable_gaps(criteria, result_text)
+            if code_gaps:
+                return False, code_gaps, 1.0
+            code_facts = checked_facts_line(criteria, result_text)
         try:
             result = _llm().complete(
                 build_self_check_messages(
                     result_text=result_text, acceptance=criteria, persona=context.persona,
                     handoff=handoff,
+                    code_facts=code_facts,
                 ),
                 role="review",
             )
@@ -1047,6 +1071,7 @@ def build_team_task_graph(
     memory_store=None,
     allow_split: bool = False,
     guidance: str = "",
+    deterministic_precheck: bool = True,
 ) -> CompiledStateGraph:
     """Build + compile the team-task step graph. `deps` defaults to real wiring.
 
@@ -1075,6 +1100,7 @@ def build_team_task_graph(
             task_id=task_id, step_seq=step_seq, step_deps=step_deps, search_hook=search_hook,
             self_id=self_id, work_override=work_override, telemetry=telemetry,
             allow_split=allow_split, guidance=guidance,
+            deterministic_precheck=deterministic_precheck,
         )
     perceive, work, await_clarify, self_check, rework, recover, deliver = \
         _make_team_task_nodes(deps, interrupt_on_clarify=checkpointer is not None)

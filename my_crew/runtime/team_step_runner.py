@@ -617,6 +617,11 @@ def _run_graph(
     if _is_sprint:
         from my_crew.runtime.sprint_runner import build_sprint_work, effort_of_task
 
+        # The sprint pipeline runs its own code-side coverage inside `work`
+        # (`coverage_gaps`, which knows a source-refused entity is not a closable
+        # gap). The graph's deterministic self-check pre-check does not — running
+        # both would fail honest sprint drafts on gaps the sources already refused.
+        _extra["deterministic_precheck"] = False
         _extra["work_override"] = build_sprint_work(
             loaded=loaded, settings=settings, context=context,
             acceptance=step.acceptance, telemetry=telemetry,

@@ -127,6 +127,7 @@ def parse_check_verdict(raw_json: str) -> CheckVerdict:
 
 def build_self_check_messages(
     *, result_text: str, acceptance: str, persona: str = "", handoff: str = "",
+    code_facts: str = "",
 ) -> list[dict[str, str]]:
     """Messages for the self_check node's structured LLM call.
 
@@ -149,6 +150,12 @@ def build_self_check_messages(
     structural boundary between "what was provided" and "what was produced" — and so a
     hostile phrase carried in upstream content cannot borrow the result's framing.
     Blank (a first step, no deps) ⇒ omitted entirely and grading is output-only.
+
+    `code_facts` is a measurement line from `deterministic_step_check` ("code đã
+    kiểm: đủ N thực thể..."). It is CODE-authored — the one input here no model or
+    CEO wrote — so it enters plain, unwrapped: wrapping it in the untrusted-content
+    delimiters would tell the grader to distrust the only line that is actually
+    ground truth. Blank ⇒ omitted and the prompt is byte-identical to before.
     """
     wrapped_result = format_internal_content(result_text, label="kết quả cần thẩm định")
     wrapped_acceptance = format_internal_content(acceptance, label="tiêu chí chấp nhận")
@@ -157,7 +164,8 @@ def build_self_check_messages(
     # that made it necessary; one literal so the two graders cannot drift apart).
     today = grader_today_line()
     user = "\n\n".join(
-        p for p in (today, wrapped_acceptance, wrapped_handoff, wrapped_result) if p
+        p for p in (today, code_facts.strip(), wrapped_acceptance, wrapped_handoff,
+                    wrapped_result) if p
     )
     return [
         {"role": "system", "content": prepend_persona(_CHECK_SYSTEM, persona)},

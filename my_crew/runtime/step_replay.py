@@ -183,6 +183,9 @@ def _run_tier(
     if str(getattr(step, "step_type", "work") or "work") == "sprint":
         from my_crew.runtime.sprint_runner import build_sprint_work
 
+        # Same gate as the live runner: sprint work already runs its own code-side
+        # coverage, so the graph's deterministic self-check pre-check stays off.
+        _extra["deterministic_precheck"] = False
         _extra["work_override"] = build_sprint_work(
             loaded=loaded, settings=settings, context=context,
             acceptance=str(getattr(step, "acceptance", "") or ""), telemetry=None,
