@@ -188,6 +188,29 @@ dead-end ở `runtime/team_tick_collaborators.py`; cột `route_json` ở `team_
 | Dead-end | `_is_sprint_dead_end` | Sprint bế tắc (`gave_up`) → gợi ý CEO giao lại `team:`; `_mark_route_dead_end` ghi đè `source` nhưng giữ phán quyết gốc dưới `previous` |
 | Routing log | cột `route_json` | `mode`/`source`/`reason`/`signals`/`effort` — chỉ số, không chứa nguyên văn đề |
 
+**v93 — nhãn ranh giới + fold cấu trúc (graph-engineering cho decompose)**: mỗi bước
+trong plan team giờ phải KHAI vì sao nó xứng là một node riêng — field `boundary` trên
+`TeamStepPlan` (`agent/task_decomposition.py`), 5 loại `BOUNDARY_KINDS`: `dependency` /
+`concurrency` / `specialization` / `permission` / `human_gate`; rỗng cho mọi plan cũ.
+Nhãn CHỈ quan sát: nằm ngoài content hash, không nhánh routing nào đọc nó; phân bố nhãn
+ghi vào `route_json.signals.boundary_counts` (`boundary_label_counts`). Lưới cưỡng chế
+thật là `fold_unjustified_steps` — chạy SAU fanout trong `ops_assign_team_task`, gộp
+bước mà cấu trúc DAG không biện minh nổi: đúng-1-dep + cùng người + cùng cờ quyền =
+việc của một người bị chẻ qua hai cold-start (hình dạng chain-death đo ở bench
+lanes8/12). Fold cố ý BỎ QUA nhãn khai — justification suy từ cấu trúc thuần, nên model
+bịa nhãn để giữ bước không được gì; fold lỗi thì fail-open giữ nguyên plan. Đường
+sprint 0 diff.
+
+**v93 — tiền kiểm định lượng trước LLM checker**: `_run_self_check` chạy
+`machine_checkable_gaps` (`runtime/deterministic_step_check.py`) TRƯỚC khi gọi model
+chấm: code đo phủ thực thể nêu đích danh trong acceptance và đếm số mục khi acceptance
+đòi "liệt kê N …". Gap code tìm ra ⇒ fail ngay với confidence 1.0, không tốn lượt gọi
+model; đo sạch ⇒ vào prompt checker thành dòng dữ kiện "CODE ĐÃ KIỂM"; không đo được gì
+⇒ fail-open, prompt byte-identical thời trước. Bước sprint TẮT tầng này
+(`deterministic_precheck=False`): pipeline sprint đã có `coverage_gaps` riêng, tầng đó
+biết "nguồn từ chối cung cấp" không phải gap đóng được — để tầng code chung fail bước
+đó là sai.
+
 **Effort tier** — `sprint_intake` chấm độ khó BẢN CHẤT của việc, ngay trong lượt gọi intake
 đã có sẵn nên KHÔNG tốn thêm lượt gọi model nào: "low" (rõ ràng, ít bước suy luận, dữ liệu
 đủ trong đề), "medium" (mặc định), "high" (tổng hợp nhiều nguồn trái chiều, phán đoán
@@ -335,6 +358,9 @@ Ba tỉ lệ lỗi tính TRÊN `routed_tasks` (chỉ task CÓ bản ghi định 
 — task cũ trước v77 vào lane `unknown`, không đoán bừa: `dead_end` (sprint nhận việc rồi bế tắc),
 `downgrade` (heuristic gọi team quá tay, lưới an toàn hạ xuống sprint), `upgrade` (một dead-end đã
 được trả tiền lần hai để chạy lại bằng đội). Thêm `cost_usd` + `wall_clock_seconds` per-lane để so bản.
+v93: route team ghi thêm `signals.boundary_counts` — phân bố nhãn ranh giới của plan SAU fold
+(xem §3.5b) — nguyên liệu để route_stats trả lời "các bước được tách ra vì lý do gì" khi đối
+chiếu giữa các vòng bench.
 
 **Benchmark v2** (`my_crew/bench/`): bốn mode đo công việc sprint/team:
 1. **routing** — offline, 0 model call. Chạy quyết định router trên bộ đề, diff hai bản (`routing_bench.py`).

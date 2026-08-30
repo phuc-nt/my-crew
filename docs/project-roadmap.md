@@ -1,12 +1,12 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v92, đã ship tới 0.13.0; v0.14.0 làm dở tại v86–v92). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-08-26.
+> Lộ trình + trạng thái (as-built v93, đã ship tới 0.13.0; v0.14.0 làm dở tại v86–v93). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Cập nhật: 2026-08-30.
 
 ## Trạng thái tổng
 
 **Production-usable, single-user autonomy-first. Đã ship tới v0.13.0 (PyPI); arc v0.14.0
-(v86–v92) commit trên main, chưa release.** 3991 BE + 406 FE + 44 e2e test, ruff/tsc sạch.
+(v86–v93) commit trên main, chưa release.** 4088 BE + 406 FE + 44 e2e test, ruff/tsc sạch.
 Mọi vòng E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out,
 UAT đối kháng, benchmark sprint-vs-team chấm mù, live e2e opt-in, release gate delta).
 
@@ -40,6 +40,19 @@ model thật **opt-in** (`pyproject.toml::addopts = ["-m", "not live"]`), assert
 shape ổn định qua model nondeterminism. Cũng tìm ra 3 lỗi thực tế (tiền tố ép chế độ bị drop,
 `_parse_json_object` nhặt thêm sau dấu `}`, đếm dãy inline nhận đánh số DANH TỪ). Cổng: 3991 BE passed,
 1 skipped, 18 live deselected.
+
+**v93 (graph-engineering crew lane — 08-30, v0.14.0 unreleased):** decompose theo triết lý
+graph-engineering "mỗi bước phải có ranh giới thật": (1) **nhãn ranh giới** — `TeamStepPlan.boundary`
+(5 loại `BOUNDARY_KINDS`), observational-only, phân bố ghi `route_json.signals.boundary_counts`;
+(2) **fold cấu trúc** — `fold_unjustified_steps` chạy sau fanout, gộp bước đúng-1-dep + cùng người
++ cùng quyền (bỏ qua nhãn khai — chống model bịa nhãn giữ bước), fail-open; (3) **tiền kiểm định
+lượng** — `deterministic_step_check` đo phủ thực thể + đếm mục bằng CODE trước LLM checker, gap
+code-found fail ngay confidence 1.0, sprint tắt (`deterministic_precheck=False`, đã có
+`coverage_gaps` riêng). **Bench vòng 6 (lanes14, 11 cặp judged)**: gate trao quyền
+`material_transform` **TRƯỢT** (team judge-win 3/7 < 2/3; no-salvage completion 64% < 80%; chỉ cost
+1.19× đậu) → routing giữ nguyên, signal tiếp tục đo-không-quyết. Salvage-draft hạ nguồn **verified
+live** (nợ vòng 5): 2 bước chết → nháp salvage → bước cuối giao có dán nhãn 'chưa qua soát'. Fold
+kéo team-lane về 1–3 bước, cost sát sprint (1.19× vs 3–4× các vòng trước). Cổng: 4088 BE passed, ruff sạch.
 
 **v80–v85 (arc quan sát bước + toàn vẹn nguồn — 08-16→08-18, chưa release):** **v80 step
 observability**: transcript JSONL per-attempt trong jail agent (`runtime/step_recorder.py`),
