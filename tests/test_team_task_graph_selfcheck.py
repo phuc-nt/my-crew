@@ -18,7 +18,11 @@ Load-bearing:
 
 from __future__ import annotations
 
-from my_crew.agent.team_task_graph import TeamTaskDeps, build_team_task_graph
+from my_crew.agent.team_task_graph import (
+    GUIDANCE_HEADER,
+    TeamTaskDeps,
+    build_team_task_graph,
+)
 
 
 def _make_deps(*, verdicts: list[tuple[bool, list[str], float]]):
@@ -165,3 +169,45 @@ def test_a_blank_rework_never_beats_a_real_draft():
     assert result["self_check_failed"] is True
     assert deliver_args["v"][0] == "bảng giá có nguồn"
     assert deliver_args["v"][2] is True
+
+
+def test_coordinator_guidance_is_consumed_by_the_first_rework_only():
+    """The coordinator's "last attempt was rejected" note is advice about the draft
+    the PREVIOUS attempt delivered. The first rework acts on it; by the second round
+    that draft no longer exists, so replaying the note tells the model to re-fix what
+    it just fixed — directly contradicting the fresh `check_failures` of round 2.
+
+    Measured on the vòng-6 bench: the note was byte-identical across both rework rounds
+    of every multi-rework attempt while the failures had moved on. `perceive` runs once
+    per attempt and the loop is `rework -> self_check -> rework`, so the handoff (which
+    carries the note) never gets recomputed — the strip has to happen in `rework`.
+
+    The upstream deps' content in the same block must SURVIVE the strip: it is standing
+    context, not a one-shot instruction.
+    """
+    handoff_from_perceive = (
+        "KẾT QUẢ BƯỚC TRƯỚC:\nbảng giá 3 công cụ\n\n"
+        f"{GUIDANCE_HEADER}\nLần trước thiếu mục B, hãy thêm."
+    )
+    handoffs: list[str] = []
+
+    def run_rework(title, prior_output, failures, handoff=""):
+        handoffs.append(handoff)
+        return f"{prior_output}+fix{len(handoffs)}", 0.02
+
+    deps = TeamTaskDeps(
+        read_handoff=lambda: handoff_from_perceive,
+        run_work=lambda title, handoff, hook: ("draft v0", 0.01),
+        run_self_check=lambda text, acceptance: (False, ["vẫn thiếu A"], 0.3),
+        run_rework=run_rework,
+        deliver_step=lambda text, version, failed: (True, f"[done] {text}"),
+    )
+    graph = build_team_task_graph(deps=deps)
+    graph.invoke({"step_title": "draft", "acceptance": "phải có phần A"})
+
+    assert len(handoffs) == 2, "budget is 2 reworks"
+    assert "Lần trước thiếu mục B" in handoffs[0], "first rework still acts on it"
+    assert "Lần trước thiếu mục B" not in handoffs[1], (
+        "second rework must not replay guidance the first one already consumed"
+    )
+    assert "bảng giá 3 công cụ" in handoffs[1], "upstream deps' content is not one-shot"

@@ -111,6 +111,13 @@ AskColleagueHook = Callable[[str, str], tuple[str, float]]
 #: `self_check_failed=True` (a stuck self-check must never loop forever, R5).
 MAX_REWORK = 2
 
+#: Header of the coordinator's "last attempt was rejected" note inside the handoff
+#: block. It is a one-shot instruction, not standing context: it describes the draft a
+#: PREVIOUS attempt delivered, so once a rework round has acted on it the draft it
+#: talks about no longer exists. Later rounds must run on the CURRENT `check_failures`
+#: alone — see `rework`'s guidance strip.
+GUIDANCE_HEADER = "CHỈ DẪN CỦA ĐIỀU PHỐI (lần trước chưa đạt):"
+
 #: Hard ceiling on consults per step ATTEMPT (M33, `TeamStepState.consult_count`,
 #: reset per attempt like `rework_count`) — matches `team_task_consult.MAX_CONSULTS`
 #: (duplicated as a plain int, not imported, so this module never needs a hard import
@@ -357,7 +364,7 @@ def default_team_task_deps(
         # it reads as the most recent instruction, and labelled, because an unlabelled
         # paste would be indistinguishable from the upstream steps' content.
         if guidance:
-            note = f"CHỈ DẪN CỦA ĐIỀU PHỐI (lần trước chưa đạt):\n{guidance}"
+            note = f"{GUIDANCE_HEADER}\n{guidance}"
             handoff = f"{handoff}\n\n{note}" if handoff else note
         return handoff
 
@@ -599,6 +606,16 @@ def default_team_task_deps(
         ask_ceo=ask_ceo_hook, take_split=take_split_hook,
         set_attempt_id=set_attempt_id_hook,
     )
+
+
+def _strip_guidance(handoff: str) -> str:
+    """Drop the coordinator's rejection note from a handoff block, keeping the rest.
+
+    `_read_handoff` appends the note LAST, so everything from the header onward is the
+    note. A handoff without one comes back unchanged.
+    """
+    idx = handoff.find(GUIDANCE_HEADER)
+    return handoff if idx < 0 else handoff[:idx].rstrip()
 
 
 def _read_deps_handoff(data_dir: Any, task_id: str, step_deps: tuple[str, ...]) -> str:
@@ -914,9 +931,17 @@ def _make_team_task_nodes(deps: TeamTaskDeps, *, interrupt_on_clarify: bool = Fa
         # The fix needs the same input the grader judged against. Told only "you made
         # these numbers up" without being shown that its source was empty, a rework
         # call just invents a fresh set — the failure repeats with new figures.
+        handoff = state.get("handoff_context", "")
+        # Round 2+ drops the coordinator's note: the first round already fixed the
+        # draft it describes, so replaying it orders the model to re-fix what it just
+        # fixed, contradicting the fresh failures. Measured on the vòng-6 bench: the
+        # note was byte-identical across both rounds of every multi-rework attempt
+        # while `check_failures` had moved on.
+        if new_count > 1:
+            handoff = _strip_guidance(handoff)
         try:
             result_text, cost = deps.run_rework(
-                title, prior_output, failures, state.get("handoff_context", "")
+                title, prior_output, failures, handoff
             )
         except TypeError:
             result_text, cost = deps.run_rework(title, prior_output, failures)
