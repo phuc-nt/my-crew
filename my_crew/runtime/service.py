@@ -18,6 +18,7 @@ one worker's runtime rather than the sum. The cap still bounds how many run at o
 from __future__ import annotations
 
 import logging
+import os
 import subprocess  # noqa: S404 — spawning the worker is the service's whole job
 import sys
 import time
@@ -508,6 +509,29 @@ def _write_coordinator_heartbeat() -> None:
         logger.warning("coordinator heartbeat write failed", exc_info=True)
 
 
+def resolve_tick_interval(raw: str | None) -> int:
+    """Tick interval in seconds, from `MY_CREW_TICK_INTERVAL_S`.
+
+    An operations knob: the default paces a real deployment, but a full-flow test
+    driving a real `serve` process cannot wait a minute per tick. Anything the env
+    cannot be read as a positive int falls back to the default rather than failing
+    boot — a typo in a unit file must not leave the CEO without a dispatch engine.
+    """
+    if raw is None:
+        return _TICK_INTERVAL_S
+    try:
+        seconds = int(raw)
+    except ValueError:
+        logger.warning("MY_CREW_TICK_INTERVAL_S=%r is not an integer; using %ds",
+                       raw, _TICK_INTERVAL_S)
+        return _TICK_INTERVAL_S
+    if seconds < 1:
+        logger.warning("MY_CREW_TICK_INTERVAL_S=%r is below 1s; using %ds",
+                       raw, _TICK_INTERVAL_S)
+        return _TICK_INTERVAL_S
+    return seconds
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     args = argv if argv is not None else sys.argv[1:]
@@ -519,7 +543,8 @@ def main(argv: list[str] | None = None) -> int:
         outcomes = service.run_tick(datetime.now())  # noqa: DTZ005 — local, matches cron intent
         logger.info("one tick: %d worker(s) spawned", len(outcomes))
         return 0
-    service.run_forever()  # pragma: no cover — runs until killed
+    interval = resolve_tick_interval(os.environ.get("MY_CREW_TICK_INTERVAL_S"))
+    service.run_forever(interval=interval)  # pragma: no cover — runs until killed
     return 0
 
 

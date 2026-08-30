@@ -78,6 +78,58 @@ requires_search = pytest.mark.skipif(
 )
 
 
+#: Ceiling for a topology journey. Higher than the in-process cases: a journey drives a
+#: whole brief through a real coordinator (plan → steps → review → deliver), so it is
+#: several model calls where a unit-shaped live case is one or two. Still far below a
+#: runaway loop, which is what the guard is actually for.
+MAX_COST_PER_JOURNEY_USD = 0.30
+
+
+@pytest.fixture
+def live_api_key() -> str:
+    """The real key, for handing to a child process's environment.
+
+    Read through the same settings object the gate uses, so a case can never run
+    against a key the gate did not see.
+    """
+    key = getattr(_ENV_SETTINGS, "openrouter_api_key", "") or ""
+    if not key:  # pragma: no cover — the collection gate already skips these cases
+        pytest.skip("OPENROUTER_API_KEY not configured")
+    return key
+
+
+class JourneyBudget:
+    """Accumulates what a topology case spent and enforces the ceiling in teardown.
+
+    Separate from `LiveRun` on purpose: `LiveRun` reads an in-process harness, while a
+    topology case's spend lives in a store owned by another process and is only visible
+    through HTTP. Same discipline, different source of truth.
+    """
+
+    def __init__(self, name: str):
+        self.name = name
+        self.started = time.monotonic()
+        self.costs: list[float] = []
+
+    def note_cost(self, usd: float) -> None:
+        self.costs.append(float(usd or 0.0))
+
+    @property
+    def total(self) -> float:
+        return round(sum(self.costs), 6)
+
+
+@pytest.fixture
+def journey_budget(request):
+    budget = JourneyBudget(request.node.name)
+    yield budget
+    wall = round(time.monotonic() - budget.started, 1)
+    print(f"\n[journey {budget.name}] cost_usd={budget.total} wall_s={wall}")
+    assert budget.total <= MAX_COST_PER_JOURNEY_USD, (
+        f"journey spent ${budget.total} > ${MAX_COST_PER_JOURNEY_USD} ceiling"
+    )
+
+
 class LiveRun:
     """One live scenario: the harness plus the numbers its run left in the store."""
 
