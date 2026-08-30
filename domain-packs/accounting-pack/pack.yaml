@@ -1,0 +1,13 @@
+# accounting-pack manifest (P6 260830-1311-zalo-business-fleet) — cashflow worker.
+#
+# MVP source: Google Sheets via the existing `gws` CLI context (same transport hr-pack's
+# Sheet read uses) OR a local CSV file (offline/no-Google fallback) — see tools.py for the
+# normalized ledger schema both sources map onto. One report kind (`cashflow-weekly`).
+# One guarded write: `append_ledger_row`, a `gws_write`-typed chat command (see
+# commands.py) — NOT an mcp_tool ALLOWLIST entry (write_handlers.py::ALLOWLIST stays
+# empty; see that file's docstring for why).
+id: accounting
+name: Accounting
+report_kinds:
+  - cashflow-weekly
+servers: []

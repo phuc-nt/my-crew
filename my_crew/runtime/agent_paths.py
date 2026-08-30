@@ -42,6 +42,27 @@ def agent_data_dir(agent_id: str) -> Path:
     return DATA_DIR / "agents" / _validate_agent_id(agent_id)
 
 
+def agent_media_dir(agent_id: str) -> Path:
+    """Durable per-agent media dir: `.data/agents/<id>/media/`.
+
+    For files a worker keeps across runs (e.g. generated report attachments) — unlike
+    `agent_tmp_dir`, nothing under here is swept by `storage_hygiene`; a pack that writes
+    here owns its own retention. Created on first use by the caller, not here (mirrors
+    `agent_data_dir`, which also only resolves the path).
+    """
+    return agent_data_dir(agent_id) / "media"
+
+
+def agent_tmp_dir(agent_id: str) -> Path:
+    """Scratch per-agent dir: `.data/agents/<id>/tmp/`.
+
+    For short-lived working files (e.g. a download mid-processing). Swept on an age
+    basis by `storage_hygiene._sweep_agent_tmp` — anything placed here is expected to be
+    disposable; do not rely on a file surviving past `RETENTION_DAYS["agent_tmp"]`.
+    """
+    return agent_data_dir(agent_id) / "tmp"
+
+
 def agent_thread_id(agent_id: str, kind: str, audience: str) -> str:
     """Checkpoint thread id for one (agent, report-kind, audience).
 

@@ -12,7 +12,12 @@ import pytest
 from my_crew.actions.action_gateway import ActionGateway
 from my_crew.config.config_builders import build_settings_from_dict
 from my_crew.llm.budget_tracker import BudgetExceededError, BudgetTracker
-from my_crew.runtime.agent_paths import agent_data_dir, agent_thread_id
+from my_crew.runtime.agent_paths import (
+    agent_data_dir,
+    agent_media_dir,
+    agent_thread_id,
+    agent_tmp_dir,
+)
 
 
 def _settings(data_dir, *, monthly_budget_usd=50.0):
@@ -144,3 +149,24 @@ def test_agent_id_rejects_unsafe(bad_id):
 def test_agent_id_accepts_safe():
     for good in ("default", "acme-web", "beta_app", "a1", "x"):
         assert agent_data_dir(good).name == good
+
+
+# --- P6: agent_media_dir / agent_tmp_dir ---
+
+
+def test_agent_media_dir_is_under_data_dir_and_per_id():
+    assert agent_media_dir("acme-web") == agent_data_dir("acme-web") / "media"
+    assert agent_media_dir("acme-web") != agent_media_dir("beta-app")
+
+
+def test_agent_tmp_dir_is_under_data_dir_and_per_id():
+    assert agent_tmp_dir("acme-web") == agent_data_dir("acme-web") / "tmp"
+    assert agent_tmp_dir("acme-web") != agent_tmp_dir("beta-app")
+
+
+@pytest.mark.parametrize("bad_id", ["/etc/passwd", "../../tmp/evil", "a/b", "..", ""])
+def test_agent_media_and_tmp_dir_reject_unsafe_id(bad_id):
+    with pytest.raises(ValueError, match="Invalid agent id"):
+        agent_media_dir(bad_id)
+    with pytest.raises(ValueError, match="Invalid agent id"):
+        agent_tmp_dir(bad_id)

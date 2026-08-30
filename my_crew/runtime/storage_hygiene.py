@@ -42,6 +42,10 @@ RETENTION_DAYS = {
     # they get a shorter, per-FILE age sweep (the orphan sweep never sees them because
     # task rows are never deleted).
     "step_transcripts": 30,
+    # P6: scratch files a worker pack drops in `agent_tmp_dir(id)` (e.g. a download
+    # mid-processing). Short window — this is explicitly disposable, unlike
+    # `agent_media_dir`, which is never swept here.
+    "agent_tmp": 3,
 }
 
 #: The integrity audit is read-only but not free — run it at most once per local day,
@@ -88,7 +92,41 @@ def run_retention_sweep(*, now: datetime | None = None) -> dict[str, int]:
     _sweep_artifact_orphans(deleted, now)
     _sweep_memory_facts(deleted, now)
     _sweep_step_transcripts(deleted, now)
+    _sweep_agent_tmp(deleted, now)
     return deleted
+
+
+def _sweep_agent_tmp(deleted: dict[str, int], now: datetime) -> None:
+    """P6: delete over-age FILES inside each registered agent's `tmp/` scratch dir
+    (`agent_tmp_dir(id)`), per-file mtime — same posture as `_sweep_step_transcripts`.
+    The `tmp/` dir itself is never removed (a pack may recreate it on next use); only
+    stale files inside it go. One broken/locked agent dir never blocks the rest."""
+    from my_crew.runtime.agent_paths import agent_tmp_dir
+    from my_crew.runtime.registry import load_registry
+
+    cutoff_ts = (now - timedelta(days=RETENTION_DAYS["agent_tmp"])).timestamp()
+    removed = 0
+    for entry in load_registry():
+        tmp_dir = agent_tmp_dir(entry.id)
+        if not tmp_dir.is_dir() or tmp_dir.is_symlink():
+            continue
+        try:
+            for f in tmp_dir.rglob("*"):
+                try:
+                    if f.is_symlink() or not f.is_file():
+                        continue
+                    if f.stat().st_mtime < cutoff_ts:
+                        f.unlink()
+                        removed += 1
+                except OSError:
+                    logger.warning(
+                        "agent tmp sweep failed for %s (ignored)", f, exc_info=True
+                    )
+        except Exception:  # noqa: BLE001 — per-agent isolation
+            logger.warning(
+                "agent tmp sweep failed for %s (ignored)", entry.id, exc_info=True
+            )
+    deleted["agent_tmp"] = removed
 
 
 def _sweep_step_transcripts(deleted: dict[str, int], now: datetime) -> None:

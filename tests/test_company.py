@@ -125,3 +125,49 @@ def test_save_starts_fresh_when_file_malformed(tmp_path):
     p.write_text("not: [valid: yaml: at all\n", encoding="utf-8")
     save_company("Acme", "coord-1", path=p)
     assert load_company(p).name == "Acme"
+
+
+# --- v94 P3: manager_id / escalation_daily_cap --------------------------------------
+
+
+def test_manager_id_defaults_to_none_and_cap_defaults_to_20(tmp_path):
+    c = load_company(tmp_path / "nope.yaml")
+    assert c.manager_id is None
+    assert c.escalation_daily_cap == 20
+
+
+def test_manager_id_and_cap_round_trip(tmp_path):
+    p = tmp_path / "company.yaml"
+    save_company("Acme", "coord-1", manager_id="mgr-1", escalation_daily_cap=5, path=p)
+    c = load_company(p)
+    assert c.manager_id == "mgr-1"
+    assert c.escalation_daily_cap == 5
+
+
+def test_blank_manager_id_becomes_none(tmp_path):
+    p = tmp_path / "company.yaml"
+    p.write_text("name: Acme\nmanager_id: ''\n", encoding="utf-8")
+    assert load_company(p).manager_id is None
+
+
+def test_bad_escalation_cap_degrades_to_default(tmp_path):
+    p = tmp_path / "company.yaml"
+    p.write_text("name: Acme\nescalation_daily_cap: notanumber\n", encoding="utf-8")
+    assert load_company(p).escalation_daily_cap == 20
+
+
+def test_negative_escalation_cap_degrades_to_default(tmp_path):
+    p = tmp_path / "company.yaml"
+    p.write_text("name: Acme\nescalation_daily_cap: -3\n", encoding="utf-8")
+    assert load_company(p).escalation_daily_cap == 20
+
+
+def test_save_preserves_manager_id_across_unrelated_saves(tmp_path):
+    p = tmp_path / "company.yaml"
+    save_company("Acme", "coord-1", manager_id="mgr-1", path=p)
+    # A caller that forgets manager_id (positional-default None) DOES reset it — this
+    # documents `save_company`'s "write exactly what's passed" contract; callers that
+    # must preserve it (routes_company.py, ops_autopilot.py, template_create.py) pass
+    # `current.manager_id` through explicitly.
+    save_company("Acme Renamed", "coord-1", path=p)
+    assert load_company(p).manager_id is None

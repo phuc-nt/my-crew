@@ -1,0 +1,23 @@
+# Staff template v1 — prefill source ONLY for the CreateAgent wizard (see
+# profiles/templates/pm-coordinator/template.yaml for the full contract note).
+#
+# Vai theo dõi quảng cáo: đọc chỉ số chi tiêu/reach/CTR từ Meta Marketing API (chỉ đọc —
+# tạo/sửa chiến dịch nằm ngoài scope MVP). `bindings_hint` rỗng vì nguồn dữ liệu là một
+# access token (ADS_META_TOKEN) + ad account id, không phải một binding kiểu Jira/Slack —
+# chủ nhân điền trực tiếp vào .env sau khi tạo agent, không qua wizard binding step.
+role: "Theo dõi quảng cáo"
+domain: ads
+reports:
+  - ads-weekly
+bindings_hint: []
+
+# v20.5: runtime backend gợi ý (wizard prefill; user override được).
+recommended_runtime: native
+
+# KHÔNG đặt schedule mặc định: agent tạo xong chưa có token Meta, một lịch có sẵn sẽ chạy
+# report rỗng/lỗi ngay khi bật. Chủ nhân tự bật lịch sau khi điền ADS_META_TOKEN +
+# ADS_META_AD_ACCOUNT_ID vào .env.
+
+# v36 P2: config version — bump when template CONFIG (reports/schedule/tools) changes
+# so agents of this role show an upgrade badge. Skills load live (no bump needed).
+version: 1

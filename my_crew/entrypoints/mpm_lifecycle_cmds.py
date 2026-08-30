@@ -19,7 +19,7 @@ import sys
 import urllib.request
 from importlib.metadata import PackageNotFoundError, version
 
-from my_crew.config.settings import MY_CREW_HOME, REPO_ROOT
+from my_crew.config.settings import DATA_DIR, MY_CREW_HOME, REPO_ROOT
 
 _PYPI_JSON_URL = "https://pypi.org/pypi/my-crew/json"
 
@@ -125,12 +125,39 @@ def run_doctor(args: list[str]) -> int:
             f"slack {pins.get('SLACK_PKG_VERSION', '?')}"
         )
 
+    _print_orphan_agent_dirs()
+
     print(
         f"\ndoctor: bắt buộc "
         f"{'OK' if required_failures == 0 else f'{required_failures} lỗi'} · "
         f"tùy chọn {'OK' if optional_failures == 0 else f'{optional_failures} chưa cấu hình'}"
     )
     return 0 if required_failures == 0 else 1
+
+
+def _print_orphan_agent_dirs() -> None:
+    """P6: list `.data/agents/<id>/` dirs whose id is no longer in registry.yaml.
+
+    Read-only — doctor never deletes anything; `mpm agent purge-data <id>` is the
+    explicit, separately-confirmed follow-up (GC is never automatic, see D8/D10)."""
+    from my_crew.runtime.registry import load_registry
+
+    agents_dir = DATA_DIR / "agents"
+    if not agents_dir.is_dir():
+        return
+    try:
+        registered = {e.id for e in load_registry()}
+    except (FileNotFoundError, RuntimeError) as exc:
+        print(f"\n  (bỏ qua kiểm tra dir mồ côi: không đọc được registry — {exc})")
+        return
+    orphans = sorted(
+        d.name for d in agents_dir.iterdir() if d.is_dir() and d.name not in registered
+    )
+    if not orphans:
+        return
+    print(f"\nDir dữ liệu mồ côi (không còn trong registry.yaml): {len(orphans)}")
+    for name in orphans:
+        print(f"  • {name}  →  mpm agent purge-data {name} --confirm")
 
 
 def _pypi_latest(timeout_s: float = 5.0) -> str | None:

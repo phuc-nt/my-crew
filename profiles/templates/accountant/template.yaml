@@ -1,0 +1,27 @@
+# Staff template v1 — prefill source ONLY for the CreateAgent wizard (see
+# profiles/templates/pm-coordinator/template.yaml for the full contract note).
+#
+# Vai kế toán: đọc sổ quỹ (Google Sheet hoặc CSV) và tổng hợp báo cáo dòng tiền hàng tuần.
+# Có đúng một hành động ghi (`append_ledger_row`), bị khoá mặc định — chủ nhân tự bật ở
+# trang Đội nếu muốn agent ghi trực tiếp vào sổ. `bindings_hint` rỗng: nguồn dữ liệu là
+# một sheet id/CSV path (ACCOUNTING_SHEET_ID / ACCOUNTING_LEDGER_CSV_PATH trong .env), không
+# phải một binding kiểu Jira/Slack.
+#
+# Thư mục template tên "accountant" (khác domain id "accounting") vì đây là danh xưng vai
+# trò người dùng thấy trên UI; domain id vẫn theo quy ước tiếng Anh của backend.
+role: "Kế toán"
+domain: accounting
+reports:
+  - cashflow-weekly
+bindings_hint: []
+
+# v20.5: runtime backend gợi ý (wizard prefill; user override được).
+recommended_runtime: native
+
+# KHÔNG đặt schedule mặc định: agent tạo xong chưa có sheet/CSV cấu hình, một lịch có sẵn
+# sẽ chạy report rỗng/lỗi ngay khi bật. Chủ nhân tự bật lịch sau khi điền
+# ACCOUNTING_SHEET_ID (hoặc ACCOUNTING_LEDGER_CSV_PATH) vào .env.
+
+# v36 P2: config version — bump when template CONFIG (reports/schedule/tools) changes
+# so agents of this role show an upgrade badge. Skills load live (no bump needed).
+version: 1

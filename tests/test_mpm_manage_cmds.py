@@ -238,3 +238,73 @@ def test_rules_dispatch_routes(monkeypatch):
     )
     assert mpm.main(["agent", "rules", "a"]) == 0
     assert seen == {"sub": "rules", "rest": ["a"]}
+
+
+# --- P6: purge-data — data-destroying, never automatic (D8/D10) ---
+
+
+def _registry(monkeypatch, ids):
+    from my_crew.runtime.registry import RegistryEntry
+
+    monkeypatch.setattr(
+        "my_crew.runtime.registry.load_registry",
+        lambda: tuple(RegistryEntry(id=i, enabled=True) for i in ids),
+    )
+
+
+def test_purge_data_refuses_registered_id(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    _registry(monkeypatch, ["a"])
+    assert mpm_manage_cmds.run_manage("purge-data", ["a", "--confirm"]) == 1
+    assert "vẫn còn trong registry.yaml" in capsys.readouterr().err
+
+
+def test_purge_data_requires_confirm_flag(monkeypatch, tmp_path, capsys):
+    data_root = tmp_path / ".data"
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", data_root)
+    _registry(monkeypatch, [])
+    orphan_dir = data_root / "agents" / "orphan-1"
+    orphan_dir.mkdir(parents=True)
+    assert mpm_manage_cmds.run_manage("purge-data", ["orphan-1"]) == 1
+    err = capsys.readouterr().err
+    assert "--confirm" in err
+    assert orphan_dir.exists()  # refused — nothing deleted
+
+
+def test_purge_data_deletes_with_confirm(monkeypatch, tmp_path, capsys):
+    data_root = tmp_path / ".data"
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", data_root)
+    _registry(monkeypatch, [])
+    orphan_dir = data_root / "agents" / "orphan-1"
+    (orphan_dir / "audit").mkdir(parents=True)
+    assert mpm_manage_cmds.run_manage("purge-data", ["orphan-1", "--confirm"]) == 0
+    assert "đã xoá" in capsys.readouterr().out
+    assert not orphan_dir.exists()
+
+
+def test_purge_data_missing_dir_exit_1(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    _registry(monkeypatch, [])
+    assert mpm_manage_cmds.run_manage("purge-data", ["ghost", "--confirm"]) == 1
+    assert "không có dữ liệu" in capsys.readouterr().err
+
+
+def test_purge_data_bad_id_clean_exit_1(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path / ".data")
+    _registry(monkeypatch, [])
+    assert mpm_manage_cmds.run_manage("purge-data", ["Bad/Id", "--confirm"]) == 1
+    assert "Invalid agent id" in capsys.readouterr().err
+
+
+def test_purge_data_missing_agent_arg_exit_2(capsys):
+    assert mpm_manage_cmds.run_manage("purge-data", []) == 2
+    assert "usage:" in capsys.readouterr().err
+
+
+def test_purge_data_dispatch_routes(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(
+        mpm_manage_cmds, "run_manage", lambda sub, rest: seen.update(sub=sub, rest=rest) or 0
+    )
+    assert mpm.main(["agent", "purge-data", "a", "--confirm"]) == 0
+    assert seen == {"sub": "purge-data", "rest": ["a", "--confirm"]}

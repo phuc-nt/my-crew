@@ -60,10 +60,15 @@ def run_manage(sub: str, args: list[str]) -> int:
         print(f"usage: mpm agent {sub} <id> ...", file=sys.stderr)
         return 2
     agent_id = args[0]
+    rest = args[1:]
+    # purge-data targets a dir that by definition may have NO loadable profile (that is
+    # exactly what makes it an orphan) — it must not go through `_load_agent`, which
+    # requires one. Handled first, before the load-profile gate every other subcommand needs.
+    if sub == "purge-data":
+        return _purge_data(agent_id, rest)
     loaded = _load_agent(agent_id)
     if loaded is None:
         return 1
-    rest = args[1:]
     if sub == "approvals":
         return _approvals(loaded)
     if sub == "approve":
@@ -73,6 +78,53 @@ def run_manage(sub: str, args: list[str]) -> int:
     if sub == "rules":
         return _rules(loaded, rest)
     return _audit(agent_id, rest)  # sub == "audit"
+
+
+def _purge_data(agent_id: str, rest: list[str]) -> int:
+    """`mpm agent purge-data <id> --confirm` — delete `.data/agents/<id>/` for good.
+
+    Data-destroying, so it is NEVER automatic (D8/D10): requires `--confirm` and REFUSES
+    any id still present in registry.yaml (that agent's data dir is live, not orphaned —
+    deregister it first if it truly needs deleting). Never invoked by autopilot/doctor;
+    doctor only lists candidates, this command is the separate explicit act.
+    """
+    import shutil
+
+    from my_crew.runtime.agent_paths import agent_data_dir
+    from my_crew.runtime.registry import load_registry
+
+    try:
+        registered = {e.id for e in load_registry()}
+    except (FileNotFoundError, RuntimeError) as exc:
+        print(f"error: không đọc được registry — {exc}", file=sys.stderr)
+        return 1
+    if agent_id in registered:
+        print(
+            f"error: {agent_id!r} vẫn còn trong registry.yaml — không xoá dữ liệu agent "
+            "đang hoạt động. Gỡ khỏi registry trước nếu thật sự muốn xoá.",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        target = agent_data_dir(agent_id)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if not target.is_dir():
+        print(f"error: không có dữ liệu tại {target} (đã xoá hay chưa từng tồn tại)",
+              file=sys.stderr)
+        return 1
+    if "--confirm" not in rest:
+        print(
+            f"sẽ xoá vĩnh viễn: {target}\n"
+            "hành động này KHÔNG thể hoàn tác. Xác nhận bằng: "
+            f"mpm agent purge-data {agent_id} --confirm",
+            file=sys.stderr,
+        )
+        return 1
+    shutil.rmtree(target)
+    print(f"đã xoá {target}")
+    return 0
 
 
 def _approvals(loaded) -> int:

@@ -1,0 +1,16 @@
+# ads-pack manifest (P6 260830-1311-zalo-business-fleet) — Meta Ads insight worker.
+#
+# MVP scope (D8): READ-ONLY. One report kind (`ads-weekly`) reads Meta Marketing API
+# insights (spend/reach/CTR by campaign+day) and pushes a Telegram DM to the owner —
+# same shape as personal-pack's push graphs, not the Slack+Confluence PM/HR shape.
+# `servers: []`: no write in the MVP (campaign create/edit is out of scope, roadmap).
+id: ads
+name: Meta Ads
+report_kinds:
+  - ads-weekly
+servers: []
+# Marketing API version pin (D8/D10 research gate — Meta docs churn fast). Bump here
+# only after re-checking developers.facebook.com's current stable version + the
+# insights endpoint/params shape; v25.0 confirmed current stable as of 2026-08-30
+# (v26.0 not yet released; v23.0 already EOL).
+meta_marketing_api_version: "v25.0"

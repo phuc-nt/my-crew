@@ -11,6 +11,7 @@
     my-crew agent automate <id> <automation.yaml> [--dry-run]
     my-crew agent approvals <id> | approve <id> <approval-id> | reject <id> <approval-id>
     my-crew agent audit <id> [--tool X] [--verdict V] [--limit N]
+    my-crew agent purge-data <id> --confirm
     my-crew web hash-password
     my-crew sandbox prepull [image]
 
@@ -48,7 +49,7 @@ def _flag_value(args: list[str], flag: str) -> str | None:
 
 _AGENT_ACTIONS = (
     "list", "register", "run", "resume", "replay", "step-replay", "automate",
-    "approvals", "approve", "reject", "audit", "rules",
+    "approvals", "approve", "reject", "audit", "rules", "purge-data",
 )
 
 
@@ -80,8 +81,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--web-only", action="store_true", help="only the web dashboard")
     p.add_argument("--scheduler-only", action="store_true", help="only the coordinator")
 
-    p = sub.add_parser("crew", help="crew-level onboarding (init [office|personal])")
-    p.add_argument("action", metavar="init")
+    p = sub.add_parser(
+        "crew",
+        help="crew-level: init [office|personal] | assign/status/overview (control plane)",
+    )
+    p.add_argument("action", metavar="init|assign|status|overview")
     p.add_argument("rest", nargs=argparse.REMAINDER)
 
     p = sub.add_parser("agent", help="operate one agent (list/register/run/approvals/audit/...)")
@@ -138,7 +142,7 @@ def _dispatch_agent(action: str, rest: list[str]) -> int:
         from my_crew.entrypoints.mpm_automate_cmd import run_automate
 
         return run_automate(rest)
-    if action in {"approvals", "approve", "reject", "audit", "rules"}:
+    if action in {"approvals", "approve", "reject", "audit", "rules", "purge-data"}:
         from my_crew.entrypoints.mpm_manage_cmds import run_manage
 
         return run_manage(action, rest)
@@ -177,6 +181,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         return run_serve(flags)
     if ns.group == "crew":
+        # Phase 2 (260830-1311-zalo-business-fleet): `assign|status|overview` are the
+        # in-process control-plane surface (same functions `/api/control-plane/*`
+        # wraps over HTTP); `init` keeps its pre-existing onboarding behavior.
+        if ns.action in {"assign", "status", "overview"}:
+            from my_crew.entrypoints.mpm_crew_cmds import run_crew_control_plane
+
+            return run_crew_control_plane(ns.action, ns.rest)
         from my_crew.entrypoints.mpm_onboarding_cmds import run_crew
 
         return run_crew(ns.action, ns.rest)

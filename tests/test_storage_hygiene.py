@@ -148,7 +148,7 @@ def test_retention_sweep_survives_a_broken_store(monkeypatch, tmp_path):
     # and the artifact-orphan/transcript sweeps ran against a home with no team-tasks
     # data (→ 0 each).
     assert out == {"dedup": 0, "artifact_orphans": 0, "memory_facts": 0,
-                   "step_transcripts": 0}
+                   "step_transcripts": 0, "agent_tmp": 0}
 
 
 def test_artifact_orphan_sweep_double_guard(monkeypatch, tmp_path):
@@ -216,6 +216,50 @@ def test_artifact_orphan_sweep_confined_to_artifact_root(monkeypatch, tmp_path):
     assert out["artifact_orphans"] == 0
     assert stray.exists()
     assert audit_log.exists()
+
+
+# ---- agent tmp (P6) -----------------------------------------------------------
+
+def test_agent_tmp_sweep_removes_old_files_keeps_recent(monkeypatch, tmp_path):
+    """Per-file mtime sweep inside `agent_tmp_dir(id)` — mirrors _sweep_step_transcripts.
+    The tmp/ dir itself survives; only stale files inside go."""
+    import os
+
+    from my_crew.runtime import storage_hygiene
+    from my_crew.runtime.registry import RegistryEntry
+
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path)
+    tmp_dir = tmp_path / "agents" / "a" / "tmp"
+    tmp_dir.mkdir(parents=True)
+    old_f = tmp_dir / "old.bin"
+    new_f = tmp_dir / "new.bin"
+    old_f.write_bytes(b"x")
+    new_f.write_bytes(b"x")
+    aged = (_NOW - timedelta(days=10)).timestamp()
+    os.utime(old_f, (aged, aged))
+
+    monkeypatch.setattr(
+        "my_crew.runtime.registry.load_registry",
+        lambda: (RegistryEntry(id="a", enabled=True),),
+    )
+    out = storage_hygiene.run_retention_sweep(now=_NOW)
+    assert out["agent_tmp"] == 1
+    assert not old_f.exists()
+    assert new_f.exists()
+    assert tmp_dir.is_dir()  # the dir itself is never removed
+
+
+def test_agent_tmp_sweep_missing_dir_is_a_noop(monkeypatch, tmp_path):
+    from my_crew.runtime import storage_hygiene
+    from my_crew.runtime.registry import RegistryEntry
+
+    monkeypatch.setattr("my_crew.runtime.agent_paths.DATA_DIR", tmp_path)
+    monkeypatch.setattr(
+        "my_crew.runtime.registry.load_registry",
+        lambda: (RegistryEntry(id="ghost", enabled=True),),
+    )
+    out = storage_hygiene.run_retention_sweep(now=_NOW)
+    assert out["agent_tmp"] == 0
 
 
 def test_integrity_audit_flags_orphans_daily_gated(monkeypatch, tmp_path):

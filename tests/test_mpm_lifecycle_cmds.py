@@ -70,6 +70,69 @@ def test_doctor_clean_machine_openrouter_only_rc0(monkeypatch, tmp_path, capsys)
     assert "bắt buộc OK" in out
 
 
+# --- P6: doctor's orphan agent-dir listing (read-only) ---
+
+
+def test_doctor_lists_orphan_agent_dirs(monkeypatch, tmp_path, capsys):
+    from my_crew.runtime.registry import RegistryEntry
+
+    _quiet_env(monkeypatch, tmp_path)
+    monkeypatch.setattr(life, "_tool_version", lambda cmd: "v1")
+    monkeypatch.setattr(
+        "my_crew.server.integration_health._run_checks",
+        lambda: [{"id": "openrouter", "label": "OpenRouter (LLM)", "ok": True,
+                  "detail": "d", "hint": ""}],
+    )
+    data_dir = tmp_path / "data"
+    monkeypatch.setattr("my_crew.entrypoints.mpm_lifecycle_cmds.DATA_DIR", data_dir)
+    (data_dir / "agents" / "kept").mkdir(parents=True)
+    (data_dir / "agents" / "orphan-1").mkdir(parents=True)
+    monkeypatch.setattr(
+        "my_crew.runtime.registry.load_registry",
+        lambda: (RegistryEntry(id="kept", enabled=True),),
+    )
+    life.run_doctor([])
+    out = capsys.readouterr().out
+    assert "Dir dữ liệu mồ côi" in out
+    assert "orphan-1" in out
+    assert "mpm agent purge-data orphan-1 --confirm" in out
+    assert "kept" not in out.split("Dir dữ liệu mồ côi")[1]
+
+
+def test_doctor_no_orphans_prints_nothing_extra(monkeypatch, tmp_path, capsys):
+    from my_crew.runtime.registry import RegistryEntry
+
+    _quiet_env(monkeypatch, tmp_path)
+    monkeypatch.setattr(life, "_tool_version", lambda cmd: "v1")
+    monkeypatch.setattr(
+        "my_crew.server.integration_health._run_checks",
+        lambda: [{"id": "openrouter", "label": "OpenRouter (LLM)", "ok": True,
+                  "detail": "d", "hint": ""}],
+    )
+    data_dir = tmp_path / "data"
+    monkeypatch.setattr("my_crew.entrypoints.mpm_lifecycle_cmds.DATA_DIR", data_dir)
+    (data_dir / "agents" / "kept").mkdir(parents=True)
+    monkeypatch.setattr(
+        "my_crew.runtime.registry.load_registry",
+        lambda: (RegistryEntry(id="kept", enabled=True),),
+    )
+    life.run_doctor([])
+    assert "Dir dữ liệu mồ côi" not in capsys.readouterr().out
+
+
+def test_doctor_no_agents_dir_is_a_noop(monkeypatch, tmp_path, capsys):
+    _quiet_env(monkeypatch, tmp_path)
+    monkeypatch.setattr(life, "_tool_version", lambda cmd: "v1")
+    monkeypatch.setattr(
+        "my_crew.server.integration_health._run_checks",
+        lambda: [{"id": "openrouter", "label": "OpenRouter (LLM)", "ok": True,
+                  "detail": "d", "hint": ""}],
+    )
+    monkeypatch.setattr("my_crew.entrypoints.mpm_lifecycle_cmds.DATA_DIR", tmp_path / "no-data")
+    life.run_doctor([])
+    assert "Dir dữ liệu mồ côi" not in capsys.readouterr().out
+
+
 def test_upgrade_check_exit_codes(monkeypatch, capsys):
     monkeypatch.setattr(life, "version", lambda name: "0.1.0")
     monkeypatch.setattr(life, "_pypi_latest", lambda **k: "0.2.0")
