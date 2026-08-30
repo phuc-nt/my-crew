@@ -40,7 +40,12 @@ def _seed_dead_sprint(run, task_id: str = "dead-live-1", *, route: dict | None =
         task = store.get(task_id)
     finally:
         store.close()
-    write_step_artifact(team_tasks_root(), task_id, task.steps[0].seq, _PARTIAL)
+    # Payload phải là DICT có `result_text` — `_sprint_context_block` đọc bằng
+    # `artifact.get("result_text")`, và nó nuốt mọi lỗi để một lần nâng cấp không bao
+    # giờ hỏng vì phần bối cảnh cho thêm. Gieo một chuỗi trần vẫn ghi ra file JSON hợp
+    # lệ nhưng đọc lại thành rỗng — bản nháp im lặng không tới được kế hoạch mới.
+    write_step_artifact(team_tasks_root(), task_id, task.steps[0].seq,
+                        {"result_text": _PARTIAL, "version": "attempt-1"})
     return task
 
 
@@ -52,9 +57,9 @@ def test_b1_an_upgrade_carries_the_dead_sprints_work_into_the_new_plan(live_run)
     """Điều đáng giá của `upgrade_to_team` không phải là nó dựng được task mới — mà là
     kết quả CEO ĐÃ TRẢ TIỀN không rơi xuống đất.
 
-    Nên assert đi vào chỗ chứng minh được điều đó bằng model thật: bản ghi định tuyến
-    phải trỏ ngược về việc cũ, và kế hoạch model dựng ra phải là kế hoạch nhiều bước
-    (đề này vốn là đề của cả đội) chứ không phải một bước suy biến."""
+    Nên assert đi vào ba bất biến của hệ thống, không vào cách model diễn đạt: bản ghi
+    định tuyến trỏ ngược về việc cũ, kế hoạch rời hẳn lane sprint, và đề bài việc mới
+    mang theo bản nháp dở dang."""
     from my_crew.agent.ops_upgrade_to_team import run_upgrade_to_team
 
     run = live_run()
@@ -72,8 +77,33 @@ def test_b1_an_upgrade_carries_the_dead_sprints_work_into_the_new_plan(live_run)
     assert route.get("mode") == "team", route
 
     steps = run.h.step_rows(new_id)
-    assert len(steps) >= 2, f"đề của cả đội phải ra kế hoạch nhiều bước: {steps}"
-    assert all(s["step_type"] != "sprint" for s in steps), steps
+    assert steps, f"nâng cấp phải dựng được kế hoạch: {steps}"
+    # KHÔNG assert số bước. Đo thật: cùng một đề ("so sánh giá 3 dịch vụ") có lần ra 3
+    # bước, có lần ra 1 bước gộp — cả hai đều là kế hoạch hợp lệ, số bước là lựa chọn
+    # của model chứ không phải bất biến của hệ thống. Thứ nâng cấp HỨA là chuyển lane
+    # sprint→team, và đó là thứ dòng dưới đo.
+    assert all(s["step_type"] != "sprint" for s in steps), (
+        f"nâng cấp phải rời khỏi lane sprint, không được suy biến về chính nó: {steps}"
+    )
+
+    # Lời hứa THẬT của nâng cấp: kết quả CEO đã trả tiền không rơi xuống đất. Đo ở đề
+    # bài việc mới — đó là thứ `run_upgrade_to_team` DỰNG RA và decompose ĐỌC VÀO, nên
+    # nó là bất biến của hệ thống.
+    #
+    # Bản trước assert kế hoạch phải nhắc tên "Dropbox"/"OneDrive". Chạy thật cho ra kế
+    # hoạch trung tính ("xác định đủ 3 dịch vụ theo nguồn tra cứu") trong khi khối bối
+    # cảnh vẫn tới nơi đầy đủ — và `_CONTEXT_HEADER` CHỦ ĐỘNG dặn "chỉ để tham khảo,
+    # đừng mặc định đi lại hướng đã chết", nên một kế hoạch không chép lại bản nháp là
+    # kế hoạch ĐÚNG. Assert đó đo lựa chọn diễn đạt của model, không đo hệ thống.
+    store = run.h.store()
+    try:
+        new_brief = str(getattr(store.get(new_id), "original_request", "") or "")
+    finally:
+        store.close()
+    assert _PARTIAL in new_brief, (
+        "đề bài việc mới phải mang theo bản nháp dở dang của chuyến sprint đã chết — "
+        f"thiếu nó là nâng cấp bắt đội làm lại từ số không: {new_brief[:600]!r}"
+    )
 
 
 def test_b2_a_chain_can_only_be_upgraded_once(live_run):
