@@ -104,11 +104,16 @@ def post_company(
         else bool(team_task_auto_confirm)
     )
     autopilot_value = current.autopilot if autopilot is None else bool(autopilot)
+    # v94 P3: this route has no request fields for `manager_id`/`escalation_daily_cap`
+    # yet (no UI surface exists) — same F7 preserve-current rule applies so a save from
+    # here never wipes a value hand-set in company.yaml.
     save_company(
         name.strip(), coord, cap,
         team_task_concurrency=concurrency,
         team_task_auto_confirm=auto_confirm,
         autopilot=autopilot_value,
+        manager_id=current.manager_id,
+        escalation_daily_cap=current.escalation_daily_cap,
     )
     return {
         "name": name.strip(),

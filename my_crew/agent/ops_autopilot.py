@@ -81,6 +81,8 @@ def run_set_autopilot(slots: dict[str, str]) -> str:
         team_task_concurrency=company.team_task_concurrency,
         team_task_auto_confirm=company.team_task_auto_confirm,
         autopilot=enable,
+        manager_id=company.manager_id,
+        escalation_daily_cap=company.escalation_daily_cap,
     )
     if enable:
         return ("Đã BẬT autopilot: từ giờ mình tự xác nhận kế hoạch, tự gỡ việc bị dừng "
