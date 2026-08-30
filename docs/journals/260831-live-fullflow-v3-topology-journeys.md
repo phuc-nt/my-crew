@@ -51,8 +51,7 @@
 - **B1 chưa sửa, cần CEO quyết**: việc bị cap báo `$0.00` cho CEO trong khi `sum_cost` là
   `$0.00318464`; việc khoẻ thì báo dư ~26%. Đổi `control_plane_views` sang `sum_cost`
   (cap là thẩm quyền) hay hoà giải CaptureStore với hàng task/step?
-- A8 mới xanh 1/1 trên mã đã vá (J/X đủ 2/2 như tiêu chí). Bản vá là code thuần tất định có
-  unit test ghim cả ca đỏ lẫn ca chống-sửa-quá-đà — đánh giá của tôi là đủ, nhưng muốn 2/2
-  sạch thì chạy thêm một lượt 28 phút.
+- A8 đã lên 2/2: chạy bù riêng nhóm routing (8/8, 14:50) trên mã vá cả B0 lẫn B6, rẻ hơn một
+  lượt 54-case 28 phút. 46 case ngoài nhóm routing vẫn dừng ở 2 lượt đầy đủ.
 - Tiền tố truy vấn vẫn hút chữ từ mệnh đề ngoặc (`'sàn hạng mục thị trường chính Shopee'`).
   Có sẵn từ trước, không do B6, ở ca này vẫn tìm đúng — ghi lại, chưa sửa.
