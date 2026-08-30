@@ -37,6 +37,26 @@ _SECRET_REGEXES: tuple[re.Pattern[str], ...] = (
     # Telegram bot token (v6 M13 introduces this credential class): numeric bot id +
     # ":" + 35-char secret. Word-bounded so issue keys / timestamps can't false-match.
     re.compile(r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b"),
+    # Fernet TOKEN (encrypted blob), e.g. a raw `credential_store` ciphertext ending up
+    # in a log line: base64url, always starts "gAAAAA" (the fixed version+timestamp
+    # header Fernet prepends), long.
+    re.compile(r"\bgAAAAA[A-Za-z0-9_=-]{20,}\b"),
+    # Fernet master KEY (MY_CREW_CRED_KEY / any Fernet.generate_key() output): exactly
+    # 32 raw bytes, urlsafe-base64-encoded -> exactly 44 chars, always padded with one
+    # trailing "=". A bare "43 base64 chars + '='" shape is NOT unique to Fernet keys —
+    # it is also the shape of every base64url-encoded 32-byte digest (e.g. a sha256
+    # content hash, an ETag, an S3 signed-URL `sig=` param), so matching the shape alone
+    # made `find_secret`/`contains_secret` (which feed the Lớp A hard-block, not just
+    # audit-log redaction) refuse legitimate actions carrying a hash or signed URL.
+    # Anchored instead on the key/env-var NAME the value is assigned to or labeled
+    # with (`MY_CREW_CRED_KEY=...`, `"cred_key": "...="`, `credential_store key: ...=`)
+    # — the one context this module actually needs to catch (a master key echoed next
+    # to its own name in a log line or free-text field), without matching every
+    # unrelated 32-byte hash that happens to have the same length.
+    re.compile(
+        r"(?i)\b(?:MY_CREW_CRED_KEY|cred[_-]?key)\b['\"]?\s*[:=]\s*['\"]?"
+        r"[A-Za-z0-9_-]{43}="
+    ),
 )
 
 # Key names that mark a value as secret-bearing regardless of its content.

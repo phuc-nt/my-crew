@@ -8,6 +8,11 @@ dependencies = [
     # the session cookie (Starlette's SessionMiddleware). Both small, well-audited.
     "bcrypt>=4.2",
     "croniter>=6.2.2",
+    # Zalo business fleet P4: Fernet symmetric encryption for `config/credential_store
+    # .py` (per-account encrypted-at-rest service credentials). Already resolved
+    # transitively before this pin (a common, well-audited wheel); declared here as a
+    # direct core dependency now that the codebase imports it directly.
+    "cryptography>=43",
     "fastapi>=0.136",
     "itsdangerous>=2.2",
     "jinja2>=3.1",

@@ -27,6 +27,7 @@ from my_crew.server.env_writer import (
     DisallowedEnvKey,
 )
 from my_crew.server.integration_health import integration_checks
+from my_crew.server.routes_account_store import router as account_store_router
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,10 @@ logger = logging.getLogger(__name__)
 _OPERATOR_WEBHOOK_URL_KEY = "OPERATOR_WEBHOOK_URL"
 
 router = APIRouter(prefix="/api/connections", tags=["connections"])
+# Account-store credential routes (P4): `/api/connections/accounts/...`. A separate
+# module (not inlined here) since this file was already near the size-review
+# threshold — see routes_account_store.py's own docstring for why it exists.
+router.include_router(account_store_router)
 
 #: Written keys the running process has not loaded yet (file != process env).
 _needs_restart = False
@@ -131,7 +136,12 @@ for _card in _CATALOG:
 
 @router.get("")
 def get_connections() -> dict:
-    """Cards for the fixed catalog: aggregated status + key presence. Never a value."""
+    """Cards for the fixed catalog: aggregated status + key presence. Never a value.
+
+    `accounts` is the P4 account-store list (ids only, never a value) — a SEPARATE
+    dynamic list from the fixed `.env`-key catalog below, since account-store entries
+    are user-created (one per external-service account) rather than a fixed key set.
+    """
     checks = {c["id"]: c for c in integration_checks()["checks"]}
     presence = env_writer.read_key_presence(SETUP_WRITABLE_KEYS | CONNECTIONS_WRITABLE_KEYS)
     cards = []
@@ -148,7 +158,12 @@ def get_connections() -> dict:
             "detail": detail, "hint": hint, "note": card.get("note", ""),
             "keys": [{"name": k, "set": bool(presence.get(k))} for k in card["keys"]],
         })
-    return {"cards": cards, "needs_restart": _needs_restart}
+    from my_crew.config.credential_store import CredentialStore
+
+    return {
+        "cards": cards, "needs_restart": _needs_restart,
+        "accounts": CredentialStore().list(),
+    }
 
 
 @router.put("/keys")

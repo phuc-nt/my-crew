@@ -1046,6 +1046,7 @@ source = { editable = "." }
 dependencies = [
     { name = "bcrypt" },
     { name = "croniter" },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "itsdangerous" },
     { name = "jinja2" },
@@ -1086,6 +1087,7 @@ dev = [
 requires-dist = [
     { name = "bcrypt", specifier = ">=4.2" },
     { name = "croniter", specifier = ">=6.2.2" },
+    { name = "cryptography", specifier = ">=43" },
     { name = "deepagents", marker = "extra == 'deep'", specifier = "==0.6.12" },
     { name = "docker", marker = "extra == 'deep'", specifier = ">=7.1" },
     { name = "fastapi", specifier = ">=0.136" },

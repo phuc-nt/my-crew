@@ -65,6 +65,14 @@ CONNECTIONS_WRITABLE_KEYS: frozenset[str] = frozenset({
     "OPERATOR_EMAIL", "OPERATOR_WEBHOOK_URL",
 })
 
+#: The Fernet master key for `config/credential_store.py` (Zalo business fleet P4).
+#: Written ONLY by that module's `_load_or_create_master_key`, on first use — never
+#: through `/setup/env` or `/api/connections/keys`, so a client can never set/overwrite
+#: the key that decrypts every stored service credential.
+CREDENTIAL_STORE_WRITABLE_KEYS: frozenset[str] = frozenset({
+    "MY_CREW_CRED_KEY",
+})
+
 #: Per-agent telegram bot token (M18): `<AGENT>_TELEGRAM_BOT_TOKEN`, agent id upper-cased.
 _TELEGRAM_TOKEN_RE = re.compile(r"^[A-Z0-9_]+_TELEGRAM_BOT_TOKEN$")
 
@@ -124,10 +132,19 @@ def merge_env(
 
     import shutil
 
-    if path.exists():
+    had_existing_file = path.exists()
+    if had_existing_file:
         shutil.copy2(path, Path(str(path) + ".bak"))  # keep a backup, don't move the original
     tmp = Path(str(path) + f".{os.getpid()}.tmp")
     tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
+    if had_existing_file:
+        # `tmp.write_text` creates the temp file with the process umask (typically
+        # 0644), which would silently WIDEN an existing `.env`'s mode on every merge —
+        # e.g. dropping a 0600 file (holding `MY_CREW_CRED_KEY`, the Fernet master key
+        # that decrypts every stored service credential) to 0644 world-readable. Copy
+        # the ORIGINAL file's mode onto the temp file before the atomic swap so a merge
+        # can never loosen permissions the operator (or a prior write) already set.
+        os.chmod(tmp, os.stat(path).st_mode & 0o777)
     os.replace(tmp, path)  # atomic swap in the new content
 
 

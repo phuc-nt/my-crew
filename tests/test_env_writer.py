@@ -9,6 +9,9 @@ Load-bearing:
 
 from __future__ import annotations
 
+import os
+import stat
+
 import pytest
 
 from my_crew.server.env_writer import (
@@ -81,3 +84,34 @@ def test_read_key_presence_bool_only(tmp_path):
 def test_finish_keys_separate_from_setup(tmp_path):
     assert is_writable("WEB_AUTH_PASSWORD_HASH", allow=FINISH_WRITABLE_KEYS)
     assert not is_writable("OPENROUTER_API_KEY", allow=FINISH_WRITABLE_KEYS)  # a setup key
+
+
+def test_merge_never_loosens_an_existing_strict_file_mode(tmp_path):
+    """A `.env` holding `MY_CREW_CRED_KEY` (the Fernet master key decrypting every
+    stored service credential) is written 0600. `merge_env`'s temp-file+os.replace
+    write must not silently widen that to the process umask (typically 0644) on the
+    next merge — that would leave the ciphertext store's decryption key
+    world-readable while the ciphertext itself stays 0600."""
+    env = tmp_path / ".env"
+    env.write_text("MY_CREW_CRED_KEY=old\n", encoding="utf-8")
+    os.chmod(env, 0o600)
+    mode_before = stat.S_IMODE(os.stat(env).st_mode)
+
+    merge_env({"MY_CREW_CRED_KEY": "new"},
+              allow=frozenset({"MY_CREW_CRED_KEY"}), env_path=env)
+
+    mode_after = stat.S_IMODE(os.stat(env).st_mode)
+    assert mode_after <= mode_before
+    assert mode_after == 0o600
+
+
+def test_merge_creating_a_brand_new_file_uses_the_process_default_mode(tmp_path):
+    """No prior file to preserve the mode of — a fresh `.env` is created with
+    whatever the process/umask default is (unchanged pre-existing behavior for the
+    first-ever write); only an EXISTING strict mode must be preserved."""
+    env = tmp_path / ".env"
+    assert not env.exists()
+
+    merge_env({"OPENROUTER_API_KEY": "x"}, allow=SETUP_WRITABLE_KEYS, env_path=env)
+
+    assert env.exists()
