@@ -118,6 +118,13 @@ MAX_REWORK = 2
 #: alone — see `rework`'s guidance strip.
 GUIDANCE_HEADER = "CHỈ DẪN CỦA ĐIỀU PHỐI (lần trước chưa đạt):"
 
+#: Opener of the runner's standing wake-context line, which rides in as the guidance
+#: block's first line (`team_step_runner._guidance_with_wake_context`). Unlike the note
+#: it prefixes, it describes THIS attempt — which retry this is, and to fix the listed
+#: items instead of starting over — so it stays true on every rework round and survives
+#: the strip. Both sides share this constant so the prefix cannot drift apart.
+WAKE_CONTEXT_PREFIX = "Bối cảnh:"
+
 #: Hard ceiling on consults per step ATTEMPT (M33, `TeamStepState.consult_count`,
 #: reset per attempt like `rework_count`) — matches `team_task_consult.MAX_CONSULTS`
 #: (duplicated as a plain int, not imported, so this module never needs a hard import
@@ -609,13 +616,32 @@ def default_team_task_deps(
 
 
 def _strip_guidance(handoff: str) -> str:
-    """Drop the coordinator's rejection note from a handoff block, keeping the rest.
+    """Drop the coordinator's one-shot rejection note, keeping everything else.
 
     `_read_handoff` appends the note LAST, so everything from the header onward is the
-    note. A handoff without one comes back unchanged.
+    note — but deps content is unsanitised model output that can quote the header, so
+    anchor on the LAST occurrence, not the first. A handoff without one comes back
+    unchanged.
+
+    One line inside the block is NOT part of the rejection and must survive: the runner
+    prefixes a standing wake-context line ("this is rework round N — fix the listed
+    items, don't start over") that describes the attempt itself, not the draft, and so
+    stays true every round. On a cross-review rework row it is the ONLY content of the
+    block, and its "don't start over" constraint matters most on the later rounds — the
+    exact rounds this strip runs on. It is recognised by its `WAKE_CONTEXT_PREFIX` and
+    kept; only the coordinator's account of a draft that no longer exists is dropped.
     """
-    idx = handoff.find(GUIDANCE_HEADER)
-    return handoff if idx < 0 else handoff[:idx].rstrip()
+    idx = handoff.rfind(GUIDANCE_HEADER)
+    if idx < 0:
+        return handoff
+    body = handoff[idx + len(GUIDANCE_HEADER):].lstrip("\n")
+    head = handoff[:idx].rstrip()
+    first, _, _ = body.partition("\n")
+    first = first.strip()
+    if not first.startswith(WAKE_CONTEXT_PREFIX):
+        return head
+    kept = f"{GUIDANCE_HEADER}\n{first}"
+    return f"{head}\n\n{kept}" if head else kept
 
 
 def _read_deps_handoff(data_dir: Any, task_id: str, step_deps: tuple[str, ...]) -> str:

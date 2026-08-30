@@ -871,20 +871,28 @@ def _guidance_with_wake_context(step: Any) -> str:
     a failed ruling" stops repeating its previous attempt verbatim — the exact loop the
     round-7 rework-resume bug produced. First attempts of ordinary steps return the
     stored guidance unchanged, so the common-case prompt stays byte-identical.
+
+    The line MUST keep opening with `WAKE_CONTEXT_PREFIX`: that prefix is how the
+    graph's `_strip_guidance` tells this standing framing apart from the coordinator's
+    one-shot rejection note it shares the block with, and keeps it on rework round 2+.
+    A cross-review rework row carries no stored guidance, so this line is the whole
+    block — dropping it there would lose "không làm lại từ đầu" entirely.
     """
+    from my_crew.agent.team_task_graph import WAKE_CONTEXT_PREFIX
+
     stored = (getattr(step, "guidance", "") or "").strip()
     step_type = str(getattr(step, "step_type", "work") or "work")
     interventions = int(getattr(step, "intervention_count", 0) or 0)
     line = ""
     if step_type == "rework":
         round_no = int(getattr(step, "review_round", 0) or 0) + 1
-        line = (f"Bối cảnh: đây là vòng SỬA thứ {round_no} theo kết quả soát chéo — đọc "
-                "danh sách lỗi trong dữ liệu vào và sửa đúng các mục đó, không làm lại "
-                "từ đầu.")
+        line = (f"{WAKE_CONTEXT_PREFIX} đây là vòng SỬA thứ {round_no} theo kết quả "
+                "soát chéo — đọc danh sách lỗi trong dữ liệu vào và sửa đúng các mục "
+                "đó, không làm lại từ đầu.")
     elif interventions > 0:
-        line = (f"Bối cảnh: lần thử thứ {interventions + 1} của bước này sau phán quyết "
-                "của điều phối viên — lần trước CHƯA ĐẠT. Làm khác đi theo chỉ dẫn, "
-                "tuyệt đối không lặp lại nguyên văn lần trước.")
+        line = (f"{WAKE_CONTEXT_PREFIX} lần thử thứ {interventions + 1} của bước này "
+                "sau phán quyết của điều phối viên — lần trước CHƯA ĐẠT. Làm khác đi "
+                "theo chỉ dẫn, tuyệt đối không lặp lại nguyên văn lần trước.")
     if not line:
         return stored
     return f"{line}\n{stored}".strip()

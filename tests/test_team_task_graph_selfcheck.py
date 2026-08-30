@@ -20,7 +20,9 @@ from __future__ import annotations
 
 from my_crew.agent.team_task_graph import (
     GUIDANCE_HEADER,
+    WAKE_CONTEXT_PREFIX,
     TeamTaskDeps,
+    _strip_guidance,
     build_team_task_graph,
 )
 
@@ -211,3 +213,43 @@ def test_coordinator_guidance_is_consumed_by_the_first_rework_only():
         "second rework must not replay guidance the first one already consumed"
     )
     assert "bảng giá 3 công cụ" in handoffs[1], "upstream deps' content is not one-shot"
+
+
+def test_strip_keeps_the_standing_wake_context_line():
+    """A cross-review rework row stores NO coordinator guidance, so the runner's wake
+    line ("this is fix round N — fix the listed items, don't start over") is the whole
+    guidance block. That line describes the attempt, not a draft, so it stays true every
+    round — and its "không làm lại từ đầu" constraint matters most on the later rounds,
+    the exact rounds the strip runs on. Dropping the block wholesale would lose it.
+    """
+    wake = f"{WAKE_CONTEXT_PREFIX} đây là vòng SỬA thứ 2 — không làm lại từ đầu."
+    only_wake = f"KẾT QUẢ BƯỚC TRƯỚC:\nsố liệu quý 3\n\n{GUIDANCE_HEADER}\n{wake}"
+
+    kept = _strip_guidance(only_wake)
+
+    assert wake in kept, "standing framing survives; it is not about a stale draft"
+    assert "số liệu quý 3" in kept
+
+    # With BOTH present the line is kept and only the coordinator's note goes.
+    both = f"{GUIDANCE_HEADER}\n{wake}\nLần trước thiếu mục B, hãy thêm."
+    kept_both = _strip_guidance(both)
+    assert wake in kept_both
+    assert "thiếu mục B" not in kept_both
+
+
+def test_strip_anchors_on_the_last_header_not_an_echoed_one():
+    """Deps content is unsanitised model output: an upstream draft that quotes the
+    header would, under a first-match search, truncate the handoff there — taking the
+    CEO brief, the clarify answers and every deps artifact after it with it. The real
+    note is always appended LAST, so anchor on the last occurrence.
+    """
+    handoff = (
+        f"KẾT QUẢ BƯỚC TRƯỚC:\nnháp cũ trích lại '{GUIDANCE_HEADER}' abc\n\n"
+        "phần quan trọng\n\n"
+        f"{GUIDANCE_HEADER}\nLần trước thiếu mục B."
+    )
+
+    kept = _strip_guidance(handoff)
+
+    assert "phần quan trọng" in kept, "content after an echoed header must survive"
+    assert "Lần trước thiếu mục B" not in kept, "the real note is still dropped"
