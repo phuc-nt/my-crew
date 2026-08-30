@@ -1,12 +1,12 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v94, đã ship tới 0.14.0 — arc v86–v94). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Lộ trình + trạng thái (as-built v95, đã ship tới 0.15.0 — arc v86–v95). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
 > Cập nhật: 2026-08-30.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v0.14.0 (PyPI, 2026-08-30 — arc
-v86–v94).** 4091 BE + 406 FE + 44 e2e test, ruff/tsc sạch.
+**Production-usable, single-user autonomy-first. Đã ship tới v0.15.0 (PyPI, 2026-08-30 — arc
+v86–v95).** 4212 BE + 417 FE + 44 e2e test + 33 live fullflow (opt-in), ruff/tsc sạch.
 Mọi vòng E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out,
 UAT đối kháng, benchmark sprint-vs-team chấm mù, live e2e opt-in, release gate delta).
 
@@ -69,6 +69,28 @@ ròng 0 (khớp-chuỗi sai nghĩa). Routing 0 diff. Cổng: 4091 BE passed, ruf
 Việc vòng sau: xét lại tín hiệu `'trong tuần'`→nhiều-giai-đoạn (bắt nhầm hạn chót); rõ hóa
 phân rã bước review-and-finalize (tách "chốt bản cuối" khỏi "phán quyết" — case meeting_notes
 stalled vì mơ hồ này); bộ đề ≥30 case cho routing + đo lại tương quan sạch→thắng phi-cơ-học.
+
+**v95 (zalo business fleet P2/P3/P4/P6 — 08-30, ship 0.15.0):** 4 phase của plan
+`260830-1311-zalo-business-fleet` (P1 kênh Zalo + P5 digital-assistant khách **hoãn**, chờ OA
+verified). (1) **Control-plane API** — `delegate_work` + status hợp nhất + fleet overview cho
+caller ngoài SPA, confirm bắt buộc mang plan hash hiện hành (hash cũ/thiếu → từ chối, không
+hành động trên kế hoạch caller chưa thấy); (2) **escalation→manager agent** — việc vượt thẩm
+quyền mint task 1 bước cho manager thay vì chết tại chỗ, 3 chốt chống bão: task escalate không
+escalate lại, cap ngày theo nguồn, manager không giao được → báo thẳng chủ; `company.yaml`
+thêm `manager_id`/`escalation_daily_cap` (chưa có UI ghi → mọi save path phải giữ giá trị đặt
+tay); (3) **credential store mã hoá** — `credentials.enc` Fernet per-account thay token
+plaintext, master key do store tự ghi, bộ lọc egress học cả hai dạng Fernet; (4) **worker
+packs accounting + Meta Ads** (đọc-insight), agent có media dir bền không bị quét dọn.
+Hai lỗi hạng production **chỉ lộ khi chạy model thật**: hỏi giá/tỷ giá được trả lời từ trí nhớ
+cũ thay vì cử người tra; việc đụng bên ngoài (gửi mail, clone repo chạy test) trả về danh sách
+lệnh thay vì thành việc — nặng nhất trên catalog admin (trượt 4/5, personal 1/5: catalog lớn
+hơn cho model thêm cớ kết luận "không lệnh nào khớp"). Sửa ở prompt + mô tả lệnh, không nới
+assert; sau sửa 42/42 trên ma trận phân loại. Thêm `dead_end` không còn đè `source` của
+route (phá nguồn mà escalation cần). **Live fullflow 33 case** vs model thật ($0.19, 19 phút,
+không case nào quá 1/4 trần chi phí). Cổng: 4212 BE passed / 69 skipped, 417 FE, 44 e2e,
+ruff sạch; release + routing bench **0 delta** so v0.14.0.
+Việc vòng sau: P1 (Zalo OA) + P5; `escalation_daily_cap` per-source hay global; nối
+`ads_credential` vào config builder.
 
 **v80–v85 (arc quan sát bước + toàn vẹn nguồn — 08-16→08-18, trong v0.14.0):** **v80 step
 observability**: transcript JSONL per-attempt trong jail agent (`runtime/step_recorder.py`),

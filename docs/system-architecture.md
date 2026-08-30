@@ -1,9 +1,9 @@
 # System Architecture — my-crew
 
-> Kiến trúc kỹ thuật (as-built, v92 — two-lane routing v2; backend ở mức 0.14.0 unreleased, last released 0.13.0). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
+> Kiến trúc kỹ thuật (as-built, v95 — control-plane API, escalation→manager, credential store, worker packs; backend 0.15.0). Đọc cùng [project-overview-pdr](project-overview-pdr.md)
 > (vì sao) + [action-gateway-explainer](action-gateway-explainer.md) (mô hình an toàn) +
 > [codebase-summary](codebase-summary.md) (cái gì ở file nào).
-> Cập nhật: 2026-08-26.
+> Cập nhật: 2026-08-30.
 
 ## 1. Nguyên tắc kiến trúc
 

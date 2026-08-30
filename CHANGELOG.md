@@ -3,6 +3,70 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.15.0] — 2026-08-30
+
+The crew can now be reached from outside the app, escalate past its own authority, hold
+service credentials without leaving them in plaintext, and staff two new kinds of work.
+
+A script or a CLI can hand the crew a job and poll it through a stable HTTP contract
+instead of driving the web app. Work that exceeds an agent's authority no longer
+dead-ends: it becomes a task for the manager agent, with three guards so it cannot turn
+into a storm — an escalated task can never escalate again, a per-source daily cap holds
+the volume, and a manager who cannot be assigned degrades to telling the operator
+directly. Service tokens move into a per-account encrypted file; the only secret left in
+`.env` is the master key, which the store writes itself and no HTTP route can set or
+overwrite. Two worker packs — accounting and Meta Ads — read their sources for insight,
+with any write still held by the gateway.
+
+The Zalo channel and the customer-facing assistant are deliberately not in this release;
+they wait on an approved Zalo OA.
+
+Two of the fixes come from running the whole flow against a real model rather than a
+stub, which is the only place they were visible: the assistant was answering questions
+about prices and rates from its own stale memory instead of sending someone to look, and
+a request touching the outside world — send this mail, clone this repo and run the tests
+— came back as a list of commands instead of becoming work, worst on the admin catalog
+where it missed four times in five.
+
+### Added
+- **A stable HTTP contract for callers outside the app.** `delegate_work`, unified task
+  status, and a fleet overview, wrapping the same assign and store APIs the web app
+  uses. A confirm must carry a current plan hash, so a stale or missing hash is refused
+  rather than acting on a plan the caller never saw.
+- **Escalation to the manager agent.** A request past an agent's authority mints a
+  single-step manager task instead of dead-ending, and the owner is told where it came
+  from. `company.yaml` gains `manager_id` and `escalation_daily_cap`; no UI writes them
+  yet, so every save path preserves a hand-set value.
+- **Encrypted at-rest credentials.** Per-account Fernet-encrypted `credentials.enc`
+  replaces plaintext service tokens, with the master key written by the store itself on
+  first use. The egress secret filter learns both Fernet shapes, so neither a ciphertext
+  blob nor the key can leave in a log line or an outbound message.
+- **Accounting and Meta Ads worker packs**, read-insight for now, with profile templates
+  for each. Agents get a durable media dir the hygiene sweep never touches, distinct
+  from the disposable tmp dir it now sweeps on a short window.
+- **`my-crew agent purge-data`** for an orphaned data dir whose profile is already gone
+  — the one case that has no profile to load, so it is handled before the load gate.
+
+### Fixed
+- **A question that needs a source becomes work instead of a guess.** Anything that
+  changes over time — a price, a rate, the news — was answered from the model's own
+  stale memory and no task was ever created. Such a question now goes to whoever can
+  look it up. `unsupported` now means work nobody can be given, which is rare: a request
+  touching the outside world goes to the team, where the gateway already holds it for
+  approval.
+- **A stalled sprint no longer erases its own routing source.** Marking a sprint a dead
+  end overwrote the route's `source` with the literal `"dead_end"`, destroying the
+  original source an escalated task needs to tell the owner where the work came from.
+  The mark is its own flag now, counted separately in route stats and bench metrics.
+- **The dead-sprint upgrade really does carry the unfinished work forward.** Its test
+  seeded the handoff artifact in a shape the reader could not use, so the partial draft
+  never reached the new plan and the case had never tested what it claimed to.
+
+### Verification
+33 full-flow cases against a real model (\$0.19, 19 min, no case above a quarter of its
+cost ceiling); 4212 offline tests; the offline release and routing benches show no
+change against 0.14.0 across 16 and 8 cases.
+
 ## [0.14.0] — 2026-08-30
 
 Work now picks its own lane. Simple jobs run as a one-process sprint and finish in
