@@ -31,6 +31,7 @@ import logging
 
 from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
 from my_crew.runtime.team_task_store import TeamStep, TeamTask, TeamTaskStore
+from my_crew.tools.search_result_formatter import scan_for_injection_markers
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,57 @@ _DROPPED_RESULT_TEXT = (
     "từ bước bị bỏ qua'."
 )
 
+#: Line prefix opening the salvaged draft section inside a drop placeholder. The step
+#: being dropped usually DID produce something — the worker's `_deliver` writes
+#: `result_text` to the artifact even when the self-check fails (that is how the row
+#: reached `needs_decision`), and the drop used to overwrite that draft with the bare
+#: placeholder. Measured across lanes9-12: 8/10 dropped steps had a real draft thrown
+#: away, and every downstream consumer then starved (team matrix delivered a 0/9-cell
+#: table). Keeping the draft under this marker lets dependents work with labeled
+#: unverified content instead of nothing.
+SALVAGE_DRAFT_PREFIX = "BẢN NHÁP CHƯA ĐẠT SOÁT CỦA BƯỚC NÀY (dùng phải dán nhãn):"
+
+_DROPPED_WITH_DRAFT_TEXT = (
+    DROP_PLACEHOLDER_PREFIX + " vì không qua được kiểm tra chất lượng — nhưng bản "
+    "nháp cuối của nó được giữ lại bên dưới. Bước sau ĐƯỢC dùng nội dung nháp, với "
+    "điều kiện dán nhãn 'dữ liệu chưa qua soát' ngay cạnh mọi số liệu/kết luận lấy "
+    "từ nháp; TUYỆT ĐỐI không bịa thêm gì ngoài những điều nháp đã ghi."
+)
+
+#: Ceiling for the salvaged draft carried inside the placeholder — same spirit as the
+#: task-level `_MAX_SALVAGE_CHARS` (6000) one shape up, smaller because this text rides
+#: every dependent's handoff prompt, not just the final delivery.
+_MAX_DRAFT_SALVAGE_CHARS = 4000
+
+#: Below this, a "draft" is more likely an error string or a refusal stub than content
+#: worth handing downstream — the bare placeholder is more honest.
+_MIN_DRAFT_SALVAGE_CHARS = 200
+
+
+def _salvageable_draft(artifact: dict | None) -> str:
+    """The dropped step's own prior draft worth keeping, or "" for the bare placeholder.
+
+    Guards: no artifact / empty text (a dead `failed`/`timeout` row may never have
+    delivered), an already-dropped placeholder (a re-drop must not nest placeholders),
+    stub-length text (see `_MIN_DRAFT_SALVAGE_CHARS`), and text that trips the
+    injection scan. The scan guard exists because the dependents' handoff wraps this
+    artifact through `format_internal_content`, which quarantines the WHOLE text on
+    one marker hit — attaching such a draft would erase even the placeholder and
+    reason for every dependent (measured live in the first salvage bench: a draft
+    containing the benign phrase 'bỏ qua yêu cầu tìm kiếm' blanked the entire
+    handoff). A draft that cannot ride is worse than no draft.
+    """
+    text = str((artifact or {}).get("result_text") or "").strip()
+    if len(text) < _MIN_DRAFT_SALVAGE_CHARS or text.startswith(DROP_PLACEHOLDER_PREFIX):
+        return ""
+    if scan_for_injection_markers(text):
+        return ""
+    if len(text) > _MAX_DRAFT_SALVAGE_CHARS:
+        cut = text.rfind("\n", 0, _MAX_DRAFT_SALVAGE_CHARS)
+        text = text[:cut if cut > 0 else _MAX_DRAFT_SALVAGE_CHARS].rstrip()
+        text += "\n(… nháp dài hơn, đã cắt bớt)"
+    return text
+
 
 def drop_step_with_placeholder(
     store: TeamTaskStore, task: TeamTask, step: TeamStep, *, reason: str = "",
@@ -68,20 +120,34 @@ def drop_step_with_placeholder(
     the attempt-guarded store write matched no row — the caller decides what a refused
     drop means (skip the step in a batch, or fall back to a full give_up).
     """
-    from my_crew.agent.team_task_artifact import write_step_artifact
+    from my_crew.agent.team_task_artifact import read_step_artifact, write_step_artifact
 
+    # Read BEFORE the store write: the placeholder below overwrites this artifact, and
+    # what it currently holds is the step's last failed draft (the worker writes
+    # `result_text` even on a failed self-check — that is how the row got here).
+    draft = _salvageable_draft(read_step_artifact(team_tasks_root(), task.id, step.seq))
     outcome_ref = f"team-tasks/{task.id}/step-{step.seq}.json"
     if not store.mark_step_dropped(
         task.id, step.step_id, outcome_ref=outcome_ref, attempt_id=step.attempt_id,
     ):
         return False
-    text = _DROPPED_RESULT_TEXT
+    text = _DROPPED_WITH_DRAFT_TEXT if draft else _DROPPED_RESULT_TEXT
     # The reason is one LINE by contract: the aggregate finds it back with a
     # line-prefix scan, so a multiline judge verdict would silently lose everything
     # after its first newline. Collapse whitespace instead of trusting the LLM.
+    # A reason tripping the injection scan is dropped for the same reason a draft is
+    # (see `_salvageable_draft`): one marker hit quarantines the whole artifact in
+    # every dependent's handoff, losing far more than the reason line.
     reason_line = " ".join(reason.split())
+    if reason_line and scan_for_injection_markers(reason_line):
+        reason_line = ""
     if reason_line:
         text = f"{text}\n{DROP_REASON_PREFIX}{reason_line}"
+    if draft:
+        # Draft LAST, after the placeholder + reason lines: the placeholder prefix
+        # must stay the first byte (aggregate detects drops via startswith) and the
+        # reason must stay a clean line-prefix hit before free-form draft text.
+        text = f"{text}\n{SALVAGE_DRAFT_PREFIX}\n{draft}"
     write_step_artifact(
         team_tasks_root(), task.id, step.seq,
         {"result_text": text, "version": step.attempt_id or "ceo-drop",

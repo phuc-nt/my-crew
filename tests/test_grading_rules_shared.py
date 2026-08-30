@@ -10,6 +10,7 @@ that self-check would have failed. These tests fail if the copies ever come back
 from my_crew.llm.grading_rules import (
     COUNTABLE_RULE,
     EVIDENCE_RULES,
+    INHERITED_GAP_RULE,
     NONPUBLIC_RULE,
     REQUEST_CEILING_RULE,
     SOURCE_LABEL_RULE,
@@ -56,10 +57,37 @@ def test_both_graders_carry_the_inherited_gap_rule():
     """A step downstream of a skipped one receives a 'KHÔNG CÓ KẾT QUẢ' handoff. The
     worker side already has the honesty rule (name the gap, don't fabricate); without
     the symmetric grading rule, both graders would fail the honest result for the very
-    gap it honestly named — turning every skip into a review-death one step later."""
-    marker = "QUY TẮC KHOẢNG TRỐNG THỪA KẾ"
-    assert marker in _CHECK_SYSTEM
-    assert marker in _REVIEW_SYSTEM
+    gap it honestly named — turning every skip into a review-death one step later.
+    Byte-identical from the one constant — the rule lived as two verbatim copies in
+    the two prompt modules, the exact drift shape this module exists to prevent."""
+    assert INHERITED_GAP_RULE in _CHECK_SYSTEM
+    assert INHERITED_GAP_RULE in _REVIEW_SYSTEM
+
+
+def test_every_layer_honors_a_salvaged_draft():
+    """A drop can carry the dead step's last failed draft (8/10 measured drops had
+    one). The draft only helps if EVERY layer agrees labeled use of it is legitimate:
+    the placeholder must invite use under the label, the worker honesty rule must
+    carve the exception, both graders (via the shared gap rule) must not call it
+    fabrication, the rework prompt must not claim 'no source exists', and the source
+    rule's placeholder⇒fabricated sentence must exempt draft-traceable figures. One
+    dissenting layer re-creates the starved-downstream death the salvage fixes."""
+    from my_crew.agent.ops_stalled_task import (
+        _DROPPED_WITH_DRAFT_TEXT,
+        SALVAGE_DRAFT_PREFIX,
+    )
+    from my_crew.llm.team_task_check_prompt import _REWORK_SYSTEM
+    from my_crew.llm.team_task_prompt import _SYSTEM
+
+    marker = "BẢN NHÁP CHƯA ĐẠT SOÁT"
+    assert SALVAGE_DRAFT_PREFIX.startswith(marker)
+    label = "dữ liệu chưa qua soát"
+    for text in (_DROPPED_WITH_DRAFT_TEXT + SALVAGE_DRAFT_PREFIX, INHERITED_GAP_RULE,
+                 _SYSTEM, _REWORK_SYSTEM, SOURCE_RULE):
+        assert marker in text
+    for text in (_DROPPED_WITH_DRAFT_TEXT, INHERITED_GAP_RULE, _SYSTEM,
+                 _REWORK_SYSTEM):
+        assert label in text
 
 
 def test_every_layer_accepts_an_honest_nonpublic_cell():

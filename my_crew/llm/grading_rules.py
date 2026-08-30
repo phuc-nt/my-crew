@@ -31,7 +31,9 @@ SOURCE_RULE = (
     "KHÔNG được chứa số liệu hay tên tổ chức không truy được về đầu vào. Đặc biệt: nếu "
     "đầu vào ghi 'KHÔNG CÓ KẾT QUẢ' / bước trước bị bỏ qua, thì mọi bảng số, khoảng giá "
     "hay tên nguồn trong kết quả đều là bịa — chấm `passed=false` và nêu rõ ở `failures`, "
-    "kể cả khi kết quả trình bày đủ mọi mục tiêu chí. Ngược lại, dữ liệu MỚI HƠN kiến "
+    "kể cả khi kết quả trình bày đủ mọi mục tiêu chí (trừ số liệu truy được về khối "
+    "'BẢN NHÁP CHƯA ĐẠT SOÁT' đính kèm ngay dưới placeholder đó — xem QUY TẮC KHOẢNG "
+    "TRỐNG THỪA KẾ). Ngược lại, dữ liệu MỚI HƠN kiến "
     "thức của bạn KHÔNG phải bằng chứng bịa: chỉ kết luận bịa khi đầu vào cho thấy KHÔNG "
     "hề có dữ liệu đó. Kết quả trung thực khi thiếu dữ liệu phải NÓI RÕ là thiếu, không "
     "lấp bằng ước lượng nghe hợp lý."
@@ -82,6 +84,25 @@ NONPUBLIC_RULE = (
     "khi tiêu chí đòi con số hay nguồn từng ô; ghi chú đó CHÍNH LÀ nguồn của ô. Chỉ "
     "chấm KHÔNG ĐẠT khi ô bỏ trống, ghi thiếu mà không nói đã tra ở đâu, hoặc dữ "
     "liệu đó thật ra có sẵn trong ĐẦU VÀO."
+)
+
+#: A step downstream of a deliberately dropped step must not be failed for the gap it
+#: inherited. Both graders used to carry their own verbatim copies of this rule (the
+#: exact drift this module exists to prevent). The draft clause exists because a drop
+#: can now carry the dead step's last failed draft (`ops_stalled_task.py`'s
+#: SALVAGE_DRAFT_PREFIX): the draft rides inside the step's input, so labeled use of
+#: it IS traceable sourcing — without this clause the SOURCE_RULE placeholder sentence
+#: would fail every honest consumer of a salvaged draft.
+INHERITED_GAP_RULE = (
+    "QUY TẮC KHOẢNG TRỐNG THỪA KẾ: nếu ĐẦU VÀO bước này ghi 'KHÔNG CÓ KẾT QUẢ' "
+    "(bước trước đã bị chủ động bỏ qua) và kết quả ĐÃ nêu trung thực phần thiếu dữ "
+    "liệu đó, thì các tiêu chí phụ thuộc dữ liệu bị thiếu KHÔNG tính là không đạt — "
+    "chấm trên phần dữ liệu thật sự có; khoảng trống được ghi rõ là trung thực, "
+    "không phải lỗi. Riêng khi placeholder đó kèm khối 'BẢN NHÁP CHƯA ĐẠT SOÁT': kết "
+    "quả ĐƯỢC dùng nội dung nháp, miễn là dán nhãn 'dữ liệu chưa qua soát' cạnh số "
+    "liệu/kết luận lấy từ nháp — dùng nháp CÓ nhãn không phải bịa, không phải lỗi; "
+    "chỉ chấm không đạt khi kết quả lấy số từ nháp mà KHÔNG dán nhãn, hoặc thêm dữ "
+    "liệu ngoài những gì nháp đã ghi."
 )
 
 #: The whole evidence bar, in the order a grader should apply it: provenance first,

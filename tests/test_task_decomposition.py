@@ -385,6 +385,23 @@ def test_decompose_prompt_pins_fanout_rule():
     assert '"needs_web":false' in _DECOMPOSE_SYSTEM
 
 
+def test_decompose_prompt_bans_bare_single_entity_collection_steps():
+    """Measured across lanes9-12: 6 of 10 dropped steps were bare one-entity
+    collect/lookup steps — they inherit quantitative criteria with no product around
+    them, and when one dies its whole downstream branch starves. Below the parallel
+    fan-out threshold the lookup must be folded INTO the producing step; at or above
+    it, each collect step must batch multiple entities."""
+    from my_crew.llm.team_task_prompt import _DECOMPOSE_SYSTEM
+
+    assert "QUY TẮC GỘP THU THẬP" in _DECOMPOSE_SYSTEM
+    assert "MỘT thực thể đứng" in _DECOMPOSE_SYSTEM
+    assert "không bao giờ một bước một thực thể" in _DECOMPOSE_SYSTEM
+    # The two rules must not contradict: batching kicks in exactly where the
+    # parallel-split rule activates.
+    assert _DECOMPOSE_SYSTEM.index("QUY TẮC TÁCH SONG SONG") \
+        < _DECOMPOSE_SYSTEM.index("QUY TẮC GỘP THU THẬP")
+
+
 # --- v74.2: code-side fan-out bias --------------------------------------------------
 
 
