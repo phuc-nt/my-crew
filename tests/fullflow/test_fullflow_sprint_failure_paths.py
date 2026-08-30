@@ -188,7 +188,7 @@ def test_sprint_dead_end_escalates_once_with_team_upgrade_hint(fullflow):
         route = store.get_route(final["id"])
     finally:
         store.close()
-    assert route is not None and route.get("source") == "dead_end", route
+    assert route is not None and route.get("dead_end") is True, route
     assert route.get("previous"), route
 
     before = h.sent_texts()

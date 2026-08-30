@@ -343,7 +343,15 @@ def load_lane_stats(db_path: Path | str, *, limit: int = 500) -> dict[str, Any]:
         span = spans.get(str(r["id"]))
         if span:
             bucket["spans"].append(span)
-        source = str(route.get("source") or "unknown")
+        # `dead_end` is a separate boolean flag on the route (not a `source` value —
+        # overwriting `source` with the literal "dead_end" destroyed the ORIGINAL
+        # routing/escalation source a stalled task needed for attribution; see the
+        # `_mark_route_dead_end` fix in `team_tick_collaborators.py`). Bucket it under
+        # its own pseudo-source name here so `counted["dead_end"]` below still works
+        # without resurrecting that overwrite.
+        source = "dead_end" if route.get("dead_end") is True else str(
+            route.get("source") or "unknown"
+        )
         bucket["sources"][source] = bucket["sources"].get(source, 0) + 1
         effort = str(route.get("effort") or "")
         if effort:

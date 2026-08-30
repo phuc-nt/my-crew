@@ -168,8 +168,9 @@ def test_only_high_raises_the_measurement_flag(monkeypatch):
 
 
 def test_the_tier_survives_the_dead_end_stamp(monkeypatch):
-    """Dấu bế tắc ghi đè `source` nhưng phải giữ `effort` — nếu không thì con số duy
-    nhất tính năng này cần ("bậc nào hay bế tắc") vĩnh viễn bằng 0."""
+    """Dấu bế tắc ghi cờ RIÊNG `dead_end` (không còn đè `source` — xem H1 fix, đè
+    `source` từng xoá mất nguồn escalation gốc) nhưng phải giữ `effort` — nếu không
+    thì con số duy nhất tính năng này cần ("bậc nào hay bế tắc") vĩnh viễn bằng 0."""
     import my_crew.runtime.team_tick_collaborators as tick_mod
 
     _wire_preview(monkeypatch, "high")
@@ -178,7 +179,7 @@ def test_the_tier_survives_the_dead_end_stamp(monkeypatch):
     tick_mod._mark_route_dead_end(slots["task_id"])
 
     route = _route_of(slots["task_id"])
-    assert route["source"] == "dead_end"
+    assert route["dead_end"] is True
     assert route["effort"] == "high"
 
 
@@ -336,7 +337,8 @@ def test_route_stats_counts_by_tier_and_names_the_stuck_ones():
     from my_crew.agent.ops_route_stats import run_route_stats
 
     _seed_route("t-low", {"mode": "sprint", "source": "heuristic", "effort": "low"})
-    _seed_route("t-high", {"mode": "sprint", "source": "dead_end", "effort": "high"})
+    _seed_route("t-high", {"mode": "sprint", "source": "heuristic", "effort": "high",
+                           "dead_end": True})
     _seed_route("t-team", {"mode": "team", "source": "heuristic"})
 
     text = run_route_stats({})

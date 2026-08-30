@@ -43,8 +43,9 @@ def _fixture(tmp_path):
               route={"mode": "sprint", "source": "prefix", "reason": "r",
                      "signals": {}, "effort": "high", "effort_high": True})
         _task(store, "sp-dead", cost=0.03, delivered=False,
-              route={"mode": "team", "source": "dead_end", "reason": "r",
-                     "signals": {}, "previous": "sp-heur-1"}, step_type="content")
+              route={"mode": "team", "source": "heuristic", "dead_end": True,
+                     "reason": "r", "signals": {}, "previous": "sp-heur-1"},
+              step_type="content")
         _task(store, "tm-refusal", cost=0.30, delivered=True,
               route={"mode": "team", "source": "refusal", "reason": "r",
                      "signals": {}}, step_type="content")

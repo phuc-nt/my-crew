@@ -82,6 +82,12 @@ def _mark_route_dead_end(task_id: str) -> None:
     định gốc giữ nguyên trong khoá `previous`: cái đáng học là "đường nào dẫn tới bế
     tắc", không phải chỉ "có bế tắc".
 
+    Ghi dấu qua khoá RIÊNG `dead_end` — KHÔNG đè `source`. `source` là namespace
+    chung của route (v94 P3 `manager_escalation` ghi `route_json.source` = nguồn
+    escalation gốc để `_manager_task_outcome_prefix` báo đúng "(nguồn: ...)" cho
+    owner); trước đây dấu bế tắc này thay `source` thành literal "dead_end", làm
+    owner nhận sai nguồn escalation. Đọc lại dấu bế tắc qua `route.get("dead_end")`.
+
     try/degrade như mọi thứ khác trong `_escalate`: đây là dữ liệu quan sát, hỏng thì
     ghi log — không bao giờ được chặn một cảnh báo đang trên đường tới CEO.
     """
@@ -92,9 +98,9 @@ def _mark_route_dead_end(task_id: str) -> None:
         store = TeamTaskStore(team_tasks_db_path())
         try:
             route = store.get_route(task_id)
-            if route is None or route.get("source") == "dead_end":
+            if route is None or route.get("dead_end") is True:
                 return
-            store.set_route(task_id, {**route, "source": "dead_end", "previous": route})
+            store.set_route(task_id, {**route, "dead_end": True, "previous": route})
         finally:
             store.close()
     except Exception:
@@ -552,6 +558,41 @@ def make_deliver_room(loaded: Any = None, settings: Any = None):
     return _deliver
 
 
+def _manager_task_outcome_prefix(task: TeamTask) -> str:
+    """v94 P3 (decision D7, requirement c): when THIS task is itself a Manager
+    escalation task (minted by `manager_escalation.escalate_to_manager`) and it stalls
+    or gets given up on inside the normal ticker, the owner must see that plainly — the
+    ticker's `deps.escalate` call is the ONLY path this outcome has to a human, since
+    an escalation task's PIC is the Manager agent, not a person.
+
+    Returns "" for every ordinary task (the overwhelming majority — no route recorded,
+    or a route recorded by the sprint/team router instead) so `_escalate`'s message
+    stays byte-identical to pre-P3 for every internal escalation source. try/degrade:
+    a store hiccup here must never block an escalation already on its way to a human.
+    """
+    try:
+        from my_crew.runtime.manager_escalation import is_escalation_origin
+        from my_crew.runtime.team_task_paths import team_tasks_db_path
+        from my_crew.runtime.team_task_store import TeamTaskStore
+
+        store = TeamTaskStore(team_tasks_db_path())
+        try:
+            route = store.get_route(task.id)
+        finally:
+            store.close()
+    except Exception:  # noqa: BLE001 — decoration only, never blocks delivery
+        logger.warning("team-tick: manager-task outcome check failed for %s", task.id,
+                       exc_info=True)
+        return ""
+    if not is_escalation_origin(route):
+        return ""
+    source = str((route or {}).get("source") or "").strip()
+    context_ref = str((route or {}).get("context_ref") or "").strip()
+    tail = f" (nguồn: {source})" if source else ""
+    ref = f" — tham chiếu: {context_ref}" if context_ref else ""
+    return (f"⚠️ Manager không xử lý xong việc do escalation{tail} chuyển tới{ref}.\n\n")
+
+
 def make_escalate(loaded: Any, settings: Any):
     """Telegram escalation, mirroring `ops_alert_runner.run_ops_alerts`'s exact
     gateway-construction + `send_telegram_message` call shape. try/degrade: any failure
@@ -559,6 +600,7 @@ def make_escalate(loaded: Any, settings: Any):
     callable's documented contract (`CoordinatorDeps.escalate`) is "never raises"."""
 
     def _escalate(task: TeamTask, step: TeamStep | None, event_kind: str, message: str) -> None:
+        message = _manager_task_outcome_prefix(task) + message
         if event_kind == "review_rounds_exhausted":
             message = message + _review_evidence_block(task, step)
         if event_kind in _STALL_EVENT_KINDS:

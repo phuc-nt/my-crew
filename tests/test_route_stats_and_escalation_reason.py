@@ -116,9 +116,12 @@ def test_route_stats_names_who_decided_in_words():
 def test_route_stats_surfaces_both_directions_of_a_wrong_guess():
     """Đây là lý do lệnh này tồn tại. `downgrade` = đoán thừa về phía đội (rẻ, mất một
     lượt decompose). `dead_end` = đoán thiếu, việc chạy hết một chuyến sprint mới lộ
-    (đắt). Hai con số đó phải hiện ra tách bạch, không trộn vào "ai quyết"."""
+    (đắt) — cờ RIÊNG `route["dead_end"]`, không còn tái dùng khoá `source` (H1 fix:
+    đè `source` xoá mất nguồn escalation gốc). Hai con số đó phải hiện ra tách bạch,
+    không trộn vào "ai quyết"."""
     _seed("t1", _route("sprint", "downgrade"))
-    _seed("t2", _route("sprint", "dead_end"))
+    dead_end_route = {**_route("sprint", "heuristic"), "dead_end": True}
+    _seed("t2", dead_end_route)
     _seed("t3", _route("sprint", "heuristic"))
 
     text = run_route_stats({})

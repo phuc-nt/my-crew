@@ -22,13 +22,14 @@ from __future__ import annotations
 from my_crew.agent.sprint_intake import _MODE_LABELS
 
 #: Nguồn quyết định → nhãn cho người đọc. Khớp đúng các giá trị `source` mà
-#: `_plan_for_brief` và `_mark_route_dead_end` ghi ra.
+#: `_plan_for_brief` ghi ra. `dead_end` KHÔNG còn nằm trong khoá `source` (H1 fix:
+#: đè `source` xoá mất nguồn escalation gốc) — giờ là cờ riêng `route["dead_end"]`,
+#: đếm riêng bên dưới thay vì qua `_SOURCE_LABELS`/`by_source`.
 _SOURCE_LABELS = {
     "prefix": "CEO ép bằng tiền tố",
     "refusal": "rào an toàn (sprint không nhận)",
     "heuristic": "bộ đoán tự động",
     "downgrade": "hạ từ team xuống sprint",
-    "dead_end": "sprint bế tắc, cần chạy lại bằng đội",
     "upgrade": "đã nâng lên đội (mang theo bối cảnh)",
 }
 
@@ -53,8 +54,10 @@ def run_route_stats(slots: dict[str, str]) -> str:
 
     by_mode: dict[str, int] = {}
     by_source: dict[str, int] = {}
-    # `source == "dead_end"` chỉ được đóng vào lúc `_mark_route_dead_end` chạy, tức là
-    # việc đã dừng hẳn — nên không cần lọc thêm theo trạng thái task.
+    # `route["dead_end"] is True` chỉ được đóng vào lúc `_mark_route_dead_end` chạy,
+    # tức là việc đã dừng hẳn — nên không cần lọc thêm theo trạng thái task. Cờ RIÊNG,
+    # không còn tái dùng khoá `source` (H1 fix: đè `source` xoá mất nguồn escalation
+    # gốc mà `_manager_task_outcome_prefix` cần để báo đúng "(nguồn: ...)" cho owner).
     dead_ends = 0
     # Đếm theo bậc độ khó, kèm số bế tắc của từng bậc. Đây là con số phải có TRƯỚC khi
     # cho `effort` quyền đổi lane: "đề chấm khó bế tắc bao nhiêu phần trăm" chỉ trả lời
@@ -64,14 +67,15 @@ def run_route_stats(slots: dict[str, str]) -> str:
     for route, _ in routes:
         mode = str(route.get("mode") or "?")
         source = str(route.get("source") or "?")
+        is_dead_end = route.get("dead_end") is True
         by_mode[mode] = by_mode.get(mode, 0) + 1
         by_source[source] = by_source.get(source, 0) + 1
-        if source == "dead_end":
+        if is_dead_end:
             dead_ends += 1
         effort = str(route.get("effort") or "").strip().lower()
         if effort in _EFFORT_LABELS:
             by_effort[effort] = by_effort.get(effort, 0) + 1
-            if source == "dead_end":
+            if is_dead_end:
                 dead_by_effort[effort] = dead_by_effort.get(effort, 0) + 1
 
     total = len(routes)

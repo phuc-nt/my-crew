@@ -738,8 +738,11 @@ def test_a_team_task_dead_end_escalation_is_byte_identical_to_before(tmp_path, m
 def test_a_sprint_dead_end_marks_the_routing_record(tmp_path, monkeypatch):
     """Bế tắc là dòng phản hồi DUY NHẤT nói bộ định tuyến đoán sai về phía sprint.
 
-    Nó ghi đè `source` nhưng giữ quyết định gốc trong `previous`: cái đáng đếm về sau
-    là "lớp nào của phễu dẫn tới bế tắc", không phải chỉ "có bế tắc".
+    Ghi cờ RIÊNG `dead_end: True`, KHÔNG đè `source` — `source` là namespace chung
+    của route (v94 P3 escalation cũng ghi `source` = nguồn escalation gốc; đè nó
+    bằng literal "dead_end" từng làm owner nhận sai nguồn escalation, xem H1). Quyết
+    định gốc giữ nguyên trong `previous`: cái đáng đếm về sau là "lớp nào của phễu
+    dẫn tới bế tắc", không phải chỉ "có bế tắc".
     """
     from my_crew.runtime import team_task_paths
     from my_crew.runtime.team_task_store import TeamTaskStore
@@ -764,9 +767,43 @@ def test_a_sprint_dead_end_marks_the_routing_record(tmp_path, monkeypatch):
         route = store.get_route("t1")
     finally:
         store.close()
-    assert route["source"] == "dead_end"
+    assert route["dead_end"] is True
+    assert route["source"] == "heuristic"  # nguồn gốc SỐNG SÓT, không bị đè
     assert route["previous"]["source"] == "heuristic"
     assert route["mode"] == "sprint"  # hướng đã đi giữ nguyên; chỉ ghi thêm kết cục
+
+
+def test_a_sprint_dead_end_preserves_an_escalation_source(tmp_path, monkeypatch):
+    """H1 regression: a task minted by `manager_escalation.escalate_to_manager`
+    (route carries `source=<original escalation source>`) that later dead-ends must
+    NOT have that source clobbered — `_manager_task_outcome_prefix` reads it back to
+    tell the owner which customer/source the escalation came from."""
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+
+    store = TeamTaskStore(team_task_paths.team_tasks_db_path())
+    try:
+        store.create_task(task_id="t1", title="viec")
+        store.set_route("t1", {"origin": "escalation", "source": "customer_assistant",
+                               "context_ref": "cust-9"})
+    finally:
+        store.close()
+
+    sprint_step = dataclasses.replace(_step(), step_type="sprint")
+    task = dataclasses.replace(_task(), steps=(sprint_step,))
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+    escalate(task, sprint_step, "gave_up", "không làm được")
+
+    store = TeamTaskStore(team_task_paths.team_tasks_db_path())
+    try:
+        route = store.get_route("t1")
+    finally:
+        store.close()
+    assert route["dead_end"] is True
+    assert route["source"] == "customer_assistant"
+    assert route["origin"] == "escalation"  # recursion guard also untouched
 
 
 def test_a_missing_routing_record_never_blocks_the_escalation(tmp_path, monkeypatch):
@@ -974,3 +1011,98 @@ def test_a_ceo_drop_without_a_reason_reads_as_deliberately_skipped(
     assert summary.startswith(
         "Hoàn thành với khoảng trống: bước 'thu thập' đã chủ động bỏ qua.\n\n"
     )
+
+
+# --- v94 P3: manager-escalation-task outcome prefix (requirement c) -----------------
+
+
+def _seeded_task_store(tmp_path, task_id="t1", route: dict | None = None):
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    store = TeamTaskStore(team_tasks_db_path())
+    store.create_task(task_id=task_id, title="Demo task", original_request="x",
+                      assigned_by="ceo", pic_id="mgr-1")
+    if route is not None:
+        store.set_route(task_id, route)
+    store.close()
+
+
+def test_a_manager_escalation_task_stall_gets_an_owner_facing_prefix(tmp_path, monkeypatch):
+    """Requirement (c): Manager bó tay → notify owner kèm context gốc. The prefix is
+    the ONLY path this outcome has to a human, since the task's PIC is the Manager
+    agent, never a person."""
+    from my_crew.runtime import team_task_paths
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    _seeded_task_store(tmp_path, "t1", {"origin": "escalation", "source": "customer_assistant",
+                                        "context_ref": "cust-42"})
+
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+    escalate(_task("t1"), None, "gave_up", "KHÔNG LÀM ĐƯỢC: hết cách.")
+
+    store = OfficeRoomStore(team_task_paths.team_tasks_root() / "office_room.sqlite3")
+    try:
+        message = store.list(OFFICE_ROOM_ID)[0].body["message"]
+    finally:
+        store.close()
+    assert "Manager không xử lý xong việc do escalation" in message
+    assert "customer_assistant" in message
+    assert "cust-42" in message
+    assert message.endswith("KHÔNG LÀM ĐƯỢC: hết cách.")
+
+
+def test_an_ordinary_task_gets_no_manager_prefix_byte_identical_to_before(tmp_path, monkeypatch):
+    """The hard regression requirement: every INTERNAL escalation source (no
+    `origin=escalation` route recorded) must produce the exact pre-P3 message."""
+    from my_crew.runtime import team_task_paths
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    _seeded_task_store(tmp_path, "t1", None)  # no route at all — the common case
+
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+    escalate(_task("t1"), None, "gave_up", "KHÔNG LÀM ĐƯỢC: hết cách.")
+
+    store = OfficeRoomStore(team_task_paths.team_tasks_root() / "office_room.sqlite3")
+    try:
+        message = store.list(OFFICE_ROOM_ID)[0].body["message"]
+    finally:
+        store.close()
+    assert message == "KHÔNG LÀM ĐƯỢC: hết cách."
+
+
+def test_a_team_router_route_does_not_trigger_the_manager_prefix(tmp_path, monkeypatch):
+    """A route record exists (v78 team-vs-sprint routing) but its origin is not
+    'escalation' — must not be mistaken for a manager-task outcome."""
+    from my_crew.runtime import team_task_paths
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+    _seeded_task_store(tmp_path, "t1", {"mode": "sprint", "source": "heuristic"})
+
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+    escalate(_task("t1"), None, "step_failed", "bước thất bại")
+
+    store = OfficeRoomStore(team_task_paths.team_tasks_root() / "office_room.sqlite3")
+    try:
+        message = store.list(OFFICE_ROOM_ID)[0].body["message"]
+    finally:
+        store.close()
+    assert "Manager không xử lý xong" not in message
+
+
+def test_a_task_with_no_store_row_at_all_never_blocks_the_escalation(tmp_path, monkeypatch):
+    """`_task()` builds a dataclass never persisted — `get_route` finds nothing for an
+    id absent from the store, which must degrade the same as "no route recorded"."""
+    from my_crew.runtime import team_task_paths
+
+    monkeypatch.setattr(team_task_paths, "DATA_DIR", tmp_path)
+
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+    escalate(_task("ghost-task"), None, "step_failed", "bước thất bại")
+
+    store = OfficeRoomStore(team_task_paths.team_tasks_root() / "office_room.sqlite3")
+    try:
+        message = store.list(OFFICE_ROOM_ID)[0].body["message"]
+    finally:
+        store.close()
+    assert message == "bước thất bại"
