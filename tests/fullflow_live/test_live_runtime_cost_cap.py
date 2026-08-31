@@ -89,12 +89,12 @@ TIGHT_CAP_USD = 0.0005
 #: the loop has genuine work to do across several rounds, which is what gives the ceiling
 #: a between-rounds check to fail.
 BRIEF = (
-    "Trong tuần, tra cứu web để dựng hồ sơ chuyên sâu về MỘT kỹ thuật duy nhất: "
-    "lượng tử hoá (quantization) mô hình ngôn ngữ lớn. Đây là một mạch việc liền, "
-    "KHÔNG chia nhỏ và KHÔNG giao cho người khác: lần lượt tìm nguồn, đọc, rồi đào "
-    "sâu thêm từ chính điều vừa đọc — cơ chế hoạt động, mức tiết kiệm chi phí thực "
-    "đo, đánh đổi về chất lượng, và điều kiện nên hoặc không nên dùng. Mỗi ý kèm "
-    "nguồn đã tra."
+    "NGHIÊN CỨU: tra cứu web tìm nguồn và dữ liệu MỚI về lượng tử hoá (quantization) "
+    "mô hình ngôn ngữ lớn, rồi trong tuần viết một hồ sơ chuyên sâu về đúng MỘT kỹ "
+    "thuật này. Đây là một mạch tra cứu liền, KHÔNG chia nhỏ và KHÔNG giao cho người "
+    "khác: tra cứu, đọc nguồn tìm được, rồi tra cứu tiếp dựa trên chính điều vừa đọc "
+    "— cơ chế hoạt động, mức tiết kiệm chi phí đã được đo, đánh đổi về chất lượng, và "
+    "điều kiện nên hoặc không nên dùng. Mỗi ý kèm nguồn đã tra được trên web."
 )
 
 
