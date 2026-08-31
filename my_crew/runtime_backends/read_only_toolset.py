@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -120,14 +121,67 @@ def _classify_ok(tool_name: str, args: dict) -> None:
         )
 
 
+def _audit_read_call(tool_name: str, verdict: str, reason: str, elapsed_ms: int) -> None:
+    """Record one read-tool call on the shared trail. Never raises.
+
+    The shim was already the single policy chokepoint; until now it was a chokepoint that
+    kept no record, so a Lớp B audit could see writes but not the reads that informed
+    them. Identity comes from the ambient `ToolCallContext` (see that module for why it
+    is ambient), and lands in `params` rather than as new `AuditEntry` fields: task/step/
+    iteration are meaningful for a team step and empty for every other caller, and the
+    entry's top level is the schema every existing reader and dashboard filters on.
+
+    Args are NOT recorded. They are attacker-influenced free text on a read path that now
+    writes a row per call, and the trail has no rotation — `tool` plus the verdict is what
+    an audit needs, and it is bounded.
+    """
+    from my_crew.audit.audit_log import AuditEntry, AuditLog
+    from my_crew.runtime.team_task_paths import team_tasks_root
+    from my_crew.runtime_backends.tool_call_context import current_tool_call_context
+
+    ctx = current_tool_call_context()
+    try:
+        AuditLog(team_tasks_root() / "audit" / "audit.jsonl").record(
+            AuditEntry(
+                action_type="mcp_tool_read",
+                tool=tool_name,
+                verdict=verdict,
+                reason=reason,
+                params={
+                    "task_id": ctx.task_id,
+                    "step_id": ctx.step_id,
+                    "iteration": ctx.iteration,
+                    "elapsed_ms": elapsed_ms,
+                },
+                actor=ctx.agent_id,
+            )
+        )
+    except Exception:  # noqa: BLE001 — audit is observation; it must never fail a read
+        logger.warning("read-tool audit write failed for %s", tool_name, exc_info=True)
+
+
 def _shim(tool_name: str, fn: Callable[[dict], Any]) -> Callable[[dict], Any]:
     """Wrap a read callable so every invocation passes through classify first, then the
     error guard — a policy block or a tool-body failure returns a "⚠️" string instead of
-    raising through (and killing) the agent loop."""
+    raising through (and killing) the agent loop. Every call leaves one audit row, with
+    the verdict classify actually reached."""
 
     def _guarded(args: dict) -> Any:
-        _classify_ok(tool_name, args or {})
-        return fn(args or {})
+        started = time.monotonic()
+        try:
+            _classify_ok(tool_name, args or {})
+        except ToolPolicyError as exc:
+            _audit_read_call(tool_name, "deny", _short_error_text(exc),
+                             int((time.monotonic() - started) * 1000))
+            raise
+        try:
+            return fn(args or {})
+        finally:
+            # In the `finally` so a tool that raises is still recorded: classify allowed
+            # the call, so "allow" is the honest verdict for it — the outcome is the error
+            # guard's business, not the policy trail's.
+            _audit_read_call(tool_name, "allow", "",
+                             int((time.monotonic() - started) * 1000))
 
     return tool_error_guard(tool_name, _guarded)
 

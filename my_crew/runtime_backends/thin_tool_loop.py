@@ -27,6 +27,7 @@ from collections.abc import Callable
 from typing import Any
 
 from my_crew.runtime_backends.loop_cost_guard import over_cost_cap, with_cost_cap_gap_note
+from my_crew.runtime_backends.tool_call_context import tool_call_iteration
 from my_crew.runtime_backends.tool_call_validation import prepare_tool_arguments
 from my_crew.runtime_backends.typed_tool_specs import ToolSpec, build_typed_specs
 
@@ -134,8 +135,11 @@ def run_thin_loop(
             continue
         prev_batch_key = batch_key
 
-        for call in tool_calls:
-            messages.append(_execute_call(call, by_name, tools_map))
+        # The round number reaches the tool audit only through the ambient context: the
+        # toolset was bound before this loop started, so there is no argument to add it to.
+        with tool_call_iteration(_round):
+            for call in tool_calls:
+                messages.append(_execute_call(call, by_name, tools_map))
 
     if text is None and capped_at_round is None:
         # Round budget exhausted while the model still wanted tools: one tool-free

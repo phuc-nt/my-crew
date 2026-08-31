@@ -525,9 +525,16 @@ def _run_team_step_kind(args: list[str], *, agent_id: str, loaded: LoadedProfile
                 body=activity, also_office=True,
             )
 
+    # Identity for the read-tool audit trail. Separate from the recorder above on
+    # purpose: that one is a debugging aid the operator can switch off, and an audit
+    # trail must not vanish with it. The round number is filled in by the work loop,
+    # which is the only thing that knows it.
+    from my_crew.runtime_backends.tool_call_context import tool_call_context
+
     with open_step_recorder(settings, agent_id=agent_id, task_id=task_id,
                             step_id=step_id, attempt_id=attempt_id,
-                            on_activity=on_activity):
+                            on_activity=on_activity), tool_call_context(
+                                agent_id=agent_id, task_id=task_id, step_id=step_id):
         try:
             # v48: run under the MCP session pool so every call_tool during the step (graph run
             # AND the in-step review, both under run_team_step) reuses one subprocess per server
