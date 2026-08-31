@@ -121,8 +121,16 @@ def _classify_ok(tool_name: str, args: dict) -> None:
         )
 
 
-def _audit_read_call(tool_name: str, verdict: str, reason: str, elapsed_ms: int) -> None:
+def _audit_read_call(
+    tool_name: str, verdict: str, reason: str, elapsed_ms: int, outcome: str = "ok"
+) -> None:
     """Record one read-tool call on the shared trail. Never raises.
+
+    `outcome` ("ok" | "error") is what the tool BODY did, which the policy `verdict`
+    cannot express: classify allows a call, then the fetch times out, and both rows read
+    "allow". It rides in `result_summary` — an existing, already-redacted field no read
+    row was using — so "which tool keeps failing" is answerable from the trail without a
+    second writer or a schema change.
 
     The shim was already the single policy chokepoint; until now it was a chokepoint that
     kept no record, so a Lớp B audit could see writes but not the reads that informed
@@ -153,6 +161,7 @@ def _audit_read_call(tool_name: str, verdict: str, reason: str, elapsed_ms: int)
                     "iteration": ctx.iteration,
                     "elapsed_ms": elapsed_ms,
                 },
+                result_summary=outcome,
                 actor=ctx.agent_id,
             )
         )
@@ -174,14 +183,19 @@ def _shim(tool_name: str, fn: Callable[[dict], Any]) -> Callable[[dict], Any]:
             _audit_read_call(tool_name, "deny", _short_error_text(exc),
                              int((time.monotonic() - started) * 1000))
             raise
+        # A tool that raises is still recorded: classify allowed the call, so "allow" is
+        # the honest POLICY verdict either way. What the body did is carried separately in
+        # `outcome`, because a trail that cannot tell a served read from a failed one
+        # cannot answer which tool is unreliable.
+        outcome = "ok"
         try:
             return fn(args or {})
+        except BaseException as exc:  # noqa: BLE001 — re-raised below; only classified here
+            outcome = "ok" if _is_loop_control_exception(exc) else "error"
+            raise
         finally:
-            # In the `finally` so a tool that raises is still recorded: classify allowed
-            # the call, so "allow" is the honest verdict for it — the outcome is the error
-            # guard's business, not the policy trail's.
             _audit_read_call(tool_name, "allow", "",
-                             int((time.monotonic() - started) * 1000))
+                             int((time.monotonic() - started) * 1000), outcome)
 
     return tool_error_guard(tool_name, _guarded)
 
