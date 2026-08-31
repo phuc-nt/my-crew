@@ -125,6 +125,40 @@ def _confirm_decision(message: str) -> str:
     return "unclear"
 
 
+def _normalize_intent_shape(parsed: dict, commands: dict[str, dict]) -> dict:
+    """Repair the two shape slips the classifier makes, before anything acts on them.
+
+    Measured live on `~deepseek/deepseek-v4-flash-latest`, 10 replays per phrasing: only
+    4-5 of 10 produced the documented `{"intent":"command","command_id":"<catalog id>"}`.
+    The rest slipped in one of two ways, and BOTH ended as the production outage
+    `test_ops_intent_delegation_live.py` exists to guard — the CEO's delegation never
+    becomes a team task, because `_start_new` requires `command_id` to be in the catalog:
+
+    1. The command id is put in the `intent` field (`{"intent":"assign_team_task", ...}`).
+       Recognisable because no legal intent is ever a command id.
+    2. `command_id` is invented rather than copied from the catalog — `cmd_001`,
+       `task_001`, `cmd_20260622_123456`, a UUID. The intent field then holds the id the
+       model actually meant, so the real answer is recoverable.
+
+    Prompt wording alone cannot close this: `_INTENT_SYSTEM` already spells the schema out
+    and the slips persist, so the guarantee belongs in code where it can be tested. Only
+    an id that IS in the catalog is ever accepted — a repair that invented a command would
+    be far worse than the fallthrough it replaces.
+    """
+    if not isinstance(parsed, dict):
+        return parsed
+    intent = str(parsed.get("intent") or "")
+    if intent in ("command", "question", "unsupported"):
+        return parsed
+    if intent in commands:
+        # The command id landed in the intent field. Trust it only over a command_id that
+        # the catalog does not recognise, so a well-formed pair is never overwritten.
+        if str(parsed.get("command_id") or "") not in commands:
+            parsed["command_id"] = intent
+        parsed["intent"] = "command"
+    return parsed
+
+
 def classify_ops_intent(
     llm: LlmClient, message: str, commands: dict[str, dict] | None = None,
 ) -> dict:
@@ -148,7 +182,7 @@ def classify_ops_intent(
                 role="plan",
             )
             cost = _add_costs(cost, result.cost_usd)
-            parsed = _parse_json_object(result.content)
+            parsed = _normalize_intent_shape(_parse_json_object(result.content), commands)
             parsed["_cost_usd"] = cost
             return parsed
         except INFRA_ERRORS:

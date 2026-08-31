@@ -183,6 +183,53 @@ def test_output_that_does_not_start_with_an_object_still_falls_back(garbage):
     assert out["intent"] == "question"
 
 
+# --- shape repair: the command id landing in the wrong field ---------------------------
+#
+# Đo thật trên `~deepseek/deepseek-v4-flash-latest`, 10 lượt mỗi cách diễn đạt: chỉ 4-5/10
+# trả đúng schema. Phần còn lại nhét command id vào ô `intent`, và/hoặc bịa `command_id`
+# (`cmd_001`, `task_001`, UUID). Cả hai đều rơi vào nhánh liệt kê catalog ở `_start_new`
+# ⇒ đúng sự cố production. Luật prompt đã nói rõ schema mà vẫn trượt, nên bảo đảm phải
+# nằm ở code — chỗ đo được.
+
+
+def test_a_command_id_placed_in_the_intent_field_is_recovered():
+    llm = _FakeLlm('{"intent":"assign_team_task","command_id":null,'
+                   '"slots":{"brief":"khảo sát thị trường"}}')
+    out = classify_ops_intent(llm, "khảo sát giúp anh")
+
+    assert out["intent"] == "command", out
+    assert out["command_id"] == "assign_team_task", out
+    assert out["slots"]["brief"] == "khảo sát thị trường", out
+
+
+def test_an_invented_command_id_loses_to_the_catalog_id_in_the_intent_field():
+    """`command_id` bịa ra thì ô `intent` mới là chỗ giữ ý định thật."""
+    llm = _FakeLlm('{"intent":"assign_team_task","command_id":"cmd_20260622_123456"}')
+    out = classify_ops_intent(llm, "nghiên cứu giúp anh")
+
+    assert out["intent"] == "command", out
+    assert out["command_id"] == "assign_team_task", out
+
+
+def test_a_well_formed_pair_is_never_rewritten():
+    """Sửa chữa chỉ được chạm vào dạng SAI — dạng đúng phải đi qua nguyên vẹn."""
+    llm = _FakeLlm('{"intent":"command","command_id":"create_agent"}')
+    out = classify_ops_intent(llm, "tạo agent")
+
+    assert out["intent"] == "command", out
+    assert out["command_id"] == "create_agent", out
+
+
+def test_an_unknown_intent_that_is_not_a_command_id_is_left_alone():
+    """Không có gì để khôi phục thì KHÔNG được bịa ra một lệnh: `_start_new` sẽ lo nốt
+    (intent lạ + command_id lạ ⇒ nhánh liệt kê catalog), an toàn hơn là đoán bừa."""
+    llm = _FakeLlm('{"intent":"chua_ro_lam","command_id":"cmd_001"}')
+    out = classify_ops_intent(llm, "msg")
+
+    assert out["intent"] == "chua_ro_lam", out
+    assert out["command_id"] == "cmd_001", out
+
+
 def test_classify_bills_every_attempt_it_made():
     """The retry costs a real completion — the turn must not under-report by dropping
     the failed attempt's cost."""
