@@ -48,9 +48,7 @@
 
 ## Mở / sang sau
 
-- **B1 chưa sửa, cần CEO quyết**: việc bị cap báo `$0.00` cho CEO trong khi `sum_cost` là
-  `$0.00318464`; việc khoẻ thì báo dư ~26%. Đổi `control_plane_views` sang `sum_cost`
-  (cap là thẩm quyền) hay hoà giải CaptureStore với hàng task/step?
+- **B1 + B7 đã sửa sau khi CEO duyệt** — xem `260831-b1-b7-fix-va-gmail-root-cause.md`.
 - A8 đã lên 2/2: chạy bù riêng nhóm routing (8/8, 14:50) trên mã vá cả B0 lẫn B6, rẻ hơn một
   lượt 54-case 28 phút. 46 case ngoài nhóm routing vẫn dừng ở 2 lượt đầy đủ.
 - Tiền tố truy vấn vẫn hút chữ từ mệnh đề ngoặc (`'sàn hạng mục thị trường chính Shopee'`).
