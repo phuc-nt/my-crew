@@ -193,6 +193,52 @@ def test_cap_above_total_spend_never_fires():
     assert text == "Giá là 65.000đ"
 
 
+def test_a_model_that_stops_on_its_own_over_budget_still_admits_the_overspend():
+    """The model ends the loop itself, having already blown the ceiling.
+
+    Every other case here scripts a model that keeps asking for tools, so the ceiling is
+    always consulted at the top of a round that actually happens. This is the shape a paid
+    live run produced instead: three tool rounds took the spend to ~3x the cap, then the
+    model returned a final answer with no tool calls, and the loop took its natural exit —
+    the branch that never consults `over_cost_cap` at all.
+
+    The result was a step marked `done`, carrying no gap note, having spent 15x its cap.
+    That is the failure the guard exists to prevent, and it read as complete work: nothing
+    downstream — `self_check`, the reviewer, the CEO — had any way to see the step had blown
+    its budget, because the one signal that says so was never attached.
+
+    The cap cannot un-spend what the final turn cost. What it must still do is tell the
+    truth about it, so the note is the assertion, not the round count.
+    """
+    llm = _FakeLlm([
+        _tool_turn(_tc("web_search", '{"query": "a"}'), cost=0.004),
+        _text_turn("Đã tra được giá 65.000đ", cost=0.004),
+    ])
+    text, cost = _run(llm, {"web.search": _search}, max_steps=6, cost_cap_usd=0.005)
+
+    assert llm.rounds == 2, "the model's own final turn should still be paid for"
+    assert llm.synthesis_calls == 0, "a natural exit already has text; no salvage needed"
+    assert "CHƯA hoàn chỉnh" in text, (
+        "the loop ended over its ceiling but the result claims to be complete work. "
+        f"spent={cost} cap=0.005 text={text!r}"
+    )
+    assert "Đã tra được giá 65.000đ" in text, "the work already paid for must be kept"
+
+
+def test_a_model_stopping_on_its_own_within_budget_is_untouched():
+    # The control for the case above: same natural exit, but the spend never reaches the
+    # ceiling, so the text must come back exactly as the model wrote it. Without this a
+    # fix that stamped the note on every natural exit would look correct.
+    llm = _FakeLlm([
+        _tool_turn(_tc("web_search", '{"query": "a"}'), cost=0.001),
+        _text_turn("Giá là 65.000đ", cost=0.001),
+    ])
+    text, _ = _run(llm, {"web.search": _search}, max_steps=6, cost_cap_usd=0.05)
+
+    assert text == "Giá là 65.000đ"
+    assert "CHƯA hoàn chỉnh" not in text
+
+
 def test_round_budget_exhaustion_still_synthesizes_when_uncapped():
     # The pre-existing salvage path must survive the new branch: rounds run out (not cost),
     # so the tool-free synthesis turn still happens.

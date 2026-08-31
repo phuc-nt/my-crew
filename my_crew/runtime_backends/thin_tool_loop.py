@@ -118,6 +118,15 @@ def run_thin_loop(
         if not tool_calls:
             # Final turn — even a "length"-truncated text is the best result we hold.
             text = str(msg.get("content") or "")
+            # This turn was paid for before its cost could be counted, so the ceiling has
+            # to be re-asked here rather than only at the top of the next round: a model
+            # that stops on its own takes this exit and never reaches that check. Measured
+            # live — three tool rounds put a step ~3x over its cap, the model then answered
+            # without tools, and the step was stored `done` at 15x the cap with no note.
+            # The overspend cannot be undone at this point; what it must not do is pass
+            # itself off as complete work to `self_check` and the reviewer.
+            if over_cost_cap(costs, cost_cap_usd):
+                capped_at_round = _round
             break
 
         messages.append(_assistant_passback(msg, tool_calls))
@@ -156,8 +165,14 @@ def run_thin_loop(
         # reached defeats the guard. Recover the text the same way that synthesis exists to
         # avoid losing it — from the transcript already in hand — and say plainly that the
         # result is partial.
+        #
+        # `text` when the model ended the loop itself: that turn was never appended to
+        # `messages` (only tool-calling turns are passed back), so recovering from the
+        # transcript would drop the very answer this exit produced and replace it with the
+        # previous round's prose. Prefer what is already in hand.
         text = with_cost_cap_gap_note(
-            _last_assistant_text(messages), costs, cost_cap_usd, capped_at_round
+            text if text else _last_assistant_text(messages),
+            costs, cost_cap_usd, capped_at_round,
         )
 
     if telemetry is not None:
