@@ -76,12 +76,19 @@ def _telegram_block(profile_id: str) -> str:
     )
 
 
-def _write_profile(home: Path, profile_id: str, *, domain: str) -> None:
+def _write_profile(home: Path, profile_id: str, *, domain: str,
+                   gws_context: bool = False) -> None:
     """One agent on disk, in the layout the real loader reads.
 
     Deliberately minimal — the live cast's in-memory profile cannot be handed to another
     process, so this writes the same shape the shipped profiles use. Model pinning lives
     in .env (fleet-wide) so a model swap here stays a one-line change.
+
+    `gws_context` is the per-agent opt-in half of mailbox access; the other half
+    (`gws_enabled`) already defaults True in the reporting config, so writing this line
+    is what makes an agent mail-capable to `agent_mail_capable`. Default False keeps
+    every existing case's fleet exactly as it was — a fleet where NOBODY can read mail,
+    which is itself the precondition one of the mail cases needs.
     """
     directory = home / "profiles" / profile_id
     directory.mkdir(parents=True, exist_ok=True)
@@ -97,6 +104,7 @@ def _write_profile(home: Path, profile_id: str, *, domain: str) -> None:
         "reports: []\n"
         "bindings: {}\n"
         "integrations: {}\n"
+        + ("gws_context: true\n" if gws_context else "")
         + _telegram_block(profile_id),
         encoding="utf-8",
     )
@@ -107,14 +115,22 @@ def _write_profile(home: Path, profile_id: str, *, domain: str) -> None:
     (directory / "MEMORY.md").write_text("", encoding="utf-8")
 
 
-def seed_home(home: Path, *, api_key: str, extra_env: dict[str, str] | None = None) -> None:
-    """Write a complete, self-contained fleet home: profiles, registry, company, .env."""
+def seed_home(home: Path, *, api_key: str, extra_env: dict[str, str] | None = None,
+              mail_capable: frozenset[str] | set[str] = frozenset()) -> None:
+    """Write a complete, self-contained fleet home: profiles, registry, company, .env.
+
+    `mail_capable` names the agents that get `gws_context: true` — i.e. the ones
+    `agent_mail_capable` will accept as assignees for a `needs_mail` step. Empty by
+    default, so a fleet seeded the ordinary way has no mailbox reader at all.
+    """
     home.mkdir(parents=True, exist_ok=True)
 
-    _write_profile(home, ADMIN_ID, domain="admin")
-    _write_profile(home, COORDINATOR_ID, domain="pm")
+    _write_profile(home, ADMIN_ID, domain="admin", gws_context=ADMIN_ID in mail_capable)
+    _write_profile(home, COORDINATOR_ID, domain="pm",
+                   gws_context=COORDINATOR_ID in mail_capable)
     for worker_id, domain in WORKERS:
-        _write_profile(home, worker_id, domain=domain)
+        _write_profile(home, worker_id, domain=domain,
+                       gws_context=worker_id in mail_capable)
 
     agent_ids = [ADMIN_ID, COORDINATOR_ID, *(w for w, _ in WORKERS)]
     (home / "registry.yaml").write_text(
@@ -296,6 +312,14 @@ SETTLED_TASK_STATES = frozenset(
 #: The same idea one level down — a step parked on a human holds its task at `open`.
 SETTLED_STEP_STATES = frozenset({"waiting_clarify", "needs_decision", "blocked"})
 
+#: Step states that are FINISHED rather than parked. Needed because a task can legitimately
+#: end as "some steps done, the rest parked on the CEO" — measured live: a plan came back
+#: `[step1 done, step2 waiting_clarify]` and nothing would ever move it again, yet a
+#: parked-only rule kept polling to the full timeout and then failed a passing case.
+#: Kept separate from SETTLED_STEP_STATES so `[done, running]` still keeps polling: a
+#: finished step must not be mistaken for a reason to stop waiting on a live sibling.
+FINISHED_STEP_STATES = frozenset({"done", "done_with_gaps", "cancelled", "failed"})
+
 
 def audit_path(home: Path) -> Path:
     """The audit trail inside a fixture home.
@@ -319,7 +343,15 @@ def is_settled(status: dict[str, Any]) -> bool:
     if state in SETTLED_TASK_STATES:
         return True
     steps = status.get("steps") or []
-    return bool(steps) and all(s.get("status") in SETTLED_STEP_STATES for s in steps)
+    if not steps:
+        return False
+    statuses = [s.get("status") for s in steps]
+    # No step can still move on its own, AND at least one is parked on a human. The second
+    # clause matters: an all-finished set means the TASK state is the authority (it may
+    # still be mid-aggregate), so let the task-level check above own that case.
+    return all(
+        st in SETTLED_STEP_STATES or st in FINISHED_STEP_STATES for st in statuses
+    ) and any(st in SETTLED_STEP_STATES for st in statuses)
 
 
 def wait_until_settled(server: ServeProcess, task_id: str, *,
