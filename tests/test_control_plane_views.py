@@ -69,6 +69,75 @@ class TestBuildTaskStatus:
         assert result["route"] == {"mode": "", "source": "", "reason": ""}
 
 
+class TestTaskCostAuthority:
+    """The CEO-facing total must be the SAME number the cost cap enforces against.
+
+    `sum_cost` (steps + decompose + aggregate) is what `team_task_cost` checks a task
+    against before letting it spend more, so it is the authoritative total. The capture
+    rows stay in `steps` as the per-attempt audit trail — they are a superset in one
+    direction (abandoned retries) and a subset in another (no decompose/aggregate), so
+    summing them produced a number that matched neither the ledger nor the cap.
+    """
+
+    def test_total_counts_decompose_and_aggregate(self, store):
+        from my_crew.server.control_plane_views import build_task_status
+
+        _seed_task(store)
+        store.record_task_cost("t1", decompose=0.002, aggregate=0.003)
+        store.mark_done("t1", "s1", cost_usd=0.01)
+
+        result = build_task_status("t1")
+        # 0.01 step + 0.002 decompose + 0.003 aggregate — the CaptureStore sum saw 0.0
+        # here, because decompose/aggregate never produce capture rows at all.
+        assert result["cost"]["total_cost_usd"] == pytest.approx(0.015)
+
+    def test_total_matches_the_cap_authority(self, store):
+        """Whatever the cap reads, the CEO sees. Pinned as an equality so the two can
+        never drift apart again without a test going red."""
+        from my_crew.server.control_plane_views import build_task_status
+
+        _seed_task(store)
+        store.record_task_cost("t1", decompose=0.0031878)
+        store.mark_done("t1", "s1", cost_usd=0.017711264)
+
+        result = build_task_status("t1")
+        # abs=1e-6: the payload rounds to 6dp (same as `routes_outputs`); the point is
+        # that the two totals agree, not that rounding is bit-exact.
+        assert result["cost"]["total_cost_usd"] == pytest.approx(store.sum_cost("t1"),
+                                                                 abs=1e-6)
+
+    def test_a_retried_step_is_not_double_counted(self, store):
+        """The shape that shipped the bug: one step, TWO capture rows (a `waiting_clarify`
+        attempt that was abandoned, then the `done` retry). Summing captures billed both
+        attempts; the step ledger — and the cap — count only the winning one.
+
+        Numbers are the real ones from live task 30cbc8baa90d.
+        """
+        from my_crew.runtime.capture_store import CaptureStore
+        from my_crew.runtime.team_task_paths import capture_db_path
+        from my_crew.server.control_plane_views import build_task_status
+
+        _seed_task(store)
+        store.record_task_cost("t1", decompose=0.0031878)
+        store.mark_done("t1", "s1", cost_usd=0.017711264)
+
+        caps = CaptureStore(capture_db_path())
+        try:
+            for attempt, status, cost in (
+                ("att-1", "waiting_clarify", 0.00586344),  # abandoned, still billed by OpenRouter
+                ("att-2", "done", 0.017711264),
+            ):
+                caps.record(attempt_id=attempt, task_id="t1", step_id="s1",
+                            agent_id="content", engine="native", status=status,
+                            cost_usd=cost, cost_source="exact")
+        finally:
+            caps.close()
+
+        result = build_task_status("t1")
+        assert len(result["cost"]["steps"]) == 2  # audit trail keeps BOTH attempts
+        assert result["cost"]["total_cost_usd"] == pytest.approx(0.020899, abs=1e-6)
+
+
 class TestBuildOverview:
     def test_all_blocks_present_with_v1(self, store, monkeypatch):
         monkeypatch.setattr("my_crew.runtime.registry.load_registry", lambda *a, **k: [])

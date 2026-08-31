@@ -228,13 +228,20 @@ def team_task_cost(task_id: str) -> dict:
     Wraps `CaptureStore.list_for_task` (one row per step-attempt) into a projected list plus
     task totals, so the FE can attribute cost to a specific task/step instead of only the
     monthly-per-agent view. Cost may be None (dry-run) — totals sum the known values only.
+
+    `total_cost_usd` comes from `TeamTaskStore.sum_cost` (the total the cost cap enforces
+    against), NOT from summing the per-attempt rows below — see `control_plane_views`
+    `_task_cost_breakdown` for why the two disagree in both directions. The rows stay as the
+    per-attempt audit trail; both cost surfaces must quote the same total.
     """
     from my_crew.runtime.capture_store import CaptureStore
     from my_crew.runtime.team_task_paths import capture_db_path
+    from my_crew.server.control_plane_views import task_cost_total
 
+    total = task_cost_total(task_id)
     path = capture_db_path()
     if not path.exists():
-        return {"task_id": task_id, "steps": [], "total_cost_usd": 0.0,
+        return {"task_id": task_id, "steps": [], "total_cost_usd": round(total, 6),
                 "total_input_tokens": 0, "total_output_tokens": 0}
     store = CaptureStore(path)
     try:
@@ -245,7 +252,7 @@ def team_task_cost(task_id: str) -> dict:
     return {
         "task_id": task_id,
         "steps": steps,
-        "total_cost_usd": round(sum(r.get("cost_usd") or 0.0 for r in rows), 6),
+        "total_cost_usd": round(total, 6),
         "total_input_tokens": sum(r.get("input_tokens") or 0 for r in rows),
         "total_output_tokens": sum(r.get("output_tokens") or 0 for r in rows),
     }

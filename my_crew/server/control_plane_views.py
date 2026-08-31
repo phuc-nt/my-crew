@@ -96,14 +96,24 @@ def build_task_status(task_id: str) -> dict[str, Any] | None:
 def _task_cost_breakdown(task_id: str) -> dict[str, Any]:
     """Per-step cost/token breakdown — same shape as `routes_outputs.team_task_cost`
     (deliberately duplicated, not imported: that route returns its OWN top-level dict
-    shape, this one nests under `cost` inside the unified status payload)."""
+    shape, this one nests under `cost` inside the unified status payload).
+
+    `total_cost_usd` comes from `TeamTaskStore.sum_cost`, NOT from summing the capture
+    rows below, because the cost cap enforces against `sum_cost` — a total that
+    disagrees with the cap tells the CEO a task was free right as it got stopped for
+    being too expensive. The capture rows differ in BOTH directions: they carry one row
+    per attempt (so an abandoned retry is counted even though the step ledger keeps only
+    the winning attempt), and they never carry decompose/aggregate cost at all. They
+    stay in `steps` as the per-attempt audit trail, which is what they are good for.
+    """
     from my_crew.runtime.capture_store import CaptureStore
     from my_crew.runtime.team_task_paths import capture_db_path
 
+    total = _safe(lambda: task_cost_total(task_id), 0.0, "cost-total")
     path = capture_db_path()
     if not path.exists():
-        return {"total_cost_usd": 0.0, "total_input_tokens": 0, "total_output_tokens": 0,
-                "steps": []}
+        return {"total_cost_usd": round(total, 6), "total_input_tokens": 0,
+                "total_output_tokens": 0, "steps": []}
     store = CaptureStore(path)
     try:
         rows = store.list_for_task(task_id)
@@ -111,11 +121,25 @@ def _task_cost_breakdown(task_id: str) -> dict[str, Any]:
         store.close()
     steps = [{k: r.get(k) for k in _STEP_COST_FIELDS} for r in rows]
     return {
-        "total_cost_usd": round(sum(r.get("cost_usd") or 0.0 for r in rows), 6),
+        "total_cost_usd": round(total, 6),
         "total_input_tokens": sum(r.get("input_tokens") or 0 for r in rows),
         "total_output_tokens": sum(r.get("output_tokens") or 0 for r in rows),
         "steps": steps,
     }
+
+
+def task_cost_total(task_id: str) -> float:
+    """The authoritative total for one task: steps + decompose + aggregate.
+
+    Public because BOTH cost surfaces (this module's status payload and
+    `routes_outputs.team_task_cost`) must quote the same number the cost cap enforces
+    against — two UI views disagreeing about what a task cost is the bug this replaced.
+    """
+    store = _open_team_task_store()
+    try:
+        return store.sum_cost(task_id)
+    finally:
+        store.close()
 
 
 def _safe(fn, default: Any, block_name: str) -> Any:

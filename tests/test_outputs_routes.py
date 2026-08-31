@@ -217,10 +217,22 @@ def test_task_cost_no_captures_returns_zero_totals(client):
 
 
 def test_task_cost_projects_steps_and_sums_totals(client):
-    """v50: per-step-attempt telemetry is projected (allowlisted) + totals summed; None cost
-    contributes 0 to the total."""
+    """v50: per-step-attempt telemetry is projected (allowlisted); tokens summed from the
+    capture rows. `total_cost_usd` is the task ledger's total (what the cost cap enforces
+    against), NOT the sum of capture rows — so the task is seeded in BOTH stores here."""
     from my_crew.runtime.capture_store import CaptureStore
-    from my_crew.runtime.team_task_paths import capture_db_path
+    from my_crew.runtime.team_task_paths import capture_db_path, team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    tasks = TeamTaskStore(team_tasks_db_path())
+    tasks.create_task(task_id="tc", title="Việc test", pic_id="content")
+    tasks.set_plan("tc", [
+        {"step_id": "s1", "title": "bước 1", "assigned_to": "content", "deps": []},
+        {"step_id": "s2", "title": "bước 2", "assigned_to": "researcher", "deps": []},
+    ], plan_hash="h")
+    tasks.mark_done("tc", "s1", cost_usd=0.02)
+    tasks.mark_done("tc", "s2", cost_usd=None)  # dry-run → contributes 0
+    tasks.close()
 
     store = CaptureStore(capture_db_path())
     store.record(attempt_id="a1", task_id="tc", step_id="s1", agent_id="content",
