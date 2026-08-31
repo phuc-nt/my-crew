@@ -212,7 +212,7 @@ Bấm **"Nâng cấp"** để áp, hoặc **"Huỷ"** để bỏ qua lần này 
 | Trường | Công dụng | Ví dụ |
 |---|---|---|
 | **Tên** | Tên hiển thị trên dashboard + báo cáo | "Chuyên gia Nghiên cứu" |
-| **Model** | Model LLM agent này dùng (ghi đè mặc định toàn công ty) | `deepseek/deepseek-v4-pro-0813` |
+| **Model** | Model LLM agent này dùng (ghi đè mặc định toàn công ty) | `deepseek/deepseek-v4-flash-latest` |
 | **Model theo vai trò** | Model khác cho từng loại việc (VD: model rẻ cho soát chéo) | `soat: model-re-hon` |
 | **Ngân sách (tháng)** | Giới hạn chi USD; agent dừng khi chạm | `$10` |
 | **Lịch** | Cron để tự động chạy báo cáo | `0 9 * * 1` (thứ 2 lúc 9 sáng) |

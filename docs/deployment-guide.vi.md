@@ -177,7 +177,7 @@ Nơi lưu `.env`, `registry.yaml`, profiles, `.data/`:
 Mỗi lệnh gọi LLM phân giải model qua 3 tầng — tầng cụ thể nhất thắng:
 
 1. **Fleet mặc định** — `OPENROUTER_MODEL` trong `.env`. Không set ⇒ mặc định
-   built-in `deepseek/deepseek-v4-pro-0813` (0.9.x là `qwen/qwen3.7-plus`).
+   built-in `deepseek/deepseek-v4-flash-latest` (0.9.x là `qwen/qwen3.7-plus`).
 2. **Per-agent** — `model:` trong `profiles/<id>/profile.yaml` đè fleet mặc định
    cho riêng agent đó.
 3. **Per-role** — `role_models:` trong profile (hoặc `OPENROUTER_ROLE_MODELS`
@@ -186,7 +186,7 @@ Mỗi lệnh gọi LLM phân giải model qua 3 tầng — tầng cụ thể nh�
 
 ```yaml
 # profiles/<id>/profile.yaml
-model: deepseek/deepseek-v4-pro-0813    # tầng 2: model riêng agent này
+model: deepseek/deepseek-v4-flash-latest    # tầng 2: model riêng agent này
 role_models:                             # tầng 3: theo loại việc
   review: your/cheaper-model
   util: your/cheaper-model

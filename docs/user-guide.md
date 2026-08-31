@@ -346,7 +346,7 @@ Go to **Chat** → ask "create an agent that…" → answer questions → assist
 | Field | What it does | Example |
 |---|---|---|
 | **Name** | Display name on dashboard and reports | "Research Pro" |
-| **Model** | LLM this agent uses (overrides fleet default) | `deepseek/deepseek-v4-pro-0813` |
+| **Model** | LLM this agent uses (overrides fleet default) | `deepseek/deepseek-v4-flash-latest` |
 | **Model Chain** | Alternative models per work type (e.g., cheaper model for reviews) | `review: your/cheaper-model` |
 | **Budget (month)** | Max spend in USD; agent stops when cap hits | `$10` |
 | **Schedule** | Cron lines for automated reports | `0 9 * * 1` (every Monday 9 AM) |

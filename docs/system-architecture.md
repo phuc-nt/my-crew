@@ -335,7 +335,7 @@ intake chấm công việc là EASY — unconfigured thì degrade về fleet, ch
 model rẻ chỉ cho công việc dễ thay vì toàn bộ content. Cấu hình per-agent trong profile.yaml: `model`
 / `model_chain` / `role_models` (yaml mapping hoặc chuỗi `"role=model,..."`, env fallback
 `OPENROUTER_ROLE_MODELS`; validate ở `config_builders._d_role_models` — role lạ/trùng
-raise rõ). Fleet default: `deepseek/deepseek-v4-pro-0813`
+raise rõ). Fleet default: `deepseek/deepseek-v4-flash-latest`
 (`DEFAULT_MODEL`). Role chưa cấu hình → nguyên fleet chain, byte-identical pre-v79.
 
 **Thứ tự 3 tầng (hẹp thắng rộng)**: `role_models[role]` trong profile.yaml của agent →

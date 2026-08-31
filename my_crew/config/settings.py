@@ -54,7 +54,7 @@ DATA_DIR = MY_CREW_HOME / ".data"
 
 # OpenRouter is OpenAI-compatible; base URL is fixed by the provider.
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_MODEL = "deepseek/deepseek-v4-pro-0813"
+DEFAULT_MODEL = "deepseek/deepseek-v4-flash-latest"
 
 # The work kinds a per-role model override may name (`Settings.role_models`). These are
 # cost shapes, not capabilities — the split is "does a human read this output".

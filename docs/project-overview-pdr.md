@@ -75,7 +75,7 @@ Xem [action-gateway-explainer.md](action-gateway-explainer.md) cho mô hình đ�
 | Trợ lý cá nhân | Chat DM tức thì; briefing sáng/tuần (thư ký + **pong** — Goodreads/Google Tasks, weekly không lặp briefing); đọc Gmail/Calendar; gửi email; tạo/sửa/xoá lịch; nhắc đúng-giờ về Telegram; đa-lệnh một tin |
 | Trí nhớ | Store SQLite bền dùng chung; đội đọc chéo; thư ký chỉ-đọc (`memory_share: read_only`); retention 90 ngày |
 | An toàn (v30) | Action Gateway (Lớp A chặn cứng luôn / Lớp B: autonomous chạy ngay vs guarded duyệt per-agent); PII firewall; chat flatten (autonomous mode); shell chỉ trong Docker sandbox (không mount host, network off, fail-closed); audit hash-chain + break-glass env-only (v76) |
-| Model (v79) | Cấu hình 3 tầng: fleet → per-agent → per-role (`role_models` trong profile); fleet mặc định `deepseek/deepseek-v4-pro-0813` |
+| Model (v79) | Cấu hình 3 tầng: fleet → per-agent → per-role (`role_models` trong profile); fleet mặc định `deepseek/deepseek-v4-flash-latest` |
 | Báo cáo | daily/weekly/okr/resource + headcount (hr); xuất .xlsx qua email; đa-audience |
 | Cảnh báo | agent chết ngầm, bộ điều phối chưa chạy, thiếu web-search key → Telegram/banner |
 

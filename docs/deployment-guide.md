@@ -196,7 +196,7 @@ Determines where `.env`, `registry.yaml`, profiles, and `.data/` live:
 Every LLM call resolves its model through three tiers — most specific wins:
 
 1. **Fleet default** — `OPENROUTER_MODEL` in `.env`. Unset ⇒ the built-in default
-   `deepseek/deepseek-v4-pro-0813` (0.9.x shipped `qwen/qwen3.7-plus`).
+   `deepseek/deepseek-v4-flash-latest` (0.9.x shipped `qwen/qwen3.7-plus`).
 2. **Per-agent** — `model:` in `profiles/<id>/profile.yaml` overrides the fleet
    default for that agent only.
 3. **Per-role** — `role_models:` in the profile (or `OPENROUTER_ROLE_MODELS`
@@ -205,7 +205,7 @@ Every LLM call resolves its model through three tiers — most specific wins:
 
 ```yaml
 # profiles/<id>/profile.yaml
-model: deepseek/deepseek-v4-pro-0813    # tier 2: this agent's fleet override
+model: deepseek/deepseek-v4-flash-latest    # tier 2: this agent's fleet override
 role_models:                             # tier 3: per work kind
   review: your/cheaper-model
   util: your/cheaper-model
