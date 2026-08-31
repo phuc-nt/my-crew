@@ -99,6 +99,7 @@ def _files_containing(home, needle: str) -> list[str]:
     return hits
 
 
+@pytest.mark.live_slow
 def test_j3_a_credential_round_trips_without_leaking_in_plaintext(fleet):
     # A value no amount of ordinary config text could contain by accident.
     token = "j3tok" + secrets.token_hex(24)
@@ -157,6 +158,7 @@ def test_j3_a_credential_round_trips_without_leaking_in_plaintext(fleet):
     )
 
 
+@pytest.mark.live_slow
 def test_j3b_a_deleted_credential_is_gone_from_the_store_and_the_disk(fleet):
     """Deletion has to actually delete. A store that keeps recoverable ciphertext after
     a delete is a compliance problem, not a tidiness one."""

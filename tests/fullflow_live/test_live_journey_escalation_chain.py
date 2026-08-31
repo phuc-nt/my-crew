@@ -118,6 +118,7 @@ def _route_row(home, task_id: str) -> dict:
     return json.loads(row[0])
 
 
+@pytest.mark.live_slow
 def test_j2_an_escalation_runs_in_a_real_fleet_and_keeps_its_source(fleet, journey_budget):
     task_id = _mint_escalation(
         fleet.home,
@@ -156,6 +157,7 @@ def test_j2_an_escalation_runs_in_a_real_fleet_and_keeps_its_source(fleet, journ
     journey_budget.note_cost((final.get("cost") or {}).get("total_cost_usd") or 0.0, final)
 
 
+@pytest.mark.live_slow
 def test_j2b_an_escalation_task_cannot_escalate_again(fleet, journey_budget):
     """The recursion brake, asserted structurally rather than by trusting the model.
 

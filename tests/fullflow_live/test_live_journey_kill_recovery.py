@@ -39,6 +39,7 @@ def home(tmp_path):
     return tmp_path / "home"
 
 
+@pytest.mark.live_slow
 def test_j5_work_survives_a_hard_kill_and_the_next_fleet_finishes_it(home, live_api_key,
                                                                      journey_budget):
     first = boot(home, api_key=live_api_key)

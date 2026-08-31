@@ -58,6 +58,7 @@ def _stored_route(home, task_id: str) -> dict:
     return json.loads(row[0]) if row and row[0] else {}
 
 
+@pytest.mark.live_slow
 def test_j4_the_offline_router_predicts_what_the_live_fleet_actually_stores(fleet):
     """The bridge. Predict offline, run live, compare the fields the bench compares."""
     from my_crew.bench.routing_bench import decide
@@ -113,6 +114,7 @@ def test_j4_the_offline_router_predicts_what_the_live_fleet_actually_stores(flee
             )
 
 
+@pytest.mark.live_slow
 def test_j4b_concurrent_tasks_do_not_cross_contaminate_their_artifacts(fleet):
     """Two briefs in flight at once must not write into each other's artifacts.
 

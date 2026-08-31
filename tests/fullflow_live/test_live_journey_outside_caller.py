@@ -45,6 +45,7 @@ def fleet(tmp_path, live_api_key):
         server.stop()
 
 
+@pytest.mark.live_slow
 def test_j1_outside_caller_drives_a_brief_to_a_settled_state(fleet, journey_budget):
     code, preview = fleet.post("/api/control-plane/delegate", {"brief": BRIEF}, timeout=180)
     assert code == 200, f"preview failed {code}: {preview!r}"
@@ -115,6 +116,7 @@ def test_j1_outside_caller_drives_a_brief_to_a_settled_state(fleet, journey_budg
     )
 
 
+@pytest.mark.live_slow
 def test_j1b_a_stale_plan_hash_is_refused(fleet, journey_budget):
     """The hash-bind is the whole point of two-step confirm: a plan the caller never
     saw must not be confirmable. Cheap to assert, and it is the failure that would

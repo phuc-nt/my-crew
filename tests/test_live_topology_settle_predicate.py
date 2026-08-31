@@ -63,3 +63,42 @@ def test_no_steps_never_settles():
     """A task with no rows yet has not been planned; `all([])` is vacuously True, so
     without an explicit guard an empty plan would look settled."""
     assert not is_settled(_status("open"))
+
+
+def test_every_full_lifecycle_journey_case_is_marked_live_slow():
+    """`docs/releasing.md` sells `-m "live and not live_slow"` as the QUICK pre-release
+    subset. That promise only holds if every case driving a whole task lifecycle actually
+    carries the marker, and nothing enforced it.
+
+    Measured: all nine `test_live_journey_*` cases carried no marker at all, so each one —
+    booting a real fleet, polling to a settled state, and in J5 hard-killing and rebooting
+    a process — sat inside the "quick" subset. Whoever trusted the doc got a subset that
+    was minutes and real money more expensive than advertised.
+
+    Collect the marker from the modules themselves rather than restating a list here, so
+    a journey case added later is covered the day it lands instead of the day someone
+    remembers to update this test.
+    """
+    import importlib
+    import pkgutil
+
+    import tests.fullflow_live as live_pkg
+
+    unmarked = []
+    for mod_info in pkgutil.iter_modules(live_pkg.__path__):
+        if not mod_info.name.startswith("test_live_journey_"):
+            continue
+        module = importlib.import_module(f"{live_pkg.__name__}.{mod_info.name}")
+        for attr in dir(module):
+            if not attr.startswith("test_"):
+                continue
+            fn = getattr(module, attr)
+            marks = getattr(fn, "pytestmark", [])
+            if not any(m.name == "live_slow" for m in marks):
+                unmarked.append(f"{mod_info.name}::{attr}")
+
+    assert not unmarked, (
+        "these full-lifecycle journey cases are missing @pytest.mark.live_slow, so they "
+        "fall into the pre-release QUICK subset that docs/releasing.md defines as "
+        f"`-m \"live and not live_slow\"`: {sorted(unmarked)}"
+    )
