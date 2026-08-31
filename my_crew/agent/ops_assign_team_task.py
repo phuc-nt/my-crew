@@ -243,9 +243,16 @@ def _decompose_with_retries(
                 )
             # v64 shell guard: a needs_shell step nobody can run must fail HERE (the
             # retry loop lets the model drop the flag) — never at dispatch time.
-            from my_crew.agent.team_task_roster import validate_shell_steps
+            from my_crew.agent.team_task_roster import (
+                validate_mail_steps,
+                validate_shell_steps,
+            )
 
             validate_shell_steps(task.steps)
+            # v92 mail guard, same shape and same reason: a needs_mail step assigned to
+            # an agent without mailbox access is caught here, not after it has spent a
+            # step's budget answering "em không có quyền".
+            validate_mail_steps(task.steps)
             # v74.2 fan-out bias: a ≥4-entity brief whose collection was NOT split
             # into parallel steps goes back through the retry loop with a concrete
             # instruction (measured: fanned ~11-12min vs un-fanned ~17-25min).

@@ -114,6 +114,11 @@ class TeamStep:
     # hint only, never permissions; binds into `decomposition_content_hash`
     # conditionally (only when True) exactly like `needs_shell`.
     needs_web: bool = False
+    # v92 capability routing: True iff the step must read the owner's mailbox. Holds the
+    # step OFF the native tier (native gets no read toolset, hence no mail tool) and
+    # constrains WHO may hold it — checked at plan time (`validate_mail_steps`) and at
+    # reassign (`_can_do_step`). Hash-bound conditionally like `needs_web`.
+    needs_mail: bool = False
     # v34 P4: JSON list [{"title","assigned_to"}] the step proposed instead of doing
     # the work itself ("Đã chia bước"). Set at mark_done; the ticker's fanout-insert
     # rule reads it, mints the sub/gather rows, and the children's existence is the
@@ -232,6 +237,9 @@ def create_schema(conn: sqlite3.Connection) -> None:
         # v74: same conditional-hash contract — default 0 keeps every pre-v74 row's
         # plan_hash recompute byte-identical (no mismatch stall on migrate).
         "ALTER TABLE team_steps ADD COLUMN needs_web INTEGER NOT NULL DEFAULT 0",
+        # v92: same conditional-hash contract — default 0 keeps every pre-v92 row's
+        # plan_hash recompute byte-identical (no mismatch stall on migrate).
+        "ALTER TABLE team_steps ADD COLUMN needs_mail INTEGER NOT NULL DEFAULT 0",
         # Coordinator intervention counter. Default 0 = "never intervened", which is
         # exactly the state of every row written before this column existed, and it is
         # outside the plan hash, so migrating cannot stall a task.
@@ -271,6 +279,7 @@ def _row_to_step(data: dict[str, Any]) -> TeamStep:
         needs_shell=bool(int(data.get("needs_shell") or 0)),
         external_write=bool(int(data.get("external_write") or 0)),
         needs_web=bool(int(data.get("needs_web") or 0)),
+        needs_mail=bool(int(data.get("needs_mail") or 0)),
         system_inserted=bool(int(data.get("system_inserted") or 0)),
         parent_step_id=data.get("parent_step_id"),
         review_round=int(data.get("review_round") or 0),
@@ -303,8 +312,8 @@ def replace_steps(conn: sqlite3.Connection, task_id: str, steps: list[dict[str, 
             "INSERT INTO team_steps "
             "(task_id, step_id, title, assigned_to, deps_json, status, acceptance, "
             " step_type, needs_review, needs_shell, external_write, needs_web, "
-            " system_inserted) "
-            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, 0)",
+            " needs_mail, system_inserted) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, 0)",
             (
                 task_id, step["step_id"], step.get("title", ""), step.get("assigned_to", ""),
                 json.dumps(list(step.get("deps", ())), ensure_ascii=False),
@@ -314,12 +323,14 @@ def replace_steps(conn: sqlite3.Connection, task_id: str, steps: list[dict[str, 
                 1 if step.get("needs_shell") else 0,  # v45: default 0 (no-shell → create_agent)
                 1 if step.get("external_write") else 0,  # v63: hash-bound conditionally
                 1 if step.get("needs_web") else 0,  # v74: hash-bound conditionally
+                1 if step.get("needs_mail") else 0,  # v92: hash-bound conditionally
             ),
         )
 
 
 def insert_step(conn: sqlite3.Connection, task_id: str, step: dict[str, Any], *,
-                needs_review: bool = False, needs_web: bool = False) -> None:
+                needs_review: bool = False, needs_web: bool = False,
+                needs_mail: bool = False) -> None:
     """Append ONE dynamically-minted row (review/rework) AFTER the task's confirmed DAG
     is already open — the AUTOINCREMENT `seq` continues from wherever it left off, so
     this row always sorts after every existing step in `steps_for_task`/`next_pending_step`.
@@ -343,13 +354,17 @@ def insert_step(conn: sqlite3.Connection, task_id: str, step: dict[str, Any], *,
     sub carries the parent's actual collection work — minting it flagless forced research
     subs onto the searchless native tier, and every one burned a coordinator ruling to
     self-heal (measured: task 8da80658e53d, 3 subs, iv=1 each, 13-23min gaps).
+
+    v92 `needs_mail` follows `needs_web` exactly, for the same reason: a rework row that
+    redoes a mailbox step must inherit the flag, or it is minted onto the native tier
+    with no mail tool and can only fail the way its parent did.
     """
     conn.execute(
         "INSERT INTO team_steps "
         "(task_id, step_id, title, assigned_to, deps_json, status, acceptance, "
-        " step_type, needs_review, needs_web, system_inserted, parent_step_id, "
-        " review_round) "
-        "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, 1, ?, ?)",
+        " step_type, needs_review, needs_web, needs_mail, system_inserted, "
+        " parent_step_id, review_round) "
+        "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, 1, ?, ?)",
         (
             task_id, step["step_id"], step.get("title", ""), step.get("assigned_to", ""),
             json.dumps(list(step.get("deps", ())), ensure_ascii=False),
@@ -357,6 +372,7 @@ def insert_step(conn: sqlite3.Connection, task_id: str, step: dict[str, Any], *,
             step.get("step_type") or "review",
             int(bool(needs_review)),
             int(bool(needs_web)),
+            int(bool(needs_mail)),
             step.get("parent_step_id"),
             int(step.get("review_round") or 0),
         ),
@@ -785,8 +801,8 @@ def swap_pending_steps(
             "INSERT INTO team_steps "
             "(task_id, step_id, title, assigned_to, deps_json, status, acceptance, "
             " step_type, needs_review, needs_shell, external_write, needs_web, "
-            " system_inserted) "
-            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, 0)",
+            " needs_mail, system_inserted) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, 0)",
             (
                 task_id, step["step_id"], step.get("title", ""), step.get("assigned_to", ""),
                 json.dumps(list(step.get("deps", ())), ensure_ascii=False),
@@ -796,6 +812,7 @@ def swap_pending_steps(
                 1 if step.get("needs_shell") else 0,  # v45 tier-0 routing
                 1 if step.get("external_write") else 0,  # v63: hash-bound conditionally
                 1 if step.get("needs_web") else 0,  # v74: hash-bound conditionally
+                1 if step.get("needs_mail") else 0,  # v92: hash-bound conditionally
             ),
         )
     return []

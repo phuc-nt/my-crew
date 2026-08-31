@@ -299,7 +299,7 @@ def run_retry_stalled_step(slots: dict[str, str]) -> str:
                 "assigned_to": content.assigned_to, "deps": retry_deps,
                 "step_type": "rework", "parent_step_id": content.step_id,
                 "review_round": review.review_round,
-            }, needs_web=content.needs_web)
+            }, needs_web=content.needs_web, needs_mail=content.needs_mail)
             ctx.store.reopen_stalled(task.id)
             return (f"Đã mở thêm MỘT vòng sửa cho bước '{content.title}' của việc "
                     f"`{task.id}`" + (" (kèm ghi chú của CEO)." if note else "."))
@@ -330,22 +330,32 @@ def run_retry_stalled_step(slots: dict[str, str]) -> str:
 
 
 def _dead_step_replacement(step: TeamStep) -> str:
-    """A different assignee who holds the tools a dead `needs_web` step requires.
+    """A different assignee who holds the tools a dead `needs_web`/`needs_mail` step
+    requires.
 
     A dead-step reset that keeps an assignee who CANNOT search dies the same way on
     the next attempt — the deterministic loop that burned the autopilot ladder in
-    round 7. Only fires when the step declares `needs_web` and its current holder
-    fails the live capability probe; picks the first assignable web-capable colleague
+    round 7. Only fires when the step declares the need and its current holder
+    fails the live capability probe; picks the first assignable capable colleague
     (registry order — deterministic), and returns "" (keep the current assignee)
     when nobody qualifies — an honest same-agent retry beats an equally-doomed swap.
+
+    A step declaring BOTH needs one agent holding both: swapping to a colleague who
+    fixes only half leaves it just as dead, so the candidate must clear every
+    capability the step declared.
     """
-    from my_crew.agent.team_task_roster import assignable_staff
+    from my_crew.agent.team_task_roster import agent_mail_capable, assignable_staff
     from my_crew.runtime.team_tick_runner import agent_web_capable
 
-    if not step.needs_web or agent_web_capable(step.assigned_to):
+    def _capable(agent_id: str) -> bool:
+        if step.needs_web and not agent_web_capable(agent_id):
+            return False
+        return not (step.needs_mail and not agent_mail_capable(agent_id))
+
+    if not (step.needs_web or step.needs_mail) or _capable(step.assigned_to):
         return ""
     for agent_id, _domain in assignable_staff():
-        if agent_id != step.assigned_to and agent_web_capable(agent_id):
+        if agent_id != step.assigned_to and _capable(agent_id):
             return agent_id
     return ""
 

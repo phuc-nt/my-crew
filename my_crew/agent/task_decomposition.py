@@ -106,6 +106,17 @@ class TeamStepPlan(BaseModel):
     # runtime the step runs on, so the CEO's confirm covers it, while every flagless
     # DAG (all pre-v74 tasks) hashes byte-identical.
     needs_web: bool = False
+    # v92 capability routing: LLM-settable, True when the step must READ the owner's
+    # Google mailbox (summarize/find/triage email). Guarded at BOTH gates, unlike the
+    # other two flags which each hold only one: `validate_mail_steps` rejects a plan at
+    # decompose/amend time, and `_can_do_step` refuses a reassign onto an agent without
+    # the tool. Born from a live task that spent $0.029 to answer "em không có quyền" —
+    # the assignee held no mail tool and nothing caught it before the money was spent.
+    # Binds into `decomposition_content_hash` CONDITIONALLY like `needs_web`: it selects
+    # a tool surface (not a trust boundary), so every flagless DAG hashes byte-identical.
+    # Never a permission: the flag routes work to an agent the CEO already granted mail
+    # access to; it cannot grant that access itself.
+    needs_mail: bool = False
     # Graph-engineering boundary DECLARATION (v93): why this step deserves to be its
     # own node — one of `BOUNDARY_KINDS`, or "" (every pre-v93 plan). Metadata like
     # `acceptance`: NOT part of `decomposition_content_hash` (a labeled DAG hashes
@@ -411,6 +422,11 @@ def decomposition_content_hash(task: DecomposedTask) -> str:
             # tier (native vs the agent's tool loop), so confirm binds it; flagless
             # DAGs keep their stored plan_hash byte-identical.
             d["needs_web"] = True
+        if bool(getattr(s, "needs_mail", False)):
+            # v92: same conditional-emit contract — the flag constrains WHO the step may
+            # be assigned to (only a mail-capable agent), which the CEO's confirm should
+            # bind; flagless DAGs keep their stored plan_hash byte-identical.
+            d["needs_mail"] = True
         return d
 
     canonical = json.dumps(

@@ -58,7 +58,8 @@ _DECOMPOSE_SYSTEM = (
     "và danh sách nhân sự (mã + vai trò) có thể giao việc, hãy trả về DUY NHẤT một JSON "
     '(không markdown) đúng dạng: {"steps":[{"step_id":"...","title":"...",'
     '"assigned_to":"<mã nhân sự>","deps":["..."],"acceptance":"...","boundary":"...",'
-    '"needs_review":true,"needs_shell":false,"needs_web":false,"external_write":false}],'
+    '"needs_review":true,"needs_shell":false,"needs_web":false,"needs_mail":false,'
+    '"external_write":false}],'
     '"pic_id":"<mã nhân sự>","requires_approval":true}. '
     "QUY TẮC RANH GIỚI (đứng trên mọi quy tắc khác): một bước chỉ xứng đáng là bước "
     "riêng khi có RANH GIỚI THẬT buộc phải tách — `boundary` khai đúng 1 giá trị: "
@@ -117,6 +118,10 @@ _DECOMPOSE_SYSTEM = (
     "MỚI (nghiên cứu, khảo giá, tìm nguồn); false cho bước làm việc trên dữ liệu các bước "
     "trước đã giao (viết nháp từ research, chấm điểm, tổng hợp, xếp hạng) — bước false "
     "chạy tier nhanh gấp nhiều lần, đặt true thừa chỉ làm chậm và tốn tiền. "
+    "`needs_mail` = true CHỈ KHI bước phải ĐỌC HỘP THƯ của chủ nhân (tổng hợp/tìm/lọc "
+    "email); false cho mọi bước khác, kể cả bước GỬI mail (gửi là `external_write`). "
+    "Bước đặt true PHẢI giao cho nhân sự được cấp quyền đọc thư — giao sai người thì kế "
+    "hoạch bị trả về ngay, và bạn phải đổi `assigned_to` hoặc bỏ cờ. "
     "`external_write` = true CHỈ KHI bước GHI ra ngoài công ty "
     "(gửi email, tạo lịch mời, mở PR, đăng/publish nội dung); MẶC ĐỊNH false cho bước "
     "nội bộ (nghiên cứu, viết nháp, phân tích, tổng hợp). "

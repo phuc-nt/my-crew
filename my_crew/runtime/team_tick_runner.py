@@ -618,7 +618,10 @@ def agent_web_capable(agent_id: str) -> bool:
 def _can_do_step(agent_id: str, step) -> bool:
     """Whether `agent_id` holds the tools this step needs — one decidable check, no
     model judgment: a step declared (v74 `needs_web`) to require live web lookup
-    needs an assignee who can ACTUALLY search, regardless of who holds it now.
+    needs an assignee who can ACTUALLY search, regardless of who holds it now. v92
+    adds `needs_mail` on the same terms — a mailbox step handed to an agent with no
+    Google grant can only reproduce the "em không có quyền" dead end that motivated
+    the flag.
 
     The declaration is the ONLY requirement source. An earlier extra guard also
     refused any move away from a web-capable holder on UNDECLARED steps, and that
@@ -628,4 +631,8 @@ def _can_do_step(agent_id: str, step) -> bool:
     its parent's declaration (`review_insert`, `ops_stalled_task`), so trusting the
     flag no longer leaves redo rows unprotected.
     """
-    return not bool(getattr(step, "needs_web", False)) or _web_search_enabled(agent_id)
+    from my_crew.agent.team_task_roster import agent_mail_capable
+
+    if bool(getattr(step, "needs_web", False)) and not _web_search_enabled(agent_id):
+        return False
+    return not bool(getattr(step, "needs_mail", False)) or agent_mail_capable(agent_id)

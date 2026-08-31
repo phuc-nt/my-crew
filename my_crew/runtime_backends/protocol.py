@@ -151,11 +151,18 @@ def resolve_step_runtime(
     # searching in code and rides the graph's `work_override` seam, which only the native
     # runtime honors — routing it to a tool-calling tier would silently discard the whole
     # pipeline and hand the model back the react loop this mode exists to avoid.
+    # v92: `needs_mail` must ALSO hold a step off native. The mail tools reach a step only
+    # through the read toolset, which `team_step_runner` wires for non-native tiers only —
+    # so routing a mail step native would strip the very tool it declared it needs, and it
+    # would fail exactly the way the task that motivated this flag did (an honest "em không
+    # có quyền" for $0.029). Unlike `needs_web` there is no prefetch seam for mail, so the
+    # flag is not cancelled by `prefetched`.
     step_type = str(getattr(step, "step_type", "work") or "work")
     needs_web = bool(getattr(step, "needs_web", False)) and not prefetched
+    needs_mail = bool(getattr(step, "needs_mail", False))
     intervened = int(getattr(step, "intervention_count", 0) or 0) > 0
     if step_type in ("review", "sprint") or (
-        step_type == "work" and not needs_web and not intervened
+        step_type == "work" and not needs_web and not needs_mail and not intervened
     ):
         return NativeGraphRuntime()
 

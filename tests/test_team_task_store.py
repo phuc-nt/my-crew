@@ -94,6 +94,36 @@ def test_needs_shell_round_trips(tmp_path):
     store.close()
 
 
+def test_needs_mail_round_trips_and_survives_the_hash_restamp(tmp_path):
+    """v92: the flag must reach the DB and come back — a step that loses it on the way
+    is routed to the toolless native tier and fails exactly as before the flag existed.
+
+    Also pins the restamp path: `_confirmed_plan_hash` MUST select needs_mail, or
+    re-stamping a mail task writes a digest the next tick cannot reproduce (a permanent
+    plan-hash-mismatch stall — the trap its own docstring warns about for needs_web)."""
+    store = _store(tmp_path)
+    steps = [
+        {"step_id": "s1", "title": "đọc hộp thư", "assigned_to": "agent-a", "deps": [],
+         "needs_mail": True},
+        {"step_id": "s2", "title": "tổng hợp", "assigned_to": "agent-a", "deps": ["s1"]},
+    ]
+    store.create_task(task_id="tml", title="demo", original_request="x")
+    store.set_plan("tml", steps, plan_hash=_content_hash(steps))
+    by_id = {s.step_id: s for s in store.get("tml").steps}
+    assert by_id["s1"].needs_mail is True   # honored
+    assert by_id["s2"].needs_mail is False  # default
+
+    restamped = store._confirmed_plan_hash("tml")
+    assert restamped == decomposition_content_hash(SimpleNamespace(steps=[
+        SimpleNamespace(step_id=s.step_id, title=s.title, assigned_to=s.assigned_to,
+                        deps=s.deps, needs_shell=s.needs_shell,
+                        external_write=s.external_write, needs_web=s.needs_web,
+                        needs_mail=s.needs_mail)
+        for s in store.get("tml").steps
+    ]))
+    store.close()
+
+
 # --- confirm_plan (TOCTOU-proof draft -> open) ------------------------------------
 
 

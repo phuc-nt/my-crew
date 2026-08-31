@@ -355,6 +355,61 @@ def test_hash_changes_when_needs_web_set_and_flagless_stays_migration_identical(
     assert decomposition_content_hash(flagless) == hashlib.sha256(pre_v74.encode()).hexdigest()
 
 
+# --- v92 plan-time mail guard --------------------------------------------------------
+
+
+def test_mail_step_rejected_when_fleet_has_no_mail_capable_agent():
+    from my_crew.agent.team_task_roster import validate_mail_steps
+
+    task = parse_decomposed_task(_raw([{**_step("s1"), "needs_mail": True}]))
+    with pytest.raises(DecompositionError, match="CHƯA có agent nào được cấp quyền đọc thư"):
+        validate_mail_steps(task.steps, capable_ids=set())
+
+
+def test_mail_step_rejected_when_assigned_to_agent_without_mailbox_access():
+    """The bug this flag exists for: a mail task assigned to a mail-less agent used to
+    run to completion and spend real money answering "em không có quyền"."""
+    from my_crew.agent.team_task_roster import validate_mail_steps
+
+    task = parse_decomposed_task(_raw([{**_step("s1", assigned_to="agent-a"),
+                                        "needs_mail": True}]))
+    with pytest.raises(DecompositionError, match="phải giao cho agent có quyền Google"):
+        validate_mail_steps(task.steps, capable_ids={"agent-b"})
+    # The message must NAME the capable agent, or the retry has nothing to act on.
+    with pytest.raises(DecompositionError, match="agent-b"):
+        validate_mail_steps(task.steps, capable_ids={"agent-b"})
+
+
+def test_mail_step_passes_on_capable_assignee_and_no_mail_never_checks():
+    from my_crew.agent.team_task_roster import validate_mail_steps
+
+    task = parse_decomposed_task(_raw([{**_step("s1", assigned_to="agent-b"),
+                                        "needs_mail": True}]))
+    validate_mail_steps(task.steps, capable_ids={"agent-b"})  # no raise
+    plain = parse_decomposed_task(_raw([_step("s1")]))
+    validate_mail_steps(plain.steps, capable_ids=set())  # no mail step -> no raise
+
+
+def test_hash_changes_when_needs_mail_set_and_flagless_stays_migration_identical():
+    """v92: needs_mail constrains who may hold the step → binds the confirm, but is
+    emitted only when True so every flagless DAG (every pre-v92 task) hashes
+    byte-identical — no plan-hash-mismatch stall on migration."""
+    task_a = parse_decomposed_task(_raw([_step("s1")]))
+    task_b = parse_decomposed_task(_raw([{**_step("s1"), "needs_mail": True}]))
+    assert decomposition_content_hash(task_a) != decomposition_content_hash(task_b)
+
+    import hashlib
+    import json as _json
+
+    flagless = parse_decomposed_task(_raw([_step("s1"), _step("s2", deps=["s1"])]))
+    pre_v92 = _json.dumps(
+        {"steps": [{"step_id": s.step_id, "title": s.title, "assigned_to": s.assigned_to,
+                    "deps": list(s.deps)} for s in flagless.steps]},
+        sort_keys=True, ensure_ascii=True, separators=(",", ":"),
+    )
+    assert decomposition_content_hash(flagless) == hashlib.sha256(pre_v92.encode()).hexdigest()
+
+
 # --- v74 phase 3: entity fan-out ----------------------------------------------------
 
 

@@ -235,16 +235,21 @@ def amend_with_retries(task, request: str, staff: list[tuple[str, str]]) -> tupl
                 validate_pic_terminal(amendment.steps, pic_id)
             # v64 shell guard — same rule as decompose: new pending shell steps must
             # land on a sandbox-capable agent or fail at plan time.
-            from my_crew.agent.team_task_roster import validate_shell_steps
+            from my_crew.agent.team_task_roster import (
+                validate_mail_steps,
+                validate_shell_steps,
+            )
 
             validate_shell_steps(amendment.steps)
+            validate_mail_steps(amendment.steps)  # v92 — same rule as decompose
             new_pending = [
                 {"step_id": s.step_id, "title": s.title, "assigned_to": s.assigned_to,
                  "deps": list(s.deps), "acceptance": s.acceptance,
                  "step_type": s.step_type, "needs_review": s.needs_review,
                  "needs_shell": s.needs_shell,  # v45 tier-0 routing
                  "external_write": s.external_write,  # v63 — hash-bound conditionally
-                 "needs_web": s.needs_web}  # v74 — hash-bound conditionally
+                 "needs_web": s.needs_web,  # v74 — hash-bound conditionally
+                 "needs_mail": s.needs_mail}  # v92 — hash-bound conditionally
                 for s in amended_tail
             ]
             return new_pending, validated, total_cost

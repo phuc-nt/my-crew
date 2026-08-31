@@ -25,12 +25,13 @@ class _LP:
 
 class _Step:
     def __init__(self, needs_shell=False, needs_web=True, step_type="work",
-                 intervention_count=0):
+                 intervention_count=0, needs_mail=False):
         # needs_web defaults TRUE here so the pre-v74 assertions below keep testing
         # the tier-drop rules on their original terms (a web-needing step); the v74
         # native-forcing rules get their own tests at the bottom.
         self.needs_shell = needs_shell
         self.needs_web = needs_web
+        self.needs_mail = needs_mail
         self.step_type = step_type
         self.intervention_count = intervention_count
 
@@ -98,6 +99,30 @@ def test_no_web_work_step_forces_native_regardless_of_tier():
         lp = _LP(kind, sandbox={"provider": "docker"} if kind == "deep_agent" else None)
         rt = resolve_step_runtime(lp, _Step(needs_web=False))
         assert _kind(rt) == "NativeGraphRuntime"
+
+
+def test_needs_mail_step_stays_off_the_native_tier():
+    """v92: the mail tools reach a step only through the read toolset, which is wired
+    for non-native tiers only. Routing a mail step native would strip the very tool it
+    declared it needs — the exact dead end (`em không có quyền`) the flag exists to
+    prevent. `needs_web=False` here so ONLY the mail flag can hold it off native."""
+    for kind in ("create_agent", "deep_agent"):
+        lp = _LP(kind, sandbox={"provider": "docker"} if kind == "deep_agent" else None)
+        rt = resolve_step_runtime(lp, _Step(needs_web=False, needs_mail=True))
+        assert _kind(rt) != "NativeGraphRuntime"
+    # A native-pinned agent still resolves native: the flag routes the step to whatever
+    # tier the agent has, it cannot conjure a tool loop the profile never configured.
+    assert _kind(resolve_step_runtime(
+        _LP("native"), _Step(needs_web=False, needs_mail=True))) == "NativeGraphRuntime"
+
+
+def test_needs_mail_is_not_cancelled_by_prefetch():
+    """`prefetched` means the launcher already fetched the step's WEB data — there is no
+    prefetch seam for mail, so it must not release a mail step onto the toolless tier."""
+    rt = resolve_step_runtime(
+        _LP("create_agent"), _Step(needs_web=False, needs_mail=True), prefetched=True,
+    )
+    assert _kind(rt) != "NativeGraphRuntime"
 
 
 def test_review_row_is_always_native():

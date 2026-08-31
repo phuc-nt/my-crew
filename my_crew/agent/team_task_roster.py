@@ -92,6 +92,67 @@ def validate_shell_steps(steps, *, capable_ids: set[str] | None = None) -> None:
     )
 
 
+def agent_mail_capable(agent_id: str) -> bool:
+    """Whether that agent can ACTUALLY read the owner's mailbox. Unknown profile ⇒ False.
+
+    Mirrors the exact gate the toolset enforces (`read_only_toolset.py`): BOTH the
+    per-agent `gws_context` opt-in AND the `gws_enabled` master switch. Either alone is
+    not enough — `gws_enabled` also governs the write commands, and `gws_context` alone
+    would claim a tool the builder refuses to bind.
+
+    Deliberately does NOT check the runtime tier here: `resolve_step_runtime` keeps a
+    `needs_mail` step off the native tier by construction, so tier is not a property of
+    the AGENT the way a deep_agent's networkless sandbox is for `web_search`.
+    """
+    from my_crew.profile.loader import load_profile
+    from my_crew.runtime.agent_paths import agent_data_dir
+
+    try:
+        loaded = load_profile(agent_id, data_dir=agent_data_dir(agent_id))
+    except (FileNotFoundError, RuntimeError):
+        return False
+    return bool(getattr(loaded, "gws_context", False)) and bool(
+        getattr(loaded.config, "gws_enabled", True)
+    )
+
+
+def mail_capable_ids() -> set[str]:
+    """Assignable agents that can read mail — the roster a `needs_mail` step may target."""
+    return {a for a, _ in assignable_staff() if agent_mail_capable(a)}
+
+
+def validate_mail_steps(steps, *, capable_ids: set[str] | None = None) -> None:
+    """v92 plan-time mail guard: every `needs_mail` step must be assigned to an agent
+    that can actually read the mailbox. Raises `DecompositionError` — called inside the
+    decompose AND amend retry loops, so the model first gets a chance to reassign or
+    drop the flag, exactly like the v64 shell guard.
+
+    Motivation is a measured one: a mail task assigned to a mail-less agent ran to
+    completion and spent $0.029 producing "em không có quyền truy cập hộp thư". Catching
+    it here costs at most one extra decompose round-trip.
+    `capable_ids` is injectable for tests; None ⇒ read the live roster."""
+    from my_crew.agent.task_decomposition import DecompositionError
+
+    mail_steps = [s for s in steps if getattr(s, "needs_mail", False)]
+    if not mail_steps:
+        return
+    capable = mail_capable_ids() if capable_ids is None else capable_ids
+    bad = [s for s in mail_steps if s.assigned_to not in capable]
+    if not bad:
+        return
+    ids = ", ".join(f"[{s.step_id}]→{s.assigned_to}" for s in bad)
+    if capable:
+        raise DecompositionError(
+            f"bước cần đọc hộp thư ({ids}) phải giao cho agent có quyền Google "
+            f"({', '.join(sorted(capable))}) — đổi assigned_to hoặc bỏ needs_mail"
+        )
+    raise DecompositionError(
+        f"bước {ids} đặt needs_mail nhưng đội CHƯA có agent nào được cấp quyền đọc thư "
+        "(gws_context + gws_enabled) — hãy làm bước này không cần đọc mail "
+        "(needs_mail=false), hoặc CEO cấp quyền cho một agent trước"
+    )
+
+
 #: Cap on the per-colleague role hint pulled from SOUL.md's first line — a targeting
 #: nudge, never a persona mirror (the full SOUL only ever reaches the ANSWER call,
 #: `team_task_consult.ask_colleague`, not the roster listing every step sees).

@@ -362,4 +362,4 @@ def _insert_rework_step(
         "assigned_to": content_step.assigned_to, "deps": rework_deps,
         "step_type": "rework",
         "parent_step_id": content_step.step_id, "review_round": review_round,
-    }, needs_web=content_step.needs_web)
+    }, needs_web=content_step.needs_web, needs_mail=content_step.needs_mail)

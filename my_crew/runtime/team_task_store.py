@@ -926,9 +926,9 @@ class TeamTaskStore:
         in the current (uncommitted) transaction.
 
         MUST select every column the hash reads — the conditional flags (`needs_shell`,
-        `external_write`, `needs_web`) included. The verify side hashes real `TeamStep`
-        rows where those flags resolve to their persisted values; reconstructing here
-        without them silently hashes them as False, so re-stamping any task whose
+        `external_write`, `needs_web`, `needs_mail`) included. The verify side hashes real
+        `TeamStep` rows where those flags resolve to their persisted values; reconstructing
+        here without them silently hashes them as False, so re-stamping any task whose
         confirmed plan carries a True flag (every research plan sets `needs_web`) writes
         a digest the next tick can never reproduce — a permanent, self-inflicted
         plan_hash-mismatch stall right after a stuck-reassign."""
@@ -936,7 +936,7 @@ class TeamTaskStore:
 
         rows = self._conn.execute(
             "SELECT step_id, title, assigned_to, deps_json, needs_shell, external_write, "
-            "needs_web FROM team_steps "
+            "needs_web, needs_mail FROM team_steps "
             "WHERE task_id = ? AND system_inserted = 0 ORDER BY seq",
             (task_id,),
         ).fetchall()
@@ -945,6 +945,7 @@ class TeamTaskStore:
                 step_id=r[0], title=r[1], assigned_to=r[2],
                 deps=tuple(json.loads(r[3] or "[]")),
                 needs_shell=bool(r[4]), external_write=bool(r[5]), needs_web=bool(r[6]),
+                needs_mail=bool(r[7]),
             )
             for r in rows
         ]
@@ -966,29 +967,34 @@ class TeamTaskStore:
         return updated
 
     def insert_step(self, task_id: str, step: dict[str, Any], *,
-                    needs_review: bool = False, needs_web: bool = False) -> None:
+                    needs_review: bool = False, needs_web: bool = False,
+                    needs_mail: bool = False) -> None:
         """Append one ticker-minted row (review/rework/sub/gather) — see
         `team_task_steps.insert_step`'s docstring for the `system_inserted` forcing
-        and the explicit `needs_review`/`needs_web` opt-ins (gather / split-sub rows)."""
+        and the explicit `needs_review`/`needs_web`/`needs_mail` opt-ins (gather /
+        split-sub / rework rows)."""
         _steps.insert_step(self._conn, task_id, step, needs_review=needs_review,
-                           needs_web=needs_web)
+                           needs_web=needs_web, needs_mail=needs_mail)
         self._conn.commit()
 
     def insert_steps_atomic(self, task_id: str,
                             rows: list[tuple[dict[str, Any], bool] |
-                                       tuple[dict[str, Any], bool, bool]]) -> None:
+                                       tuple[dict[str, Any], bool, bool] |
+                                       tuple[dict[str, Any], bool, bool, bool]]) -> None:
         """Append SEVERAL ticker-minted rows in ONE transaction (v34 P4 fan-out mints
         N subs + 1 gather together — a crash between per-row commits would strand
         subs without their gather forever, since the children-exist idempotency guard
         then refuses a re-mint). `rows` = [(step_dict, needs_review)] or
-        [(step_dict, needs_review, needs_web)] (v74 split subs). All-or-nothing:
+        [(step_dict, needs_review, needs_web)] (v74 split subs) or
+        [(step_dict, needs_review, needs_web, needs_mail)] (v92). All-or-nothing:
         any failure rolls the whole mint back."""
         try:
             for row in rows:
                 step, needs_review = row[0], row[1]
                 needs_web = bool(row[2]) if len(row) > 2 else False
+                needs_mail = bool(row[3]) if len(row) > 3 else False
                 _steps.insert_step(self._conn, task_id, step, needs_review=needs_review,
-                                   needs_web=needs_web)
+                                   needs_web=needs_web, needs_mail=needs_mail)
         except Exception:
             self._conn.rollback()
             raise

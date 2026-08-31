@@ -380,6 +380,12 @@ dry_run off, GIỮ Lớp A): chat DM tức thì (listener long-poll, tick làm f
   tray join thẳng, heuristic v54 thành fallback event cũ.
 - [x] ~~`/api/office/assign/staff` load_profile per-staff~~ — xong v58: yaml-peek chung
   `peek_profile_yaml`, test chống tái phát.
+- [ ] **Nghiên cứu harness openhuman** (CEO đặt 2026-08-31): đọc
+  https://github.com/tinyhumansai/openhuman, đối chiếu với runtime hiện tại
+  (`my_crew/runtime_backends/` — native / create_agent / deep_agent + router
+  `resolve_step_runtime`). Câu hỏi cần trả lời: harness đó tách vòng lặp agent thế nào,
+  có gì đáng mượn cho lớp tier-routing + toolset gating của mình không, và mượn được thì
+  chi phí nào (license, phụ thuộc, khoá hãm). Chỉ nghiên cứu — không cam kết tích hợp.
 - Modularization >200 LOC: KHÔNG đứng riêng — `team_task_graph.py` (920 LOC) là lõi đã
   red-team nhiều vòng, refactor vì đếm dòng = rủi ro > lợi. Áp rule khi chạm file có lý
   do hành vi.
