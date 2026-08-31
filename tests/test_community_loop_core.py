@@ -102,6 +102,70 @@ def test_tools_tier_sends_exactly_one_system_message(monkeypatch):
     assert "system_prompt" not in seen["create_agent_kwargs"]
 
 
+def test_tools_tier_runs_without_the_optional_deep_extra(monkeypatch):
+    """`loop_engine: langchain` must work on a default install.
+
+    The scratch middleware needs the optional `deep` extra; nothing in config links the two, so
+    hard-failing on the import took the whole tier down for anyone who installed without it. The
+    tier degrades to no file scratch — and must then NOT promise a scratch tool in its prompt.
+    """
+    import builtins
+
+    import my_crew.runtime_backends.react_loop as react_loop
+
+    real_import = builtins.__import__
+
+    def _no_deepagents(name, *args, **kwargs):
+        if name.startswith("deepagents"):
+            raise ModuleNotFoundError(f"No module named {name!r}")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _no_deepagents)
+
+    seen = {}
+
+    class _FakeAgent:
+        def invoke(self, state, config=None):
+            seen["messages"] = state["messages"]
+            return {"messages": [_Msg("ok")]}
+
+    def _fake_create_agent(model, tools, **kwargs):
+        seen["middleware"] = kwargs.get("middleware")
+        return _FakeAgent()
+
+    monkeypatch.setattr("langchain.agents.create_agent", _fake_create_agent)
+    monkeypatch.setattr("langchain_openai.ChatOpenAI", lambda *a, **k: object())
+
+    class _S:
+        openrouter_model = "x/y"
+        openrouter_api_key = "k"
+
+    class _Ctx:
+        persona = "P"
+        project = "proj"
+        memory = "mem"
+        capability = "cap"
+
+    text, _cost = react_loop.run_react_work(
+        title="t", handoff="h", context=_Ctx(), settings=_S(), tools_map={}, max_steps=4,
+    )
+    assert text == "ok"  # the tier still ran
+    assert seen["middleware"] == []  # degraded, not a [None] that create_agent would choke on
+    system = next(m for m in seen["messages"] if type(m).__name__ == "SystemMessage")
+    assert react_loop._STATE_SCRATCH_CONTRACT not in system.content
+
+
+@pytest.mark.skipif(not _HAS_DEEPAGENTS, reason="deepagents optional dep not installed")
+def test_tools_tier_binds_file_scratch_when_the_deep_extra_is_present():
+    """The degrade path must not become the ONLY path: with the extra installed the middleware is
+    still built, still shell-free."""
+    import my_crew.runtime_backends.react_loop as react_loop
+
+    mw = react_loop._state_scratch_middleware()
+    assert mw is not None
+    assert "execute" not in [getattr(t, "name", "") for t in mw.tools]
+
+
 def test_invoke_capped_forces_tracing_off_during_invoke(monkeypatch):
     # With tracing env ON, the invoke must see it OFF (blanked env), then have it restored after.
     import os

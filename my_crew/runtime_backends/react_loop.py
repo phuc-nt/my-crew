@@ -93,7 +93,12 @@ def run_react_work(
     # v45: give this tier an in-STATE file scratch (no Docker, no host, no shell) so a no-shell
     # step routed here can do the compose-early report discipline. The clause + read-back mirror
     # the deep_agent path but the files live in graph state, never a container.
-    system = system + _tool_capability_contract(tools_map) + _STATE_SCRATCH_CONTRACT
+    # Built BEFORE the prompt: without the optional `deep` extra there is no scratch tool, and
+    # promising one the model cannot call is how a step burns its turns asking for a file surface.
+    scratch_mw = _state_scratch_middleware()
+    system = system + _tool_capability_contract(tools_map)
+    if scratch_mw is not None:
+        system = system + _STATE_SCRATCH_CONTRACT
     user = next((m["content"] for m in msgs if m["role"] == "user"), title)
 
     # LangChain chat model pointed at OpenRouter (same base URL/model as LlmClient). Only used
@@ -108,8 +113,8 @@ def run_react_work(
     # v45: attach the StateBackend file-scratch middleware (execute stripped — this tier has NO
     # shell). The read toolset stays the positive read-allowlist; the scratch tools are a SEPARATE,
     # host-free surface (files in graph state), asserted shell-free before binding.
-    scratch_mw = _state_scratch_middleware()
-    agent = create_agent(model, _as_lc_tools(tools_map), middleware=[scratch_mw])
+    agent = create_agent(model, _as_lc_tools(tools_map),
+                         middleware=[scratch_mw] if scratch_mw is not None else [])
     result = invoke_capped(
         agent,
         [SystemMessage(content=system), HumanMessage(content=user)],
@@ -180,9 +185,22 @@ def _state_scratch_middleware():
     the `execute` tool anyway so the create_agent tier exposes NO shell-shaped tool at all (moat +
     audit clarity: the tools-tier is provably shell-free). Fail-loud if `execute` somehow can't be
     removed rather than silently binding a shell-named tool.
+
+    Returns None when the optional `deep` extra is absent: file scratch is an ENHANCEMENT for this
+    tier (a place to draft long output), not its reason to exist — the tools tier's actual job is
+    the read toolset, which needs no deepagents. Hard-failing here took down `loop_engine:
+    langchain` for anyone who installed without `--extra deep`, with nothing linking the two
+    settings. Degrade loudly in the log, keep the tier working.
     """
-    from deepagents.backends.state import StateBackend
-    from deepagents.middleware.filesystem import FilesystemMiddleware
+    try:
+        from deepagents.backends.state import StateBackend
+        from deepagents.middleware.filesystem import FilesystemMiddleware
+    except ModuleNotFoundError:
+        logger.warning(
+            "create_agent scratch: optional `deep` extra not installed — running without file "
+            "scratch (install with `uv sync --extra deep` to enable it)"
+        )
+        return None
 
     mw = FilesystemMiddleware(backend=StateBackend())
     mw.tools = [t for t in mw.tools if getattr(t, "name", "") != "execute"]
