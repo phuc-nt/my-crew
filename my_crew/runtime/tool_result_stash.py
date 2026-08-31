@@ -3,8 +3,9 @@
 `data_dir/artifacts/team-tasks/<task_id>/tool-results/<step_id>-<n>-<tool>.txt`, a
 sibling of `transcripts/` and `work-orders/` and confined the same way (`task_artifact_dir`).
 
-Why a stash rather than a plain trim. A tool with no cap of its own — `history_search`,
-`openalex`, the issue-tracker readers — can return tens of thousands of characters, and
+Why a stash rather than a plain trim. A tool with no cap of its own — the issue-tracker
+readers (`jira.issues`, `github.prs`, `linear.issues`), `confluence.page` (raw XHTML
+storage body), and `web.search` snippets — can return tens of thousands of characters, and
 `thin_tool_loop` feeds that verbatim into `messages`, where it is re-sent on EVERY
 subsequent round. One large result therefore costs its size times the rounds that follow
 it. Trimming alone would fix the cost and lose the data; stashing fixes the cost and
