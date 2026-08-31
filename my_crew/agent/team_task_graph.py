@@ -324,7 +324,7 @@ def default_team_task_deps(
         return llm
 
     def _read_handoff() -> str:
-        handoff = _read_deps_handoff(data_dir, task_id, step_deps)
+        handoff = _read_deps_handoff(data_dir, task_id, step_deps, cap_dep_chars=True)
         # The ORIGINAL CEO brief rides into EVERY step, first in the block. A step used
         # to see only its own title/acceptance + deps' artifacts — and a decompose that
         # wrote a generic title ("Nghiên cứu giá 3 công cụ quản lý dự án", no names) left
@@ -644,7 +644,38 @@ def _strip_guidance(handoff: str) -> str:
     return f"{head}\n\n{kept}" if head else kept
 
 
-def _read_deps_handoff(data_dir: Any, task_id: str, step_deps: tuple[str, ...]) -> str:
+#: Per-dep ceiling on handoff text, applied only when building a step's PROMPT.
+#: A fan-in step's deps are its N sub-steps, so an uncapped join grows with the fanout
+#: width and the widest branch — the parent pays for every sub's full output even though
+#: it is being asked to synthesize, not to re-read. 8000 chars ≈ 2000 tokens leaves a
+#: long research answer intact (measured deliverables run well under it) while bounding
+#: the pathological case. The full text is never lost: it stays in `step-<seq>.json`,
+#: which is what the pointer names.
+HANDOFF_DEP_CHAR_CAP = 8000
+
+
+def _cap_dep_text(text: str, dep_step, task_id: str) -> str:
+    """One dep's contribution, bounded, with a pointer to the untruncated artifact.
+
+    Uses the delimiter-aware truncator rather than a plain slice: a step's `result_text`
+    may carry wrapped `===SEARCH_RESULT===` blocks, and a slice landing inside one leaves
+    an unclosed delimiter that swallows the rest of the prompt.
+    """
+    if len(text) <= HANDOFF_DEP_CHAR_CAP:
+        return text
+    from my_crew.tools.search_result_formatter import truncate_preserving_delimiters
+
+    head = truncate_preserving_delimiters(text, HANDOFF_DEP_CHAR_CAP)
+    dropped = len(text) - len(head)
+    return (
+        f"{head}\n…[đã cắt {dropped} ký tự — bản đầy đủ ở artifact "
+        f"step-{int(dep_step.seq)}.json của việc {task_id}]"
+    )
+
+
+def _read_deps_handoff(
+    data_dir: Any, task_id: str, step_deps: tuple[str, ...], *, cap_dep_chars: bool = False
+) -> str:
     """DEPS-aware handoff read: the artifact(s) of THIS step's `deps` (step_ids),
     mapped to their store `seq` via `TeamTaskStore.get_step` — NOT "seq - 1" (the
     prior implementation's shortcut).
@@ -671,6 +702,15 @@ def _read_deps_handoff(data_dir: Any, task_id: str, step_deps: tuple[str, ...]) 
     leaving the fix round to re-derive from the CEO brief alone. Measured on task
     51ad15207896: seven rework rows, three rounds, 0 chars of handoff every time,
     while each verdict sat on disk complete.
+
+    `cap_dep_chars` bounds each dep's contribution to `HANDOFF_DEP_CHAR_CAP`, appending a
+    pointer to the full artifact. Default OFF, and deliberately a per-caller choice rather
+    than unconditional: the other two callers are not building a prompt. The work-order
+    writer records the handoff for replay, where a truncated copy would make the replay
+    diverge from the run it claims to reproduce; the reviewer context exists so a grader
+    can read what the graded step was actually given, and a reviewer who marks a step
+    incomplete because the evidence was cut before it reached them is worse than a long
+    prompt.
     """
     if not step_deps:
         return ""
@@ -704,7 +744,7 @@ def _read_deps_handoff(data_dir: Any, task_id: str, step_deps: tuple[str, ...]) 
                 continue
             text = str(artifact.get("result_text", ""))
             if text:
-                parts.append(text)
+                parts.append(_cap_dep_text(text, dep_step, task_id) if cap_dep_chars else text)
         return "\n\n".join(parts)
     finally:
         store.close()
