@@ -825,3 +825,29 @@ def test_decompose_prompt_pins_boundary_rule():
     for kind in ("dependency", "concurrency", "specialization", "permission",
                  "human_gate"):
         assert kind in _DECOMPOSE_SYSTEM
+
+
+def test_the_live_mail_brief_still_reaches_the_team_lane():
+    """Premise guard for the live mail cases, kept OFFLINE on purpose.
+
+    `tests/fullflow_live/test_live_mail_capability_gate.py` drives a mail-shaped brief
+    through a real fleet to prove the v92 gate holds end to end. That only tests anything
+    if the brief reaches the TEAM lane: `classify_brief` is pure code that defaults to
+    SPRINT, and the sprint lane has no `needs_mail` concept at all, so a brief that routes
+    there bypasses the gate entirely and both live cases pass while asserting nothing.
+
+    This assertion cannot live beside those cases: `fullflow_live/conftest.py` marks every
+    test in that package `live`, so it would be deselected by the default `-m "not live"`
+    and skipped on any machine without a key — silent in exactly the situation it exists
+    for. Here it runs on every plain `pytest`, and an innocuous reword of the brief fails
+    fast and free instead of after a paid run.
+    """
+    from my_crew.agent.sprint_intake import classify_brief
+    from tests.fullflow_live.test_live_mail_capability_gate import BRIEF
+
+    is_sprint, reason = classify_brief(BRIEF)
+    assert not is_sprint, (
+        f"the live mail BRIEF now routes to the SPRINT lane ({reason!r}), which has no "
+        "needs_mail concept — the live cases would bypass the v92 gate and pass while "
+        "testing nothing. Restore the multi-stage phrasing that keeps it on the team lane."
+    )
