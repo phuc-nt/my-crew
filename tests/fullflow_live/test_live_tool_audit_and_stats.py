@@ -10,7 +10,10 @@ wiring a synthesised row cannot exercise.
 
 Both cases ride ONE journey rather than one each. The trail and the stats are two views of
 the same rows, so a second paid run would buy no additional coverage — and `collect_tool_stats`
-reading the same file the shim wrote is precisely the invariant L5 exists to check.
+reading the same file the shim wrote is precisely the invariant L5 exists to check. That
+sharing needs `scope="module"` on the fleet and the run: at the default function scope each
+case quietly got its own fleet and its own delegate, so the two views were of two DIFFERENT
+runs and the cross-check was hollow while still reporting green.
 
 **Same fleet seam as the cost-cap cases, for the same measured reason.** A default-seeded
 fleet is entirely native, and the native tier binds no read toolset at all — so the shim
@@ -53,25 +56,31 @@ BRIEF = (
 )
 
 
-@pytest.fixture
-def tool_fleet(tmp_path, live_api_key):
-    """`analyst` on the tools tier, no spend ceiling — the loop should run to its natural end."""
-    home = tmp_path / "home"
-    seed_home(home, api_key=live_api_key, tools_tier={TOOL_AGENT})
-    server = boot(home, api_key=live_api_key, seed=False)
+@pytest.fixture(scope="module")
+def tool_fleet(tmp_path_factory, live_api_key_module):
+    """`analyst` on the tools tier, no spend ceiling — the loop should run to its natural end.
+
+    Module-scoped so both cases share ONE fleet, for the same reason `tool_journey` is:
+    a per-case fleet would mean a per-case journey.
+    """
+    home = tmp_path_factory.mktemp("tool_audit") / "home"
+    seed_home(home, api_key=live_api_key_module, tools_tier={TOOL_AGENT})
+    server = boot(home, api_key=live_api_key_module, seed=False)
     try:
         yield server
     finally:
         server.stop()
 
 
-@pytest.fixture
-def tool_journey(tool_fleet, journey_budget):
-    """Run BRIEF once and hand both cases the same settled task.
+@pytest.fixture(scope="module")
+def _tool_journey_run(tool_fleet):
+    """Run BRIEF exactly once for the whole module.
 
-    A fixture rather than a helper called twice: these two cases assert on different views
-    of one run, and paying for the journey twice would measure two different runs while
-    claiming to cross-check one.
+    Module-scoped, and that is load-bearing rather than an optimisation. Under the default
+    function scope each case got its OWN fleet and its OWN delegate, so the two cases were
+    reading two different runs while the docstring claimed they cross-checked one — which
+    is precisely the failure L5 exists to detect, reintroduced in the harness itself.
+    Measured: a run of this file paid for two full research journeys (~28 min) instead of one.
     """
     code, body = tool_fleet.post(
         "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True}, timeout=900
@@ -81,6 +90,18 @@ def tool_journey(tool_fleet, journey_budget):
     assert task_id, f"delegate returned no task_id: {body!r}"
 
     status = wait_until_settled(tool_fleet, task_id, timeout_s=900)
+    return task_id, status
+
+
+@pytest.fixture
+def tool_journey(tool_fleet, _tool_journey_run, journey_budget):
+    """Hand both cases the same settled task, and bill each case's own budget.
+
+    `journey_budget` stays function-scoped — it is shared with every other live journey
+    file and keys its baseline row off `request.node.name` — so the spend of the one real
+    run is noted once per case. The run itself happens only once.
+    """
+    task_id, status = _tool_journey_run
     journey_budget.note_cost(
         (status.get("cost") or {}).get("total_cost_usd") or 0.0, status
     )

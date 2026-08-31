@@ -89,8 +89,7 @@ requires_search = pytest.mark.skipif(
 MAX_COST_PER_JOURNEY_USD = 0.30
 
 
-@pytest.fixture
-def live_api_key() -> str:
+def _live_api_key() -> str:
     """The real key, for handing to a child process's environment.
 
     Read through the same settings object the gate uses, so a case can never run
@@ -100,6 +99,24 @@ def live_api_key() -> str:
     if not key:  # pragma: no cover — the collection gate already skips these cases
         pytest.skip("OPENROUTER_API_KEY not configured")
     return key
+
+
+@pytest.fixture
+def live_api_key() -> str:
+    """Function-scoped key — the default, used by every per-case live fixture."""
+    return _live_api_key()
+
+
+@pytest.fixture(scope="module")
+def live_api_key_module() -> str:
+    """Module-scoped key, for a fleet that several cases deliberately SHARE.
+
+    A module-scoped fixture cannot request a function-scoped one (pytest raises
+    ScopeMismatch at setup — not at collection, so it surfaces only once a real run
+    starts). Both variants delegate to one implementation so the two can never read
+    the key differently.
+    """
+    return _live_api_key()
 
 
 class JourneyBudget:
