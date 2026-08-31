@@ -66,7 +66,8 @@ TIGHT_CAP_USD = 0.0005
 #:    version of this brief returned `(True, "dạng 'tra cứu', không có dấu hiệu cần đội")`
 #:    and produced exactly one `step_type='sprint'` row — the cap was never consulted and
 #:    `resolved=[]`. The multi-stage "trong tuần" phrasing is what moves it to the team
-#:    lane; `test_the_brief_reaches_the_team_lane` pins that offline so a reword cannot
+#:    lane; `test_the_live_cost_cap_brief_still_reaches_the_team_lane` (in
+#:    `tests/test_task_decomposition.py`) pins that offline so a reword cannot
 #:    silently send it back.
 #: 2. **A `needs_web` work step.** `resolve_step_runtime` gate 2 sends a plain work step to
 #:    native regardless of the profile, so without this flag the tools tier is unreachable.

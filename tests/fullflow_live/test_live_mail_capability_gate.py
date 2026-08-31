@@ -61,7 +61,8 @@ MAIL_AGENT = "secretary"
 #: classifier rather than assumed: this brief returns
 #: `(False, "việc dài nhiều giai đoạn ('trong tuần')")`, i.e. the team lane, and the
 #: multi-stage phrasing is what puts it there. Changing the wording can silently move it
-#: to sprint, so `test_the_brief_really_reaches_the_team_lane` pins it offline.
+#: to sprint, so `test_the_live_mail_brief_still_reaches_the_team_lane` (in
+#: `tests/test_task_decomposition.py`) pins it offline.
 #:
 #: Deliberately SHORT (3 parts, not 6). A measured run with a 6-part version showed why:
 #: the guard rejects each mail-claiming plan and the model re-plans inside the retry loop,
