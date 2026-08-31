@@ -26,6 +26,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from my_crew.runtime_backends.loop_cost_guard import over_cost_cap, with_cost_cap_gap_note
 from my_crew.runtime_backends.tool_call_validation import prepare_tool_arguments
 from my_crew.runtime_backends.typed_tool_specs import ToolSpec, build_typed_specs
 
@@ -52,12 +53,16 @@ _REPEAT_BATCH_MSG = (
 
 def run_thin_loop(
     *, title: str, handoff: str, context, settings, tools_map, max_steps: int,
-    telemetry=None, llm=None,
+    telemetry=None, llm=None, cost_cap_usd: float | None = None,
 ) -> tuple[str, float | None]:
     """Run one team-step's work as a flat tool loop. Returns (text, cost_usd).
 
     `llm` is injectable for tests; default builds an `LlmClient(settings)`. `telemetry`
     (optional StepTelemetry) receives summed token counts with cost_source "exact".
+
+    `cost_cap_usd` is this step's own spend ceiling (`RuntimeCaps.cost_cap_usd`). None —
+    the default for every tier — leaves the loop bounded only by `max_steps`, exactly as
+    before. See `loop_cost_guard` for why enforcement lives in this loop alone.
     """
     from my_crew.llm.team_task_prompt import build_team_step_messages
 
@@ -97,7 +102,14 @@ def run_thin_loop(
             have_cost = True
 
     text: str | None = None
+    capped_at_round: int | None = None
     for _round in range(max_steps):
+        # The spend ceiling is consulted BEFORE the call, not after: a check that runs
+        # afterwards has already paid for the round it was meant to prevent. `cost_cap_usd`
+        # is None on every tier by default, so this is a no-op unless a profile sets one.
+        if over_cost_cap(costs, cost_cap_usd):
+            capped_at_round = _round
+            break
         exchange = llm.complete_with_tools(messages, wire_tools)
         _account(exchange.result)
         msg = exchange.message
@@ -125,7 +137,7 @@ def run_thin_loop(
         for call in tool_calls:
             messages.append(_execute_call(call, by_name, tools_map))
 
-    if text is None:
+    if text is None and capped_at_round is None:
         # Round budget exhausted while the model still wanted tools: one tool-free
         # synthesis turn over everything fetched so far — never an empty result.
         result = llm.complete(
@@ -133,6 +145,16 @@ def run_thin_loop(
         )
         _account(result)
         text = result.content
+
+    if capped_at_round is not None:
+        # Stopped on cost, so the salvage synthesis above is deliberately skipped: it is
+        # another paid call, and spending past the ceiling to explain that the ceiling was
+        # reached defeats the guard. Recover the text the same way that synthesis exists to
+        # avoid losing it — from the transcript already in hand — and say plainly that the
+        # result is partial.
+        text = with_cost_cap_gap_note(
+            _last_assistant_text(messages), costs, cost_cap_usd, capped_at_round
+        )
 
     if telemetry is not None:
         telemetry.record(
@@ -165,6 +187,26 @@ def _loop_contract(specs: list[ToolSpec]) -> str:
             "có, và phải ghi chú rõ đó là nguồn thứ cấp."
         )
     return contract
+
+
+def _last_assistant_text(messages: list[dict]) -> str:
+    """The most recent assistant prose in the transcript, for the cost-capped exit.
+
+    Assistant turns that carry tool calls have `content == ""` by wire rule W1, so most of
+    a capped loop's transcript holds no prose at all. Walking backwards finds the last turn
+    that actually said something; when the model only ever called tools (the common shape
+    for a loop cut off early) there is nothing to recover and the caller's gap note stands
+    alone. Tool RESULTS are deliberately not harvested here: pasting raw fetched payloads
+    into a step's answer would read as the agent's own findings, which is the fabrication
+    risk the loop contract exists to prevent.
+    """
+    for msg in reversed(messages):
+        if msg.get("role") != "assistant":
+            continue
+        content = str(msg.get("content") or "").strip()
+        if content:
+            return content
+    return ""
 
 
 def _assistant_passback(msg: dict, tool_calls: list[dict]) -> dict:

@@ -12,10 +12,15 @@ v20.5 adds per-runtime guardrail caps via `caps()`:
     read as "tool rounds" while the graph gets the super-step budget. Measured to hold identically
     for both `langgraph.prebuilt.create_react_agent` and `langchain.agents.create_agent` (limit 16
     → 8 tool rounds). So deep_agent's effective recursion_limit is 32.
-  - `cost_cap_usd` — OBSERVABILITY ONLY in v20.5. The real per-task hard stop is
-    `company.team_task_cap_usd`, enforced task-level in the coordinator; a per-runtime value
-    cannot lower a shared per-task cap without a per-agent enforcement seam that does not exist
-    yet, so we record the intent but do NOT claim enforcement (red-team C4). None ⇒ use company cap.
+  - `cost_cap_usd` — a per-STEP spend ceiling, ENFORCED by the tools tier's thin loop
+    (`loop_cost_guard.over_cost_cap`, consulted between rounds before the next provider call).
+    It was observability-only through v20.5 because no per-agent enforcement seam existed
+    (red-team C4); `thin_tool_loop` is that seam. It does NOT replace `company.team_task_cap_usd`,
+    which remains the per-TASK hard stop enforced by the coordinator across every step and every
+    tier — this one is narrower (one step) and earlier (before the coordinator's next tick). The
+    other work loops (`react_loop`, `deep_agent_loop`) run inside LangChain's `agent.invoke` and
+    learn their cost only afterwards, so they stay bounded by `runtime_loop_limit` alone and this
+    cap does not claim to cover them. None (every kind's default) ⇒ no per-step ceiling.
   - `sandbox` — the deep-agent sandbox config (`{provider: fake|docker}`), REQUIRED for
     deep_agent (Phase 2/3), rejected on other kinds.
 """
@@ -51,7 +56,7 @@ class RuntimeCaps:
     """Resolved per-runtime guardrail caps (see module docstring)."""
 
     runtime_loop_limit: int
-    cost_cap_usd: float | None  # observability-only in v20.5
+    cost_cap_usd: float | None  # per-step ceiling; enforced by the thin tool loop
     sandbox: dict | None
 
 
@@ -70,7 +75,7 @@ class AgentRuntimeConfig:
 
     kind: str = "native"
     runtime_loop_limit: int | None = None  # None ⇒ default per kind
-    cost_cap_usd: float | None = None  # observability-only (v20.5)
+    cost_cap_usd: float | None = None  # per-step ceiling; enforced by the thin tool loop
     sandbox: dict | None = None  # deep_agent only
     loop_engine: str = "thin"  # create_agent only: thin | langchain
 

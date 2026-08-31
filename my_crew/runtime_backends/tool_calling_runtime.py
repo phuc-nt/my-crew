@@ -50,6 +50,12 @@ class ToolCallingRuntime:
             runtime_config.caps().runtime_loop_limit
             if runtime_config is not None else MAX_LOOP_STEPS
         )
+        # The step's own spend ceiling, threaded down the same path as the round cap. None
+        # (every tier's default, and the case where the runner threaded no config) leaves
+        # the loop bounded only by rounds — the pre-existing behaviour.
+        cost_cap_usd = (
+            runtime_config.caps().cost_cap_usd if runtime_config is not None else None
+        )
         # v86: which work-loop engine runs the tools tier — `thin` (self-owned flat loop,
         # default) or `langchain` (create_agent react loop, kept selectable for A/B).
         loop_engine = (
@@ -72,12 +78,13 @@ class ToolCallingRuntime:
         kwargs.pop("deep_team", None)
         kwargs.pop("deep_team_max_calls", None)
         work = self._make_work_override(settings, context, config, loop_limit, telemetry,
-                                        academic_search, gws_context, web_search, loop_engine)
+                                        academic_search, gws_context, web_search, loop_engine,
+                                        cost_cap_usd)
         return build_team_task_graph(work_override=work, **kwargs)
 
     def _make_work_override(self, settings, context, config, loop_limit, telemetry=None,
                             academic_search=False, gws_context=False, web_search=False,
-                            loop_engine="thin"):
+                            loop_engine="thin", cost_cap_usd=None):
         """Build the run_work replacement: a tool loop over the read toolset."""
         from my_crew.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
 
@@ -102,6 +109,7 @@ class ToolCallingRuntime:
             return run_thin_loop(
                 title=title, handoff=handoff, context=context, settings=settings,
                 tools_map=tools_map, max_steps=loop_limit, telemetry=telemetry,
+                cost_cap_usd=cost_cap_usd,
             )
 
         return _run_work
