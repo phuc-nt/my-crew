@@ -54,7 +54,10 @@ DATA_DIR = MY_CREW_HOME / ".data"
 
 # OpenRouter is OpenAI-compatible; base URL is fixed by the provider.
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_MODEL = "deepseek/deepseek-v4-flash-latest"
+# The leading `~` is part of the ID, not decoration: OpenRouter publishes floating
+# "latest" aliases under that prefix (this one currently resolves to
+# deepseek-v4-flash-0731). Stripping it yields a 400 "not a valid model ID".
+DEFAULT_MODEL = "~deepseek/deepseek-v4-flash-latest"
 
 # The work kinds a per-role model override may name (`Settings.role_models`). These are
 # cost shapes, not capabilities — the split is "does a human read this output".
