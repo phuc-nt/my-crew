@@ -83,6 +83,23 @@ _MAX_DRAFT_SALVAGE_CHARS = 4000
 _MIN_DRAFT_SALVAGE_CHARS = 200
 
 
+def _cost_cap_note_marker() -> str:
+    """The literal, format-independent head of `COST_CAP_GAP_NOTE`.
+
+    Derived from the constant rather than copied so a reword cannot leave this scan
+    matching a string the guard no longer emits — the note is the only thing standing
+    between a capped step and a dependent that believes nothing was produced.
+    """
+    from my_crew.runtime_backends.loop_cost_guard import COST_CAP_GAP_NOTE
+
+    return COST_CAP_GAP_NOTE.split("{", 1)[0]
+
+
+def _carries_cost_cap_note(text: str) -> bool:
+    """Did the spend ceiling write this text, rather than a failing tool or a refusal?"""
+    return _cost_cap_note_marker() in text
+
+
 def _salvageable_draft(artifact: dict | None) -> str:
     """The dropped step's own prior draft worth keeping, or "" for the bare placeholder.
 
@@ -97,7 +114,16 @@ def _salvageable_draft(artifact: dict | None) -> str:
     handoff). A draft that cannot ride is worse than no draft.
     """
     text = str((artifact or {}).get("result_text") or "").strip()
-    if len(text) < _MIN_DRAFT_SALVAGE_CHARS or text.startswith(DROP_PLACEHOLDER_PREFIX):
+    if text.startswith(DROP_PLACEHOLDER_PREFIX):
+        return ""
+    # The length floor filters error strings and refusal stubs, which are short BECAUSE
+    # they carry no content. A cost-cap note is short for the opposite reason: the ceiling
+    # stopped the loop before it could produce prose, and the note is then the entire
+    # result_text. Measured live (L1): 191 chars against a floor of 200, so the one
+    # sentence explaining WHY the work is incomplete was dropped nine characters short,
+    # and every dependent saw "no result" with no reason. The note is code-authored and
+    # never a stub, so it earns its keep at any length.
+    if len(text) < _MIN_DRAFT_SALVAGE_CHARS and not _carries_cost_cap_note(text):
         return ""
     if scan_for_injection_markers(text):
         return ""

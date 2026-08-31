@@ -601,6 +601,32 @@ def test_salvage_caps_a_long_draft_and_never_nests_placeholders():
     assert _salvageable_draft(None) == ""
 
 
+def test_salvage_keeps_a_cost_cap_note_that_falls_under_the_length_floor():
+    """A capped step's note is short because the ceiling stopped it, not because it is a stub.
+
+    Measured live in L1: `cost_cap_usd=0.0005` tripped the guard at round 0, so the loop
+    produced no prose and `COST_CAP_GAP_NOTE` was the whole `result_text` — 191 chars
+    against a 200-char floor. The drop then discarded it, and the dependent step reported
+    "no result" with no reason, losing the one sentence explaining why the work stopped.
+    The floor must keep filtering real stubs; it must not filter this.
+    """
+    from my_crew.agent.ops_stalled_task import (
+        _MIN_DRAFT_SALVAGE_CHARS,
+        _salvageable_draft,
+    )
+    from my_crew.runtime_backends.loop_cost_guard import with_cost_cap_gap_note
+
+    note = with_cost_cap_gap_note("", [0.00168], 0.0005, 0)
+    assert len(note) < _MIN_DRAFT_SALVAGE_CHARS, (
+        "premise: this case only means something while the note is under the floor"
+    )
+    kept = _salvageable_draft({"result_text": note})
+    assert kept == note, "the cost-cap note was dropped for being short"
+
+    # The floor still does its job for text that is short because it says nothing.
+    assert _salvageable_draft({"result_text": "Lỗi: hết lượt web."}) == ""
+
+
 def test_salvage_never_attaches_content_the_handoff_quarantine_would_eat(tmp_path):
     """Dependents read this artifact through `format_internal_content`, which replaces
     the WHOLE text with a quarantine stub on one injection-marker hit. Live bench:
