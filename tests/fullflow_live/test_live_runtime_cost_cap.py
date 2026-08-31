@@ -74,15 +74,27 @@ TIGHT_CAP_USD = 0.0005
 #:    marks the step prefetched and demotes it back to native. Measured — prefetch returns
 #:    0 chars on a `web_search:false` profile even where provider keys are configured.
 #:
+#: 4. **No runtime fan-out.** Measured, and it cost a paid run: a brief phrased as N
+#:    parallel items of the same kind ("hai kỹ thuật X, hai kỹ thuật Y") is exactly the
+#:    shape `_PROPOSE_SPLIT_ADDENDUM` invites a step to split on. The pre-work propose call
+#:    runs BEFORE the tool loop, and its addendum states plainly that a step proposing a
+#:    split "sẽ KHÔNG tự làm nữa" — so the capped agent's step ended `done` after one
+#:    tool-free JSON call, and the actual work went to `secretary` and `writer`, neither of
+#:    which is on the tools tier or carries a cap. The step reached `ToolCallingRuntime`
+#:    and still never entered `run_thin_loop`. Hence a brief describing ONE indivisible
+#:    investigation deepened in sequence, rather than a list of independent parts.
+#:
 #: The agent is not left toolless by (3): `academic_search: true` binds `academic.search`
 #: (OpenAlex, keyless) and `web.scrape`, verified against the real `build_read_toolset`. So
 #: the loop has genuine work to do across several rounds, which is what gives the ceiling
 #: a between-rounds check to fail.
 BRIEF = (
-    "Nghiên cứu chi phí suy luận mô hình ngôn ngữ lớn rồi lập báo cáo trong tuần: "
-    "(1) tra cứu web hai kỹ thuật giảm chi phí suy luận, mỗi kỹ thuật kèm nguồn, "
-    "(2) tra cứu web hai kỹ thuật tăng tốc độ phản hồi, mỗi kỹ thuật kèm nguồn, "
-    "(3) tổng hợp thành bảng so sánh và đề xuất 2 việc cần làm tuần sau."
+    "Trong tuần, tra cứu web để dựng hồ sơ chuyên sâu về MỘT kỹ thuật duy nhất: "
+    "lượng tử hoá (quantization) mô hình ngôn ngữ lớn. Đây là một mạch việc liền, "
+    "KHÔNG chia nhỏ và KHÔNG giao cho người khác: lần lượt tìm nguồn, đọc, rồi đào "
+    "sâu thêm từ chính điều vừa đọc — cơ chế hoạt động, mức tiết kiệm chi phí thực "
+    "đo, đánh đổi về chất lượng, và điều kiện nên hoặc không nên dùng. Mỗi ý kèm "
+    "nguồn đã tra."
 )
 
 

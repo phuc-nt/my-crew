@@ -910,3 +910,29 @@ def test_the_live_output_guard_brief_still_reaches_the_team_lane():
         "is one step with no deps, so no handoff is ever read and the per-dep cap cannot "
         "engage. Restore the multi-stage phrasing."
     )
+
+
+def test_the_live_cost_cap_brief_still_tells_its_step_not_to_split():
+    """The cost-cap brief must stay indivisible, and this too was learned by paying for it.
+
+    Reaching the team lane is necessary but not sufficient. The pre-work propose call runs
+    BEFORE the tool loop, and `_PROPOSE_SPLIT_ADDENDUM` invites any step made of "2-4 PHẦN
+    ĐỘC LẬP CÙNG DẠNG" to hand its work to sub-steps instead — stating outright that such a
+    step "sẽ KHÔNG tự làm nữa". Measured: a brief phrased as two techniques plus two more
+    split onto `secretary` and `writer`, neither on the tools tier nor carrying a cap. The
+    capped step's work order still recorded `effective_runtime=ToolCallingRuntime`, so the
+    live case's anti-vacuity check passed while `run_thin_loop` never executed a single
+    round — the most expensive kind of false premise, because it looks like a real failure
+    of Phase 1.
+
+    Whether the model splits is a model judgement no offline test can pin. What IS pinnable
+    is that the brief still carries the explicit instruction not to, which is the only lever
+    the case has over that judgement.
+    """
+    from tests.fullflow_live.test_live_runtime_cost_cap import BRIEF
+
+    assert "KHÔNG chia nhỏ" in BRIEF and "KHÔNG giao cho người khác" in BRIEF, (
+        "the live cost-cap BRIEF lost its explicit no-split instruction. Without it the "
+        "propose call may fan the step out to uncapped agents, and L1 then measures a step "
+        f"that never ran the thin loop at all. brief={BRIEF!r}"
+    )

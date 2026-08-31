@@ -390,14 +390,20 @@ def work_orders(home: Path, task_id: str) -> list[dict[str, Any]]:
     Path built from `home` rather than `team_tasks_root()` for the same reason
     `audit_path` does it: that helper resolves a DATA_DIR bound at import time in THIS
     process, which points at the developer's repo instead of the child's tmp home.
+
+    Swept across EVERY agent directory, not the coordinator's. Measured: each worker runs
+    in its own child process with its own data dir, so a step assigned to `writer` writes
+    its order under `.data/agents/writer/...` and nothing lands at the coordinator path.
+    Reading only the coordinator path returned zero orders for every task — which would
+    have made an anti-vacuity assertion fail against a product that was working.
     """
-    root = home / ".data" / "artifacts" / "team-tasks" / task_id / "work-orders"
-    if not root.exists():
-        return []
     orders = []
-    for path in sorted(root.glob("*.json")):
-        with contextlib.suppress(ValueError, OSError):
-            orders.append(json.loads(path.read_text(encoding="utf-8")))
+    for root in sorted(
+        home.glob(f".data/agents/*/artifacts/team-tasks/{task_id}/work-orders")
+    ):
+        for path in sorted(root.glob("*.json")):
+            with contextlib.suppress(ValueError, OSError):
+                orders.append(json.loads(path.read_text(encoding="utf-8")))
     return sorted(orders, key=lambda o: str(o.get("created_at") or ""))
 
 
@@ -407,12 +413,18 @@ def transcript_events(home: Path, task_id: str, transcript: str) -> list[dict[st
     Takes the work order's own `transcript` field rather than rebuilding the filename, so
     a rename on the writer's side surfaces as an empty read here instead of this helper
     quietly reconstructing a path that no longer matches what is written.
+
+    Searched across every agent directory for the same reason `work_orders` is: the
+    transcript sits beside the order that names it, in the writing agent's OWN data dir,
+    and the caller holding that order does not know which agent ran the step.
     """
-    path = home / ".data" / "artifacts" / "team-tasks" / task_id / transcript
-    if not path.exists():
+    matches = sorted(
+        home.glob(f".data/agents/*/artifacts/team-tasks/{task_id}/{transcript}")
+    )
+    if not matches:
         return []
     events = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line in matches[0].read_text(encoding="utf-8", errors="replace").splitlines():
         with contextlib.suppress(ValueError):
             events.append(json.loads(line))
     return events
