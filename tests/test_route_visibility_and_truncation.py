@@ -39,7 +39,12 @@ def _result(content: str, finish_reason: str = "") -> LlmResult:
     ("finish_reason", "expected"),
     [("length", True), ("stop", False), ("tool_calls", False), ("", False)],
 )
-def test_truncated_reads_only_the_length_stop_reason(finish_reason, expected):
+def test_the_stop_reason_decides_when_the_body_itself_looks_complete(
+    finish_reason, expected
+):
+    """A balanced body carries no shape evidence either way, so `finish_reason` alone
+    settles it. The shape fallback for bodies that DO look cut lives in
+    test_truncation_shape_detection.py."""
     assert _result("{}", finish_reason).truncated is expected
 
 

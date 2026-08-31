@@ -91,6 +91,50 @@ def _next_retry_wait(attempt: int, exc: Exception) -> float:
     return base * random.uniform(_RETRY_JITTER_FLOOR, 1.0)
 
 
+def looks_truncated(content: str) -> bool:
+    """True when `content` has the SHAPE of a body that stopped mid-write.
+
+    A conservative fallback for when the provider does not report `finish_reason`.
+    "Conservative" is the whole design constraint: a body that is merely malformed in
+    some other way must keep taking the JSON-error path, because the two retries ask for
+    opposite things — one for a SHORTER plan, one for well-formed JSON — and answering
+    the wrong question wastes a paid round.
+
+    So this only reports the one unambiguous signature: text that opened a JSON structure
+    and never closed it. Balanced-but-invalid JSON (a trailing comma, a bare key, the
+    wrong type) is not truncation and is not reported. Quotes are tracked so a brace
+    inside a string value cannot throw off the count, and escapes so a `\\"` inside a
+    string does not look like its end.
+    """
+    text = content.strip()
+    if not text or text[0] not in "{[":
+        return False  # not a JSON body at all — no shape to judge
+
+    depth = 0
+    in_string = False
+    escaped = False
+    for ch in text:
+        if escaped:
+            escaped = False
+            continue
+        if ch == "\\":
+            if in_string:
+                escaped = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+    # An unterminated string, or a structure still open at the end, means the writer
+    # stopped mid-way. A negative depth is malformed some OTHER way — not our signal.
+    return in_string or depth > 0
+
+
 @dataclass(frozen=True)
 class LlmResult:
     """One completion's content plus accounting.
@@ -116,8 +160,18 @@ class LlmResult:
 
     @property
     def truncated(self) -> bool:
-        """The answer was cut off by the output-token limit."""
-        return self.finish_reason == "length"
+        """The answer was cut off by the output-token limit.
+
+        `finish_reason` alone under-reports: a provider that streams, hits a proxy
+        timeout, or simply omits the field returns a body cut mid-field with
+        `finish_reason=""`. That was measured in production — a decomposition cut mid
+        string was read as "the model wrote garbage", so the retry asked for valid JSON
+        and got the same too-long plan again. Fall back to the body's SHAPE when the
+        provider does not say.
+        """
+        return self.finish_reason == "length" or (
+            self.finish_reason != "stop" and looks_truncated(self.content)
+        )
 
 
 @dataclass(frozen=True)

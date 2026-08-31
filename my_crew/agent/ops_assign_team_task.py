@@ -220,8 +220,9 @@ def _decompose_with_retries(
                 "ít bước hơn, mô tả mỗi bước ngắn hơn, không thêm giải thích ngoài JSON"
             )
             logger.warning(
-                "assign_team_task: decompose bị cắt cụt (finish_reason=length) — "
-                "thử lại với yêu cầu rút ngắn"
+                "assign_team_task: decompose bị cắt cụt (finish_reason=%r) — "
+                "thử lại với yêu cầu rút ngắn",
+                getattr(result, "finish_reason", ""),
             )
             continue
         try:

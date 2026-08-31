@@ -138,8 +138,8 @@ def run_thin_loop(
         # The round number reaches the tool audit only through the ambient context: the
         # toolset was bound before this loop started, so there is no argument to add it to.
         with tool_call_iteration(_round):
-            for call in tool_calls:
-                messages.append(_execute_call(call, by_name, tools_map))
+            for seq, call in enumerate(tool_calls):
+                messages.append(_execute_call(call, by_name, tools_map, seq))
 
     if text is None and capped_at_round is None:
         # Round budget exhausted while the model still wanted tools: one tool-free
@@ -287,6 +287,7 @@ def _execute_call(
     call: dict,
     by_name: dict[str, ToolSpec],
     tools_map: dict[str, Callable[[dict], Any]],
+    seq: int = 0,
 ) -> dict:
     """Validate + run ONE tool call; ANY failure becomes an instructive tool result.
 
@@ -294,8 +295,12 @@ def _execute_call(
     same observability contract the community loop keeps, so peer-review evidence and
     the bench error-rate counter see thin-loop steps identically. Error results are
     recorded too: an invented-tool or bad-args round IS the signal the A/B measures.
+
+    `seq` distinguishes several calls to the same tool within one round, so their stashed
+    artifacts do not overwrite each other.
     """
     from my_crew.runtime.step_recorder import head, record_event
+    from my_crew.runtime.tool_result_stash import stash_if_oversized
     from my_crew.runtime_backends.read_only_toolset import tool_error_guard
 
     fn = call.get("function") or {}
@@ -319,7 +324,10 @@ def _execute_call(
     # Double-guard like the react tier: build_read_toolset already guards its callables,
     # but a hand-built tools_map must not be able to kill the loop with a raising body.
     safe = tool_error_guard(spec.legacy_name, tools_map[spec.legacy_name])
-    content = str(safe(args))
+    # Stash BEFORE the notes are appended: the notes are the loop's own corrective words
+    # (a coerced argument, a dropped field) and must reach the model whole, never end up
+    # on the far side of a preview cut.
+    content = stash_if_oversized(str(safe(args)), name, seq)
     if notes:
         content = (content.strip() or "(no output)") + "\n" + "\n".join(notes)
     return _done(content)
