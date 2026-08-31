@@ -851,3 +851,62 @@ def test_the_live_mail_brief_still_reaches_the_team_lane():
         "needs_mail concept — the live cases would bypass the v92 gate and pass while "
         "testing nothing. Restore the multi-stage phrasing that keeps it on the team lane."
     )
+
+
+def test_the_live_cost_cap_brief_still_reaches_the_team_lane():
+    """The same premise guard for the live per-step cost-cap cases, and it is not theory.
+
+    Measured: the first version of that brief read as a lookup, so `classify_brief`
+    returned `(True, "dạng 'tra cứu', không có dấu hiệu cần đội")` and the fleet planned a
+    single `step_type='sprint'` row. Sprint mode deliberately keeps the model on the fast
+    native tier, so `thin_tool_loop` — and with it the whole cost ceiling — never ran, and
+    the live case failed after a 443s paid run with no work orders at all.
+
+    Offline for the reason the mail guard above records: beside the live cases this would
+    be deselected by the default `-m "not live"`. Here a reword fails in milliseconds.
+    """
+    from my_crew.agent.sprint_intake import classify_brief
+    from tests.fullflow_live.test_live_runtime_cost_cap import BRIEF
+
+    is_sprint, reason = classify_brief(BRIEF)
+    assert not is_sprint, (
+        f"the live cost-cap BRIEF now routes to the SPRINT lane ({reason!r}). Sprint steps "
+        "run on the native tier, which never consults cost_cap_usd, so L1/L1b would assert "
+        "against a loop that never executed. Restore the multi-stage phrasing."
+    )
+
+
+def test_the_live_tool_audit_brief_still_reaches_the_team_lane():
+    """Same premise guard for the live tool-audit/stats cases.
+
+    Sprint mode keeps the model on the native tier, which binds no read toolset at all — so
+    the policy shim never runs and the audit trail stays empty. The live cases would then
+    fail on "no rows" and look like a Phase 3 regression when the real cause is routing.
+    """
+    from my_crew.agent.sprint_intake import classify_brief
+    from tests.fullflow_live.test_live_tool_audit_and_stats import BRIEF
+
+    is_sprint, reason = classify_brief(BRIEF)
+    assert not is_sprint, (
+        f"the live tool-audit BRIEF now routes to the SPRINT lane ({reason!r}). The native "
+        "tier binds no read toolset, so no shim runs and no audit row is written. Restore "
+        "the multi-stage phrasing."
+    )
+
+
+def test_the_live_output_guard_brief_still_reaches_the_team_lane():
+    """Same premise guard for the live dep-cap case, which needs a step that HAS deps.
+
+    A sprint runs as a single step, and a step with no deps reads no handoff — so the
+    per-dep cap has nothing to bound and the live case would fail on "no step with deps"
+    while Phase 2 was working perfectly.
+    """
+    from my_crew.agent.sprint_intake import classify_brief
+    from tests.fullflow_live.test_live_output_guards import BRIEF
+
+    is_sprint, reason = classify_brief(BRIEF)
+    assert not is_sprint, (
+        f"the live output-guard BRIEF now routes to the SPRINT lane ({reason!r}). A sprint "
+        "is one step with no deps, so no handoff is ever read and the per-dep cap cannot "
+        "engage. Restore the multi-stage phrasing."
+    )

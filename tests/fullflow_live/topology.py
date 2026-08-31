@@ -76,8 +76,35 @@ def _telegram_block(profile_id: str) -> str:
     )
 
 
+def _tools_tier_block(cost_cap_usd: float | None) -> str:
+    """The `agent_runtime:` + tool opt-in lines that move an agent onto the TOOLS tier.
+
+    Measured, and the reason this seam has to exist: with no `agent_runtime:` block a
+    profile loads as `kind="native"`, and `resolve_step_runtime` then returns
+    `NativeGraphRuntime` for every step — so `thin_tool_loop` and the policy-shimmed read
+    toolset, i.e. everything phases 1/3/4/5 changed, never executed ONCE in this suite.
+    Cases asserting on them against the default fleet would have been vacuously green.
+
+    `academic_search` is the tool opt-in rather than `web_search`, and that is deliberate:
+    `web_search: true` plus a provider key makes the launcher PREFETCH a `needs_web` step,
+    and a non-empty bundle sends the step straight back to the native tier — the opt-in
+    that looks most relevant is the one that would silently undo this seam. OpenAlex is
+    keyless, so the tool arms identically on any machine; `web.scrape` comes along on its
+    own whenever Firecrawl is configured.
+
+    `cost_cap_usd=None` omits the key entirely, which is the shipped default (no ceiling).
+    """
+    lines = ["agent_runtime:\n", "  kind: create_agent\n"]
+    if cost_cap_usd is not None:
+        lines.append(f"  cost_cap_usd: {cost_cap_usd}\n")
+    lines.append("academic_search: true\n")
+    return "".join(lines)
+
+
 def _write_profile(home: Path, profile_id: str, *, domain: str,
-                   gws_context: bool = False) -> None:
+                   gws_context: bool = False,
+                   tools_tier: bool = False,
+                   cost_cap_usd: float | None = None) -> None:
     """One agent on disk, in the layout the real loader reads.
 
     Deliberately minimal — the live cast's in-memory profile cannot be handed to another
@@ -89,6 +116,10 @@ def _write_profile(home: Path, profile_id: str, *, domain: str,
     is what makes an agent mail-capable to `agent_mail_capable`. Default False keeps
     every existing case's fleet exactly as it was — a fleet where NOBODY can read mail,
     which is itself the precondition one of the mail cases needs.
+
+    `tools_tier` / `cost_cap_usd` move the agent onto the tool-calling runtime and give
+    it a per-step spend ceiling. Both default off, so a fleet seeded the ordinary way is
+    byte-identical to what every pre-existing case has always run against.
     """
     directory = home / "profiles" / profile_id
     directory.mkdir(parents=True, exist_ok=True)
@@ -105,6 +136,7 @@ def _write_profile(home: Path, profile_id: str, *, domain: str,
         "bindings: {}\n"
         "integrations: {}\n"
         + ("gws_context: true\n" if gws_context else "")
+        + (_tools_tier_block(cost_cap_usd) if tools_tier else "")
         + _telegram_block(profile_id),
         encoding="utf-8",
     )
@@ -116,21 +148,35 @@ def _write_profile(home: Path, profile_id: str, *, domain: str,
 
 
 def seed_home(home: Path, *, api_key: str, extra_env: dict[str, str] | None = None,
-              mail_capable: frozenset[str] | set[str] = frozenset()) -> None:
+              mail_capable: frozenset[str] | set[str] = frozenset(),
+              tools_tier: frozenset[str] | set[str] = frozenset(),
+              cost_cap_usd: float | None = None) -> None:
     """Write a complete, self-contained fleet home: profiles, registry, company, .env.
 
     `mail_capable` names the agents that get `gws_context: true` — i.e. the ones
     `agent_mail_capable` will accept as assignees for a `needs_mail` step. Empty by
     default, so a fleet seeded the ordinary way has no mailbox reader at all.
+
+    `tools_tier` names the agents that run on the tool-calling runtime instead of native,
+    and `cost_cap_usd` gives those agents a per-step spend ceiling. Both empty/None by
+    default: the ordinary fleet is entirely native and uncapped, exactly as before.
     """
     home.mkdir(parents=True, exist_ok=True)
 
-    _write_profile(home, ADMIN_ID, domain="admin", gws_context=ADMIN_ID in mail_capable)
-    _write_profile(home, COORDINATOR_ID, domain="pm",
-                   gws_context=COORDINATOR_ID in mail_capable)
-    for worker_id, domain in WORKERS:
-        _write_profile(home, worker_id, domain=domain,
-                       gws_context=worker_id in mail_capable)
+    def _write(profile_id: str, domain: str) -> None:
+        _write_profile(
+            home, profile_id, domain=domain,
+            gws_context=profile_id in mail_capable,
+            tools_tier=profile_id in tools_tier,
+            # The ceiling rides with the tier: an agent left on native has no thin loop to
+            # enforce it, so writing the key there would look configured and do nothing.
+            cost_cap_usd=cost_cap_usd if profile_id in tools_tier else None,
+        )
+
+    _write(ADMIN_ID, "admin")
+    _write(COORDINATOR_ID, "pm")
+    for worker_id, worker_domain in WORKERS:
+        _write(worker_id, worker_domain)
 
     agent_ids = [ADMIN_ID, COORDINATOR_ID, *(w for w, _ in WORKERS)]
     (home / "registry.yaml").write_text(
@@ -329,6 +375,93 @@ def audit_path(home: Path) -> Path:
     developer's real repo, not at the child's tmp home.
     """
     return home / ".data" / "audit" / "audit.jsonl"
+
+
+def work_orders(home: Path, task_id: str) -> list[dict[str, Any]]:
+    """Every work order this task wrote, oldest first.
+
+    The work order is the only place the RESOLVED runtime tier is observable: the runner
+    writes `effective_runtime` (the runtime class's own name) before the tier runs, and
+    nothing in the HTTP projection or the store carries it. That matters more than it
+    sounds — a fleet seeded without `agent_runtime:` runs every step native, so a case
+    asserting on tool-loop behaviour would pass by never reaching the code it names. This
+    is how such a case proves it was under load rather than skipped.
+
+    Path built from `home` rather than `team_tasks_root()` for the same reason
+    `audit_path` does it: that helper resolves a DATA_DIR bound at import time in THIS
+    process, which points at the developer's repo instead of the child's tmp home.
+    """
+    root = home / ".data" / "artifacts" / "team-tasks" / task_id / "work-orders"
+    if not root.exists():
+        return []
+    orders = []
+    for path in sorted(root.glob("*.json")):
+        with contextlib.suppress(ValueError, OSError):
+            orders.append(json.loads(path.read_text(encoding="utf-8")))
+    return sorted(orders, key=lambda o: str(o.get("created_at") or ""))
+
+
+def transcript_events(home: Path, task_id: str, transcript: str) -> list[dict[str, Any]]:
+    """The recorded events of one attempt, from the pointer a work order carries.
+
+    Takes the work order's own `transcript` field rather than rebuilding the filename, so
+    a rename on the writer's side surfaces as an empty read here instead of this helper
+    quietly reconstructing a path that no longer matches what is written.
+    """
+    path = home / ".data" / "artifacts" / "team-tasks" / task_id / transcript
+    if not path.exists():
+        return []
+    events = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        with contextlib.suppress(ValueError):
+            events.append(json.loads(line))
+    return events
+
+
+def step_texts(home: Path, task_id: str) -> dict[str, str]:
+    """`{artifact filename: all its prose concatenated}` for every step artifact of a task.
+
+    Concatenates every string VALUE in the payload rather than reading `result_text` by
+    name. A step's outcome artifact is written by several different call sites with
+    different payload shapes (the graph's `deliver` node writes the real one; the worker's
+    fallback writes a status-only payload; the stall path writes a third), so naming one
+    field would make a case silently blind whenever the step took a path that spells it
+    differently — and "the note is absent" is exactly what these cases assert on, so a
+    blind read fails OPEN. Keyed by filename so a caller can tell a review artifact
+    (`step-<n>-review-<r>.json`) from the work step's own.
+    """
+    root = home / ".data" / "artifacts" / "team-tasks" / task_id
+    if not root.exists():
+        return {}
+
+    def _strings(node: Any) -> list[str]:
+        if isinstance(node, str):
+            return [node]
+        if isinstance(node, dict):
+            return [s for v in node.values() for s in _strings(v)]
+        if isinstance(node, list):
+            return [s for v in node for s in _strings(v)]
+        return []
+
+    out: dict[str, str] = {}
+    for path in sorted(root.glob("step-*.json")):
+        with contextlib.suppress(ValueError, OSError):
+            out[path.name] = "\n".join(_strings(json.loads(path.read_text(encoding="utf-8"))))
+    return out
+
+
+def audit_rows(home: Path) -> list[dict[str, Any]]:
+    """Every parsable row on the fixture fleet's audit trail. Corrupt lines are skipped —
+    a trail is append-only from several processes, and one torn write must not blind a
+    case to the rows around it."""
+    path = audit_path(home)
+    if not path.exists():
+        return []
+    rows = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        with contextlib.suppress(ValueError):
+            rows.append(json.loads(line))
+    return rows
 
 
 def task_status(server: ServeProcess, task_id: str) -> dict[str, Any]:
