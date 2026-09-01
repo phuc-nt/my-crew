@@ -69,10 +69,32 @@ def test_deep_sandbox_valid():
     assert c.caps().sandbox == {"provider": "fake"}
 
 
-def test_cost_cap_is_observability_only():
-    # cost_cap parses + surfaces in caps() but is NOT claimed as enforced (red-team C4).
+def test_cost_cap_surfaces_on_every_tier_and_defaults_to_none():
+    """Mặc định `None` ở CẢ BA tier — đó là thứ giữ cho tính năng này off trừ khi có người bật.
+
+    Trước 0.16.0 test này tên `..._is_observability_only` và chỉ khẳng định giá trị round-trip.
+    Cái tên đó nay sai: `loop_cost_guard` đã enforce thật. Nguy hơn cái tên là chỗ nó KHÔNG
+    kiểm: không đâu ghim mặc định `None`. Ai đặt một số mặc định khác `None` cho bất kỳ tier
+    nào sẽ bật trần chi phí cho toàn fleet mà không test nào đỏ.
+    """
+    for kind in ("native", "create_agent", "deep_agent"):
+        assert parse_agent_runtime_config({"kind": kind}).caps().cost_cap_usd is None, (
+            f"tier {kind} có trần chi phí mặc định — tính năng opt-in tự bật lên"
+        )
     c = parse_agent_runtime_config({"kind": "deep_agent", "cost_cap_usd": 4.0})
     assert c.caps().cost_cap_usd == 4.0
+
+
+def test_zero_cost_cap_rejected():
+    """Trần 0 = mọi bước chết ở vòng 0, nên chặn ngay ở parse thay vì để fleet im lặng rỗng.
+
+    `over_cost_cap` hỏi "còn tiền cho vòng nữa không" TRƯỚC cuộc gọi đầu, mà `sum([]) >= 0`
+    đúng ⇒ vòng lặp break ở round 0, không gọi provider lần nào, bước chỉ còn lại ghi chú
+    "chưa hoàn chỉnh". Người viết `cost_cap_usd: 0` gần như chắc chắn định nói "không giới
+    hạn" — mà cách nói đó là bỏ trống key (None), đã ghi trong docstring của guard.
+    """
+    with pytest.raises(RuntimeError, match="cost_cap_usd"):
+        parse_agent_runtime_config({"kind": "create_agent", "cost_cap_usd": 0})
 
 
 def test_loop_engine_defaults_to_thin():

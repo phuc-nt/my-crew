@@ -264,8 +264,12 @@
   `team_step_egress: {channel}` (absent → artifact-only, byte-identical). Nền cho mọi runtime egress.
 - **Guardrail phân tầng** (`config.py` mở rộng): `AgentRuntimeConfig.caps()` → `runtime_loop_limit`
   (native 0 < create_agent 8 < deep_agent 16; KHÔNG nhầm `MAX_STEPS` DAG=7 — red-team F8) +
-  `cost_cap_usd` (OBSERVABILITY-only, không claim enforce vì cost cap thật là company task-level —
-  red-team C4) + `sandbox` (deep only). Config tới runtime qua `build_task(runtime_config=)` (F1).
+  `cost_cap_usd` (0.16.0: ENFORCE thật ở tier tools qua `loop_cost_guard.over_cost_cap`, hỏi giữa
+  các vòng TRƯỚC cuộc gọi kế; trước đó observability-only vì chưa có seam per-agent — red-team C4.
+  KHÔNG thay `company.team_task_cap_usd` (per-task, coordinator); `react_loop`/`deep_agent_loop`
+  chạy trong `agent.invoke` nên vẫn chỉ bị chặn bởi `runtime_loop_limit`. Mặc định `None` cả 3
+  tier = không trần; `0` bị reject ở parse vì nó giết mọi bước ở vòng 0) + `sandbox` (deep only).
+  Config tới runtime qua `build_task(runtime_config=)` (F1).
 - **DeepAgentRuntime cháy thật** (`deep_agent_runtime.py` + `deep_agent_loop.py`): `create_deep_agent`
   (deepagents 0.6.12, optional extra `[deep]`) chạy shell CHỈ trong sandbox. **Fail-closed up-front**
   (red-team C3): sandbox provider allowlist `{fake,docker}` — reject `local`/`modal`/`e2b`/unknown +

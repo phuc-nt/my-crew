@@ -3,6 +3,16 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [Unreleased]
+
+### Fixed
+- **`cost_cap_usd: 0` is now rejected instead of silently emptying every step.** The
+  ceiling is checked before a step's first provider call, so a zero cap ended every
+  tools-tier step at round zero — no model call, no work, only the "incomplete" note.
+  Leaving the key unset is still how you say "no ceiling"; zero now fails at config-parse
+  time with the reason. No shipped configuration set it, so nothing in a running fleet
+  changes.
+
 ## [0.16.0] — 2026-09-01
 
 What was measured before this cut, and what could not be: [docs/release-evidence-0.16.0.md](docs/release-evidence-0.16.0.md).

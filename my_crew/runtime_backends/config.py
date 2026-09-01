@@ -20,7 +20,9 @@ v20.5 adds per-runtime guardrail caps via `caps()`:
     tier — this one is narrower (one step) and earlier (before the coordinator's next tick). The
     other work loops (`react_loop`, `deep_agent_loop`) run inside LangChain's `agent.invoke` and
     learn their cost only afterwards, so they stay bounded by `runtime_loop_limit` alone and this
-    cap does not claim to cover them. None (every kind's default) ⇒ no per-step ceiling.
+    cap does not claim to cover them. None (every kind's default) ⇒ no per-step ceiling; `0` is
+    REJECTED at parse rather than treated as unlimited, because the guard runs before the first
+    call and a zero cap would end every step at round 0 with nothing to show for it.
   - `sandbox` — the deep-agent sandbox config (`{provider: fake|docker}`), REQUIRED for
     deep_agent (Phase 2/3), rejected on other kinds.
 """
@@ -96,8 +98,8 @@ def parse_agent_runtime_config(raw: object) -> AgentRuntimeConfig:
     """Validate the optional `agent_runtime:` block. Absent/empty ⇒ native.
 
     Accepts a bare string (`agent_runtime: native`) or a mapping with optional caps. Fail-loud
-    (RuntimeError) on shape errors, unknown kind, negative caps, or a `sandbox` on a non-deep
-    runtime / an unknown sandbox provider.
+    (RuntimeError) on shape errors, unknown kind, a negative `runtime_loop_limit`, a
+    `cost_cap_usd` that is not > 0, or a `sandbox` on a non-deep runtime / an unknown provider.
     """
     if raw is None or raw == {} or raw == "":
         return AgentRuntimeConfig()
@@ -112,9 +114,15 @@ def parse_agent_runtime_config(raw: object) -> AgentRuntimeConfig:
     if loop is not None and (not isinstance(loop, int) or isinstance(loop, bool) or loop < 0):
         raise RuntimeError("profile agent_runtime.runtime_loop_limit must be an int >= 0.")
     cost = raw.get("cost_cap_usd")
-    _bad_cost = not isinstance(cost, (int, float)) or isinstance(cost, bool) or cost < 0
+    _bad_cost = not isinstance(cost, (int, float)) or isinstance(cost, bool) or cost <= 0
     if cost is not None and _bad_cost:
-        raise RuntimeError("profile agent_runtime.cost_cap_usd must be a number >= 0.")
+        # `> 0`, not `>= 0`. Zero parses as a number and reads like "no limit", but the guard
+        # asks "can I afford another round" BEFORE the first call, and `sum([]) >= 0` is true —
+        # so a zero cap ends every step at round 0, with no provider call and nothing but the
+        # gap note to show for it. Omitting the key (None) is already the documented way to say
+        # unlimited, so zero has no meaning left that is worth the fleet it would silently
+        # disable.
+        raise RuntimeError("profile agent_runtime.cost_cap_usd must be a number > 0.")
     sandbox = raw.get("sandbox")
     if sandbox is not None:
         if not isinstance(sandbox, dict):
