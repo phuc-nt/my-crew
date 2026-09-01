@@ -72,6 +72,22 @@ def tool_fleet(tmp_path_factory, live_api_key_module):
         server.stop()
 
 
+#: Above the 900s most of the live suite uses, and set by autopsy rather than by taste.
+#:
+#: Sample 2 (2026-09-01) timed out at 900s, and the store it left behind shows the run was
+#: never stuck: `step_1`/`step_2` both `done`, `step_3` still `running` with a heartbeat at
+#: 02:10:38 — i.e. alive and reporting right up to the moment the poll gave up. Nothing had
+#: failed; the deadline simply landed mid-journey. (Sample 1 passed, so the two samples
+#: bracket the real distribution rather than showing a regression.)
+#:
+#: This module is structurally near the top of the suite's cost: one research brief that
+#: fans into a 3-step DAG, where `step_3` joins BOTH predecessors and so cannot start until
+#: the two research steps finish. Raising the wait weakens no assertion — L3 and L5 both
+#: measure the audit trail against the transcript of whatever run happened — it only stops
+#: the poll from ending a run that was still making progress.
+SETTLE_TIMEOUT_S = 1500
+
+
 @pytest.fixture(scope="module")
 def _tool_journey_run(tool_fleet):
     """Run BRIEF exactly once for the whole module.
@@ -89,7 +105,7 @@ def _tool_journey_run(tool_fleet):
     task_id = body.get("task_id")
     assert task_id, f"delegate returned no task_id: {body!r}"
 
-    status = wait_until_settled(tool_fleet, task_id, timeout_s=900)
+    status = wait_until_settled(tool_fleet, task_id, timeout_s=SETTLE_TIMEOUT_S)
     return task_id, status
 
 
