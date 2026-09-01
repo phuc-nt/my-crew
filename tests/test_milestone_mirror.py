@@ -287,3 +287,41 @@ def test_dedup_is_keyed_by_task_id_not_task_title_two_tasks_same_title_both_deli
     assert r["delivered"] is True
     body, _chat = sent[0]
     assert "xong A" in body and "xong B" in body
+
+
+def test_first_tick_survives_an_agent_data_dir_that_does_not_exist_yet(
+    monkeypatch, tmp_path,
+):
+    """The mirror's own cursor DB must create its parent directory.
+
+    Measured on a live fleet: the scheduler fires the first `milestone-mirror` tick
+    before the admin agent's `.data/agents/<id>/` has been created, and
+    `sqlite3.connect` on a path whose parent is missing raises
+    `OperationalError: unable to open database file` — the whole tick died with a
+    traceback and only self-healed once a later tick found the directory there.
+    Every other SQLite store in the runtime (`office_room_store`, `dedup_store`,
+    `clarify_store`, `reminder_store`, `heartbeat_state_store`) already creates its
+    parent; the cursor store was the one that did not.
+    """
+    room = _room(tmp_path)
+    room.append(
+        "task-a", author="coordinator", kind="milestone",
+        body={"task_id": "task-a", "task_title": "Demo", "milestone": "done", "message": "xong"},
+        also_office=True,
+    )
+    room.close()
+
+    # The agent data dir the mirror writes its cursor into does NOT exist yet — this is
+    # the live startup ordering, not a contrived path.
+    agent_dir = tmp_path / "agents" / "admin"
+    assert not agent_dir.exists()
+
+    sent: list = []
+    _patch_send(monkeypatch, sent)
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.team_tasks_root", lambda: tmp_path)
+    from my_crew.runtime.milestone_mirror_runner import run_milestone_mirror
+
+    r = run_milestone_mirror(_Loaded(), _Settings(agent_dir), now=NOW)
+
+    assert r["delivered"] is True
+    assert (agent_dir / "milestone_mirror_cursor.sqlite3").exists()

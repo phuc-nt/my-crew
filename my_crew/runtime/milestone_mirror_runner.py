@@ -64,6 +64,10 @@ class _CursorStore:
     already funnels every milestone event there)."""
 
     def __init__(self, db_path: Path) -> None:
+        # The scheduler can fire the first mirror tick before the agent's own data dir
+        # exists, and sqlite3.connect on a missing parent raises OperationalError rather
+        # than creating it. Every sibling store in the runtime creates its parent here.
+        db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False, timeout=30.0)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA busy_timeout=30000")
