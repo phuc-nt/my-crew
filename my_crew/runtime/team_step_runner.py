@@ -558,8 +558,6 @@ def _run_graph(
         _extra["reporting_config"] = loaded.config
         # v20.5: thread the per-runtime caps (loop limit / sandbox) to the runtime.
         _extra["runtime_config"] = loaded.agent_runtime
-        # v31 P6: per-agent OpenAlex opt-in for the read toolset (keyless — the flag gates).
-        _extra["academic_search"] = bool(getattr(loaded, "academic_search", False))
         # v39 #1: per-agent Google-Workspace-read opt-in (gws CLI OAuth is the credential).
         _extra["gws_context"] = bool(getattr(loaded, "gws_context", False))
         # v73: web-search opt-in for the loop tier — the SAME `web_search:` profile flag

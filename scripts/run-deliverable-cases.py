@@ -6,19 +6,24 @@ caps make the delivered WORK worse? Answering it needs real deliverables from bo
 revisions, produced the same way, then judged blind.
 
 **Why these briefs and not `brief_suite`'s.** The bench suite's cases are commercial
-lookups (streaming prices, e-commerce fees) that need a live web provider. The previous
-round ran them on a fleet without one and 7 of 8 tasks ended in a refusal, so the judge
-was scoring which revision declines more gracefully — a real verdict about nothing. These
-briefs ask for the same SHAPE of work (compare N subjects on M criteria, cite sources)
-against literature that OpenAlex can actually reach, and OpenAlex is keyless, so the run
-arms identically on any machine.
+lookups (streaming prices, e-commerce fees). The previous round ran them on a fleet
+without a web provider and 7 of 8 tasks ended in a refusal, so the judge was scoring which
+revision declines more gracefully — a real verdict about nothing. These briefs ask for the
+same SHAPE of work (compare N subjects on M criteria, cite sources) over a literature the
+model is far likelier to hold, so a source-cited answer is reachable rather than a coin
+flip on one provider's uptime.
 
-**Why the fleet is on the tools tier.** `academic_search` rides with `agent_runtime:
-create_agent` (see `topology._tools_tier_lines`), and that is also the tier the caps under
-test actually live on — a native fleet would exercise neither. Deliberately NOT
-`web_search: true`: with a provider key that makes the launcher prefetch a `needs_web`
-step, and a non-empty bundle sends the step back to the native tier, silently undoing the
-tier this run depends on.
+**These briefs need a configured web provider.** They were written when the keyless
+OpenAlex tool supplied the citations and the run armed identically on any machine. That
+tool has been retired, so the only lookup tools left need credentials: run this with a
+Firecrawl base URL (arms `web.scrape`) or a Tavily/Brave key, or expect refusals and
+uncited claims — and read the output as a measurement of THAT, not of the revision.
+
+**Why the fleet is on the tools tier.** That is the tier the caps under test live on — a
+native fleet would exercise neither. `seed_home(tools_tier=...)` sets `agent_runtime:
+create_agent` without a tool flag, and deliberately NOT `web_search: true`: with a
+provider key that makes the launcher prefetch a `needs_web` step, and a non-empty bundle
+sends the step back to the native tier, silently undoing the tier this run depends on.
 
     .venv/bin/python scripts/run-deliverable-cases.py --out /tmp/deliverables-candidate
 """
@@ -124,9 +129,9 @@ def main() -> int:
 
     home = args.home or (args.out.parent / f"{args.out.name}-home")
     home.mkdir(parents=True, exist_ok=True)
-    # Every worker on the tools tier: that is where `academic_search` and the caps under
-    # test both live. No `cost_cap_usd` — the shipped default is no ceiling, and this run
-    # measures the DEFAULT posture rather than a configuration nobody has.
+    # Every worker on the tools tier: that is where the caps under test live. No
+    # `cost_cap_usd` — the shipped default is no ceiling, and this run measures the
+    # DEFAULT posture rather than a configuration nobody has.
     seed_home(home, api_key=api_key, tools_tier={a for a, _ in WORKERS})
     server = boot(home, api_key=api_key, seed=False)
 

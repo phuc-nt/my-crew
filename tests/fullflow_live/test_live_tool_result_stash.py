@@ -8,9 +8,9 @@ hay nó coi phần preview là toàn bộ dữ liệu rồi kết luận sai. Pl
 script thì lời hứa ấy chưa từng bị thử.
 
 Vì sao tiêm `tools_map` thay vì đợi một công cụ thật trả >12.000 ký tự: đã quét cạn registry
-(2026-09-01) và KHÔNG công cụ keyless nào vượt nổi ngưỡng — `academic.search` trần 4.000,
-`history.search` ~4,7k, `web.scrape` 8.000 và cần Firecrawl; 4 công cụ không trần đều cần
-credential. `tools_map` là tham số thường của vòng lặp, và chính product code khai báo phải
+(2026-09-01) và KHÔNG công cụ keyless nào vượt nổi ngưỡng — `history.search` ~4,7k,
+`web.scrape` 8.000 và cần Firecrawl; 4 công cụ không trần đều cần credential.
+`tools_map` là tham số thường của vòng lặp, và chính product code khai báo phải
 chịu được "a hand-built tools_map" (`thin_tool_loop.py:339-341`) — nên đây là seam SẴN CÓ.
 Thứ được thay chỉ là NGUỒN của chuỗi dài; từ `stash_if_oversized` trở xuống là sản phẩm
 nguyên vẹn: stash thật, vòng lặp thật, model thật đọc placeholder thật.

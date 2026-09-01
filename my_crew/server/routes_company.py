@@ -190,10 +190,9 @@ def _load_one_template(role_dir) -> dict | None:
         # override). Absent ⇒ "native" (the safe default).
         "recommended_runtime": str(doc.get("recommended_runtime") or "native"),
         # v32 one-click contract additions (all optional; absent keeps v1 behavior):
-        # academic_search mirrors web_search; schedule is {report kind: cron} defaults
-        # (validated by create_agent against the role's reports); has_skills tells the
-        # FE card a skills/ folder will be copied into the created agent.
-        "academic_search": bool(doc.get("academic_search", False)),
+        # schedule is {report kind: cron} defaults (validated by create_agent against the
+        # role's reports); has_skills tells the FE card a skills/ folder will be copied
+        # into the created agent.
         "schedule": {str(k): str(v) for k, v in (doc.get("schedule") or {}).items()}
         if isinstance(doc.get("schedule"), dict) else {},
         "has_skills": (role_dir / "skills").is_dir(),

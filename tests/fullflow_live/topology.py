@@ -85,19 +85,19 @@ def _tools_tier_block(cost_cap_usd: float | None) -> str:
     toolset, i.e. everything phases 1/3/4/5 changed, never executed ONCE in this suite.
     Cases asserting on them against the default fleet would have been vacuously green.
 
-    `academic_search` is the tool opt-in rather than `web_search`, and that is deliberate:
-    `web_search: true` plus a provider key makes the launcher PREFETCH a `needs_web` step,
-    and a non-empty bundle sends the step straight back to the native tier — the opt-in
-    that looks most relevant is the one that would silently undo this seam. OpenAlex is
-    keyless, so the tool arms identically on any machine; `web.scrape` comes along on its
-    own whenever Firecrawl is configured.
+    NO tool opt-in flag is set here, and `web_search: true` in particular is deliberately
+    NOT set: it plus a provider key makes the launcher PREFETCH a `needs_web` step, and a
+    non-empty bundle sends the step straight back to the native tier — the opt-in that
+    looks most relevant is the one that would silently undo this seam. The tier alone is
+    enough to arm a tool: `history.search` is registered unconditionally for internal
+    audiences (no flag, no key, no network), so the loop has a real tool on any machine.
+    `web.scrape` comes along on its own whenever Firecrawl is configured.
 
     `cost_cap_usd=None` omits the key entirely, which is the shipped default (no ceiling).
     """
     lines = ["agent_runtime:\n", "  kind: create_agent\n"]
     if cost_cap_usd is not None:
         lines.append(f"  cost_cap_usd: {cost_cap_usd}\n")
-    lines.append("academic_search: true\n")
     return "".join(lines)
 
 

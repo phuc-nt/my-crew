@@ -653,10 +653,10 @@ Cards in any other column do not show the button: they are real work, not drafts
 **Team** → click agent → **🔬 Nâng cao** tab → edit YAML and add:
 
 ```yaml
-academic_search: true
+web_search: true
 ```
 
-Agent can now find papers via OpenAlex (no API key needed).
+Agent can now search the web from inside its work loop (needs a Tavily or Brave key).
 
 ### Enable Telegram Alerts
 

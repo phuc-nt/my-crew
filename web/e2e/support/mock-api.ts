@@ -318,7 +318,6 @@ export async function mockOfficeApi(
             persona: '',
             web_search: false,
             recommended_runtime: 'native',
-            academic_search: false,
             // A scheduled role, so the gallery's schedule chip is exercised too.
             schedule: { daily: '08:00' },
             has_skills: false,

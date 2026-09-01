@@ -98,7 +98,7 @@ def test_deep_agent_build_task_tolerates_full_extra_kwargs():
             step_seq=1, step_deps=(), search_hook=None, self_id="a", telemetry=None,
             remember_node=None, reporting_config=None,
             runtime_config=AgentRuntimeConfig(kind="deep_agent"),
-            academic_search=False, gws_context=False, deep_team=True, allow_split=False,
+            gws_context=False, deep_team=True, allow_split=False,
         )
 
 

@@ -283,9 +283,13 @@ def test_runtime_threads_the_cap_from_profile_into_the_loop(monkeypatch):
 
     cfg = parse_agent_runtime_config({"kind": "create_agent", "cost_cap_usd": 0.33})
     runtime = tcr.ToolCallingRuntime()
+    # Flags by keyword, not position: a positional tail silently re-binds when the
+    # signature changes, so a dropped parameter lands a value in the wrong slot instead
+    # of failing. That is exactly how the retired academic-search flag broke this case.
     work = runtime._make_work_override(
-        _settings(), _Ctx(), None, 16, None, False, False, False, "thin",
-        cfg.caps().cost_cap_usd,
+        _settings(), _Ctx(), None, 16, None,
+        gws_context=False, web_search=False, loop_engine="thin",
+        cost_cap_usd=cfg.caps().cost_cap_usd,
     )
     work("Tìm giá", "", None)
 

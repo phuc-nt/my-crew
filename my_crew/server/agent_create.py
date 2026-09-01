@@ -160,9 +160,6 @@ def _build_profile_doc(spec: dict, profiles_dir) -> tuple[str, dict, str | None]
     # so a spec can't smuggle arbitrary values into profile.yaml through this key.
     if spec.get("web_search"):
         doc["web_search"] = True
-    # v32: opt-in OpenAlex academic search — same literal-True-only posture.
-    if spec.get("academic_search"):
-        doc["academic_search"] = True
     # v30: optional trust mode. Only the two literal policies pass through; absent ⇒ the
     # profile inherits the global default (TRUST_MODE env / builder default "autonomous").
     trust_mode = str(spec.get("trust_mode") or "").strip().lower()

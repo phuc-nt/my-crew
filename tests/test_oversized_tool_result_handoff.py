@@ -1,8 +1,8 @@
 """A huge tool result is stashed to disk, not poured into every following round.
 
 `thin_tool_loop` appends each tool result to `messages`, and `messages` is re-sent on
-every subsequent round. So one uncapped result (`history_search`, `openalex`, the issue
-readers have no cap of their own) costs its own size MULTIPLIED by the rounds after it.
+every subsequent round. So one uncapped result (`history_search` and the issue readers
+have no cap of their own) costs its own size MULTIPLIED by the rounds after it.
 
 The fix must hold two things at once, which is what most of these tests pin:
   - the prompt gets bounded text that ANNOUNCES it is partial (a silent cut makes the

@@ -19,7 +19,6 @@ const PM_TEMPLATE = {
   persona: '# SOUL',
   web_search: false,
   recommended_runtime: 'native',
-  academic_search: false,
   schedule: {},
   has_skills: false,
 }

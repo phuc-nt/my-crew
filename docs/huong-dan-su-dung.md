@@ -160,7 +160,7 @@ Vào **Đội** → bấm **"+ Tạo nhân sự ảo"**. Có 2 đường:
 
 ### B.2a. Tạo từ template — tạo ngay (v32, ≤2 click)
 
-Trang wizard hiện **bộ template nhân sự có sẵn** (6 vai trò: Trưởng phòng, Nghiên cứu, Nội dung, Phân tích, Kiểm định, PM-Coordinator). Mỗi template mang **tool gắn sẵn** (web search, academic search, lịch báo cáo mặc định, skills). Chọn card template → bấm **"Tạo ngay"** → xác nhận → nhân sự **được tạo NGAY** (chỉ 2 click, không qua form):
+Trang wizard hiện **bộ template nhân sự có sẵn** (6 vai trò: Trưởng phòng, Nghiên cứu, Nội dung, Phân tích, Kiểm định, PM-Coordinator). Mỗi template mang **tool gắn sẵn** (web search, lịch báo cáo mặc định, skills). Chọn card template → bấm **"Tạo ngay"** → xác nhận → nhân sự **được tạo NGAY** (chỉ 2 click, không qua form):
 
 - Nhân sự mới sẽ **TẮT** theo mặc định. Điền token `.env` cho vai trò (nếu cần) rồi bấm **bật** ở hub **Đội ngũ**.
 - **Tuyển ≠ bổ nhiệm.** Tuyển template điều phối viên KHÔNG tự đặt nó làm trưởng phòng:
@@ -507,10 +507,6 @@ Agent có thể **append hàng vào Google Sheets** hoặc **tạo/sửa Google 
 - `gws docs +write` — ghi vào doc tồn tại
 
 Chỉ 3 lệnh này cho phép; email (gmail) không qua đây (dùng `email_send` cửa khác). OAuth khóa từ keyring (đã cài ở setup).
-
-## B.5d. Bật Academic Search (v31)
-
-Ở hub **Đội ngũ** → chọn agent Nghiên cứu → tab "Cài đặt" → ghim `academic_search: true` trong profile YAML. Lần tới agent có thể tìm paper qua OpenAlex (keyless, trả kết quả không API key).
 
 ## B.5e. Khai Watcher (v31)
 

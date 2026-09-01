@@ -77,10 +77,6 @@ class LoadedProfile:
     # Opt-in web-search flag for team-task steps. Default False ⇒ `search_hook`
     # resolves to None regardless of provider keys (see `team_step_runner.py`).
     web_search: bool = False
-    # v31 P6: opt-in OpenAlex academic search for tool-calling runtimes. Default False ⇒
-    # the `academic.search` tool is not offered (toolset byte-identical). OpenAlex needs
-    # no key, so this flag IS the gate (there is no config-availability gate to lean on).
-    academic_search: bool = False
     # v39 #1: opt-in Google Workspace READ tools (Gmail/Calendar/Drive) for tool-calling
     # runtimes. Default False ⇒ the gws.* tools are not offered (toolset byte-identical).
     # The gws CLI's OAuth is the credential; no key gate to lean on, so the flag IS the gate.
@@ -189,7 +185,6 @@ def load_profile(
     team_step_egress = _parse_team_step_egress(yaml_doc.get("team_step_egress"))
     auto_approve = _parse_auto_approve(yaml_doc.get("auto_approve"))
     web_search = bool(yaml_doc.get("web_search", False))
-    academic_search = bool(yaml_doc.get("academic_search", False))
     gws_context = bool(yaml_doc.get("gws_context", False))
     deep_team = bool(yaml_doc.get("deep_team", False))
     deep_team_max_calls = _parse_deep_team_max_calls(yaml_doc.get("deep_team_max_calls"))
@@ -216,7 +211,6 @@ def load_profile(
         inbox=inbox,
         auto_approve=auto_approve,
         web_search=web_search,
-        academic_search=academic_search,
         gws_context=gws_context,
         deep_team=deep_team,
         deep_team_max_calls=deep_team_max_calls,

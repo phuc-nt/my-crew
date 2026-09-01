@@ -140,7 +140,7 @@ def test_deep_team_flag_threads_into_started_step_event_when_true(
 
     loaded = SimpleNamespace(
         soul="", project="", memory="", config=SimpleNamespace(), agent_runtime=None,
-        academic_search=False, gws_context=False, deep_team=True, deep_team_max_calls=None,
+        gws_context=False, deep_team=True, deep_team_max_calls=None,
         company_docs=(), web_search=False, team_step_egress=None, skills=(),
         profile_id="agent-a", domain="pm", template_role=None,
     )
@@ -182,7 +182,7 @@ def test_deep_team_flag_omitted_from_started_event_when_false(
 
     loaded = SimpleNamespace(
         soul="", project="", memory="", config=SimpleNamespace(), agent_runtime=None,
-        academic_search=False, gws_context=False, deep_team=False, deep_team_max_calls=None,
+        gws_context=False, deep_team=False, deep_team_max_calls=None,
         company_docs=(), web_search=False, team_step_egress=None, skills=(),
         profile_id="agent-a", domain="pm", template_role=None,
     )

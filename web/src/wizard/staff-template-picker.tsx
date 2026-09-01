@@ -23,7 +23,6 @@ const RUNTIME_LABEL_KEY: Record<string, UiKey> = {
 function toolChips(template: StaffTemplate, t: (key: UiKey, params?: Record<string, string | number>) => string): string[] {
   const chips: string[] = []
   if (template.web_search) chips.push(t('staffTemplatePicker.chipWebSearch'))
-  if (template.academic_search) chips.push(t('staffTemplatePicker.chipAcademicSearch'))
   if (template.has_skills) chips.push(t('staffTemplatePicker.chipSkills'))
   if (template.reports.length > 0) chips.push(t('staffTemplatePicker.chipReports', { kinds: template.reports.join(', ') }))
   const runtimeKey = RUNTIME_LABEL_KEY[template.recommended_runtime]

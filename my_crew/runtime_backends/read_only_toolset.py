@@ -300,28 +300,6 @@ def _web_search_tool(settings: Any) -> Callable[[dict], Any] | None:
     return _search
 
 
-def _openalex_tool() -> Callable[[dict], Any]:
-    """An `academic.search` callable over OpenAlex (public data, no key, fixed host).
-
-    Provider/network failures degrade to a short message string — the loop continues.
-    The rendered results are untrusted-wrapped by `render_works` itself.
-    """
-
-    def _search(args: dict) -> str:
-        query = str((args or {}).get("query") or "")
-        if not query.strip():
-            return "(academic.search cần tham số query)"
-        from my_crew.tools.openalex_tool import render_works, search_works
-
-        try:
-            works = search_works(query)
-        except Exception as exc:  # noqa: BLE001 — search best-effort, never crash the loop
-            return f"(tra cứu OpenAlex lỗi: {exc})"
-        return render_works(works)
-
-    return _search
-
-
 def _gws_tool(surface: str) -> Callable[[dict], Any]:
     """A Google Workspace READ callable (`gmail`/`calendar`/`drive`) over the gws CLI.
 
@@ -394,15 +372,13 @@ def _history_search_tool() -> Callable[[dict], Any]:
 
 def build_read_toolset(
     config: ReportingConfig, audience: str = "internal", settings: Any = None,
-    academic_search: bool = False, gws_context: bool = False, web_search: bool = False,
+    gws_context: bool = False, web_search: bool = False,
 ) -> dict[str, Callable[[dict], Any]]:
     """The positive read-allowlist for a tool-calling runtime, policy-shimmed + audience-aware.
 
     Returns a name→callable map. External audience drops internal-only reads. Every callable is
     shimmed through `classify`. There is no path here to a write/destructive tool — they are
-    not listed. `settings` (optional) enables the Firecrawl web-scrape tool when configured;
-    `academic_search` (the per-agent profile flag, v31 P6) enables OpenAlex — keyless, so the
-    flag is its only gate and the default keeps every existing toolset byte-identical.
+    not listed. `settings` (optional) enables the Firecrawl web-scrape tool when configured.
     `gws_context` (v39 #1) enables the Google Workspace READ tools (Gmail/Calendar/Drive) —
     INTERNAL company data, so internal-audience only, and OFF by default (byte-identical).
     `web_search` (v73) enables the in-loop Tavily/Brave search — the same per-agent profile
@@ -434,9 +410,6 @@ def build_read_toolset(
         ws = _web_search_tool(settings)
         if ws is not None:
             raw["web.search"] = ws
-    # v31 P6: OpenAlex paper search — public academic data, both audiences, flag-gated.
-    if academic_search:
-        raw["academic.search"] = _openalex_tool()
     # v39 #1: Google Workspace READ (Gmail/Calendar/Drive) via the gws CLI — INTERNAL
     # company context, flag-gated per agent (default OFF ⇒ toolset byte-identical). Each
     # tool degrades to a "(gws … lỗi)" string on CLI/OAuth failure; the read argv is

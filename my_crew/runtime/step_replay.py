@@ -176,7 +176,6 @@ def _run_tier(
         _extra["runtime_config"] = loaded.agent_runtime
         # Network-off replay: every live-web/toolset opt-in stays False regardless of
         # what the profile says today.
-        _extra["academic_search"] = False
         _extra["gws_context"] = False
         _extra["web_search"] = False
         _extra["deep_team"] = False

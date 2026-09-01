@@ -436,7 +436,6 @@ export interface StaffTemplate {
   web_search: boolean
   recommended_runtime: string // v20.5: 'native' | 'create_agent' | 'deep_agent'
   // v32 one-click contract: pre-attached tools + default schedule + bundled skills
-  academic_search: boolean
   schedule: Record<string, string>
   has_skills: boolean
 }

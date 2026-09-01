@@ -107,11 +107,11 @@ _CATALOG: tuple[dict, ...] = (
                 "(Đội → chọn nhân sự → Telegram).",
     },
     {
-        "id": "nokey", "label": "Firecrawl / OpenAlex",
+        "id": "nokey", "label": "Firecrawl",
         "check_ids": (),
         "keys": (),
         "ok": True,
-        "note": "Không cần key — Firecrawl chạy local, OpenAlex là API mở.",
+        "note": "Không cần key — Firecrawl chạy local.",
     },
     {
         # Operator escalation channels (email + webhook): NOT wizard-writable — only the

@@ -14,7 +14,6 @@ type Translate = (key: UiKey, params?: Record<string, string | number>) => strin
 export function templateChips(template: StaffTemplate, t: Translate): string[] {
   const chips: string[] = []
   if (template.web_search) chips.push(t('staffTemplatePicker.chipWebSearch'))
-  if (template.academic_search) chips.push(t('staffTemplatePicker.chipAcademicSearch'))
   if (template.has_skills) chips.push(t('staffTemplatePicker.chipSkills'))
   if (template.reports.length > 0)
     chips.push(t('staffTemplatePicker.chipReports', { kinds: template.reports.join(', ') }))

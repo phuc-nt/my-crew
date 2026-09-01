@@ -85,17 +85,17 @@ TIGHT_CAP_USD = 0.0005
 #:    and still never entered `run_thin_loop`. Hence a brief describing ONE indivisible
 #:    investigation deepened in sequence, rather than a list of independent parts.
 #:
-#: The agent is not left toolless by (3): `academic_search: true` binds `academic.search`
-#: (OpenAlex, keyless) and `web.scrape`, verified against the real `build_read_toolset`. So
-#: the loop has genuine work to do across several rounds, which is what gives the ceiling
-#: a between-rounds check to fail.
+#: The agent is not left toolless by (3): the tools tier binds `history.search`
+#: unconditionally for internal audiences — no flag and no key — verified against the real
+#: `build_read_toolset`. So the loop has genuine work to do across several rounds, which is
+#: what gives the ceiling a between-rounds check to fail. The brief therefore asks about
+#: the team's OWN past work, the one corpus a keyless tool can actually reach.
 BRIEF = (
-    "NGHIÊN CỨU: tra cứu web tìm nguồn và dữ liệu MỚI về lượng tử hoá (quantization) "
-    "mô hình ngôn ngữ lớn, rồi trong tuần viết một hồ sơ chuyên sâu về đúng MỘT kỹ "
-    "thuật này. Đây là một mạch tra cứu liền, KHÔNG chia nhỏ và KHÔNG giao cho người "
-    "khác: tra cứu, đọc nguồn tìm được, rồi tra cứu tiếp dựa trên chính điều vừa đọc "
-    "— cơ chế hoạt động, mức tiết kiệm chi phí đã được đo, đánh đổi về chất lượng, và "
-    "điều kiện nên hoặc không nên dùng. Mỗi ý kèm nguồn đã tra được trên web."
+    "RÀ SOÁT NỘI BỘ: tra lịch sử làm việc của đội để dựng lại đúng MỘT mạch việc đã qua, "
+    "rồi trong tuần viết một hồ sơ chuyên sâu về nó. Đây là một mạch tra cứu liền, KHÔNG "
+    "chia nhỏ và KHÔNG giao cho người khác: tra lịch sử, đọc thứ tìm được, rồi tra tiếp "
+    "dựa trên chính điều vừa đọc — việc đã làm những gì, ai làm, kết quả ra sao, và điều "
+    "gì còn dở dang. Mỗi ý kèm trích dẫn lấy được từ lịch sử."
 )
 
 

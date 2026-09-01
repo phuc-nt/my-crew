@@ -5,6 +5,17 @@ Development history at finer grain lives in [docs/journals/](docs/journals/).
 
 ## [Unreleased]
 
+### Removed
+- **The OpenAlex academic-search tool is gone**, along with the `academic_search:` profile
+  flag that armed it, its "tra cứu paper" template chip, and the "no key needed" mention
+  on the connections page. It was keyless, which made it easy to attach, but it rate-limits
+  by IP and returned HTTP 429 on every attempt to benchmark it, so an agent relying on it
+  had no dependable lookup at all. Agents that need to look things up should use web search
+  (`web_search: true` plus a Tavily or Brave key) or web scrape (Firecrawl).
+- The `researcher` template is now `version: 2`. Agents created from v1 carry a stale
+  `academic_search` key in their config baseline; both runtimes still accept and ignore it,
+  so those profiles keep loading, and the upgrade preview simply stops reporting the field.
+
 ### Fixed
 - **`cost_cap_usd: 0` is now rejected instead of silently emptying every step.** The
   ceiling is checked before a step's first provider call, so a zero cap ended every

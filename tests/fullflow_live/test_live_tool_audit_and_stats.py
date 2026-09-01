@@ -45,13 +45,18 @@ TOOL_AGENT = "analyst"
 READ_CALL_ACTION = "mcp_tool_read"
 
 #: Multi-stage so it reaches the team lane (a lookup-shaped brief routes to sprint, which
-#: runs native and binds no tools) and research-shaped so the loop has a reason to call
-#: `academic.search` more than once. Pinned offline by
+#: runs native and binds no tools) and review-shaped so the loop has a reason to call
+#: `history.search` more than once. Pinned offline by
 #: `test_the_live_tool_audit_brief_still_reaches_the_team_lane`.
+#:
+#: The lookups target the team's OWN past work rather than the web: on the tools tier the
+#: only unconditionally-bound tool is `history.search` (keyless, no network). The staged
+#: shape also feeds itself — by stage (3) the earlier steps are `done` and swept into the
+#: index, so the later lookups have real rows to find rather than an empty corpus.
 BRIEF = (
-    "Nghiên cứu rồi lập báo cáo trong tuần về đánh giá chất lượng mô hình ngôn ngữ: "
-    "(1) tra cứu hai phương pháp đánh giá tự động phổ biến, mỗi phương pháp kèm nguồn, "
-    "(2) tra cứu hai hạn chế đã được ghi nhận của các phương pháp đó, kèm nguồn, "
+    "Rà soát rồi lập báo cáo trong tuần về chính hoạt động của đội: "
+    "(1) tra lịch sử làm việc tìm hai mạch việc đã làm gần đây, mỗi mạch kèm trích dẫn, "
+    "(2) tra lịch sử tìm hai chỗ còn dở dang hoặc đã vướng, kèm trích dẫn, "
     "(3) tổng hợp thành bảng và đề xuất 2 việc cần làm tuần sau."
 )
 
@@ -202,8 +207,8 @@ def test_l5_the_stats_table_counts_exactly_the_calls_the_transcript_recorded(too
     assert recorded, (
         "the tools-tier step's transcript records no tool_call events, so the model never "
         "used a tool and there is nothing for the stats table to agree with. The step had "
-        "academic.search and web.scrape bound; a run where it used neither cannot "
-        "cross-check two counters."
+        "history.search bound (plus web.scrape when Firecrawl is configured); a run where "
+        "it used neither cannot cross-check two counters."
     )
 
     stats = collect_tool_stats(audit_path(home), actor=TOOL_AGENT)

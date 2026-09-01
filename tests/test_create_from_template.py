@@ -64,7 +64,6 @@ def test_create_from_template_carries_standard_config(tmp_world):
     assert doc["domain"] == "office"
     # the "tool gắn sẵn" contract: flags + runtime tier land in the created profile
     assert doc["web_search"] is True
-    assert doc["academic_search"] is True
     assert doc["agent_runtime"]["kind"] == "deep_agent"
     # persona (SOUL.md) scaffolded
     assert (profiles / "researcher" / "SOUL.md").exists()
@@ -248,6 +247,6 @@ def test_routes_crew_id_selects_the_crew_and_defaults_to_office(tmp_world):
 def test_staff_templates_expose_v32_fields(tmp_world):
     client = TestClient(create_app())
     templates = {t["role_id"]: t for t in client.get("/api/staff-templates").json()["templates"]}
-    assert templates["researcher"]["academic_search"] is True
+    assert templates["researcher"]["web_search"] is True
     assert templates["researcher"]["has_skills"] is True
-    assert templates["coordinator"]["academic_search"] is False
+    assert templates["coordinator"]["web_search"] is False

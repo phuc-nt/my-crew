@@ -47,7 +47,7 @@ def test_schemas_declare_required_params():
 def test_every_spec_has_description_and_object_schema():
     all_legacy = [
         "jira.issues", "github.prs", "linear.issues", "confluence.page", "web.scrape",
-        "web.search", "academic.search", "gws.gmail", "gws.calendar", "gws.drive",
+        "web.search", "gws.gmail", "gws.calendar", "gws.drive",
         "history.search",
     ]
     specs = build_typed_specs(_map(*all_legacy))

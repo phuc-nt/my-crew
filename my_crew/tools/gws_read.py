@@ -8,8 +8,8 @@ Gateway (reads never mutate). The credential is the CLI's own OAuth; nothing new
 Safety: the LLM never supplies an argv. Each helper builds a FIXED argv from
 `_READ_ALLOWLIST` and injects only a data parameter (a query/max-results), json-escaped —
 so a crafted "argument" can never turn a read into a write/delete. Results are bounded and
-returned as short text; a CLI failure degrades to a "(gws … lỗi)" string (like Firecrawl /
-OpenAlex) so one flaky read never crashes the loop.
+returned as short text; a CLI failure degrades to a "(gws … lỗi)" string (like Firecrawl)
+so one flaky read never crashes the loop.
 """
 
 from __future__ import annotations

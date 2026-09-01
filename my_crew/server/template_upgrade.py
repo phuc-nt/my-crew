@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 #: Config fields a template may drive + upgrade. `domain` is deliberately NOT here — a
 #: domain change would re-validate reports/bindings and is not a safe auto-apply; it stays
 #: a create-time-only choice.
-_CONFIG_FIELDS = ("reports", "schedule", "web_search", "academic_search", "recommended_runtime")
+_CONFIG_FIELDS = ("reports", "schedule", "web_search", "recommended_runtime")
 
 
 def config_snapshot(template: dict) -> dict:
@@ -42,7 +42,6 @@ def config_snapshot(template: dict) -> dict:
         "reports": list(template.get("reports") or []),
         "schedule": dict(template.get("schedule") or {}),
         "web_search": bool(template.get("web_search")),
-        "academic_search": bool(template.get("academic_search")),
         "recommended_runtime": str(template.get("recommended_runtime") or "native"),
     }
 
@@ -54,7 +53,7 @@ def _agent_live_value(doc: dict, field: str):
         return list(doc.get("reports") or [])
     if field == "schedule":
         return dict(doc.get("schedule") or {})
-    if field in ("web_search", "academic_search"):
+    if field == "web_search":
         return bool(doc.get(field))
     if field == "recommended_runtime":
         rt = doc.get("agent_runtime")

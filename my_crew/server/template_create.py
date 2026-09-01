@@ -231,8 +231,6 @@ def _spec_from_template(template: dict, agent_id: str, role_id: str) -> dict:
         spec["persona"] = template["persona"]
     if template.get("web_search"):
         spec["web_search"] = True
-    if template.get("academic_search"):
-        spec["academic_search"] = True
     runtime = template.get("recommended_runtime") or "native"
     if runtime != "native":
         # deep_agent needs its sandbox block to be loadable — the docker default the

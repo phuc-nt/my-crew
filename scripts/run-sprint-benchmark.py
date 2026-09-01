@@ -367,7 +367,7 @@ def _judge(args: argparse.Namespace) -> int:
     # nên bộ đề của bench tra được thẳng bằng tên; case ngoài bộ vẫn lùi về tên như cũ.
     goals = {case.name: case.goal for case in (*ALL_CASES, *ROUTING_CASES)}
     # Deliverables can come from briefs the bench suite does not own — the axis-5 judging
-    # briefs are academic-lookup cases written to need no web provider, and none of them
+    # briefs are literature-lookup cases, and none of them
     # appears in ALL_CASES. Without their real đề, the `.get(name, name)` fallback above
     # would quietly hand the judge a case NAME as the requirement, which is precisely the
     # blinded `dung_de` the comment above warns about. Failing loudly on an unreadable or

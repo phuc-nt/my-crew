@@ -65,9 +65,9 @@ class ToolCallingRuntime:
         # deps use it; this runtime routes telemetry into its own work loop instead, so it must
         # NOT also ride **kwargs into the graph (double-wire).
         telemetry = kwargs.pop("telemetry", None)
-        # v31 P6: the agent's academic-search opt-in (threaded by the step runner from the
-        # loaded profile); popped so it never rides **kwargs into the graph.
-        academic_search = bool(kwargs.pop("academic_search", False))
+        # Retired academic-search opt-in: still popped so a profile that predates the
+        # removal loads instead of raising when the stale key rides **kwargs into the graph.
+        kwargs.pop("academic_search", None)
         # v39 #1: the agent's Google-Workspace-read opt-in (threaded from the loaded profile).
         gws_context = bool(kwargs.pop("gws_context", False))
         # v73: the agent's web-search opt-in — the SAME profile flag that arms the native
@@ -78,12 +78,12 @@ class ToolCallingRuntime:
         kwargs.pop("deep_team", None)
         kwargs.pop("deep_team_max_calls", None)
         work = self._make_work_override(settings, context, config, loop_limit, telemetry,
-                                        academic_search, gws_context, web_search, loop_engine,
+                                        gws_context, web_search, loop_engine,
                                         cost_cap_usd)
         return build_team_task_graph(work_override=work, **kwargs)
 
     def _make_work_override(self, settings, context, config, loop_limit, telemetry=None,
-                            academic_search=False, gws_context=False, web_search=False,
+                            gws_context=False, web_search=False,
                             loop_engine="thin", cost_cap_usd=None):
         """Build the run_work replacement: a tool loop over the read toolset."""
         from my_crew.runtime_backends.read_only_toolset import assert_read_only, build_read_toolset
@@ -92,7 +92,6 @@ class ToolCallingRuntime:
             # team-step is inherently internal (no external audience). `settings` enables the
             # Firecrawl web-scrape tool when FIRECRAWL_BASE_URL is configured (v20.5).
             tools_map = build_read_toolset(config, audience="internal", settings=settings,
-                                           academic_search=academic_search,
                                            gws_context=gws_context, web_search=web_search)
             assert_read_only(list(tools_map))  # defense-in-depth: prove no write tool leaked in
 

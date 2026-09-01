@@ -84,12 +84,6 @@ _REGISTRY: tuple[ToolSpec, ...] = (
         prepare_arguments=_fix_web_fetch_args,
     ),
     ToolSpec(
-        name="academic_search",
-        legacy_name="academic.search",
-        description="Search academic literature (OpenAlex). Returns papers with citations.",
-        parameters=_query_schema("Topic or author keywords."),
-    ),
-    ToolSpec(
         name="confluence_page",
         legacy_name="confluence.page",
         description="Read one Confluence page by its page id.",
