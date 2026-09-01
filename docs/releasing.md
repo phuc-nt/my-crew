@@ -175,9 +175,19 @@ fleet boot, the temp home, and the budget ceilings. To cut a new baseline, point
 journeys at an output path:
 
 ```bash
+uv sync --extra deep          # refresh installed metadata FIRST — see below
 MY_CREW_JOURNEY_BASELINE_OUT=bench/journey_baseline_X.Y.Z.json \
     uv run pytest tests/fullflow_live -q -m live -k journey
 ```
+
+Refresh the install before cutting, or the baseline is stamped with the *previous*
+version. The recorder reads `importlib.metadata.version("my-crew")` — the installed
+distribution, not `pyproject.toml` — and bumping the version in `pyproject.toml` does not
+re-register an editable install. Cutting 0.16.0 on a venv still advertising 0.15.0 writes
+`"version": "0.15.0"` into a file named `..._0.16.0.json`, which a later comparison has no
+way to detect. Reading the installed version is deliberate (a baseline labelled with a
+version it was not cut from is worse than one labelled `uninstalled`), so the fix belongs
+here in the checklist rather than in the recorder.
 
 Unset, that variable writes nothing — an ordinary live run must never overwrite the
 committed baseline, or "compare against baseline" quietly becomes "compare against

@@ -5,6 +5,8 @@ Development history at finer grain lives in [docs/journals/](docs/journals/).
 
 ## [0.16.0] — 2026-09-01
 
+What was measured before this cut, and what could not be: [docs/release-evidence-0.16.0.md](docs/release-evidence-0.16.0.md).
+
 A long tool result no longer costs its size on every round that follows it, and a long
 step no longer pushes the next step's prompt past what the model can use. Both were
 paid for silently: the thin loop re-sends its whole message list each round, so one big
