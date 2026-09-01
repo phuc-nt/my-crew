@@ -7,7 +7,16 @@ the boundary only bites against a model that actually keeps calling tools. This 
 real OpenRouter model with a tool it is told to call several times, and asserts the loop reaches
 the documented round count at the documented cap.
 
-Skipped unless OPENROUTER_API_KEY is configured (same gating as the other live suites).
+Gated exactly like `tests/fullflow_live/`: the `live` marker keeps it out of a plain
+`pytest` run (`addopts = ["-m", "not live"]`), and the skipif keeps a keyless machine
+green. Both are needed — with only the skipif, how this file shipped originally, a
+developer with a key in their env spent real money on every full-suite invocation.
+
+This file was the worse half of that bug: it holds a single test with no time bound, so
+a stalled read had nothing to stop it. Traced once to five open HTTPS sockets with the
+suite parked at 48% for ten minutes. The client below is therefore given an explicit
+timeout and retry budget; `pytest-timeout` is NOT installed, so a `timeout` marker here
+would be silently ignored rather than enforced.
 """
 
 from __future__ import annotations
@@ -23,7 +32,10 @@ except Exception:
     _settings = None
     _HAS_KEY = False
 
-pytestmark = pytest.mark.skipif(not _HAS_KEY, reason="OPENROUTER_API_KEY not configured")
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.skipif(not _HAS_KEY, reason="OPENROUTER_API_KEY not configured"),
+]
 
 
 def _counting_tool(counter):
@@ -53,6 +65,11 @@ def test_create_agent_reaches_documented_rounds_at_cap():
         model=_settings.openrouter_model,
         api_key=_settings.openrouter_api_key,
         base_url=OPENROUTER_BASE_URL,
+        # Bounded so a stalled socket fails the test instead of parking the suite forever.
+        # Three rounds against a slow model is the real workload, hence a per-request
+        # ceiling rather than a tight one.
+        timeout=90,
+        max_retries=2,
     )
     agent = create_agent(model, [_counting_tool(counter)])
     rounds = 3

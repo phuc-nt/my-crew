@@ -21,7 +21,13 @@ through the entire production outage. The prompt/description TEXT contract is as
 deterministically over in `test_ops_chat.py`; this file is the only thing that can catch
 a wording change that keeps every keyword yet stops persuading the model.
 
-Skipped unless OPENROUTER_API_KEY is configured (same gating as the other live suites).
+Gated exactly like `tests/fullflow_live/`: the `live` marker keeps it out of a plain
+`pytest` run (`addopts = ["-m", "not live"]`), and the skipif keeps a keyless machine
+green. Both are needed. With only the skipif — how this file shipped originally — a
+developer with a key in their env ran real, paid model calls on every full-suite
+invocation and had no way to tell: the tests are network-bound and flaky, so the suite
+went red perhaps one run in twenty and the whole suite's wall time was dominated by
+these calls.
 """
 
 from __future__ import annotations
@@ -37,7 +43,10 @@ except Exception:
     _settings = None
     _HAS_KEY = False
 
-pytestmark = pytest.mark.skipif(not _HAS_KEY, reason="OPENROUTER_API_KEY not configured")
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.skipif(not _HAS_KEY, reason="OPENROUTER_API_KEY not configured"),
+]
 
 #: The exact strings measured against the live model — the first two are what the CEO
 #: actually sent and what actually failed, kept verbatim rather than paraphrased so a
