@@ -51,6 +51,7 @@
 - **Trục 5 cần chạy lại từ IP khác hoặc giãn nhịp gọi OpenAlex** mới đủ 3 case. Cũng nên
   lưu ý: trục 5 đo trên brief tra cứu học thuật, trục 1-4 đo trên brief thương mại — hai
   tập đề khác nhau, không đặt cạnh nhau được.
-- **Chưa push gì**: ~50 commit trên `main` + tag `v0.16.0` đều còn local, chờ user duyệt.
-- **Báo cáo bench nằm trong `plans/` (gitignored)** — nếu không chuyển sang `docs/` thì
-  bằng chứng release này không trace được từ repo.
+- **Đã release**: 62 commit + tag `v0.16.0` lên `origin/main` (`d924c41`). Bằng chứng
+  release chốt vào `docs/release-evidence-0.16.0.md` để trace được từ repo; ghi chú làm
+  việc vẫn ở `plans/` (gitignored) có chủ đích. Trục 5 đóng bằng **waive**, không phải
+  bằng số đo — nợ này sang bản sau.
