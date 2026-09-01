@@ -366,6 +366,21 @@ def _judge(args: argparse.Namespace) -> int:
     # Tên file deliverable khớp `BriefCase.name` theo quy ước của `load_deliverables`,
     # nên bộ đề của bench tra được thẳng bằng tên; case ngoài bộ vẫn lùi về tên như cũ.
     goals = {case.name: case.goal for case in (*ALL_CASES, *ROUTING_CASES)}
+    # Deliverables can come from briefs the bench suite does not own — the axis-5 judging
+    # briefs are academic-lookup cases written to need no web provider, and none of them
+    # appears in ALL_CASES. Without their real đề, the `.get(name, name)` fallback above
+    # would quietly hand the judge a case NAME as the requirement, which is precisely the
+    # blinded `dung_de` the comment above warns about. Failing loudly on an unreadable or
+    # malformed file beats judging three criteria out of four and reporting it as four.
+    if args.goals:
+        extra = json.loads(Path(args.goals).read_text(encoding="utf-8"))
+        if not isinstance(extra, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in extra.items()
+        ):
+            print(f"--goals must be a JSON object of string→string: {args.goals}",
+                  file=sys.stderr)
+            return 2
+        goals.update(extra)
 
     report = run_judging(
         LlmClient(settings), Path(args.baseline_dir), Path(args.candidate_dir),
@@ -469,6 +484,11 @@ def main() -> int:
     judge.add_argument(
         "--model", default=None,
         help="judge model (default: a different family from the one that ran the tasks)",
+    )
+    judge.add_argument(
+        "--goals", default=None,
+        help="JSON file of {case name: đề gốc} for cases outside the bench suite "
+             "(merged over the suite's own goals)",
     )
 
     args = parser.parse_args()

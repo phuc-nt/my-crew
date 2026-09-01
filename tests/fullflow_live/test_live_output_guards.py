@@ -43,6 +43,7 @@ subject under test.
 from __future__ import annotations
 
 import json
+import re
 import threading
 from pathlib import Path
 
@@ -377,10 +378,48 @@ def test_l2_a_long_dep_reaches_the_next_prompt_cut_but_its_artifact_stays_whole(
         "reproduces the run it claims to document."
     )
 
-    longest = max(long_artifacts.values(), key=len)
-    assert len(prompt) < len(full_handoff), (
-        f"the prompt ({len(prompt)} chars) is not shorter than the uncapped handoff "
-        f"({len(full_handoff)} chars) even though it carries the cut marker, so the "
-        "marker is being appended to text that was never actually cut. "
-        f"longest_artifact={len(longest)}"
+    # What "actually cut" means, measured against the dep rather than the whole prompt.
+    #
+    # Run 4 (2026-09-01) is why this is not `len(prompt) < len(full_handoff)`. That
+    # comparison read 52235 < 9057 and failed while the cap was working perfectly: the
+    # prompt is the WHOLE prompt (role preamble, brief, task context, and the capped dep),
+    # while `handoff` is one dep's text alone. They are not commensurable quantities, so
+    # the comparison could never detect truncation — it passed in earlier runs only
+    # because the surrounding prompt happened to be smaller than the dep.
+    #
+    # The cap's real promise is per-dep and self-describing: `_cap_dep_text` keeps
+    # `HANDOFF_DEP_CHAR_CAP` chars and appends a marker stating how many it dropped. So
+    # read the number the product itself wrote and check it against the artifact on disk.
+    # That is a claim only a genuinely truncated dep can satisfy, and it stays true no
+    # matter how large the rest of the prompt grows.
+    dropped = re.search(rf"{re.escape(CUT_MARKER)}(\d+) ký tự", prompt)
+    assert dropped, (
+        f"the prompt of step {order.get('step_id')!r} carries the cut marker but not the "
+        f"dropped-character count that `_cap_dep_text` always writes with it. "
+        f"marker_context={prompt[max(0, prompt.find(CUT_MARKER) - 80):][:200]!r}"
+    )
+    dropped_chars = int(dropped.group(1))
+    assert dropped_chars > 0, (
+        f"the marker reports {dropped_chars} characters dropped, so nothing was actually "
+        "cut and the pointer is decorating an untruncated dep."
+    )
+
+    # The dep that got cut is the one whose length the marker's arithmetic reconstructs:
+    # kept + dropped == the artifact as stored. Checking against every oversized artifact
+    # (not just the longest) keeps this honest when a fan-in step reads more than one.
+    reconstructed = DEP_CHAR_CAP + dropped_chars
+    assert any(abs(len(t) - reconstructed) <= 200 for t in long_artifacts.values()), (
+        f"the marker says {dropped_chars} chars were dropped past a ~{DEP_CHAR_CAP}-char "
+        f"head, implying a dep of about {reconstructed} chars, but no artifact of this "
+        f"task is that size. The prompt is reporting a cut that does not correspond to "
+        f"any stored dep. artifact_sizes={ {n: len(t) for n, t in long_artifacts.items()} !r}"
+    )
+
+    # And the whole point of the cap: the dep reached the prompt SHORTER than it is on
+    # disk, while the artifact itself stayed whole. `full_handoff` is the uncapped record.
+    assert len(full_handoff) > DEP_CHAR_CAP >= len(full_handoff) - dropped_chars, (
+        f"step {order.get('step_id')!r} recorded {len(full_handoff)} chars of uncapped "
+        f"handoff, but the {dropped_chars} chars the marker claims to have dropped do not "
+        f"bring it down to the {DEP_CHAR_CAP}-char cap. The replay record and the prompt "
+        "disagree about the same dep."
     )

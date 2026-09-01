@@ -26,6 +26,7 @@ tier this run depends on.
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 import time
@@ -145,7 +146,19 @@ def main() -> int:
     for name, task_id in results.items():
         harvest += ["--case", f"{name}={task_id}"]
     print("\n--- harvest ---", flush=True)
-    return subprocess.call(harvest)
+    rc = subprocess.call(harvest)
+
+    # The judge needs each case's real đề, or `run_judging` falls back to using the case
+    # NAME as the requirement and the `dung_de` criterion scores against the string
+    # "eval_methods". These cases are not in the bench suite, so write the map here — from
+    # the same dict that produced the briefs, which is the only way the two cannot drift.
+    # `strip_mode_prefix` is not applied: the judge reads this as the requirement text, and
+    # the `team:` prefix is routing, not part of what the deliverable must answer.
+    goals_path = args.out.parent / f"{args.out.name}-goals.json"
+    goals = {name: selected[name].removeprefix("team: ") for name in results}
+    goals_path.write_text(json.dumps(goals, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"goals: {goals_path}", flush=True)
+    return rc
 
 
 if __name__ == "__main__":
