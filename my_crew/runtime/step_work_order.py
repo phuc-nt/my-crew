@@ -74,9 +74,15 @@ def write_work_order(
         handoff = ""
         try:
             from my_crew.agent.team_task_graph import _read_deps_handoff
+            from my_crew.runtime.team_task_paths import team_tasks_root
 
+            # The deps read resolves the SHARED task store and the shared step
+            # artifacts, so it takes `team_tasks_root()` — not this agent's own
+            # `data_dir`, which holds only its transcripts and work orders and would
+            # resolve an empty store, recording `handoff: ""` for every step that has
+            # deps. The path above stays per-agent on purpose (same as transcripts).
             handoff = _read_deps_handoff(
-                Path(getattr(settings, "data_dir", "")), task_id,
+                team_tasks_root(), task_id,
                 tuple(getattr(step, "deps", ()) or ()),
             )
         except Exception:  # noqa: BLE001 — a broken deps read degrades to "" handoff

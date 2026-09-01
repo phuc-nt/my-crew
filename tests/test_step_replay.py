@@ -63,9 +63,14 @@ class _FakeResult:
 
 
 class TestWorkOrder:
-    def test_write_freezes_step_input_with_transcript_pointer(self, tmp_path):
+    def test_write_freezes_step_input_with_transcript_pointer(self, tmp_path, monkeypatch):
         settings = _settings(tmp_path)
         step = _seed_store(tmp_path)
+        # The handoff comes from the SHARED root; this case keeps both roots on one
+        # tmp_path, so point the shared root there too rather than at the real `.data/`.
+        monkeypatch.setattr(
+            "my_crew.runtime.team_task_paths.team_tasks_root", lambda: tmp_path
+        )
         write_work_order(
             settings, task_id="t1", step=step, attempt_id="a1",
             effective_kind="NativeGraphRuntime", task_title="Nhiệm vụ",
@@ -83,6 +88,42 @@ class TestWorkOrder:
         assert order["transcript"] == "transcripts/s2-a1.jsonl"
         assert "content" in order["model_roles"]  # role → chain snapshot
         assert isinstance(order["model_roles"]["content"], list)
+
+    def test_handoff_is_read_from_the_shared_root_not_the_agent_data_dir(
+        self, tmp_path, monkeypatch,
+    ):
+        """A step's deps live in the SHARED store; the work order lives per-agent.
+
+        Every other case here sets `settings.data_dir` to the same `tmp_path` the store
+        is seeded in, so the two roots coincide and a read from the wrong one still
+        finds the data. The live fleet keeps them apart: the task store and step
+        artifacts sit at `.data/`, while each agent writes its own transcripts and work
+        orders under `.data/agents/<id>/`. Measured on live task 6c45ef2318a9 — step 2
+        depended on step 1, step 1's artifact was on disk complete, and the work order
+        still recorded `handoff: ""`, because the read resolved
+        `.data/agents/writer/team_tasks.sqlite3` (0 steps) instead of the shared store
+        (2 steps). A work order that records none of its upstream input cannot replay
+        the run it claims to reproduce, which is the one job it has.
+        """
+        shared = tmp_path / "shared"
+        shared.mkdir()
+        agent_dir = tmp_path / "agents" / "writer"
+        agent_dir.mkdir(parents=True)
+
+        step = _seed_store(shared)
+        monkeypatch.setattr(
+            "my_crew.runtime.team_task_paths.team_tasks_root", lambda: shared
+        )
+        write_work_order(
+            _settings(agent_dir), task_id="t1", step=step, attempt_id="a1",
+            effective_kind="NativeGraphRuntime",
+        )
+
+        order = json.loads(
+            work_order_path(agent_dir, "t1", "s2", "a1").read_text(encoding="utf-8")
+        )
+        assert order["deps"] == ["s1"]
+        assert order["handoff"] == "dữ liệu bước 1"
 
     def test_setting_off_writes_nothing(self, tmp_path):
         settings = _settings(tmp_path, step_transcripts=False)
@@ -125,7 +166,12 @@ class TestWorkOrder:
 # ---- replay engine -----------------------------------------------------------
 
 
-def _freeze(tmp_path, step, **kw):
+def _freeze(tmp_path, step, monkeypatch, **kw):
+    # These cases keep the agent data dir and the shared root on one `tmp_path`; the
+    # handoff read resolves the shared root, so point it at `tmp_path` as well.
+    monkeypatch.setattr(
+        "my_crew.runtime.team_task_paths.team_tasks_root", lambda: tmp_path
+    )
     write_work_order(
         _settings(tmp_path), task_id="t1", step=step, attempt_id="a1",
         effective_kind="NativeGraphRuntime", task_title="Nhiệm vụ",
@@ -141,7 +187,7 @@ class TestReplay:
         step = _seed_store(tmp_path)
         write_step_artifact(tmp_path, "t1", 2, {"status": "done",
                                                 "result_text": "kết quả gốc"})
-        _freeze(tmp_path, step)
+        _freeze(tmp_path, step, monkeypatch)
 
         seen_messages: list = []
 
@@ -175,7 +221,7 @@ class TestReplay:
     def test_model_override_replaces_every_role_chain(self, tmp_path, monkeypatch):
         settings = _settings(tmp_path)
         step = _seed_store(tmp_path)
-        _freeze(tmp_path, step)
+        _freeze(tmp_path, step, monkeypatch)
 
         chains: list = []
 
@@ -201,7 +247,7 @@ class TestReplay:
     ):
         settings = _settings(tmp_path)
         step = _seed_store(tmp_path, needs_web=True)
-        _freeze(tmp_path, step)
+        _freeze(tmp_path, step, monkeypatch)
 
         seen_messages: list = []
 
@@ -224,10 +270,10 @@ class TestReplay:
         flat = json.dumps(seen_messages, ensure_ascii=False)
         assert REPLAY_NET_OFF in flat
 
-    def test_review_step_is_refused(self, tmp_path):
+    def test_review_step_is_refused(self, tmp_path, monkeypatch):
         settings = _settings(tmp_path)
         step = _seed_store(tmp_path, step_type="review")
-        _freeze(tmp_path, step)
+        _freeze(tmp_path, step, monkeypatch)
         with pytest.raises(ValueError, match="review"):
             replay_step(None, settings, task_id="t1", step_id="s2", data_dir=tmp_path)
 
