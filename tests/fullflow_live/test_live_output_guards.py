@@ -91,6 +91,26 @@ BRIEF = (
 #: real run would build.
 INJECTED_DEP_CHARS = 9000
 
+#: Longer than the 900s the rest of the live suite uses, because this case is structurally
+#: the longest journey in it — and the number was set by measurement, not by taste.
+#:
+#: Run 2 (2026-09-01) settled at ~960s and the 900s poll cut it off at ~900s. Nothing about
+#: the measurement had failed: the artifacts that run left behind satisfy all four
+#: assertions below (dep artifact 9057 chars > cap · cut marker present 4x in the prompt ·
+#: work order handoff still 9057 chars and marker-free · prompt copy shorter than the
+#: artifact). Only the wait was short.
+#:
+#: Why the brief is NOT the lever, also measured: 8 decompose samples across the current
+#: phrasing and a trimmed one with the research verb removed. Both plan 3-4 steps, and both
+#: still request web on 3/4. Dropping "Nghiên cứu" made it WORSE (4 steps instead of 3), so
+#: trimming buys no wall time — every other live case settles on one step or an early park,
+#: while this one needs a chain of model-driven steps to have a dep edge at all.
+#:
+#: Raising this does not weaken any assertion; it only stops the poll from ending a run
+#: that was still progressing. Kept as a named constant so the next retune is a deliberate
+#: edit with this note attached.
+SETTLE_TIMEOUT_S = 1500
+
 
 def _oversized_dep_text() -> str:
     """~9000 chars of real Vietnamese operations prose, built deterministically.
@@ -275,7 +295,7 @@ def test_l2_a_long_dep_reaches_the_next_prompt_cut_but_its_artifact_stays_whole(
     injector = _DepInjector(home / ".data" / "artifacts" / "team-tasks" / task_id)
     injector.start()
     try:
-        status = wait_until_settled(stock_fleet, task_id, timeout_s=900)
+        status = wait_until_settled(stock_fleet, task_id, timeout_s=SETTLE_TIMEOUT_S)
     finally:
         injector.stop()
     journey_budget.note_cost(
