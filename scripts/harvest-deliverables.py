@@ -55,7 +55,26 @@ def _deliverable_text(payload: dict) -> str:
     return "\n".join(s for s in strings(payload) if s.strip())
 
 
-def harvest_one(data_root: Path, task_id: str) -> tuple[str | None, str]:
+def _terminal_steps(steps: list) -> list:
+    """The steps nothing depends on, derived from `deps` alone.
+
+    Exists for the baseline side of an A/B. `final_deliverable` is stored at confirm time,
+    so a task planned by a revision that predates the column carries no flag and every
+    case would skip — leaving nothing to judge, which is not the same as a fair comparison.
+
+    This is NOT a heuristic and not the thing the flag replaced: it is the same rule the
+    product applies (`task_decomposition.find_terminals` — "a step no other step depends
+    on"), recomputed from the `deps` the store already holds. The heuristic that picked
+    wrong before guessed by file size and mtime; this reads the DAG. Where both are
+    available they agree by construction, which `--derive-terminal` is checked against
+    before being trusted on the side that has no flag.
+    """
+    depended_on = {dep for s in steps for dep in (s.deps or ())}
+    return [s for s in steps if s.step_id not in depended_on]
+
+
+def harvest_one(data_root: Path, task_id: str, *,
+                derive_terminal: bool = False) -> tuple[str | None, str]:
     """`(text, note)` for one task. `text` is None when nothing can be harvested."""
     from my_crew.agent.team_task_artifact import step_artifact_path
     from my_crew.runtime.team_task_store import TeamTaskStore
@@ -65,7 +84,18 @@ def harvest_one(data_root: Path, task_id: str) -> tuple[str | None, str]:
     if task is None:
         return None, "no such task in the store"
 
-    marked = [s for s in task.steps if s.final_deliverable]
+    marked = [s for s in task.steps if getattr(s, "final_deliverable", False)]
+    how = "flag"
+    if not marked and derive_terminal:
+        marked = _terminal_steps(task.steps)
+        how = "derived"
+        if len(marked) > 1:
+            # Same refusal the flag makes: several terminals means the DAG does not name
+            # one answer, and picking among them is the guess this script exists to avoid.
+            return None, (
+                f"{len(marked)} terminal steps ({[s.step_id for s in marked]!r}) — the DAG "
+                "names no single answer, so there is nothing to harvest without guessing"
+            )
     if not marked:
         return None, (
             f"no step carries `final_deliverable` among {len(task.steps)} steps — either "
@@ -91,7 +121,7 @@ def harvest_one(data_root: Path, task_id: str) -> tuple[str | None, str]:
     text = _deliverable_text(payload)
     if not text.strip():
         return None, f"step {step.step_id!r} artifact carries no prose"
-    return text, f"step {step.step_id!r} (seq {step.seq}, {len(text)} chars)"
+    return text, f"step {step.step_id!r} (seq {step.seq}, {len(text)} chars, via {how})"
 
 
 def main() -> int:
@@ -103,6 +133,12 @@ def main() -> int:
                         help="directory to write <case>.md into (created if absent)")
     parser.add_argument("--case", action="append", default=[], metavar="NAME=TASK_ID",
                         help="repeatable: the case name to file this task's answer under")
+    parser.add_argument(
+        "--derive-terminal", action="store_true",
+        help="when a task carries no `final_deliverable` flag, fall back to the step "
+             "nothing depends on (same rule the flag stores). For the BASELINE side of an "
+             "A/B, whose revision predates the column; still refuses a multi-terminal DAG.",
+    )
     args = parser.parse_args()
 
     pairs: list[tuple[str, str]] = []
@@ -119,7 +155,8 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     written, skipped = 0, []
     for name, task_id in pairs:
-        text, note = harvest_one(args.data_root, task_id)
+        text, note = harvest_one(args.data_root, task_id,
+                                 derive_terminal=args.derive_terminal)
         if text is None:
             skipped.append(f"{name} ({task_id}): {note}")
             print(f"skip  {name:<24} {note}")

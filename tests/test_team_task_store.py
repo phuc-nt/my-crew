@@ -1220,6 +1220,41 @@ def test_a_plan_with_several_terminals_marks_none_of_them(tmp_path):
     store.close()
 
 
+def test_deriving_the_terminal_step_agrees_with_the_stored_flag(tmp_path):
+    """Harvest's baseline fallback must reach the SAME step the flag names.
+
+    The axis-5 comparison needs a deliverable from a revision that predates the column, so
+    `harvest-deliverables.py --derive-terminal` recomputes the terminal from `deps` when no
+    flag is present. That is only honest if the two routes agree where both exist —
+    otherwise the A/B would compare the candidate's real answer against some other step of
+    the baseline and report the difference as a quality delta.
+
+    Both routes implement the same rule ("a step nothing depends on"), so this is pinning
+    that they stay the same rule, not discovering whether they are.
+    """
+    import importlib.util
+    import pathlib
+
+    spec = importlib.util.spec_from_file_location(
+        "harvest_deliverables",
+        pathlib.Path(__file__).resolve().parents[1] / "scripts" / "harvest-deliverables.py",
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    store = _store(tmp_path)
+    _plan(store)
+    steps = store.get("t1").steps
+
+    flagged = [s.step_id for s in steps if s.final_deliverable]
+    derived = [s.step_id for s in module._terminal_steps(steps)]
+    assert derived == flagged == ["s3"], (
+        f"cờ chỉ {flagged!r} còn suy ra từ deps chỉ {derived!r} — hai đường phải trỏ cùng "
+        "một bước, nếu không vế baseline sẽ bị chấm trên một bước khác vế candidate"
+    )
+    store.close()
+
+
 def test_a_store_created_before_the_final_deliverable_column_still_opens(tmp_path):
     """Store cũ mở bằng code mới: hàng cũ đọc ra `False`, plan_hash KHÔNG đổi.
 
