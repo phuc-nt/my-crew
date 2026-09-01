@@ -1220,6 +1220,34 @@ def test_a_plan_with_several_terminals_marks_none_of_them(tmp_path):
     store.close()
 
 
+def test_a_plan_whose_deps_form_a_cycle_marks_nothing(tmp_path):
+    """Không bước nào là bước chốt ⇒ không cờ nào, giống hệt trường hợp nhiều bước chốt.
+
+    Chu trình thì mọi bước đều là dep của kẻ khác, nên tập terminal RỖNG. Nhánh này khác
+    nhánh "nhiều terminal" ở chỗ nó dễ hỏng âm thầm: viết `terminals[0] if terminals`
+    thay vì kiểm đúng một phần tử vẫn xanh với mọi test hiện có, và khi đó chu trình sẽ
+    gắn cờ bừa vào bước đầu tiên. `set_plan` là API của store nên fixture và caller ngoài
+    đường confirm ghi thẳng được, không đi qua chỗ chặn chu trình ở `task_decomposition`.
+
+    Ba caller như vậy đang tồn tại thật — `watcher_runner.py`, `step_replay.py`,
+    `manager_escalation.py` — đều `set_plan` trên danh sách bước do hệ thống tự dựng, nên
+    nhánh 0-terminal này là đường đi tới được, không phải giả định.
+    """
+    store = _store(tmp_path)
+    steps = [
+        {"step_id": "a", "title": "A", "assigned_to": "agent-a", "deps": ["b"]},
+        {"step_id": "b", "title": "B", "assigned_to": "agent-b", "deps": ["a"]},
+    ]
+    store.create_task(task_id="t1", title="demo")
+    store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+
+    assert [s.step_id for s in store.get("t1").steps if s.final_deliverable] == [], (
+        "chu trình không có bước chốt nào — gắn cờ ở đây là đoán bừa, và người đọc sau "
+        "không có cách nào phát hiện cờ sai"
+    )
+    store.close()
+
+
 def test_deriving_the_terminal_step_agrees_with_the_stored_flag(tmp_path):
     """Harvest's baseline fallback must reach the SAME step the flag names.
 

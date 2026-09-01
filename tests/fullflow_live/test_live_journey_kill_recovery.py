@@ -91,9 +91,16 @@ def test_j5_work_survives_a_hard_kill_and_the_next_fleet_finishes_it(home, live_
 
         # 2. And the new fleet drives it to completion. Surviving but never moving is
         #    the failure that hides: the dashboard looks healthy forever.
+        # 900s, not 300s. A recovered task re-plans and re-runs its remaining steps
+        # against the real model, so its settle time tracks provider latency rather than
+        # anything this test controls. The measured spread bears that out: 59s and 101s
+        # end-to-end on a quiet machine, while the three historical failures landed at
+        # 311s, 338s and 319s — all just past a 300s ceiling, none of them a product
+        # fault. A deadline that close to the working range reports load as a regression,
+        # which is the failure that wastes the most time to diagnose.
         final = poll_until(
             lambda: (lambda s: s if is_settled(s) else None)(task_status(second, task_id)),
-            timeout_s=300, interval_s=3,
+            timeout_s=900, interval_s=3,
             what=f"the rebooted fleet to settle recovered task {task_id}",
         )
 

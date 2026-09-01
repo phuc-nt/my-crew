@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 from my_crew.agent.team_task_artifact import read_step_artifact, write_step_artifact
+from my_crew.agent.team_task_graph import HANDOFF_DEP_CHAR_CAP
 from my_crew.config.config_builders import build_settings_from_dict
 from my_crew.runtime.step_replay import REPLAY_NET_OFF, replay_step
 from my_crew.runtime.step_work_order import (
@@ -28,7 +29,7 @@ def _settings(tmp_path, **overrides):
     return build_settings_from_dict({"data_dir": tmp_path, **overrides})
 
 
-def _seed_store(tmp_path, *, needs_web=False, step_type="work"):
+def _seed_store(tmp_path, *, needs_web=False, step_type="work", dep_text="dữ liệu bước 1"):
     """Real store layout: s1 done (artifact = the handoff) + s2, the step under test."""
     store = TeamTaskStore(tmp_path / "team_tasks.sqlite3")
     store.create_task(
@@ -47,7 +48,7 @@ def _seed_store(tmp_path, *, needs_web=False, step_type="work"):
         ],
         plan_hash="ph-1",
     )
-    write_step_artifact(tmp_path, "t1", 1, {"status": "done", "result_text": "dữ liệu bước 1"})
+    write_step_artifact(tmp_path, "t1", 1, {"status": "done", "result_text": dep_text})
     step = store.get_step("t1", "s2")
     store.close()
     return step
@@ -124,6 +125,38 @@ class TestWorkOrder:
         )
         assert order["deps"] == ["s1"]
         assert order["handoff"] == "dữ liệu bước 1"
+
+    def test_the_work_order_freezes_the_full_handoff_not_the_prompt_capped_copy(
+        self, tmp_path, monkeypatch,
+    ):
+        """Work order KHÔNG chịu trần 8000 ký tự — và phải có test giữ điều đó.
+
+        Trần `cap_dep_chars` là để prompt khỏi phình, còn work order tồn tại để replay
+        dựng lại ĐÚNG đầu vào của lần chạy đó. Cắt ở đây thì replay chạy trên một đầu vào
+        khác lần thật, và sai lệch ấy im lặng: bản ghi vẫn hợp lệ, chỉ là không còn tái
+        hiện được cái nó nhận là tái hiện.
+
+        Mọi case khác trong lớp này dùng handoff 15 ký tự, nên thêm `cap_dep_chars=True`
+        vào `step_work_order` vẫn xanh hết. Case này là chỗ duy nhất phân biệt được.
+        """
+        long_dep = "x" * (HANDOFF_DEP_CHAR_CAP + 500)
+        step = _seed_store(tmp_path, dep_text=long_dep)
+        monkeypatch.setattr(
+            "my_crew.runtime.team_task_paths.team_tasks_root", lambda: tmp_path
+        )
+        write_work_order(
+            _settings(tmp_path), task_id="t1", step=step, attempt_id="a1",
+            effective_kind="NativeGraphRuntime",
+        )
+
+        order = json.loads(
+            work_order_path(tmp_path, "t1", "s2", "a1").read_text(encoding="utf-8")
+        )
+        assert len(order["handoff"]) == HANDOFF_DEP_CHAR_CAP + 500, (
+            f"handoff bị cắt còn {len(order['handoff'])} ký tự — replay sẽ chạy trên đầu "
+            "vào khác với lần chạy thật mà không báo gì"
+        )
+        assert "đã cắt" not in order["handoff"]
 
     def test_setting_off_writes_nothing(self, tmp_path):
         settings = _settings(tmp_path, step_transcripts=False)

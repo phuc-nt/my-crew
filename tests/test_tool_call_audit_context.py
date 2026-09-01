@@ -133,6 +133,32 @@ def test_tool_args_never_reach_the_trail(audit_rows):
     assert "another-canary" not in blob
 
 
+def test_a_tool_from_the_real_toolset_builder_is_audited(audit_rows):
+    """Đi qua `build_read_toolset` THẬT, không gọi `_shim` tay như mọi case khác.
+
+    Mọi test khác trong file tự bọc `_shim` rồi kiểm cái vừa bọc — nên chúng luôn xanh
+    theo định nghĩa, kể cả khi hàm dựng toolset ngừng bọc. Chỗ bọc là một comprehension
+    DUY NHẤT ở cuối `build_read_toolset`; thêm một tool sau dòng đó, hoặc chèn một
+    `return` sớm, là tool ấy vào tay model mà không để lại dòng audit nào — và không có
+    gì đỏ. Case này là dây bảo hiểm cho đúng đường đi thật đó.
+
+    Chọn `history.search` vì nó không cần key, không ra mạng, và luôn bật cho audience
+    nội bộ, nên nó kiểm được đường dựng mà không kéo theo phụ thuộc bên ngoài.
+    """
+    from my_crew.runtime_backends.read_only_toolset import build_read_toolset
+
+    toolset = build_read_toolset(config=None)
+    assert "history.search" in toolset
+
+    toolset["history.search"]({"query": "bất kỳ"})
+
+    rows = audit_rows()
+    assert [r["tool"] for r in rows] == ["history.search"], (
+        f"gọi tool dựng từ build_read_toolset nhưng sổ audit ghi {rows!r} — "
+        "tool tới tay model mà không đi qua shim"
+    )
+
+
 def test_a_policy_block_is_recorded_as_a_deny(audit_rows, monkeypatch):
     """The deny is the row an audit most needs; it must not be the one path that is
     silent."""
@@ -212,7 +238,25 @@ def test_the_verdict_reaches_the_row_unmodified_by_the_shim(audit_rows, monkeypa
 
 
 def test_the_row_records_how_long_the_call_took(audit_rows):
-    tool, _seen = _ok_tool()
-    tool({})
+    """Đo thời gian THẬT, không chỉ kiểm `>= 0`.
 
-    assert audit_rows()[0]["params"]["elapsed_ms"] >= 0
+    `>= 0` xanh cả khi `elapsed_ms` bị hardcode 0, cả khi `started = time.monotonic()`
+    bị dời xuống SAU cuộc gọi — nghĩa là nó không canh được cái duy nhất nó có mặt để
+    canh. Cho tool ngủ một khoảng đo được rồi đòi con số phản ánh khoảng đó.
+
+    Ngưỡng 15ms cho một giấc ngủ 30ms: chừa biên cho đồng hồ thô và máy CI chậm, nhưng
+    vẫn đủ xa 0 để mọi cách hỏng nói trên đều đỏ.
+    """
+    import time as _time
+
+    def _slow(args: dict):
+        _time.sleep(0.03)
+        return "result text"
+
+    _shim("jira.issues", _slow)({})
+
+    elapsed = audit_rows()[0]["params"]["elapsed_ms"]
+    assert elapsed >= 15, (
+        f"elapsed_ms={elapsed} cho cuộc gọi ngủ 30ms — đồng hồ không bao quanh cuộc gọi, "
+        "nên cột thời gian trong sổ audit là số vô nghĩa"
+    )

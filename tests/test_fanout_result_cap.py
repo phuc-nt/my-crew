@@ -136,3 +136,38 @@ def test_a_straddling_block_is_dropped_rather_than_left_hanging(tmp_path):
     assert "===SEARCH_RESULT===" not in handoff
     assert handoff.startswith("phần mở đầu")
     assert "đã cắt" in handoff  # still points at the artifact holding the whole block
+
+
+def test_a_dep_that_is_one_unclosed_block_stays_within_a_bounded_overshoot(tmp_path):
+    """Nhánh vô hiệu hoá dấu mở là đường về DUY NHẤT mà không test nào của file này đi qua.
+
+    Hai case delimiter ở trên đều mở đầu bằng văn xuôi, nên `head` luôn khác rỗng và hàm
+    thoát ở `return head`. Muốn chạm nhánh cuối thì dấu mở phải nằm ngay đầu — đúng tình
+    huống CEO dán nguyên một khối vào đề. Lúc đó hàm KHÔNG cắt về đúng `limit`: nó thay dấu
+    mở bằng chuỗi vô hiệu hoá DÀI HƠN, nên kết quả vượt trần.
+
+    Đo được: vượt đúng 39 ký tự = len(vô hiệu hoá) - len(dấu mở), và chỉ vượt một lần.
+    Nhiều dấu mở KHÔNG cộng dồn — có dấu mở thứ hai nghĩa là dấu trước nó hoặc đã đóng
+    trong lát (thoát ở `return cut`) hoặc để lại `head` khác rỗng (thoát ở `return head`),
+    cả hai đều ngắn hơn trần. Ghim mốc này để nó là hằng số có chủ ý: đổi chuỗi vô hiệu hoá
+    dài thêm sẽ nới trần theo mà không ai hay.
+    """
+    from my_crew.tools.search_result_formatter import (
+        _DELIM_START,
+        truncate_preserving_delimiters,
+    )
+    # 39 viết thẳng, KHÔNG tính từ len(_NEUTRALIZED_DELIM). Tính lại từ chính hằng số đó
+    # thì hai vế của assert cùng trôi theo nhau: nới chuỗi vô hiệu hoá dài thêm vẫn xanh,
+    # và test mất đúng cái nó sinh ra để canh. Số này đo được, đổi nó phải là hành vi có
+    # chủ ý — sửa số ở đây là chỗ ghi nhận chủ ý ấy.
+    MEASURED_OVERSHOOT = 39
+
+    blob = _DELIM_START + "\n" + ("q" * (HANDOFF_DEP_CHAR_CAP * 2))
+    out = truncate_preserving_delimiters(blob, HANDOFF_DEP_CHAR_CAP)
+
+    assert _DELIM_START not in out, "dấu mở hở lọt qua — đúng thứ hàm này tồn tại để chặn"
+    assert len(out) == HANDOFF_DEP_CHAR_CAP + MEASURED_OVERSHOOT, (
+        f"vượt trần {len(out) - HANDOFF_DEP_CHAR_CAP} ký tự, không phải "
+        f"{MEASURED_OVERSHOOT} — hoặc chuỗi vô hiệu hoá đã đổi độ dài, hoặc phần vượt "
+        "đã cộng dồn theo số dấu mở"
+    )
