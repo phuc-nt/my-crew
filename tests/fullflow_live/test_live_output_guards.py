@@ -85,6 +85,31 @@ BRIEF = (
     "và đề xuất 3 việc cần làm tuần sau."
 )
 
+#: What the case actually delegates. The `team:` prefix is load-bearing, and run 3
+#: (2026-09-01) is why: that run SETTLED inside the deadline having spent one decompose's
+#: worth of tokens ($0.0072) and recorded exactly ONE step, `('research', [])`. No dep
+#: edge, so nothing read the injected text forward and the cap had no prompt to bound.
+#:
+#: The planner was not at fault — 4 offline decompose samples of this brief each produced
+#: a 3-step chain across THREE assignees with zero folds. But the assignee split is a
+#: model choice, not a property of the brief. On a run where the model puts every step on
+#: one person, `downgrade_to_sprint` (`sprint_intake.py:500`, `len(assignees) != 1`)
+#: converts the whole plan into a single sprint step. That is correct product behaviour
+#: (a one-person DAG buys only coordination cost) and fatal to a case whose entire subject
+#: is a dep edge — so the lane has to be pinned rather than hoped for.
+#:
+#: `strip_mode_prefix` turns this prefix into `forced_mode="team"`, which
+#: `ops_assign_team_task` honours by skipping the downgrade outright ("CEO gõ team: là
+#: quyết định của người giao việc, không phải phỏng đoán"). A real product affordance, not
+#: a test-only seam — and the brief reaches the planner byte-identical, since
+#: `strip_mode_prefix("team: " + BRIEF)` returns exactly `BRIEF`.
+#:
+#: `BRIEF` itself stays bare so the offline pin
+#: `test_the_live_output_guard_brief_still_reaches_the_team_lane` keeps checking the
+#: router against the words themselves, rather than against a prefix that would satisfy
+#: it trivially.
+DELEGATE_BRIEF = "team: " + BRIEF
+
 
 #: How much oversized text the injector writes. Comfortably past the 8000-char cap so the
 #: cut is unambiguous, but not so far past that the capped prompt stops resembling one a
@@ -283,7 +308,8 @@ def test_l2_a_long_dep_reaches_the_next_prompt_cut_but_its_artifact_stays_whole(
       cut rather than being appended to text that was passed through whole.
     """
     code, body = stock_fleet.post(
-        "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True}, timeout=900
+        "/api/control-plane/delegate", {"brief": DELEGATE_BRIEF, "confirm": True},
+        timeout=900,
     )
     assert code == 200, f"delegate failed {code}: {body!r}"
     task_id = body.get("task_id")

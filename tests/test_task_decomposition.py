@@ -912,6 +912,38 @@ def test_the_live_output_guard_brief_still_reaches_the_team_lane():
     )
 
 
+def test_the_live_output_guard_delegate_brief_forces_the_team_lane():
+    """The router agreeing is not enough — the live case also has to survive the downgrade.
+
+    Learned by paying for it. Live run 3 (2026-09-01) settled inside its deadline having
+    spent one decompose ($0.0072) and stored exactly one step, `('research', [])`. The
+    brief had reached the team lane exactly as the test above pins; what happened after is
+    that the model assigned every step to one person, and `downgrade_to_sprint` collapsed
+    the plan into a single sprint step. Correct product behaviour — a one-person DAG is
+    pure coordination cost — but it leaves the dep-cap case with no dep edge to measure,
+    and the failure looks like a broken guard rather than an unmet premise.
+
+    The assignee split is a model choice that varies run to run, so the lane is pinned
+    with the `team:` prefix instead of hoped for. This checks the two properties that
+    makes rest on: the prefix really forces team mode, and the brief the planner sees is
+    unchanged by stripping it.
+    """
+    from my_crew.agent.ops_assign_team_task import strip_mode_prefix
+    from tests.fullflow_live.test_live_output_guards import BRIEF, DELEGATE_BRIEF
+
+    forced_mode, brief_after_strip = strip_mode_prefix(DELEGATE_BRIEF)
+    assert forced_mode == "team", (
+        f"the live output-guard DELEGATE_BRIEF no longer forces the team lane "
+        f"(forced_mode={forced_mode!r}). Without it, a plan the model happens to put on a "
+        "single assignee is downgraded to a one-step sprint and the per-dep cap has no "
+        "dep edge to bound."
+    )
+    assert brief_after_strip == BRIEF, (
+        "stripping the mode prefix must leave the brief byte-identical — the live case "
+        "pins the lane, it does not reword the task the planner is given."
+    )
+
+
 def test_the_live_cost_cap_brief_still_tells_its_step_not_to_split():
     """The cost-cap brief must stay indivisible, and this too was learned by paying for it.
 

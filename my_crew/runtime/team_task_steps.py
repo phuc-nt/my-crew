@@ -135,6 +135,17 @@ class TeamStep:
     # context. Empty on every step that was never handed back. Like `acceptance`, it is
     # outside `decomposition_content_hash` — guidance is not part of the confirmed plan.
     guidance: str = ""
+    # True on the ONE step of the confirmed DAG that nobody depends on — the step whose
+    # output is the task's answer (`task_decomposition.find_terminals`). Recorded at plan
+    # time so a reader asking "which artifact is the deliverable" gets the plan's own
+    # verdict instead of re-deriving it from a DAG that review/rework/fan-out rows have
+    # since reshaped.
+    #
+    # Outside `decomposition_content_hash`, unlike the needs_* flags: those are model
+    # proposals that move a step's runtime or authz, so the CEO's confirm must bind them.
+    # This is derived from `deps`, which the hash already covers. False on every row
+    # written before the column existed, which reads honestly as "unmarked".
+    final_deliverable: bool = False
 
 
 #: Step types that carry CEO-asked-for content, as opposed to the ticker-minted
@@ -245,6 +256,19 @@ def create_schema(conn: sqlite3.Connection) -> None:
         # outside the plan hash, so migrating cannot stall a task.
         "ALTER TABLE team_steps ADD COLUMN intervention_count INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE team_steps ADD COLUMN guidance TEXT NOT NULL DEFAULT ''",
+        # Marks the step whose output IS the task's answer — the one terminal of the
+        # confirmed DAG (`task_decomposition.find_terminals`). Written here rather than
+        # inferred later so a reader gets the plan's own verdict instead of re-deriving
+        # it from a shape that dynamically-minted rows have since changed.
+        #
+        # Deliberately OUTSIDE the plan hash, unlike needs_shell/external_write/
+        # needs_web/needs_mail. Those are model PROPOSALS that move a step's runtime or
+        # authz, so the CEO's confirm must bind them. This one is DERIVED from `deps`,
+        # which the hash already covers — including it would add nothing and would risk
+        # a plan-hash-mismatch stall on a migrated store. Default 0 means a pre-existing
+        # row reads as "unmarked", which is the honest answer for a DAG written before
+        # anyone recorded the distinction.
+        "ALTER TABLE team_steps ADD COLUMN final_deliverable INTEGER NOT NULL DEFAULT 0",
     ):
         try:
             conn.execute(ddl)
@@ -287,6 +311,7 @@ def _row_to_step(data: dict[str, Any]) -> TeamStep:
         split_proposal_json=data.get("split_proposal_json"),
         intervention_count=int(data.get("intervention_count") or 0),
         guidance=data.get("guidance") or "",
+        final_deliverable=bool(int(data.get("final_deliverable") or 0)),
     )
 
 
@@ -305,15 +330,26 @@ def replace_steps(conn: sqlite3.Connection, task_id: str, steps: list[dict[str, 
     .validate_decomposition`) with the v12-compatible defaults `"work"`/`False` when
     absent, so a caller that never sets these keys (every pre-P2 test/fixture) persists
     rows byte-identical to before this phase existed.
+
+    `final_deliverable` is DERIVED here from the DAG being written, never read off the
+    caller's dict: the terminal is a property of the shape, so computing it in the one
+    place the shape is known keeps every write path — real confirm flow and fixture
+    alike — correct without each caller having to remember. A DAG with several terminals
+    marks none: which of them is "the" answer is a judgement about the work, and guessing
+    would be worse than the honest "unmarked" a reader can detect.
     """
+    dep_targets = {d for s in steps for d in s.get("deps", ())}
+    terminals = [s["step_id"] for s in steps if s["step_id"] not in dep_targets]
+    final_step_id = terminals[0] if len(terminals) == 1 else None
+
     conn.execute("DELETE FROM team_steps WHERE task_id = ?", (task_id,))
     for step in steps:
         conn.execute(
             "INSERT INTO team_steps "
             "(task_id, step_id, title, assigned_to, deps_json, status, acceptance, "
             " step_type, needs_review, needs_shell, external_write, needs_web, "
-            " needs_mail, system_inserted) "
-            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, 0)",
+            " needs_mail, system_inserted, final_deliverable) "
+            "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, 0, ?)",
             (
                 task_id, step["step_id"], step.get("title", ""), step.get("assigned_to", ""),
                 json.dumps(list(step.get("deps", ())), ensure_ascii=False),
@@ -324,6 +360,7 @@ def replace_steps(conn: sqlite3.Connection, task_id: str, steps: list[dict[str, 
                 1 if step.get("external_write") else 0,  # v63: hash-bound conditionally
                 1 if step.get("needs_web") else 0,  # v74: hash-bound conditionally
                 1 if step.get("needs_mail") else 0,  # v92: hash-bound conditionally
+                1 if step["step_id"] == final_step_id else 0,  # outside the plan hash
             ),
         )
 

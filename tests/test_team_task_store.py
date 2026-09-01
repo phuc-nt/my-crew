@@ -1179,3 +1179,71 @@ def test_a_store_created_before_the_route_column_still_opens(tmp_path):
     store.set_route("t1", {"mode": "team", "source": "prefix", "reason": "x", "signals": {}})
     assert store.get_route("t1")["mode"] == "team"
     store.close()
+
+
+def test_the_single_terminal_step_is_marked_as_the_final_deliverable(tmp_path):
+    """Ai đọc artifact sau này phải biết bài nộp CUỐI là cái nào, không phải đoán.
+
+    `_plan` dựng chuỗi s1 → s2 → s3: chỉ s3 là không ai phụ thuộc, nên chỉ s3 mang cờ.
+    Đo cả hai chiều (đúng một cờ, và cờ nằm đúng chỗ) vì "đúng một cờ" mà gắn nhầm bước
+    thì harvest vẫn bốc nhầm y như thời heuristic.
+    """
+    store = _store(tmp_path)
+    _plan(store)
+
+    steps = store.get("t1").steps
+    marked = [s.step_id for s in steps if s.final_deliverable]
+    assert marked == ["s3"], (
+        f"chuỗi s1→s2→s3 chỉ có s3 là bước chốt, nhưng cờ đang nằm ở {marked!r}"
+    )
+    store.close()
+
+
+def test_a_plan_with_several_terminals_marks_none_of_them(tmp_path):
+    """Nhiều bước chốt ⇒ KHÔNG gắn cờ nào, chứ không chọn bừa một cái.
+
+    Bước nào mới là "bài nộp" khi có nhiều nhánh song song là phán đoán về nội dung công
+    việc; đoán sai tệ hơn là để trống, vì người đọc phát hiện được ô trống nhưng không
+    phát hiện được cờ sai.
+    """
+    store = _store(tmp_path)
+    steps = [
+        {"step_id": "a", "title": "nhanh A", "assigned_to": "agent-a", "deps": []},
+        {"step_id": "b", "title": "nhanh B", "assigned_to": "agent-b", "deps": []},
+    ]
+    store.create_task(task_id="t1", title="demo")
+    store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+
+    assert [s.step_id for s in store.get("t1").steps if s.final_deliverable] == [], (
+        "hai bước đều không ai phụ thuộc — không được tự chọn một bước làm bài nộp cuối"
+    )
+    store.close()
+
+
+def test_a_store_created_before_the_final_deliverable_column_still_opens(tmp_path):
+    """Store cũ mở bằng code mới: hàng cũ đọc ra `False`, plan_hash KHÔNG đổi.
+
+    Cờ này cố tình nằm NGOÀI `decomposition_content_hash` (nó suy ra từ `deps`, mà `deps`
+    đã được hash rồi). Test giữ đúng điều đó: nếu ai đó cho cờ vào hash, mọi task đã xác
+    nhận từ trước sẽ stall vì plan-hash mismatch ngay khi migrate — và dòng assert cuối
+    ở đây là thứ bắt được.
+    """
+    path = tmp_path / "team_tasks.sqlite3"
+    old = TeamTaskStore(path)
+    _plan(old)
+    hash_before = old.get("t1").plan_hash
+    old._conn.execute("ALTER TABLE team_steps DROP COLUMN final_deliverable")
+    old._conn.commit()
+    old.close()
+
+    store = TeamTaskStore(path)
+    steps = store.get("t1").steps
+    assert [s.step_id for s in steps] == ["s1", "s2", "s3"]
+    assert all(not s.final_deliverable for s in steps), (
+        "hàng ghi trước khi có cột phải đọc ra 'chưa đánh dấu', không được đoán"
+    )
+    assert store.get("t1").plan_hash == hash_before, (
+        "plan_hash đổi sau migrate ⇒ cờ đã lọt vào content hash; mọi task đã xác nhận "
+        "từ trước sẽ stall vì mismatch"
+    )
+    store.close()
