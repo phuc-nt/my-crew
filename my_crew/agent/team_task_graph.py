@@ -660,6 +660,11 @@ def _cap_dep_text(text: str, dep_step, task_id: str) -> str:
     Uses the delimiter-aware truncator rather than a plain slice: a step's `result_text`
     may carry wrapped `===SEARCH_RESULT===` blocks, and a slice landing inside one leaves
     an unclosed delimiter that swallows the rest of the prompt.
+
+    The bound is `HANDOFF_DEP_CHAR_CAP` plus up to 39 characters, not the cap exactly:
+    when the cut lands inside a block, the truncator replaces the opening delimiter with
+    a longer neutralised form. The overshoot is that constant length difference, so it
+    does not scale with the input or the number of blocks.
     """
     if len(text) <= HANDOFF_DEP_CHAR_CAP:
         return text
