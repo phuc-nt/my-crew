@@ -536,3 +536,91 @@ def test_rework_step_inherits_content_step_source_deps(tmp_path, monkeypatch):
     rework = next(s for s in task.steps if s.step_type == "rework")
     # Failure brief first (review artifact), then the author's own source inputs.
     assert rework.deps == (review_step.step_id, "src")
+
+
+# --- concurrent ticks: two overlapping ticks must not collide on the minted id ---------
+
+
+def test_two_overlapping_ticks_do_not_crash_minting_the_same_next_review_round(
+    tmp_path, monkeypatch,
+):
+    """Two ticks holding the same pre-insert snapshot must not raise on the second mint.
+
+    The daemon runs a poke-triggered team-tick ALONGSIDE the minute cadence, and
+    `run_poked_team_tick` reasons that an overlap is harmless because "the step lease/DB
+    already serialize real actions". The lease serializes step DISPATCH; minting a review
+    row takes no lease. `_insert_review_step` derives its `step_id` suffix from a
+    `mint_count` read off the in-memory `task.steps`, so two ticks that both read the task
+    before either insert compute the SAME suffix and the second insert hits
+    `UNIQUE(task_id, step_id)`.
+
+    Measured on the user's own daemon log: 5 occurrences of `worker coordinator/team-tick
+    failed`, every one of them `sqlite3.IntegrityError: UNIQUE constraint failed:
+    team_steps.task_id, team_steps.step_id` raised from this exact path, each immediately
+    preceded by a `poke-triggered team-tick` line.
+
+    The unique index is doing its job — no duplicate row is written, so this is not
+    corruption. The damage is that the exception escapes `run_one_tick` and kills the
+    WHOLE tick, discarding every other task that tick would have served. A tick that loses
+    a race to mint a row it did not need to mint should be a no-op, not a crash.
+    """
+    store = _store(tmp_path)
+    _plan_one_step(store, needs_review=True)
+    _mint_review(store)
+    store.insert_step("t1", {
+        "step_id": "s1-rework-0", "title": "draft báo cáo", "assigned_to": "agent-a",
+        "deps": ["s1-review-0"], "step_type": "rework", "parent_step_id": "s1",
+        "review_round": 0,
+    })
+    store.reserve_step("t1", "s1-rework-0")
+    store.mark_done("t1", "s1-rework-0", outcome_ref="x", cost_usd=0.0)
+    _wire_roster(monkeypatch, [("agent-a", "pm"), ("agent-qa", "pm")])
+
+    # BOTH ticks read the task before either inserts — the overlap the daemon allows.
+    task_tick_a = store.get("t1")
+    task_tick_b = store.get("t1")
+    rework_a = next(s for s in task_tick_a.steps if s.step_type == "rework")
+    rework_b = next(s for s in task_tick_b.steps if s.step_type == "rework")
+
+    assert maybe_insert_review_after_rework(_deps(store), task_tick_a, rework_a) is True
+
+    # The loser of the race must simply decline; the round is already minted.
+    assert maybe_insert_review_after_rework(_deps(store), task_tick_b, rework_b) is False
+
+    task = store.get("t1")
+    round1 = [s for s in task.steps if s.step_type == "review" and s.review_round == 1]
+    assert len(round1) == 1, f"exactly one round-1 review must exist, got {round1!r}"
+
+
+def test_two_overlapping_ticks_do_not_crash_minting_the_same_rework_row(
+    tmp_path, monkeypatch,
+):
+    """Same race, one row-type over: the rework mint has no DB-level guard either.
+
+    `_insert_rework_step`'s id is fully deterministic (`<content>-rework-<round>`) and its
+    only idempotency guard is `rework_this_round`, computed from the caller's in-memory
+    `task.steps`. Two overlapping ticks therefore both pass the guard and the second
+    INSERT collides, killing that tick exactly as the review-mint race did.
+    """
+    store = _store(tmp_path)
+    _plan_one_step(store, needs_review=True)
+    _mint_review(store)
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    write_review_verdict_artifact(
+        team_tasks_root(), "t1", 1, 0,
+        {"passed": False, "failures": ["thieu so lieu"], "result_text": "brief"},
+    )
+    _wire_roster(monkeypatch, [("agent-a", "pm"), ("agent-qa", "pm")])
+
+    task_tick_a = store.get("t1")
+    task_tick_b = store.get("t1")
+    review_a = next(s for s in task_tick_a.steps if s.step_type == "review")
+    review_b = next(s for s in task_tick_b.steps if s.step_type == "review")
+
+    assert maybe_handle_review_done(_deps(store), task_tick_a, review_a) is True
+    assert maybe_handle_review_done(_deps(store), task_tick_b, review_b) is False
+
+    task = store.get("t1")
+    reworks = [s for s in task.steps if s.step_type == "rework"]
+    assert len(reworks) == 1, f"exactly one rework row must exist, got {reworks!r}"

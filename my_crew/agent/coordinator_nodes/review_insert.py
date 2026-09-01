@@ -44,6 +44,7 @@ multiple ticks is always a safe no-op:
 from __future__ import annotations
 
 import logging
+import sqlite3
 from typing import TYPE_CHECKING
 
 from my_crew.runtime.office_room_append import append_office_event, room_for_task
@@ -168,8 +169,9 @@ def maybe_insert_review(deps: CoordinatorDeps, task: TeamTask, done_step: TeamSt
         )
         return False
 
-    _insert_review_step(deps, task, done_step, reviewer=reviewer, review_round=0)
-    return True
+    # False = a concurrent tick minted it first; this tick changed nothing and must not
+    # claim the tick, or the caller re-reads the task for an action that never happened.
+    return _insert_review_step(deps, task, done_step, reviewer=reviewer, review_round=0)
 
 
 def maybe_handle_review_done(deps: CoordinatorDeps, task: TeamTask, review_step: TeamStep) -> bool:
@@ -219,12 +221,11 @@ def maybe_handle_review_done(deps: CoordinatorDeps, task: TeamTask, review_step:
             # made every re-mint fall back to the CONTENT step, so a round-1 re-review
             # graded the artifact the round-0 failure already rejected instead of the
             # rework that answered it.
-            _insert_review_step(
+            return _insert_review_step(
                 deps, task, content_step, reviewer=review_step.assigned_to,
                 review_round=review_step.review_round,
                 source_step_id=review_step.deps[0] if review_step.deps else None,
             )
-            return True
         return False
 
     if bool(verdict.get("passed")):
@@ -255,8 +256,9 @@ def maybe_handle_review_done(deps: CoordinatorDeps, task: TeamTask, review_step:
     )
     if rework_this_round:
         return False  # rework already minted this round — avoid a double insert.
-    _insert_rework_step(deps, task, content_step, review_round=review_step.review_round)
-    return True
+    return _insert_rework_step(
+        deps, task, content_step, review_round=review_step.review_round
+    )
 
 
 def maybe_insert_review_after_rework(
@@ -294,20 +296,21 @@ def maybe_insert_review_after_rework(
             also_office=True,
         )
         return False
-    _insert_review_step(
+    return _insert_review_step(
         deps, task, content_step, reviewer=reviewer, review_round=next_round,
         source_step_id=rework_step.step_id,
     )
-    return True
 
 
 def _insert_review_step(
     deps: CoordinatorDeps, task: TeamTask, content_step: TeamStep, *, reviewer: str,
     review_round: int, source_step_id: str | None = None,
-) -> None:
-    """Mint one review-step row. `source_step_id` (defaults to `content_step.step_id`)
-    is the row whose FRESH artifact this review locks onto — round >=1 reviews lock the
-    latest rework's artifact, not the original content step's.
+) -> bool:
+    """Mint one review-step row; True when this call is the one that wrote it.
+
+    `source_step_id` (defaults to `content_step.step_id`) is the row whose FRESH artifact
+    this review locks onto — round >=1 reviews lock the latest rework's artifact, not the
+    original content step's.
 
     `step_id` includes a `-<n>` mint-count suffix (n = how many review rows already
     exist for this content step, at ANY round) rather than JUST `-review-<round>` —
@@ -316,22 +319,46 @@ def _insert_review_step(
     otherwise collide on `UNIQUE(task_id, step_id)`. The round number a reader cares
     about (idempotency, `review_round` column, verdict artifact filename) is unaffected
     — it lives in the `review_round` column, never parsed back out of `step_id`.
+
+    That suffix — and every idempotency guard in this module — is computed from the
+    caller's in-memory `task.steps`, which makes them correct only for ticks that do not
+    overlap. The daemon runs a poke-triggered team-tick ALONGSIDE the minute cadence
+    (`service.run_poked_team_tick`), and its assumption that "the step lease/DB already
+    serialize real actions" does not reach here: minting a row takes no lease. Two ticks
+    that both read the task before either inserts compute the SAME suffix, and the second
+    INSERT hits `UNIQUE(task_id, step_id)`. Measured on a real daemon: 5 crashed ticks,
+    every one this path, each right after a poke-triggered tick.
+
+    The unique index already prevents the duplicate row, so losing the race is harmless in
+    itself — what was not harmless is the exception escaping into `run_one_tick` and
+    killing the WHOLE tick, discarding every other task it would have served. So the loser
+    declines instead: the row it wanted exists, which is precisely the post-condition it
+    was trying to establish.
     """
     locked_on = source_step_id or content_step.step_id
     mint_count = len([s for s in task.steps if s.step_type == "review"
                       and s.parent_step_id == content_step.step_id])
     step_id = f"{content_step.step_id}-review-{review_round}-{mint_count}"
-    deps.store.insert_step(task.id, {
-        "step_id": step_id, "title": f"Soát chéo: {content_step.title}",
-        "assigned_to": reviewer, "deps": [locked_on], "step_type": "review",
-        "parent_step_id": content_step.step_id, "review_round": review_round,
-    })
+    try:
+        deps.store.insert_step(task.id, {
+            "step_id": step_id, "title": f"Soát chéo: {content_step.title}",
+            "assigned_to": reviewer, "deps": [locked_on], "step_type": "review",
+            "parent_step_id": content_step.step_id, "review_round": review_round,
+        })
+    except sqlite3.IntegrityError:
+        logger.info(
+            "review row %s/%s already minted by a concurrent tick — skipping",
+            task.id, step_id,
+        )
+        return False
+    return True
 
 
 def _insert_rework_step(
     deps: CoordinatorDeps, task: TeamTask, content_step: TeamStep, *, review_round: int,
-) -> None:
+) -> bool:
     """Mint one rework-step row, same original author, `deps=[review_step_id]`.
+    True when this call is the one that wrote it.
 
     The rework brief (prior output + structured failures) is NOT assembled here — it
     already rides inside the review-step's OWN verdict artifact's `result_text` field
@@ -357,9 +384,22 @@ def _insert_rework_step(
     # (observed live, task a0865653ed89: "Công cụ tìm kiếm web không khả dụng" →
     # waiting_clarify) — a fix round that cannot re-fetch its own sources is not a fix
     # round. Same argument v74 already accepted for runtime-split subs.
-    deps.store.insert_step(task.id, {
-        "step_id": step_id, "title": content_step.title,
-        "assigned_to": content_step.assigned_to, "deps": rework_deps,
-        "step_type": "rework",
-        "parent_step_id": content_step.step_id, "review_round": review_round,
-    }, needs_web=content_step.needs_web, needs_mail=content_step.needs_mail)
+    #
+    # The `rework_this_round` guard upstream reads the caller's in-memory snapshot, so it
+    # cannot see a row a CONCURRENT tick just inserted — see `_insert_review_step` for the
+    # measured poke-vs-cadence overlap. This id is fully deterministic, so the loser of
+    # that race collides here; it declines rather than killing the whole tick.
+    try:
+        deps.store.insert_step(task.id, {
+            "step_id": step_id, "title": content_step.title,
+            "assigned_to": content_step.assigned_to, "deps": rework_deps,
+            "step_type": "rework",
+            "parent_step_id": content_step.step_id, "review_round": review_round,
+        }, needs_web=content_step.needs_web, needs_mail=content_step.needs_mail)
+    except sqlite3.IntegrityError:
+        logger.info(
+            "rework row %s/%s already minted by a concurrent tick — skipping",
+            task.id, step_id,
+        )
+        return False
+    return True
