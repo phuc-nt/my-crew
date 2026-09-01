@@ -3,6 +3,63 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [0.16.0] — 2026-09-01
+
+A long tool result no longer costs its size on every round that follows it, and a long
+step no longer pushes the next step's prompt past what the model can use. Both were
+paid for silently: the thin loop re-sends its whole message list each round, so one big
+search result was billed again and again, and a dependency's full text went into the
+next prompt whole no matter how long it ran.
+
+Two bounds now sit in the way. A tool result over 12,000 characters keeps its full text
+in a per-task artifact and hands the loop a preview stating the real size and where the
+rest went. Each dependency contributes at most 8,000 characters to the next step's
+prompt, with a marker saying how much was cut and which artifact holds the whole thing.
+The artifact and the work order always keep the full text — a run has to stay replayable,
+and a reviewer has to see what the graded step was actually given.
+
+Every read a worker makes now leaves an audit row, so "which tool keeps failing" is a
+question the trail can answer.
+
+`cost_cap_usd` is opt-in and stays off unless you set it. It is a per-step ceiling
+enforced only by the thin tool loop; the react loop and the deep-agent tier do not read
+it. The task-level ceiling remains `company.team_task_cap_usd`, which is unchanged.
+
+### Added
+- **Oversized tool results move to an artifact.** Over 12,000 characters, the loop gets a
+  preview with the true size and the artifact path instead of the body. Truncation is
+  also detected by shape when the provider reports no `finish_reason`: a body that opened
+  a JSON structure and never closed it is a cut-off write, not a malformed one, so it
+  stops taking the retry that asks the model to rewrite the same too-long plan.
+- **A per-dependency cap on the prompt path.** 8,000 characters per dep, cut on a
+  delimiter boundary so a search-result block is never left unclosed, with a marker
+  naming the dropped character count and the artifact holding the full text. Artifacts
+  and work orders are deliberately exempt.
+- **An audit row for every read-tool call** — actor, task, step, elapsed time, and
+  whether the body succeeded, kept separate from the policy verdict so a served read and
+  a failed one are distinguishable. Arguments are not recorded.
+- **Per-tool call statistics** aggregated from that trail.
+- **`cost_cap_usd` per step (opt-in).** Default `None` on all three tiers; only the thin
+  tool loop enforces it.
+
+### Changed
+- **Default fleet model is now `~deepseek/deepseek-v4-flash-latest`.** The leading `~`
+  is part of the model ID; stripping it yields a 400.
+
+### Fixed
+- **A dropped step's cost-cap note survives.** It was being swallowed by the drop branch,
+  so the one message explaining why the work stopped never reached the reader.
+- **Degrade-and-continue.** A non-terminal `give_up` becomes a skip-with-gap instead of
+  ending the run, dropped review and rework rows end their chain correctly, and a review
+  is never minted over a step that was already dropped.
+
+### Verification
+The dependency cap was measured live, not just offline: two journeys on a real fleet,
+both green, at \$0.0065 / 502s and \$0.0123 / 1030s — each an order of magnitude under
+the 0.30 USD per-journey ceiling. The case proves all four properties at once (a dep
+really exceeded the cap, the marker appeared downstream, the work order kept full text,
+and the marker's own dropped count reconciles against the artifact on disk).
+
 ## [0.15.0] — 2026-08-30
 
 The crew can now be reached from outside the app, escalate past its own authority, hold
