@@ -31,7 +31,12 @@ window is a property of how verbosely a given model answers on a given day, not 
 a test can pin.
 
 So `oversized_dep_injector` supplies the long text instead: the moment a step's artifact
-lands on disk, the watcher rewrites its `result_text` to a deterministic ~9000-char body.
+lands on disk, the watcher rewrites its `result_text` to a deterministic ~9000-char body,
+and KEEPS it that way for the rest of the run. Holding it is not belt-and-braces — a step
+artifact is not write-once, and run 5 (2026-09-01) failed on exactly that: the injection
+landed on `step-1.json`, the run later re-delivered that step, and the case found 2406
+chars where it had written 9057. Re-asserting each pass is what makes "the dep is oversized
+when a downstream step reads it" true rather than merely likely.
 Everything downstream of that write is untouched real product — `_read_deps_handoff`
 re-reads the artifact from disk when it builds the next step's prompt (it holds no
 in-memory copy), so the cap engages on genuinely oversized input, on a real fleet, with a
@@ -224,15 +229,27 @@ class _DepInjector:
     def _run(self) -> None:
         text = _oversized_dep_text()
         while not self._stop.is_set():
-            if self.injected is None:
-                for path in sorted(self._dir.glob("step-*.json")):
-                    # Skip review verdicts: a `step-<n>-review-<r>.json` is read through
-                    # a different branch of `_read_deps_handoff` and enlarging one would
-                    # test the reviewer path while claiming to test the work path.
-                    if "-review-" in path.name:
-                        continue
-                    if self._enlarge(path, text):
-                        break
+            # Re-asserted every pass, not injected once. Run 5 (2026-09-01) is why: the
+            # injector enlarged `step-1.json` to 9057 chars, the run later re-delivered
+            # that step, and by the time the case looked the artifact was back to 2406 —
+            # so the premise assertion failed on a run where the injection had genuinely
+            # happened. A step's artifact is not write-once (a rework round re-delivers
+            # it, and a first delivery can land after an early inject), so holding the
+            # text oversized for the whole run is the only way the dep is still oversized
+            # when a downstream step actually reads it.
+            #
+            # Still latches `self.injected` to the FIRST artifact enlarged, so the case
+            # keeps reporting which dep it chose; later passes re-enlarge that same file.
+            for path in sorted(self._dir.glob("step-*.json")):
+                # Skip review verdicts: a `step-<n>-review-<r>.json` is read through
+                # a different branch of `_read_deps_handoff` and enlarging one would
+                # test the reviewer path while claiming to test the work path.
+                if "-review-" in path.name:
+                    continue
+                if self.injected is not None and path.name != self.injected:
+                    continue  # keep enlarging the dep we picked, not every step in turn
+                if self._enlarge(path, text):
+                    break
             self._stop.wait(0.5)
 
     def _enlarge(self, path: Path, text: str) -> bool:
@@ -248,6 +265,11 @@ class _DepInjector:
             return False
         if not isinstance(payload, dict) or not payload.get("result_text"):
             return False  # a status-only fallback artifact — nothing reads it forward
+        if payload["result_text"] == text:
+            # Already carries the injected text. Returning True keeps the caller's "this
+            # is the dep we chose" latch intact without rewriting the file every 0.5s,
+            # which would race the product's own writer for no reason.
+            return True
         payload["result_text"] = text
         tmp = path.with_suffix(".tmp-injector")
         try:
