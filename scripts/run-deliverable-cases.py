@@ -98,6 +98,13 @@ def main() -> int:
                         help="per-brief settle deadline; matches the live suite's long cases")
     parser.add_argument("--case", action="append", default=[],
                         help="repeatable: run only these case names (default: all)")
+    parser.add_argument(
+        "--derive-terminal", action="store_true",
+        help="passed to the harvester: fall back to the step nothing depends on when the "
+             "task carries no `final_deliverable` flag. Needed on the BASELINE side of the "
+             "A/B, whose revision predates the column — without it every baseline case is "
+             "skipped and the judging has nothing to pair against.",
+    )
     args = parser.parse_args()
 
     import os
@@ -143,6 +150,8 @@ def main() -> int:
         sys.executable, str(Path(__file__).with_name("harvest-deliverables.py")),
         "--data-root", str(home / ".data"), "--out", str(args.out),
     ]
+    if args.derive_terminal:
+        harvest.append("--derive-terminal")
     for name, task_id in results.items():
         harvest += ["--case", f"{name}={task_id}"]
     print("\n--- harvest ---", flush=True)
