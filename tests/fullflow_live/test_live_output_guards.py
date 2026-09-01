@@ -20,9 +20,31 @@ to design against. So the case first finds a dep whose stored artifact EXCEEDS t
 (without one, there is nothing to bound and the case skips rather than lies), then checks
 the three things that follow: the prompt carries the cut marker, the work order still
 carries the full text, and the prompt is genuinely shorter than the artifact.
+
+**Why the long dep is supplied rather than requested.** The first version of this case
+asked the MODEL to write past 8000 chars ("at least 12 risks, each a full paragraph, plus
+a metric and a threshold each"). Measured: the brief that was heavy enough to pass the cap
+was also heavy enough to blow the 900s deadline — the run reached 1282s without ever
+reaching the assertions, so the guard stayed unverified across the whole release. The
+brief had to be "big enough for the cap to engage, small enough to settle", and that
+window is a property of how verbosely a given model answers on a given day, not something
+a test can pin.
+
+So `oversized_dep_injector` supplies the long text instead: the moment a step's artifact
+lands on disk, the watcher rewrites its `result_text` to a deterministic ~9000-char body.
+Everything downstream of that write is untouched real product — `_read_deps_handoff`
+re-reads the artifact from disk when it builds the next step's prompt (it holds no
+in-memory copy), so the cap engages on genuinely oversized input, on a real fleet, with a
+real model reading the capped result. What the injector removes is only the model's
+freedom to be too terse or too slow, which is precisely the part that was never the
+subject under test.
 """
 
 from __future__ import annotations
+
+import json
+import threading
+from pathlib import Path
 
 import pytest
 
@@ -46,18 +68,150 @@ CUT_MARKER = "…[đã cắt "
 DEP_CHAR_CAP = 8000
 
 #: Multi-stage so it reaches the team lane (a lookup-shaped brief runs as one sprint step
-#: with no deps at all, and a step with no deps has no handoff to cap). Each stage asks
-#: for enumerated detail WITH per-item explanation, because the cap only engages once a
-#: dep's stored text passes 8000 chars — roughly 2000 tokens, which a terse three-bullet
-#: answer will not reach. Pinned offline by
+#: with no deps at all, and a step with no deps has no handoff to cap). Pinned offline by
 #: `test_the_live_output_guard_brief_still_reaches_the_team_lane`.
+#:
+#: Deliberately MODEST in volume. The earlier phrasing ("at least 12 risks, each a full
+#: paragraph, plus a metric and a threshold each") existed to push a dep past 8000 chars
+#: by asking the model to write long, and that is what made the run take 1282s against a
+#: 900s deadline. `oversized_dep_injector` now supplies the long text, so this brief only
+#: has to do the one thing the injector cannot: produce a multi-step DAG in which some
+#: step actually READS an upstream step's artifact.
 BRIEF = (
     "Nghiên cứu rồi lập cẩm nang vận hành đội kỹ thuật trong tuần: "
-    "(1) liệt kê ÍT NHẤT 12 rủi ro vận hành thường gặp của một đội phát triển phần mềm, "
-    "mỗi rủi ro viết một đoạn đầy đủ gồm dấu hiệu nhận biết, hậu quả, và cách phòng ngừa, "
-    "(2) với mỗi rủi ro ở bước 1, nêu một chỉ số đo lường cụ thể và ngưỡng cảnh báo, "
-    "(3) tổng hợp tất cả thành bảng cẩm nang và đề xuất 3 việc cần làm tuần sau."
+    "(1) liệt kê 4 rủi ro vận hành thường gặp của một đội phát triển phần mềm, "
+    "mỗi rủi ro nêu dấu hiệu nhận biết và cách phòng ngừa, "
+    "(2) dựa trên danh sách ở bước 1, tổng hợp thành bảng cẩm nang ngắn "
+    "và đề xuất 3 việc cần làm tuần sau."
 )
+
+
+#: How much oversized text the injector writes. Comfortably past the 8000-char cap so the
+#: cut is unambiguous, but not so far past that the capped prompt stops resembling one a
+#: real run would build.
+INJECTED_DEP_CHARS = 9000
+
+
+def _oversized_dep_text() -> str:
+    """~9000 chars of real Vietnamese operations prose, built deterministically.
+
+    Real sentences rather than filler: the step that receives this text still runs its own
+    `self_check` against the acceptance criteria, and a wall of lorem would push that step
+    toward `needs_decision` for reasons unrelated to the cap. The assertions do not depend
+    on the step's terminal status, but a run that derails is a run that costs money and
+    measures nothing.
+
+    Numbered so the truncation is visible by eye in a failure dump: the capped copy ends
+    mid-list, and which entry it ends on says exactly how many chars survived.
+    """
+    entries = [
+        "Bàn giao thiếu ngữ cảnh: người nhận phải hỏi lại từ đầu, mỗi lần hỏi mất nửa "
+        "ngày. Dấu hiệu là số câu hỏi làm rõ tăng sau mỗi lần chuyển việc. Phòng ngừa "
+        "bằng mẫu bàn giao có sẵn ô bối cảnh, ràng buộc và tiêu chí nghiệm thu.",
+        "Phụ thuộc chéo không ai theo dõi: hai nhóm cùng chờ nhau, không nhóm nào báo "
+        "chậm vì ai cũng nghĩ mình đang chờ chứ không phải đang trễ. Dấu hiệu là việc "
+        "đứng yên nhiều ngày mà trạng thái vẫn 'đang làm'.",
+        "Ước lượng theo trường hợp thuận lợi: kế hoạch chỉ đúng khi không có gì bất "
+        "thường, nên tuần nào cũng trễ. Phòng ngừa bằng cách tách ước lượng phần chắc "
+        "chắn và phần rủi ro, rồi theo dõi riêng tỉ lệ hai phần đó.",
+        "Kiểm thử chạy sau khi đã gộp mã: lỗi phát hiện muộn thì chi phí sửa nhân lên "
+        "vì đã có mã khác xây trên nền hỏng. Dấu hiệu là số lần phải quay đầu tăng dần.",
+        "Cảnh báo quá nhiều đến mức không ai đọc: hệ thống báo động liên tục cho việc "
+        "không cần hành động, nên khi có sự cố thật thì tín hiệu bị chìm.",
+        "Tri thức nằm trong đầu một người: người đó nghỉ là cả luồng việc dừng. Dấu "
+        "hiệu là mọi câu hỏi về một mảng đều dồn về đúng một cái tên.",
+        "Nợ kỹ thuật không được ghi nhận: mỗi lần vá nhanh đều hợp lý riêng lẻ, nhưng "
+        "cộng dồn thì thời gian thêm một tính năng tăng đều mà không ai giải thích được.",
+        "Môi trường chạy thử lệch môi trường thật: mã chạy đúng khi thử rồi hỏng khi "
+        "phát hành, và mỗi lần điều tra đều tốn công dựng lại hiện trường.",
+        "Quyết định không được ghi lại: ba tháng sau không ai nhớ vì sao chọn phương án "
+        "này, nên tranh luận cũ lặp lại từ đầu với đúng các lập luận cũ.",
+        "Việc gấp chen ngang liên tục: mỗi lần chen là một lần bỏ dở, và chi phí quay "
+        "lại mạch cũ lớn hơn nhiều so với thời gian xử lý việc gấp.",
+        "Tiêu chí nghiệm thu mơ hồ: 'làm xong cho ổn' nghĩa là mỗi người hiểu một kiểu, "
+        "nên việc bị trả lại nhiều vòng mà không bên nào sai.",
+        "Giám sát chỉ đo tài nguyên chứ không đo trải nghiệm: máy chủ rảnh, bộ nhớ dư, "
+        "mà người dùng vẫn chờ lâu, và không có số liệu nào chỉ ra chỗ nghẽn.",
+    ]
+    out: list[str] = ["Cẩm nang rủi ro vận hành đội kỹ thuật — bản đầy đủ.\n"]
+    index = 0
+    # Cycle the entries until past the target: a fixed list long enough to reach 9000
+    # chars would be unreadable, and repetition with a running number keeps every char
+    # accounted for while staying obviously deterministic.
+    while sum(len(part) for part in out) < INJECTED_DEP_CHARS:
+        entry = entries[index % len(entries)]
+        out.append(f"\n{index + 1}. {entry}")
+        index += 1
+    return "".join(out)
+
+
+class _DepInjector:
+    """Watches a task's artifact dir and enlarges the first step artifact that lands.
+
+    A thread rather than a post-settle rewrite: the cap is applied while the run is in
+    flight, when the graph builds the next step's prompt, so the text has to be on disk
+    before that step starts. Rewriting after `wait_until_settled` would change nothing
+    the run ever read.
+
+    Rewrites `result_text` in place and leaves every other field alone, so the artifact
+    stays exactly the shape `_deliver` wrote — the product is never asked to read a
+    payload it would not itself produce.
+    """
+
+    def __init__(self, artifact_dir: Path) -> None:
+        self._dir = artifact_dir
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        #: The artifact this injector enlarged, for the case's premise assertion. A run
+        #: where nothing was ever injected must fail loudly rather than measure a cap
+        #: that never engaged.
+        self.injected: str | None = None
+        self.injected_chars = 0
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=10)
+
+    def _run(self) -> None:
+        text = _oversized_dep_text()
+        while not self._stop.is_set():
+            if self.injected is None:
+                for path in sorted(self._dir.glob("step-*.json")):
+                    # Skip review verdicts: a `step-<n>-review-<r>.json` is read through
+                    # a different branch of `_read_deps_handoff` and enlarging one would
+                    # test the reviewer path while claiming to test the work path.
+                    if "-review-" in path.name:
+                        continue
+                    if self._enlarge(path, text):
+                        break
+            self._stop.wait(0.5)
+
+    def _enlarge(self, path: Path, text: str) -> bool:
+        """Rewrite one artifact's `result_text`, atomically. Returns whether it happened.
+
+        Tolerant of a torn read for the same reason `read_step_artifact` is: the writer
+        renames into place, but this reader races that rename by design and must retry
+        rather than crash the thread the case depends on.
+        """
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        if not isinstance(payload, dict) or not payload.get("result_text"):
+            return False  # a status-only fallback artifact — nothing reads it forward
+        payload["result_text"] = text
+        tmp = path.with_suffix(".tmp-injector")
+        try:
+            tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            tmp.replace(path)
+        except OSError:
+            return False
+        self.injected = path.name
+        self.injected_chars = len(text)
+        return True
 
 
 @pytest.fixture
@@ -100,7 +254,8 @@ def test_l2_a_long_dep_reaches_the_next_prompt_cut_but_its_artifact_stays_whole(
     others still passed:
 
     - some dep artifact exceeds the cap — without this there is nothing to bound, and the
-      remaining assertions would be vacuous (the case skips instead of pretending);
+      remaining assertions would be vacuous (the case fails instead of pretending, since
+      the injector is supposed to guarantee it);
     - a downstream prompt carries the cut marker — the cap engaged on the prompt path;
     - that step's work order still carries text longer than the cap — Phase 2's explicit
       carve-out, since a truncated work order would no longer replay the run it records;
@@ -114,21 +269,34 @@ def test_l2_a_long_dep_reaches_the_next_prompt_cut_but_its_artifact_stays_whole(
     task_id = body.get("task_id")
     assert task_id, f"delegate returned no task_id: {body!r}"
 
-    status = wait_until_settled(stock_fleet, task_id, timeout_s=900)
+    home = stock_fleet.home
+    # Started only once the task_id is known: the injector watches ONE task's artifact
+    # dir, so it cannot enlarge anything a different task wrote.
+    injector = _DepInjector(home / ".data" / "artifacts" / "team-tasks" / task_id)
+    injector.start()
+    try:
+        status = wait_until_settled(stock_fleet, task_id, timeout_s=900)
+    finally:
+        injector.stop()
     journey_budget.note_cost(
         (status.get("cost") or {}).get("total_cost_usd") or 0.0, status
     )
 
-    home = stock_fleet.home
+    assert injector.injected, (
+        "the injector never found a step artifact carrying `result_text` to enlarge, so "
+        "no dep was oversized and every assertion below would be vacuous. Either the run "
+        "produced no delivered step, or the artifact layout moved. "
+        f"artifacts={sorted(step_texts(home, task_id))!r}"
+    )
+
     texts = step_texts(home, task_id)
     long_artifacts = {name: t for name, t in texts.items() if len(t) > DEP_CHAR_CAP}
-    if not long_artifacts:
-        pytest.skip(
-            "no step of this run produced more than "
-            f"{DEP_CHAR_CAP} chars, so no dep was large enough for the cap to engage. "
-            "This is a property of how verbosely the model answered, not a product "
-            f"failure. sizes={ {n: len(t) for n, t in texts.items()} !r}"
-        )
+    assert long_artifacts, (
+        f"the injector rewrote {injector.injected!r} to {injector.injected_chars} chars, "
+        f"but no artifact now reads longer than {DEP_CHAR_CAP} — something overwrote it "
+        "after the injection (a rework round re-delivering the step would do this). "
+        f"sizes={ {n: len(t) for n, t in texts.items()} !r}"
+    )
 
     orders = work_orders(home, task_id)
     with_deps = [o for o in orders if o.get("deps")]
