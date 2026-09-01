@@ -372,12 +372,15 @@ def _judge(args: argparse.Namespace) -> int:
     # would quietly hand the judge a case NAME as the requirement, which is precisely the
     # blinded `dung_de` the comment above warns about. Failing loudly on an unreadable or
     # malformed file beats judging three criteria out of four and reporting it as four.
-    if args.goals:
-        extra = json.loads(Path(args.goals).read_text(encoding="utf-8"))
+    # `getattr`, not `args.goals`: `_judge` is called with hand-built args as well as by
+    # argparse, and an OPTIONAL flag must not become a required attribute of that shape.
+    goals_path = getattr(args, "goals", None)
+    if goals_path:
+        extra = json.loads(Path(goals_path).read_text(encoding="utf-8"))
         if not isinstance(extra, dict) or not all(
             isinstance(k, str) and isinstance(v, str) for k, v in extra.items()
         ):
-            print(f"--goals must be a JSON object of string→string: {args.goals}",
+            print(f"--goals must be a JSON object of string→string: {goals_path}",
                   file=sys.stderr)
             return 2
         goals.update(extra)
