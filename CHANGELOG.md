@@ -5,6 +5,35 @@ Development history at finer grain lives in [docs/journals/](docs/journals/).
 
 ## [Unreleased]
 
+### Changed
+- **A team task that cannot finish now always ends with a conclusion in the room.** Every
+  path that used to leave the task `stalled` with nothing delivered (a step the worker gave
+  up on, a cost-cap breach, a plan-hash mismatch after a system-inserted row) now writes a
+  `final_summary` naming what was done and what was not, delivers it to the room under the
+  ⛔ head, and escalates once. The best completed step artifact is salvaged into that
+  summary so partial work still reaches the CEO.
+- **The coordinator finishes a dead step itself before giving up.** When a worker fails a
+  step for good, the coordinator first skips it (a non-terminal step with live siblings,
+  the gap noted in the handoff) or does it itself from the step's deps (a terminal
+  work/sprint/rework step, unless the task requires CEO approval). The self-written
+  artifact carries `coordinator_fallback`, and the aggregate header says who did the step
+  and why. Only when neither rung applies does the task conclude as failed.
+- **The coordinator can rule "accept" on a step that failed its own self-check.** Until
+  now its only rulings were retry, reassign, or give up, so a result that actually met
+  the step's acceptance list (measured live: a cohort analysis carrying every required
+  figure, failed twice for "not mentioning" them) could only be retried or redone. The
+  judge may now take the result as it stands; the step is done with the worker's own
+  artifact, annotated with the reason, and no further attempt is spent.
+- **The judge reads the CEO's full request, not the 120-character title.** The stuck-step
+  brief used to carry only the task title, which is the request's first paragraph cut at
+  120 characters, so a judge could conclude the brief itself was truncated and send the
+  worker to "check the original brief" it already had. The brief now includes the
+  original request (capped at 2000 characters).
+- **A rework round that changes nothing ends the review loop.** The worker compares the
+  normalized failure set of the previous self-check with the current one; when nothing was
+  cleared, the remaining rework budget is not spent and the step is delivered flagged
+  (`self_check_failed`) for the coordinator to decide.
+
 ### Removed
 - **The OpenAlex academic-search tool is gone**, along with the `academic_search:` profile
   flag that armed it, its "tra cứu paper" template chip, and the "no key needed" mention

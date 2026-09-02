@@ -54,7 +54,7 @@ _POKE_WORTHY_ACTIONS = frozenset({
     "review_inserted", "fanout_inserted",
     # A skipped step counts as done, so its dependents became dispatchable THIS tick —
     # same minted-then-wait shape as a review/fanout insert.
-    "step_skipped",
+    "step_skipped", "stuck_accepted", "self_did",
 })
 
 

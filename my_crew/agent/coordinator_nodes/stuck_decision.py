@@ -6,8 +6,12 @@ until somebody judges it. This module is that judgement — the piece that makes
 coordinator an actual supervisor instead of a DAG walker that only ever asked "is the
 pid alive?".
 
-Three outcomes, and only three:
+Four outcomes, and only four:
 
+- `accept` — the result actually meets the step's own acceptance list and only the
+  grader was wrong (measured live: a cohort analysis carrying every required figure
+  was failed twice for "not mentioning" them). Take it as it stands: the step is
+  `done` with the worker's artifact, no re-run, no reassign, no coordinator rewrite.
 - `retry_with_guidance` — the result is fixable and the same staffer can fix it, given
   concrete direction about what was missing. The step goes back to `pending` with the
   guidance appended to its handoff, so the next attempt actually sees it.
@@ -43,7 +47,13 @@ logger = logging.getLogger(__name__)
 #: same thing.
 MAX_INTERVENTIONS = 2
 
-_VALID_DECISIONS = frozenset({"retry_with_guidance", "reassign", "give_up"})
+_VALID_DECISIONS = frozenset({"accept", "retry_with_guidance", "reassign", "give_up"})
+
+#: How much of the CEO's original request the judge is shown. `task.title` is the
+#: request's first paragraph cut at 120 chars, so a judge given only the title reads a
+#: brief that literally ends mid-word — and rules from that (observed live: "brief gốc
+#: bị cắt ngọn ... cần CEO rõ ràng 3 tiêu chí", on a request that named all three).
+_MAX_REQUEST_CHARS = 2000
 
 
 @dataclass(frozen=True)
@@ -69,7 +79,10 @@ def build_stuck_brief(deps: CoordinatorDeps, task: TeamTask, step: TeamStep) -> 
     """
     from my_crew.agent.team_task_artifact import read_step_artifact
     from my_crew.runtime.team_task_paths import team_tasks_root
-    from my_crew.tools.search_result_formatter import format_internal_content
+    from my_crew.tools.search_result_formatter import (
+        format_internal_content,
+        truncate_preserving_delimiters,
+    )
 
     artifact = read_step_artifact(team_tasks_root(), task.id, step.seq) or {}
     result_text = str(artifact.get("result_text") or "")[:2000]
@@ -98,8 +111,13 @@ def build_stuck_brief(deps: CoordinatorDeps, task: TeamTask, step: TeamStep) -> 
         f"theo:\n{prior_guidance}"
         if prior_guidance else ""
     )
+    request = truncate_preserving_delimiters(
+        (task.original_request or "").strip(), _MAX_REQUEST_CHARS,
+    )
+    request_block = f"Yêu cầu gốc của CEO (đầy đủ):\n{request}\n" if request else ""
     return (
         f"Việc: {task.title}\n"
+        f"{request_block}"
         f"Bước đang kẹt: {step.title}\n"
         f"Người đang làm: {step.assigned_to}\n"
         f"Tiêu chí đạt: {step.acceptance or '(không ghi rõ)'}\n"
@@ -167,6 +185,8 @@ def decide_stuck_step(
         )
 
     judgement = _judge(deps, task, step)
+    if judgement.decision == "accept":
+        return _accept(deps, task, step, judgement)
     # Retry-first policy: the FIRST ruling on a step never reassigns. Measured across a
     # day of live tasks the judge chose reassign on the first failure 5 of 6 times, and
     # it was the wrong call every time — the original assignee fixed it on retry once
@@ -199,6 +219,51 @@ def decide_stuck_step(
     if judgement.decision == "retry_with_guidance":
         return _retry(deps, task, step, judgement)
     return _give_up(deps, task, step, judgement.reason or "không nêu lý do")
+
+
+def _accept(
+    deps: CoordinatorDeps, task: TeamTask, step: TeamStep, judgement: StuckJudgement,
+) -> TickResult:
+    """Take the failed-self-check result as the step's answer.
+
+    The worker's artifact stays as written (it IS the accepted content); only its
+    status flips to `done` so dependents and the aggregate read it as finished work,
+    and the acceptance reason is recorded on it for the CEO's audit. The row write is
+    `mark_done_by_coordinator`: `done` from a `needs_decision` row only, attempt-
+    guarded, review flag dropped — the judge's reading was the review.
+    """
+    from my_crew.agent.coordinator_graph import TickResult
+    from my_crew.agent.team_task_artifact import read_step_artifact, write_step_artifact
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    reason = " ".join(judgement.reason.split()) or "kết quả đã đạt tiêu chí của bước"
+    if not deps.store.mark_done_by_coordinator(
+        task.id, step.step_id, outcome_ref=step.outcome_ref, attempt_id=step.attempt_id,
+    ):
+        logger.warning(
+            "team-tick: accept on %s/%s matched no row (not needs_decision on attempt %s)",
+            task.id, step.step_id, step.attempt_id or "<none>",
+        )
+        return TickResult(
+            task_id=task.id, action="none", detail=f"{step.step_id} accept matched no row",
+        )
+    try:
+        artifact = read_step_artifact(team_tasks_root(), task.id, step.seq)
+        if artifact:
+            write_step_artifact(
+                team_tasks_root(), task.id, step.seq,
+                {**artifact, "status": "done", "accepted_by_coordinator": reason},
+            )
+    except Exception:  # noqa: BLE001 — the row is the source of truth; the note is audit
+        logger.exception(
+            "team-tick: could not annotate accepted artifact %s/%s", task.id, step.step_id,
+        )
+    deps.escalate(
+        task, step, "stuck",
+        f"Bước '{step.title}' tự chấm trượt nhưng điều phối đọc lại thấy đã đạt tiêu chí "
+        f"— nhận kết quả như đang có: {reason[:300]}",
+    )
+    return TickResult(task_id=task.id, action="stuck_accepted", detail=f"{step.step_id}: {reason}")
 
 
 def _retry(

@@ -290,7 +290,8 @@ class TickResult:
     #               only reaches a terminal, test-visible "failed" once retries are
     #               exhausted.
     #               A step that finished but failed its own acceptance criteria adds
-    #               three more values, all from `decide_stuck_step`: "stuck_retry"
+    #               four more values, all from `decide_stuck_step`: "stuck_accepted"
+    #               (the failed-self-check result taken as-is), "stuck_retry"
     #               (same assignee, now carrying guidance), "stuck_reassigned" (handed
     #               to a different colleague), and "gave_up" (concluded not doable —
     #               the task is stalled WITH a final_summary stating why).

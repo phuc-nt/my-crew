@@ -1,5 +1,5 @@
 """Coordinator judgement on a step that finished but failed its own acceptance
-criteria (`needs_decision`). Covers the three legal rulings, the hard intervention cap,
+criteria (`needs_decision`). Covers the four legal rulings, the hard intervention cap,
 the roster gate on reassign, and the degrade-to-give_up paths — all against
 `run_one_tick` with an injected judge seam (no real LLM).
 """
@@ -64,6 +64,70 @@ def _deps(store, **overrides) -> CoordinatorDeps:
     )
     base.update(overrides)
     return CoordinatorDeps(**base)
+
+
+# --- accept ------------------------------------------------------------------------
+
+
+def test_accept_takes_the_failed_self_check_result_as_is_without_another_attempt(tmp_path):
+    from my_crew.agent.team_task_artifact import read_step_artifact, write_step_artifact
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    store = _stuck_store(tmp_path)
+    write_step_artifact(team_tasks_root(), "t1", 1, {
+        "status": "needs_decision", "result_text": "T1 62/48/41, T2 58/44",
+        "self_check_failed": True, "self_check_failures": ["không nhắc tỷ lệ T1"],
+    })
+    spawned, alerts = [], []
+    deps = _deps(
+        store,
+        judge_stuck_step=lambda brief, step: {
+            "decision": "accept", "reason": "bốn tỷ lệ cohort đều có mặt, người chấm đọc sót",
+        },
+        spawn_step=lambda task, step, attempt_id: spawned.append(step.step_id) or 4242,
+        escalate=lambda task, step, kind, msg: alerts.append((kind, msg)),
+    )
+
+    result = run_one_tick(deps)
+
+    assert result.action == "stuck_accepted"
+    step = store.get("t1").steps[0]
+    assert step.status == "done"
+    assert step.needs_review is False
+    assert spawned == []
+    artifact = read_step_artifact(team_tasks_root(), "t1", 1)
+    assert artifact["result_text"] == "T1 62/48/41, T2 58/44"
+    assert artifact["status"] == "done"
+    assert "người chấm đọc sót" in artifact["accepted_by_coordinator"]
+    assert [k for k, _ in alerts] == ["stuck"]
+    assert "nhận kết quả như đang có" in alerts[0][1]
+    # The accepted step is finished work: the next tick aggregates and the task is done.
+    follow = run_one_tick(deps)
+    assert follow.action == "aggregated"
+    assert store.get("t1").status == "done"
+
+
+def test_the_judge_is_shown_the_ceo_full_request_not_only_the_120_char_title(tmp_path):
+    request = (
+        "So sánh 3 công cụ họp trực tuyến (Zoom, Google Meet, Microsoft Teams) theo đúng 3 "
+        "tiêu chí: giá gói trả phí thấp nhất, giới hạn thời gian họp của bản miễn phí, số "
+        "người tham gia tối đa của bản miễn phí."
+    )
+    steps = [{"step_id": "s1", "title": "tra cuu", "assigned_to": "agent-a", "deps": []}]
+    store = TeamTaskStore(tmp_path / "team_tasks.sqlite3")
+    store.create_task(task_id="t1", title=request[:120], original_request=request)
+    store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    store.mark_needs_decision("t1", "s1", attempt_id=store.reserve_step("t1", "s1"))
+    seen = []
+
+    def _judge(brief, step):
+        seen.append(brief)
+        return {"decision": "give_up", "reason": "x"}
+
+    run_one_tick(_deps(store, judge_stuck_step=_judge))
+
+    assert "số người tham gia tối đa của bản miễn phí" in seen[0]
+    assert "Yêu cầu gốc của CEO" in seen[0]
 
 
 # --- retry_with_guidance -------------------------------------------------------------
