@@ -49,9 +49,9 @@ _REASON_MESSAGES = {
 
 
 def _staff_roster() -> list[tuple[str, str]]:
-    from my_crew.agent.team_task_roster import assignable_staff
+    from my_crew.agent.team_task_roster import planning_roster
 
-    return assignable_staff()
+    return planning_roster()
 
 
 def _render_diff(task, new_pending: list[dict]) -> str:

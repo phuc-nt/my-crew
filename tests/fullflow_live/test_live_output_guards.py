@@ -83,11 +83,28 @@ DEP_CHAR_CAP = 8000
 #: 900s deadline. `oversized_dep_injector` now supplies the long text, so this brief only
 #: has to do the one thing the injector cannot: produce a multi-step DAG in which some
 #: step actually READS an upstream step's artifact.
+#:
+#: Shaped as a FAN-IN — two independent parts joined by a third — and that shape is the
+#: premise, learned on 2026-09-02 by paying for it. The earlier two-stage chain ("liệt kê
+#: rủi ro, rồi dựa trên đó tổng hợp") settled as ONE step, `('step1', [])`, on a plan the
+#: router had accepted as `mode=team, shape=custom`: `fold_unjustified_steps` now merges a
+#: step into its single predecessor whenever the two owners share a capability tuple
+#: (`team_task_roster.Capability`: tier, web, mail, model), and every worker in this
+#: fixture's stock fleet shares one. Correct product behaviour — a chain across two names
+#: with the same tools is one person's work split across two cold starts — but it means
+#: NO linear chain can carry a dep edge on this fleet, whoever the model assigns it to.
+#: A fan-in edge survives by construction: the fold only ever considers a step with
+#: exactly one dep, and the join has two. Measured offline on the live model
+#: (claude-haiku-4.5, 3/3): three steps across three workers, the join depending on both
+#: parts, zero folds.
 BRIEF = (
-    "Nghiên cứu rồi lập cẩm nang vận hành đội kỹ thuật trong tuần: "
-    "(1) liệt kê 4 rủi ro vận hành thường gặp của một đội phát triển phần mềm, "
-    "mỗi rủi ro nêu dấu hiệu nhận biết và cách phòng ngừa, "
-    "(2) dựa trên danh sách ở bước 1, tổng hợp thành bảng cẩm nang ngắn "
+    "Lập cẩm nang vận hành đội kỹ thuật trong tuần, làm theo ba phần: "
+    "(1a) liệt kê 4 rủi ro vận hành thường gặp của một đội phát triển phần mềm, "
+    "mỗi rủi ro nêu dấu hiệu nhận biết và cách phòng ngừa; "
+    "(1b) độc lập với 1a và do một người khác làm song song, liệt kê 4 thói quen tốt "
+    "hằng tuần của đội (họp, review, theo dõi tiến độ), mỗi thói quen nêu lợi ích và "
+    "cách duy trì; "
+    "(2) chỉ sau khi có cả 1a và 1b, tổng hợp hai danh sách thành bảng cẩm nang ngắn "
     "và đề xuất 3 việc cần làm tuần sau."
 )
 
@@ -96,10 +113,10 @@ BRIEF = (
 #: worth of tokens ($0.0072) and recorded exactly ONE step, `('research', [])`. No dep
 #: edge, so nothing read the injected text forward and the cap had no prompt to bound.
 #:
-#: The planner was not at fault — 4 offline decompose samples of this brief each produced
-#: a 3-step chain across THREE assignees with zero folds. But the assignee split is a
-#: model choice, not a property of the brief. On a run where the model puts every step on
-#: one person, `downgrade_to_sprint` (`sprint_intake.py:500`, `len(assignees) != 1`)
+#: The planner was not at fault — 4 offline decompose samples of the brief of the day each
+#: produced a 3-step chain across THREE assignees with zero folds. But the assignee split
+#: is a model choice, not a property of the brief. On a run where the model puts every
+#: step on one person, `downgrade_to_sprint` (`sprint_intake.py`, `len(assignees) != 1`)
 #: converts the whole plan into a single sprint step. That is correct product behaviour
 #: (a one-person DAG buys only coordination cost) and fatal to a case whose entire subject
 #: is a dep edge — so the lane has to be pinned rather than hoped for.
@@ -197,7 +214,7 @@ def _oversized_dep_text() -> str:
 
 
 class _DepInjector:
-    """Watches a task's artifact dir and enlarges the first step artifact that lands.
+    """Watches a task's artifact dir and enlarges every work artifact that lands.
 
     A thread rather than a post-settle rewrite: the cap is applied while the run is in
     flight, when the graph builds the next step's prompt, so the text has to be on disk
@@ -213,9 +230,9 @@ class _DepInjector:
         self._dir = artifact_dir
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
-        #: The artifact this injector enlarged, for the case's premise assertion. A run
-        #: where nothing was ever injected must fail loudly rather than measure a cap
-        #: that never engaged.
+        #: The FIRST artifact this injector enlarged, for the case's premise assertion.
+        #: A run where nothing was ever injected must fail loudly rather than measure a
+        #: cap that never engaged.
         self.injected: str | None = None
         self.injected_chars = 0
 
@@ -238,18 +255,21 @@ class _DepInjector:
             # text oversized for the whole run is the only way the dep is still oversized
             # when a downstream step actually reads it.
             #
-            # Still latches `self.injected` to the FIRST artifact enlarged, so the case
-            # keeps reporting which dep it chose; later passes re-enlarge that same file.
+            # EVERY work artifact is enlarged, not only the first one seen. An earlier
+            # version latched onto the first artifact and left the rest alone, which
+            # measured nothing on a fan-out plan: the planner now merges same-tier
+            # steps, so the first artifact to land was a sibling the synthesis step
+            # read alongside two untouched ones, and the run the case looked at had
+            # every dep under the cap. With all of them oversized, whichever dep the
+            # downstream step reads is the oversized one. `self.injected` still reports
+            # the first artifact enlarged, so the premise assertion has a name.
             for path in sorted(self._dir.glob("step-*.json")):
                 # Skip review verdicts: a `step-<n>-review-<r>.json` is read through
                 # a different branch of `_read_deps_handoff` and enlarging one would
                 # test the reviewer path while claiming to test the work path.
                 if "-review-" in path.name:
                     continue
-                if self.injected is not None and path.name != self.injected:
-                    continue  # keep enlarging the dep we picked, not every step in turn
-                if self._enlarge(path, text):
-                    break
+                self._enlarge(path, text)
             self._stop.wait(0.5)
 
     def _enlarge(self, path: Path, text: str) -> bool:
@@ -277,7 +297,8 @@ class _DepInjector:
             tmp.replace(path)
         except OSError:
             return False
-        self.injected = path.name
+        if self.injected is None:
+            self.injected = path.name
         self.injected_chars = len(text)
         return True
 
@@ -439,9 +460,21 @@ def test_l2_a_long_dep_reaches_the_next_prompt_cut_but_its_artifact_stays_whole(
 
     # And the whole point of the cap: the dep reached the prompt SHORTER than it is on
     # disk, while the artifact itself stayed whole. `full_handoff` is the uncapped record.
-    assert len(full_handoff) > DEP_CHAR_CAP >= len(full_handoff) - dropped_chars, (
-        f"step {order.get('step_id')!r} recorded {len(full_handoff)} chars of uncapped "
-        f"handoff, but the {dropped_chars} chars the marker claims to have dropped do not "
-        f"bring it down to the {DEP_CHAR_CAP}-char cap. The replay record and the prompt "
-        "disagree about the same dep."
+    # Per dep, not per handoff: the reader can be a gather step with several deps
+    # (measured: a runtime fan-out split the long step, and the gather's record held
+    # 36k chars across its shards while the marker cut one 9k dep), so the tail of the
+    # cut artifact is what must be in the record and out of the prompt.
+    cut_artifact = next(
+        t for t in long_artifacts.values() if abs(len(t) - reconstructed) <= 200
+    )
+    tail = cut_artifact[-300:]
+    assert tail not in prompt, (
+        f"step {order.get('step_id')!r} carries the cut marker yet its prompt still ends "
+        f"with the tail of the {len(cut_artifact)}-char dep — the marker decorates a dep "
+        "that was passed through whole."
+    )
+    assert len(full_handoff) >= len(cut_artifact), (
+        f"step {order.get('step_id')!r} recorded only {len(full_handoff)} chars of handoff "
+        f"for a {len(cut_artifact)}-char dep: the replay record is capped too, so a replay "
+        "could not re-read what the step was actually given."
     )

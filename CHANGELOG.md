@@ -5,7 +5,54 @@ Development history at finer grain lives in [docs/journals/](docs/journals/).
 
 ## [Unreleased]
 
+### Added
+- **Context-crew: a role is a capability tuple, a hand-off is an artifact, and a crew has one
+  of two shapes.** `Capability(tier, web, mail, model)` is derived from the profile; two
+  neighbouring plan steps split across agents with the same tuple now fold into one. Every
+  content step owes its dependents an artifact by kind (`findings` needs a source URL, `final`
+  needs a real body) and is checked by code before the LLM self-check. The router keeps a
+  team plan only when it is a do + independent review or a permission chain; any other plan
+  runs as a sprint (`route.source="shape"`). Team routes record `route.shape` and three new
+  signals (`independent_sources`, `needs_independent_review`, `sensitive_tool`);
+  `route_stats` counts shapes.
+- **Hypothesis bench for the crew shapes** (`my_crew/bench/hypothesis_stats.py`): fixed kill
+  lines (min 4 cases × 3 runs, Wilson interval reported) that decide whether each shape stays
+  in the router. The first round (4 briefs × 3 runs, blind 3-vote judge) kept do + review
+  (independent reviewer caught 10/12 seeded-error artifacts, 8% run disagreement) and killed
+  fan-out/merge: a crew of parallel lookups won 4/12 pairs against one strong agent at 1.5×
+  the cost, and a cheap-specialist variant won 4/12 at 0.6×. The fan-out shape was removed
+  from the router; the runtime entity fan-out inside an existing crew (v74) is unchanged.
+  Live cases `tests/fullflow_live/test_live_crew_shapes.py` pin one brief per surviving
+  shape plus a forced-team source-listing brief recorded as `custom`.
+
 ### Changed
+- **Per-step `cost_cap_usd` is now ON by default for the tool tiers** (`create_agent`,
+  `deep_agent`: 1.0 USD, half the task-level default). It was opt-in through 0.16.0. Native
+  stays uncapped (one call, no loop); a profile value still overrides.
+- **Fewer wasted rounds on a dead step.** Rework is capped at one round (was two); a terminal
+  step gets one coordinator intervention before the coordinator does it itself (non-terminal
+  steps keep two); a `needs_web` step whose search fails is a tool error retried by the
+  machine, not an artifact sent to a grader; a plan with a step nobody can measure is retried
+  once and then run as a sprint (`route.source="unmeasurable"`).
+- **A work step runs on its assignee's tier, not on the coordinator's guess about the web.**
+  The rule that forced every `needs_web=false` work step onto the native runtime is gone: a
+  tools-tier role (`create_agent`, `deep_agent`) keeps its loop for its work steps, so a
+  "clone and run the tests" step no longer lands on a runtime with no shell. Only review and
+  sprint steps, and a work step whose deps were prefetched for it, run native; one
+  coordinator ruling on such a step re-arms the assignee's tier.
+- **A team tick is fleet-wide exclusive.** A poked tick and the scheduled tick used to run the
+  same store concurrently; `run_team_tick` now takes a lock under the team-tasks root and the
+  loser returns `tick_in_flight` without touching anything (not counted as a failure, not
+  poke-worthy).
+- **A refusal outranks an unmeasurable plan.** A brief the sprint intake refused (shell, repo
+  clone, writes outside the company) whose team plan cannot be measured is raised to the CEO
+  with the rewrite hint instead of being silently downgraded to the sprint it was refused for.
+- **Execution outcomes count as measurable.** "test suite passes", "build exits without
+  fail", "the command's log shows X" are machine-checkable acceptance anchors, so a shell
+  brief no longer plans as unmeasurable.
+- **A refused "write outside the company" brief keeps its permission boundary even when the
+  planning model drops the flag**: the terminal step is marked `external_write`, so the
+  review/gateway path is never skipped by the shape gate.
 - **A team task that cannot finish now always ends with a conclusion in the room.** Every
   path that used to leave the task `stalled` with nothing delivered (a step the worker gave
   up on, a cost-cap breach, a plan-hash mismatch after a system-inserted row) now writes a
@@ -46,12 +93,60 @@ Development history at finer grain lives in [docs/journals/](docs/journals/).
   so those profiles keep loading, and the upgrade preview simply stops reporting the field.
 
 ### Fixed
+- **A stalled provider can no longer hold an LLM call open indefinitely.** OpenRouter keeps a stalled socket busy with keep-alive bytes, so the client's 60s read timeout never fired; measured live, one decompose sat past 900s and the synchronous delegate never answered. Every completion now streams and is bounded by idle time (`_STREAM_IDLE_S`, 120s without a chunk): a silent call is abandoned on its worker thread, counted as transient and retried; a second silent attempt in a row gives the model up for that call so the chain (or the caller's own retry) moves on instead of burning five attempts on silence. A slow answer is never cut — the same evening the live model ran at ~23 tokens/s and a legitimate review took 190s, which the wall-clock ceiling first tried in its place would have killed. Usage and OpenRouter's `cost` still arrive on the final streamed chunk, so cost accounting is unchanged.
+- **Two workers starting together no longer crash on the once-only `.data/` migration.** Both passed the guard before either created the target, the first rename won, and the second died in `main()` over a store that was already safely under `agents/default/`. The sibling's move is now recognised and skipped.
+- **The live harness now serves the fleet on the model it declares.** `boot()` inherited the developer's `OPENROUTER_MODEL` and the child's own `.env` could not override it, and the per-role models were written under a key the config never reads; every live run had declared haiku and served the default model. `serve_env()` sets both explicitly, guarded offline by `tests/test_live_topology_fleet_model.py`.
+- **The live harness's stop condition recognises a task parked behind a CEO question.** A `pending` step whose dependency is parked (transitively) cannot move on its own; polling on waited the full 900s and failed a case whose assertions all held.
+- **A mail brief no longer stalls on `plan_hash mismatch` before its first step.** The
+  confirm-time hash has carried `needs_mail` since v92, but the assign path persisted the
+  step rows without it, so the ticker's dispatch-time recheck failed on every tick and the
+  task stalled with nothing spawned (measured live: "Rà soát hộp thư..." → both steps
+  pending forever). The row now carries the flag; the recheck passes.
+- **Accepting a stuck step on a do+review plan keeps the planned reviewer.** The stuck
+  judge's accept dropped the review flag ("the judge's reading was the review"), so on a
+  plan the CEO shaped as do+review no review row was ever minted and the task closed
+  "sau soát chéo" with nobody having cross-checked anything. On that shape the flag now
+  survives the accept and the reviewer row is minted as planned; every other route keeps
+  the old drop.
+- **A reviewer that answers with nothing no longer kills the task.** The review step
+  parses the grader's JSON verdict strictly; a cheap reviewer model was measured live
+  returning an empty completion, the parse failed, and the whole task stalled as a
+  "dead step" for the CEO to sort out. The review step now re-asks the same prompt once
+  before failing (both calls are billed and recorded), the same machine retry the
+  runtime already applies to tool errors.
+- **"Rà soát rồi lập báo cáo" no longer conscripts a second reviewer.** Bare "rà soát"
+  was counted as a request for an independent review, so a brief asking the author to
+  read the material and then write got an unasked-for review step appended (and, above,
+  a stall when that step died). Only "rà soát lại" / "soát chéo" / "nhờ người khác"
+  phrasings now raise the independent-review signal.
 - **`cost_cap_usd: 0` is now rejected instead of silently emptying every step.** The
   ceiling is checked before a step's first provider call, so a zero cap ended every
   tools-tier step at round zero — no model call, no work, only the "incomplete" note.
   Leaving the key unset is still how you say "no ceiling"; zero now fails at config-parse
   time with the reason. No shipped configuration set it, so nothing in a running fleet
   changes.
+- **A cost-capped draft is delivered for a decision, never reworked.** A tools-tier step
+  that hit its `cost_cap_usd` returned a capped draft with the incomplete note, the LLM
+  self-check failed it (correctly: an intention, not a result), and the rework ran under
+  the same ceiling — one call, a bare refusal, and the note the CEO needed was overwritten.
+  A draft carrying the cap note is now terminal on its first failed check: no rework, the
+  capped text is the artifact, the step parks `needs_decision`.
+- **The self-check grades the step, not the whole brief.** A step whose acceptance covered
+  only part (1a) of a three-part brief was failed for not delivering (1b) and (2) — the
+  sibling steps' work — and the one rework it had left was spent on a refusal, so the
+  dependent step never ran. The shared ceiling rule now says a step is ONE part of the
+  brief and the parts its criteria do not name belong to other steps.
+- **The deterministic item count reads "liệt kê đúng N" and states its direction.** "Liệt
+  kê đúng 4 rủi ro" was not read as a demand for four items, and the fact line handed to the
+  grader — "kết quả có 28 mục (tiêu chí đòi 2)" — was cited by it as a failure. The count
+  regex accepts `đúng`, and the fact reads "không ít hơn con số tối thiểu N … nhiều dòng hơn
+  KHÔNG phải lỗi".
+- **The planner sees which agent has tools.** The decompose and sprint-intake rosters listed
+  agents by domain only, so a "tra lịch sử làm việc nội bộ" step was assigned to the native
+  secretary (no history tool) one live run in four. Each roster line now carries a
+  capability hint derived from the role tuple ("có công cụ tra lịch sử …; tra được web" /
+  "không có công cụ — chỉ viết/suy luận"), and both prompts carry the rule to route
+  tool steps by it (`planning_roster()`).
 
 ## [0.16.0] — 2026-09-01
 

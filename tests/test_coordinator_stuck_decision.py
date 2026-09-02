@@ -835,3 +835,109 @@ def test_a_sibling_stuck_step_still_counts_as_live_for_skippability(tmp_path):
     assert result.action == "step_skipped"
     assert store.get_step("t1", "s1").status == "done"
     assert store.get("t1").status != "stalled"
+
+
+# --- one ruling for a terminal step the coordinator can finish itself ----------------
+
+
+def _retry_judge(calls):
+    def _judge(brief, step):
+        calls.append(step.step_id)
+        return {"decision": "retry_with_guidance", "guidance": "thử lại theo tiêu chí"}
+    return _judge
+
+
+def test_a_terminal_step_the_coordinator_can_finish_gets_one_ruling_then_self_did(tmp_path):
+    """After the one guided retry has failed, a second round of guidance/reassign costs
+    more than the coordinator writing the deliverable itself — so it does."""
+    store = _stuck_store(tmp_path)
+    store.bump_intervention("t1", "s1")  # the guided retry has been spent
+    calls: list[str] = []
+
+    result = run_one_tick(_deps(
+        store, judge_stuck_step=_retry_judge(calls),
+        self_do_step=lambda task, step, handoff: ("điều phối viên tự viết", 0.01),
+    ))
+
+    assert store.get_step("t1", "s1").final_deliverable is True  # the premise
+    assert result.action == "self_did"
+    assert calls == []  # no judge call was paid for
+
+
+def test_without_a_self_do_hook_the_terminal_step_keeps_the_full_cap(tmp_path):
+    """Nobody can stand in for the step, so the second ruling is still worth paying for."""
+    store = _stuck_store(tmp_path)
+    store.bump_intervention("t1", "s1")
+    calls: list[str] = []
+
+    result = run_one_tick(_deps(store, judge_stuck_step=_retry_judge(calls)))
+
+    assert calls == ["s1"]
+    assert result.action != "gave_up"
+
+
+def test_a_non_terminal_step_keeps_the_full_cap_even_with_a_self_do_hook():
+    """The coordinator can finish the task's ANSWER, not a step others still read from."""
+    from my_crew.agent.coordinator_nodes.stuck_decision import intervention_cap
+
+    deps = SimpleNamespace(self_do_step=lambda *_a: ("x", 0.0))
+    assert intervention_cap(deps, SimpleNamespace(final_deliverable=False)) == MAX_INTERVENTIONS
+    assert intervention_cap(deps, SimpleNamespace(final_deliverable=True)) == 1
+
+
+def test_accept_on_a_do_review_plan_keeps_the_planned_review_and_a_reviewer_is_minted(
+    tmp_path, monkeypatch,
+):
+    """On a plan routed as do+review the CEO asked for an independent reader of the
+    deliverable. The stuck judge only settled the author's self-check dispute — it did
+    not read the work as a reviewer — so accepting must NOT drop the planned flag.
+    Measured live before this: accept dropped it, no review row was ever minted, and
+    the task closed "sau soát chéo" with nobody having cross-checked anything."""
+    import my_crew.agent.team_task_roster as roster_mod
+    from my_crew.agent.crew_shape import DO_REVIEW_SHAPE
+
+    steps = [{"step_id": "draft", "title": "viết phạm vi", "assigned_to": "agent-a",
+              "deps": [], "needs_review": True}]
+    store = TeamTaskStore(tmp_path / "team_tasks.sqlite3")
+    store.create_task(task_id="t1", title="demo task", original_request="lam demo")
+    store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    store.set_route("t1", {"mode": "team", "shape": DO_REVIEW_SHAPE})
+    attempt = store.reserve_step("t1", "draft")
+    store.mark_needs_decision("t1", "draft", attempt_id=attempt, outcome_ref="ref-1")
+    monkeypatch.setattr(roster_mod, "assignable_staff",
+                        lambda: [("agent-a", "pm"), ("agent-b", "pm")])
+    deps = _deps(store, judge_stuck_step=lambda brief, step: {
+        "decision": "accept", "reason": "đủ ý, người chấm đọc sót",
+    })
+
+    assert run_one_tick(deps).action == "stuck_accepted"
+    draft = next(s for s in store.get("t1").steps if s.step_id == "draft")
+    assert draft.status == "done"
+    assert draft.needs_review is True
+
+    follow = run_one_tick(deps)
+    assert follow.action == "review_inserted"
+    review = next(s for s in store.get("t1").steps if s.step_type == "review")
+    assert review.parent_step_id == "draft"
+    assert review.assigned_to == "agent-b"
+    assert store.get("t1").status != "done"
+
+
+def test_accept_on_any_other_route_still_drops_the_review_flag(tmp_path):
+    """The do+review exception is narrow: on a plan the router did not shape that way,
+    the judge's reading stays the review and the accepted step needs no peer row."""
+    steps = [{"step_id": "draft", "title": "viết phạm vi", "assigned_to": "agent-a",
+              "deps": [], "needs_review": True}]
+    store = TeamTaskStore(tmp_path / "team_tasks.sqlite3")
+    store.create_task(task_id="t1", title="demo task", original_request="lam demo")
+    store.set_plan("t1", steps, plan_hash=_content_hash(steps))
+    store.set_route("t1", {"mode": "team", "shape": "permission_chain"})
+    attempt = store.reserve_step("t1", "draft")
+    store.mark_needs_decision("t1", "draft", attempt_id=attempt, outcome_ref="ref-1")
+    deps = _deps(store, judge_stuck_step=lambda brief, step: {
+        "decision": "accept", "reason": "đủ ý",
+    })
+
+    assert run_one_tick(deps).action == "stuck_accepted"
+    assert store.get("t1").steps[0].needs_review is False
+    assert run_one_tick(deps).action == "aggregated"

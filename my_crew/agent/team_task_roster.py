@@ -17,6 +17,94 @@ Excluded from the assignable roster, even though they are enabled registry agent
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Capability:
+    """What an agent can DO, as the context-crew model defines a role: the runtime tier
+    (which tool loop it runs — `native` calls no tools, `create_agent` binds the read
+    toolset, `deep_agent` adds the shell), web and mail access, plus the model it runs
+    on. Persona is deliberately absent — two agents with the same tuple are
+    interchangeable for planning purposes, and `fold_unjustified_steps` merges
+    neighbouring steps split across them. `model` is the effective OpenRouter model id
+    (profile override or fleet default), so a cheap-specialist agent is a different role
+    from a strong-generalist one even with identical tools.
+
+    `tier` is a field in its own right, not folded into a bool: a tools-tier agent and a
+    native agent with the same web flag and model are NOT the same role — measured live,
+    treating them as one folded the tools-tier research step into the native writer's
+    step and the read toolset was never bound."""
+
+    tier: str = "native"
+    web: bool = False
+    mail: bool = False
+    model: str = ""
+
+
+def agent_capability(agent_id: str) -> Capability | None:
+    """Derive the capability tuple from the agent's profile. Unknown/unloadable profile ⇒
+    None — an UNKNOWN role must never compare equal to another unknown role, or two
+    agents nobody can read would fold into one (never raises: the consumer fails open)."""
+    from my_crew.profile.loader import load_profile
+    from my_crew.runtime.agent_paths import agent_data_dir
+    from my_crew.runtime_backends.protocol import runtime_kind_for
+
+    try:
+        loaded = load_profile(agent_id, data_dir=agent_data_dir(agent_id))
+    except (FileNotFoundError, RuntimeError):
+        return None
+    return Capability(
+        tier=runtime_kind_for(loaded),
+        web=bool(getattr(loaded, "web_search", False)),
+        mail=bool(getattr(loaded, "gws_context", False))
+        and bool(getattr(getattr(loaded, "config", None), "gws_enabled", True)),
+        model=str(getattr(getattr(loaded, "config", None), "openrouter_model", "") or ""),
+    )
+
+
+def capability_hint(cap: Capability | None) -> str:
+    """The planner-facing, user-language rendering of a role's tool boundary.
+
+    The decomposer sees `(agent_id, domain)` and nothing else, so it cannot tell which
+    agent can actually run a lookup step — measured live: a "tra lịch sử làm việc"
+    step landed on a native agent one run in four, which had no history tool and could
+    only report the work impossible. The hint names what the tuple's tier/web/mail
+    fields let the agent DO, in the planner's language, so a step that needs a tool
+    can be routed to a role that has it. Unknown capability ⇒ "" (nothing claimed)."""
+    if cap is None:
+        return ""
+    parts: list[str] = []
+    if cap.tier == "native":
+        parts.append("không có công cụ — chỉ viết/suy luận trên dữ liệu được đưa")
+    else:
+        parts.append("có công cụ tra lịch sử làm việc nội bộ và các tích hợp")
+        if cap.tier == "deep_agent":
+            parts.append("chạy được shell")
+    if cap.web:
+        parts.append("tra được web")
+    if cap.mail:
+        parts.append("đọc/gửi được thư")
+    return "; ".join(parts)
+
+
+def planning_roster() -> list[tuple[str, str]]:
+    """`assignable_staff()` with each agent's domain extended by its capability hint —
+    the roster every PLANNING prompt (decompose, amend, sprint intake) renders. The
+    ids are unchanged, so the validators that only need the id set keep reading
+    `assignable_staff` directly."""
+    staff = assignable_staff()
+    caps = capability_map(a for a, _ in staff)
+    out: list[tuple[str, str]] = []
+    for agent_id, domain in staff:
+        hint = capability_hint(caps.get(agent_id))
+        out.append((agent_id, f"{domain} — {hint}" if hint else domain))
+    return out
+
+
+def capability_map(agent_ids) -> dict[str, Capability | None]:
+    return {a: agent_capability(a) for a in agent_ids}
+
 
 def assignable_staff() -> list[tuple[str, str]]:
     """`[(agent_id, domain), ...]` for every ENABLED registry agent that is neither the

@@ -20,7 +20,8 @@ dispatch-time re-check marks the step `failed` + escalates instead of spawning i
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+import re
+from collections.abc import Callable, Iterable
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -222,6 +223,60 @@ class DecomposedTask(BaseModel):
 class DecompositionError(ValueError):
     """Raised by `validate_decomposition` — always carries a CEO/operator-facing
     message (no internals leaked), matching `ops_catalog`'s ValueError convention."""
+
+
+class UnmeasurablePlanError(DecompositionError):
+    """The plan is structurally valid but a step has no measurable acceptance, so
+    nothing — not code, not a grader — could ever say whether it is done. The router
+    treats this as "the work is not crew-shaped" and falls back to a sprint; a CEO
+    who forced `team:` sees it as a plain decompose failure. Carries the decompose
+    spend so the sprint route can still account for it."""
+
+    def __init__(self, message: str, *, cost_usd: float = 0.0) -> None:
+        super().__init__(message)
+        self.cost_usd = cost_usd
+
+
+#: What makes an acceptance line MEASURABLE: something code or a grader can count or
+#: locate — a number (items, chars, dates, money), a source demand, a named
+#: structure, an enumerated list of entities, or an EXECUTION outcome (a test run, a
+#: build, an exit code, a log line: a machine reports pass/fail without a grader).
+#: "Đầy đủ và chính xác" has none of these and is therefore not a criterion, it is a
+#: wish. The execution anchors were added after a shell brief ("clone repo ... rồi chạy
+#: test suite") came back unmeasurable: its step promised a green test run, which is
+#: the most checkable outcome there is, and the gate refused the whole plan.
+_MEASURABLE_HINT_RE = re.compile(
+    r"\d|https?://|\b(?:nguồn|link|url|bảng|cột|danh sách|file|tệp|json|csv|markdown|"
+    r"tiêu đề|đoạn|dòng|ký tự|trang|slide|ảnh|so sánh|"
+    r"test|pass|fail|exit|build|log|lệnh|command)\b",
+    re.IGNORECASE,
+)
+
+
+def unmeasurable_gap(task: DecomposedTask) -> str:
+    """Name the first work step whose acceptance nobody could measure, or "".
+
+    Measurable = non-blank AND carries at least one countable/locatable anchor
+    (`_MEASURABLE_HINT_RE`) or enumerates entities. A crew only pays for itself when
+    each hand-off can be checked without a conversation; a step that cannot be
+    checked is a step the coordinator would end up re-doing anyway, so the plan is
+    sent back (retry) and finally refused (`UnmeasurablePlanError`) rather than run.
+    """
+    from my_crew.runtime.sprint_runner import listed_entities
+
+    for step in task.steps:
+        if step.step_type != "work":
+            continue
+        text = (step.acceptance or "").strip()
+        if text and (_MEASURABLE_HINT_RE.search(text) or listed_entities(text, prose=True)):
+            continue
+        what = "chưa có tiêu chí nghiệm thu" if not text else (
+            f"tiêu chí {text[:60]!r} không đo được")
+        return (
+            f"bước '{step.step_id}' ({step.title[:60]}) {what} — mỗi bước cần ít nhất "
+            "một tiêu chí đếm/soi được (số lượng, nguồn, cấu trúc, hoặc danh sách thực thể)"
+        )
+    return ""
 
 
 def parse_decomposed_task(raw_json: str) -> DecomposedTask:
@@ -579,7 +634,9 @@ def boundary_label_counts(task: DecomposedTask) -> dict[str, int]:
     return counts
 
 
-def _merge_step_into_predecessor(pred: TeamStepPlan, step: TeamStepPlan) -> TeamStepPlan:
+def _merge_step_into_predecessor(
+    pred: TeamStepPlan, step: TeamStepPlan, *, assigned_to: str | None = None,
+) -> TeamStepPlan:
     """The predecessor absorbs the folded step's scope: titles joined, acceptance
     lines concatenated (verbatim, deduped — same no-rewrite rationale as
     `downgrade_to_sprint`'s acceptance merge), and the routing hint `needs_web`
@@ -597,10 +654,13 @@ def _merge_step_into_predecessor(pred: TeamStepPlan, step: TeamStepPlan) -> Team
         "acceptance": "\n".join(acceptance_lines)[:2000],
         "needs_web": pred.needs_web or step.needs_web,
         "needs_review": pred.needs_review or step.needs_review,
+        "assigned_to": assigned_to or pred.assigned_to,
     })
 
 
-def fold_unjustified_steps(task: DecomposedTask) -> tuple[DecomposedTask, int]:
+def fold_unjustified_steps(
+    task: DecomposedTask, *, capability_of: Callable[[str], object] | None = None,
+) -> tuple[DecomposedTask, int]:
     """Merge steps that no real boundary justifies as separate nodes. Returns the
     folded task and how many steps were folded (0 ⇒ the exact input task).
 
@@ -627,14 +687,37 @@ def fold_unjustified_steps(task: DecomposedTask) -> tuple[DecomposedTask, int]:
     collapses to one step — which then lets the existing `downgrade_to_sprint`
     catch shapes its old ≤3-step guard could not see.
 
+    `capability_of` (context-crew): maps an agent id to its capability tuple
+    (`team_task_roster.Capability`). When given, a change of PERSON is no longer a
+    boundary by itself — only a change of CAPABILITY is: two agents with the same
+    tools and model are the same role, and a step handed between them is one
+    person's work split across two cold-start processes under two names. The merged
+    step keeps the predecessor's owner, except when the folded step belongs to the
+    task's PIC: then the merged step takes the PIC, so the PIC-owns-terminal
+    invariant survives by construction. None ⇒ the pre-existing same-assignee rule.
+
     Every invariant `validate_decomposition` proved is preserved by construction
     (folding only removes nodes and re-points edges at an ancestor — no cycle can
-    appear; assignees are untouched; the terminal's owner is unchanged because a
-    folded terminal's absorber shares its assignee), but callers re-validate the
+    appear; the terminal's owner is unchanged because a folded terminal's absorber
+    either shares its assignee or is handed the PIC), but callers re-validate the
     result anyway — cheap proof beats trust, same policy as `fanout_split`.
     """
     steps = list(task.steps)
     folds = 0
+    pic_id = getattr(task, "pic_id", None)
+
+    def _same_role(a: str, b: str) -> bool:
+        if a == b:
+            return True
+        if capability_of is None:
+            return False
+        try:
+            cap_a, cap_b = capability_of(a), capability_of(b)
+        except Exception:  # noqa: BLE001 — an unreadable profile is not a fold reason
+            return False
+        # None = unknown role; unknown never equals unknown (fail open, no fold).
+        return cap_a is not None and cap_a == cap_b
+
     for _ in range(len(steps)):
         by_id = {s.step_id: s for s in steps}
         candidate = None
@@ -644,13 +727,14 @@ def fold_unjustified_steps(task: DecomposedTask) -> tuple[DecomposedTask, int]:
             if s.needs_shell or s.external_write:
                 continue
             pred = by_id[s.deps[0]]
-            if pred.assigned_to == s.assigned_to:
+            if _same_role(pred.assigned_to, s.assigned_to):
                 candidate = (pred, s)
                 break
         if candidate is None:
             break
         pred, step = candidate
-        merged = _merge_step_into_predecessor(pred, step)
+        owner = pic_id if (pic_id and step.assigned_to == pic_id) else None
+        merged = _merge_step_into_predecessor(pred, step, assigned_to=owner)
         rewired: list[TeamStepPlan] = []
         for s in steps:
             if s.step_id == step.step_id:

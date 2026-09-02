@@ -69,7 +69,10 @@ REQUEST_CEILING_RULE = (
     "TRẦN — tiêu chí nào đòi CAO HƠN đề gốc (vd đề chỉ đòi 'link nguồn' mà tiêu chí đòi "
     "'nguồn chính thức của hãng'; đề cho phép ghi THIẾU mà tiêu chí bắt phải có đủ số) "
     "thì chấm theo ĐỀ GỐC, không theo phần thổi phồng. Kết quả trung thực dùng nguồn gần "
-    "kề + ghi rõ THIẾU cho phần không tìm được là ĐẠT với đề như vậy."
+    "kề + ghi rõ THIẾU cho phần không tìm được là ĐẠT với đề như vậy. Đề gốc mô tả "
+    "TOÀN việc, còn bước này chỉ làm MỘT phần của nó: phần nào của đề gốc mà 'tiêu chí "
+    "chấp nhận' của bước KHÔNG nhắc tới (vd đề tách (1a)/(1b)/(2), bước chỉ có tiêu chí "
+    "về (1a)) là việc của bước khác — KHÔNG chấm thiếu vì kết quả không làm phần đó."
 )
 
 #: A cell that honestly reports "not public" with a trace of the attempted lookup is

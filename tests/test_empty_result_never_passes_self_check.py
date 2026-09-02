@@ -62,3 +62,21 @@ def test_a_non_empty_result_is_still_graded_normally(tmp_path):
     passed, failures, _ = _deps(tmp_path).run_self_check("Giá thuê hạng A: 64.7 USD/m²", "")
     assert passed is True
     assert failures == []
+
+
+def test_a_findings_step_without_a_url_fails_before_any_grader_call(tmp_path):
+    # The artifact contract is decided by code on the same short-circuit: a dep-less web
+    # collect that leaves no link for its dependents is rejected without a provider call.
+    from my_crew.agent.step_artifact_contract import ArtifactContract
+    from my_crew.agent.team_task_graph import default_team_task_deps
+
+    deps = default_team_task_deps(
+        settings=None, step_title="Tra cứu", data_dir=tmp_path, task_id="t1", step_seq=1,
+        artifact_contract=ArtifactContract(kind="findings", needs_web=True),
+    )
+    passed, failures, confidence = deps.run_self_check(
+        "Giá Shopee 1.2tr, Lazada 1.1tr (theo báo)", "- có giá 2 sàn", ""
+    )
+    assert passed is False
+    assert any("link nguồn" in f for f in failures)
+    assert confidence == 1.0

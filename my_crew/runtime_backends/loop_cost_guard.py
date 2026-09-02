@@ -46,6 +46,25 @@ COST_CAP_GAP_NOTE = (
 _GAP_NOTE_SEPARATOR = "\n\n---\n"
 
 
+def cost_cap_note_marker() -> str:
+    """The literal, format-independent head of `COST_CAP_GAP_NOTE`.
+
+    Derived from the constant rather than copied so a reword cannot leave a scan
+    matching a string the guard no longer emits.
+    """
+    return COST_CAP_GAP_NOTE.split("{", 1)[0]
+
+
+def carries_cost_cap_note(text: str) -> bool:
+    """Did the spend ceiling write this text, rather than a failing tool or a refusal?
+
+    Shared by the two readers that must agree on it: the stalled-task drop (which
+    salvages a capped draft instead of discarding it) and the step graph's self_check
+    (which must not spend a rework round on a draft the budget, not the worker, cut
+    short — a rework runs under the same ceiling and cannot do better)."""
+    return cost_cap_note_marker() in (text or "")
+
+
 def over_cost_cap(costs: list[float], cap: float | None) -> bool:
     """Has this loop's recorded spend reached its ceiling?
 

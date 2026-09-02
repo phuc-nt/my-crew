@@ -900,6 +900,12 @@ def test_the_live_output_guard_brief_still_reaches_the_team_lane():
     A sprint runs as a single step, and a step with no deps reads no handoff — so the
     per-dep cap has nothing to bound and the live case would fail on "no step with deps"
     while Phase 2 was working perfectly.
+
+    Reaching the lane is the half an offline test can pin. The other half — that the
+    plan keeps a dep edge through `fold_unjustified_steps` on a fleet whose workers all
+    share one capability — is a property of the brief's SHAPE (a fan-in, whose join has
+    two deps and is never a fold candidate), measured on the live model and written up
+    next to `BRIEF` itself.
     """
     from my_crew.agent.sprint_intake import classify_brief
     from tests.fullflow_live.test_live_output_guards import BRIEF
@@ -968,3 +974,146 @@ def test_the_live_cost_cap_brief_still_tells_its_step_not_to_split():
         "propose call may fan the step out to uncapped agents, and L1 then measures a step "
         f"that never ran the thin loop at all. brief={BRIEF!r}"
     )
+
+
+# --- capability-aware fold (context-crew) ------------------------------------------
+
+
+def _fold_with(steps: list[dict], caps: dict, *, pic_id: str | None = None):
+    from my_crew.agent.task_decomposition import fold_unjustified_steps, parse_decomposed_task
+
+    raw = {"steps": steps, "requires_approval": True}
+    if pic_id:
+        raw["pic_id"] = pic_id
+    task = parse_decomposed_task(json.dumps(raw))
+    return fold_unjustified_steps(task, capability_of=caps.get)
+
+
+def test_fold_merges_a_chain_across_two_agents_with_the_same_capability():
+    # Same tools + same model = same role; the person's name is not a boundary.
+    from my_crew.agent.team_task_roster import Capability
+
+    same = Capability(web=True, model="m")
+    folded, count = _fold_with([
+        _step("research", assigned_to="agent-a"),
+        _step("draft", assigned_to="agent-b", deps=["research"]),
+    ], {"agent-a": same, "agent-b": Capability(web=True, model="m")})
+    assert count == 1
+    assert folded.steps[0].assigned_to == "agent-a"
+
+
+def test_fold_keeps_a_chain_across_different_capabilities():
+    from my_crew.agent.team_task_roster import Capability
+
+    task, count = _fold_with([
+        _step("research", assigned_to="agent-a"),
+        _step("draft", assigned_to="agent-b", deps=["research"]),
+    ], {"agent-a": Capability(web=True, model="m"), "agent-b": Capability(web=False, model="m")})
+    assert count == 0
+    assert len(task.steps) == 2
+
+
+def test_fold_never_treats_two_unknown_roles_as_the_same_role():
+    task, count = _fold_with([
+        _step("research", assigned_to="agent-a"),
+        _step("draft", assigned_to="agent-b", deps=["research"]),
+    ], {})
+    assert count == 0
+
+
+def test_fold_hands_the_merged_step_to_the_pic_when_the_folded_step_was_the_pics():
+    from my_crew.agent.task_decomposition import validate_decomposition
+    from my_crew.agent.team_task_roster import Capability
+
+    same = Capability(web=True, model="m")
+    folded, count = _fold_with([
+        _step("research", assigned_to="agent-b"),
+        _step("final", assigned_to="agent-a", deps=["research"]),
+    ], {"agent-a": same, "agent-b": same}, pic_id="agent-a")
+    assert count == 1
+    only = folded.steps[0]
+    assert only.assigned_to == "agent-a"
+    # the PIC-owns-terminal invariant still holds without a repair pass
+    validate_decomposition(folded, staff_ids={"agent-a", "agent-b"}, pic_id="agent-a")
+
+
+# --- measurable acceptance: a hand-off nobody can grade is not a crew boundary ---------
+
+
+def _chain_with_acceptance(*acceptances: str):
+    steps = [
+        {**_step(f"s{i}", deps=[f"s{i - 1}"] if i else None), "acceptance": text}
+        for i, text in enumerate(acceptances)
+    ]
+    return _task_from(steps)
+
+
+def test_a_step_without_acceptance_is_unmeasurable():
+    from my_crew.agent.task_decomposition import unmeasurable_gap
+
+    gap = unmeasurable_gap(_chain_with_acceptance("kèm 3 link nguồn", ""))
+    assert "'s1'" in gap and "chưa có tiêu chí" in gap
+
+
+def test_a_wish_is_not_a_criterion():
+    """"Đầy đủ và chính xác" cannot be counted or located by anyone — code or grader —
+    so it must not pass as acceptance just because the field is non-blank."""
+    from my_crew.agent.task_decomposition import unmeasurable_gap
+
+    gap = unmeasurable_gap(_chain_with_acceptance("đầy đủ và chính xác", "có bảng so sánh"))
+    assert "'s0'" in gap and "không đo được" in gap
+
+
+@pytest.mark.parametrize("text", [
+    "ít nhất 3 nguồn",
+    "có bảng so sánh 2 cột",
+    "nêu Notion, Obsidian và Evernote",
+    "kèm link nguồn cho từng số liệu",
+    "tối đa 200 từ",
+    # execution outcomes: a machine reports these without a grader. Measured live: a
+    # shell brief's step promised a green test run and the gate refused the plan.
+    "test suite chạy pass toàn bộ",
+    "lệnh build chạy xong không báo fail",
+])
+def test_a_countable_or_locatable_anchor_makes_a_step_measurable(text):
+    from my_crew.agent.task_decomposition import unmeasurable_gap
+
+    assert unmeasurable_gap(_chain_with_acceptance(text, "kèm link nguồn")) == ""
+
+
+def test_the_live_cost_cap_breach_brief_still_plans_as_do_review():
+    """Premise guard for the live cost-cap BREACH cases (X2/X2b).
+
+    Measured: the planner now merges same-tier steps, so the first version of that brief
+    (three parts of one content plan) folded to ONE step and the shape gate downgraded it
+    to a sprint — a single row that finished before any tick re-examined the task, so the
+    cap was never consulted and the case passed by testing nothing. Asking for a cross-check
+    is what keeps it a crew: do+review is the one small plan the router refuses to fold,
+    and the reviewer row is the second tick the cap check needs.
+    """
+    from my_crew.agent.sprint_intake import classify_brief, route_signals
+    from tests.fullflow_live.test_live_adversarial_cost_cap_breach import BRIEF
+
+    is_sprint, reason = classify_brief(BRIEF)
+    assert not is_sprint, f"the live breach BRIEF now routes to the SPRINT lane ({reason!r})"
+    assert route_signals(BRIEF)["needs_independent_review"] == 1, (
+        "the live breach BRIEF lost its cross-check ask: the plan would fold to one step "
+        "and the task would finish before the cap is ever consulted"
+    )
+
+
+def test_decompose_prompt_renders_the_capability_hint_and_the_tool_rule():
+    """The planner must see which agent has tools, and be told to route tool steps by
+    it — otherwise a "tra lịch sử làm việc" step can land on an agent that has no
+    history tool (measured live, one run in four)."""
+    from my_crew.llm.team_task_prompt import build_team_decompose_messages
+
+    messages = build_team_decompose_messages(
+        brief="tra lịch sử làm việc của đội",
+        staff=[("analyst", "research — có công cụ tra lịch sử làm việc nội bộ"),
+               ("writer", "pm — không có công cụ")],
+    )
+
+    assert "QUY TẮC CÔNG CỤ" in messages[0]["content"]
+    assert "- analyst (research — có công cụ tra lịch sử làm việc nội bộ)" in messages[1]["content"]
+    assert "- writer (pm — không có công cụ)" in messages[1]["content"]

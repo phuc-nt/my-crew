@@ -32,7 +32,17 @@ LOOP_QUERY = "giá spotify premium việt nam"
 #: Sentinel chỉ tồn tại trong KẾT QUẢ tool (không lọt vào artifact/handoff) — dùng
 #: làm marker định tuyến lượt thin-loop thứ hai.
 DATA_MARK = "DỮ LIỆU SPOTIFY"
-LOOKUP_RESULT = "Giá Spotify Premium Việt Nam: 59.000đ/tháng (nguồn: spotify.com)."
+LOOKUP_RESULT = ("Giá Spotify Premium Việt Nam: 59.000đ/tháng "
+                 "(nguồn: https://www.spotify.com/vn-vi/premium/).")
+
+#: Terminal artifact long enough for the final-deliverable floor — a one-liner would
+#: be sent to rework and never reach the CEO as-is.
+FINAL_BULLETIN = (
+    "Bản tin: Spotify Premium 59.000đ/tháng.\n\nGói Premium cá nhân tại Việt Nam hiện có "
+    "giá 59.000đ/tháng theo bảng giá chính thức (nguồn: https://www.spotify.com/vn-vi/premium/). "
+    "Mức giá này chưa đổi so với đầu năm; gói gia đình và sinh viên có giá riêng, không nằm "
+    "trong phạm vi bản tin này."
+)
 
 
 def _dag_steps() -> list[dict]:
@@ -71,7 +81,7 @@ def test_needs_web_step_runs_the_thin_loop_end_to_end(fullflow, monkeypatch):
         rules.intent_assign_team_task(),
         rules.propose_no_consult(),
         rules.decompose(_dag_steps(), title="Bản tin giá Spotify"),
-        rules.step_work(FINAL_TITLE, "Bản tin: Spotify Premium 59.000đ/tháng."),
+        rules.step_work(FINAL_TITLE, FINAL_BULLETIN),
         rules.self_check_pass(),
         rules.peer_review(True),
         *rules.utility_rules(),

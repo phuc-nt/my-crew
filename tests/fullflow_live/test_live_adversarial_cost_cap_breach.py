@@ -47,12 +47,18 @@ from tests.fullflow_live.topology import boot, poll_until, seed_home, task_statu
 #: decomposition still breached it first and the task still stalled with no step spawned.
 TINY_CAP_USD = 0.001
 
-#: Multi-step on purpose. A single-step task could finish before any tick re-examines it,
+#: Multi-row on purpose. A single-step task could finish before any tick re-examines it,
 #: and then the cap would never be consulted — the case would pass by never testing
-#: anything. Several steps guarantee at least one `_act_on_task` after spend is recorded.
+#: anything. Three parts of one content plan are no longer enough: the planner merges
+#: same-tier steps, so that brief folded to ONE step and was downgraded to a sprint
+#: (measured, one paid run). The cross-check ask is what keeps it a crew — do+review is
+#: the one small plan the router refuses to fold — and the reviewer row guarantees at
+#: least one `_act_on_task` after spend is recorded. Pinned offline by
+#: `test_the_live_cost_cap_breach_brief_still_plans_as_do_review`.
 BRIEF = (
     "Viết kế hoạch nội dung cho trang chủ: (1) đoạn giới thiệu công ty, "
-    "(2) danh sách 3 tính năng chính, (3) một lời kêu gọi hành động."
+    "(2) danh sách 3 tính năng chính, (3) một lời kêu gọi hành động, "
+    "rồi nhờ người khác soát chéo trước khi gửi anh."
 )
 
 
@@ -127,10 +133,20 @@ def capped_fleet(tmp_path, live_api_key):
         server.stop()
 
 
+#: How long the synchronous delegate POST may take. 180s held for months — one decompose
+#: on the live model answers in well under a minute — and then failed twice on 2026-09-02
+#: with the fleet still inside its FIRST decompose attempt: OpenRouter kept the socket busy
+#: with keep-alive whitespace while the upstream stalled, so nothing timed out server-side
+#: either. The client now abandons an attempt at a 240s wall-clock deadline and retries,
+#: which is the product's own recovery; a 180s wait here ended the case before that
+#: recovery could run. 900s is what the rest of the live suite already allows a delegate.
+DELEGATE_TIMEOUT_S = 900
+
+
 def test_x2_breaching_the_cost_cap_stalls_the_task_and_halts_its_steps(capped_fleet,
                                                                        journey_budget):
     code, body = capped_fleet.post(
-        "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True}, timeout=180
+        "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True}, timeout=DELEGATE_TIMEOUT_S
     )
     assert code == 200, f"delegate failed {code}: {body!r}"
     task_id = body.get("task_id")
@@ -221,15 +237,18 @@ def test_x2b_a_normal_cap_does_not_stall_ordinary_work(tmp_path, live_api_key,
     server = boot(tmp_path / "home", api_key=live_api_key)
     try:
         code, body = server.post(
-            "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True}, timeout=180
+            "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True},
+            timeout=DELEGATE_TIMEOUT_S,
         )
         assert code == 200, f"delegate failed {code}: {body!r}"
         task_id = body["task_id"]
 
         # Let the fleet do real work under the default $5 cap, then look. Waiting for
-        # recorded spend rather than for a full delivery: this only needs to observe that
-        # the task progressed WITHOUT the brake firing, and a completed deliverable would
-        # cost several times more for no extra evidence.
+        # recorded spend PAST X2's tiny cap rather than for a full delivery: this only
+        # needs to observe that the task progressed beyond the point where X2 stalled,
+        # WITHOUT the brake firing, and a completed deliverable would cost several times
+        # more for no extra evidence. Waiting for any spend at all is not enough: the first
+        # recorded call (a single cheap decompose) can land under $0.001 on its own.
         #
         # Spend is polled from the STORE for the same reason X2 asserts on it: the
         # comparison below is against the cap, and the cap reads `sum_cost`. Polling the
@@ -237,9 +256,10 @@ def test_x2b_a_normal_cap_does_not_stall_ordinary_work(tmp_path, live_api_key,
         # another.
         home = tmp_path / "home"
         poll_until(
-            lambda: _recorded_spend(home, task_id) or None,
+            lambda: (lambda usd: usd if usd > TINY_CAP_USD else None)(
+                _recorded_spend(home, task_id)),
             timeout_s=240, interval_s=3,
-            what=f"task {task_id} to record real spend under the default cap",
+            what=f"task {task_id} to record spend past ${TINY_CAP_USD} under the default cap",
         )
         status = task_status(server, task_id)
 

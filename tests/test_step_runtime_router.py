@@ -26,9 +26,9 @@ class _LP:
 class _Step:
     def __init__(self, needs_shell=False, needs_web=True, step_type="work",
                  intervention_count=0, needs_mail=False):
-        # needs_web defaults TRUE here so the pre-v74 assertions below keep testing
-        # the tier-drop rules on their original terms (a web-needing step); the v74
-        # native-forcing rules get their own tests at the bottom.
+        # needs_web defaults TRUE here so the tier-drop assertions below keep testing
+        # on their original terms (a web-needing step); the step-type / prefetch rules
+        # get their own tests at the bottom.
         self.needs_shell = needs_shell
         self.needs_web = needs_web
         self.needs_mail = needs_mail
@@ -91,14 +91,19 @@ def test_force_native_killswitch(monkeypatch):
 # --- v74: tool-less steps run native one-shot -----------------------------------------
 
 
-def test_no_web_work_step_forces_native_regardless_of_tier():
-    """Measured (task b4c227ec37ba): grading on deep = 548s, synthesis on the loop =
-    780s, vs ~60-120s native with identical inputs. A work step declaring no web need
-    runs native even on a loop/deep-pinned agent."""
-    for kind in ("create_agent", "deep_agent"):
-        lp = _LP(kind, sandbox={"provider": "docker"} if kind == "deep_agent" else None)
-        rt = resolve_step_runtime(lp, _Step(needs_web=False))
-        assert _kind(rt) == "NativeGraphRuntime"
+def test_a_work_step_runs_on_its_assignees_tier_even_without_web():
+    """A role is (tools, permissions, model, schema): an agent the operator put on the
+    tools tier is there because its steps need tools native never binds (history
+    search, the read toolset). Measured live on a tools-tier fleet: the old rule sent a
+    no-web work step native, no toolset was bound, and the step burned every
+    intervention explaining it could not search. A native-pinned agent stays native."""
+    rt = resolve_step_runtime(_LP("create_agent"), _Step(needs_web=False))
+    assert _kind(rt) == "ToolCallingRuntime"
+    lp = _LP("deep_agent", sandbox={"provider": "docker"})
+    assert _kind(resolve_step_runtime(lp, _Step(needs_web=False))) == "ToolCallingRuntime"
+    assert _kind(resolve_step_runtime(_LP("native"), _Step(needs_web=False))) == (
+        "NativeGraphRuntime"
+    )
 
 
 def test_needs_mail_step_stays_off_the_native_tier():
@@ -133,12 +138,14 @@ def test_review_row_is_always_native():
     assert _kind(rt) == "NativeGraphRuntime"
 
 
-def test_wrong_no_web_hint_self_heals_after_first_ruling():
-    """A wrong needs_web=False costs ONE attempt: once the coordinator has ruled
-    (intervention_count >= 1) the native forcing drops and the agent's own tier runs."""
+def test_a_prefetched_work_step_runs_native_until_a_ruling_re_arms_the_tier():
+    """`prefetched` means the launcher already put the step's web data in the prompt —
+    the web capability the tier held over native is spent, so the fast one-shot tier
+    runs. After a coordinator ruling (intervention_count >= 1) the agent's own tier is
+    back, so a wrong hint costs one attempt, not the step."""
     lp = _LP("create_agent")
-    assert _kind(resolve_step_runtime(lp, _Step(needs_web=False))) == "NativeGraphRuntime"
-    rt = resolve_step_runtime(lp, _Step(needs_web=False, intervention_count=1))
+    assert _kind(resolve_step_runtime(lp, _Step(), prefetched=True)) == "NativeGraphRuntime"
+    rt = resolve_step_runtime(lp, _Step(intervention_count=1), prefetched=True)
     assert _kind(rt) == "ToolCallingRuntime"
 
 

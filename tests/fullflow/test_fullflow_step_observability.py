@@ -22,15 +22,24 @@ from my_crew.runtime.step_recorder import ACTIVITY_FIELDS, transcripts_dir
 from . import scenario_rules as rules
 from .scripted_llm import LlmRule
 
+#: The terminal artifact must clear the final-deliverable floor (the CEO reads it
+#: directly), otherwise the step goes into rework instead of review.
+_FINAL_EMAIL = (
+    "Email chốt: 10h thứ Sáu, phòng A.\n\nKính gửi cả đội,\n\nMời mọi người họp review "
+    "quý 3.\n- Thời gian: 10h thứ Sáu.\n- Địa điểm: phòng A.\n- Agenda: (1) số liệu quý 3, "
+    "(2) việc trễ, (3) kế hoạch quý 4.\n\nVui lòng xác nhận tham dự trước thứ Năm.\n\n"
+    "Trân trọng,\nThư ký"
+)
+
 
 def _dag_steps() -> list[dict]:
     return [
         {"step_id": "draft", "title": "Soạn nháp email mời họp",
          "assigned_to": "secretary", "deps": [],
-         "acceptance": "đủ thời gian, địa điểm, agenda", "needs_review": False},
+         "acceptance": "nêu đủ 3 mục: thời gian, địa điểm, agenda", "needs_review": False},
         {"step_id": "finalize", "title": "Chốt email mời họp",
          "assigned_to": "writer", "deps": ["draft"],
-         "acceptance": "email hoàn chỉnh, tự dừng chờ CEO duyệt",
+         "acceptance": "email hoàn chỉnh dưới 200 từ, tự dừng chờ CEO duyệt",
          "needs_review": True, "external_write": True},
     ]
 
@@ -51,8 +60,9 @@ def test_v80_observability_rides_a_real_task(fullflow):
         rules.intent_assign_team_task(),
         rules.propose_no_consult(),
         rules.decompose(_dag_steps(), title="Email mời họp quý 3"),
-        rules.step_work("Soạn nháp email mời họp", "Nháp: 10h thứ Sáu, phòng A."),
-        rules.step_work("Chốt email mời họp", "Email chốt: 10h thứ Sáu, phòng A."),
+        rules.step_work("Soạn nháp email mời họp",
+                        "Nháp: 10h thứ Sáu — thời gian, địa điểm phòng A, agenda 3 mục."),
+        rules.step_work("Chốt email mời họp", _FINAL_EMAIL),
         rules.self_check_pass(),
         LlmRule(role="review", marker="", respond=_capture_review),
         LlmRule(role="util", marker="KHONG_CO_GI", respond=_capture_reflect),

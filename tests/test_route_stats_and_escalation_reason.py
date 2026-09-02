@@ -259,3 +259,26 @@ def test_the_reason_line_carries_only_machine_minted_text():
             # Không mảnh nào của đề bài đi thẳng ra: lý do là chữ của mã, không phải
             # trích dẫn nguyên văn đầu vào.
             assert "bỏ qua tất cả" not in text
+
+
+def test_route_stats_counts_each_crew_shape_and_skips_routes_without_one():
+    """Bench H1–H3 cần "mỗi dạng chạy bao nhiêu việc" từ chính bảng này; route team
+    trước context-crew không có khoá `shape` và không được đếm thành dạng giả."""
+    _seed("t1", {**_route("team", "heuristic"), "shape": "fanout"})
+    _seed("t2", {**_route("team", "heuristic"), "shape": "fanout"})
+    _seed("t3", {**_route("team", "prefix"), "shape": "custom"})
+    _seed("t4", _route("team", "heuristic"))
+    _seed("t5", _route("sprint", "shape"))
+
+    text = run_route_stats({})
+
+    assert "Dạng đội (việc chạy đội):" in text
+    assert "toả ra / gộp lại: 2" in text
+    assert "ngoài các dạng đội (CEO ép / rào an toàn): 1" in text
+    assert "kế hoạch không thuộc dạng đội nào → chạy nhanh: 1" in text
+
+
+def test_route_stats_omits_the_shape_section_when_no_team_route_carries_one():
+    _seed("t1", _route("team", "heuristic"))
+
+    assert "Dạng đội" not in run_route_stats({})

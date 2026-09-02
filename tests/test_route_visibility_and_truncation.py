@@ -66,7 +66,7 @@ def test_a_truncated_decompose_retries_asking_for_a_shorter_plan(monkeypatch):
     """
     retry_errors: list[str] = []
     good = ('{"pic_id": "agent-a", "steps": [{"step_id": "s1", "title": "làm việc",'
-            ' "assigned_to": "agent-a", "deps": [], "acceptance": "xong"}]}')
+            ' "assigned_to": "agent-a", "deps": [], "acceptance": "kèm 1 file"}]}')
     bodies = iter([_result('{"pic_id": "agent-a", "steps": [{"step_i', "length"),
                    _result(good, "stop")])
 
@@ -97,7 +97,7 @@ def test_a_truncated_decompose_does_not_burn_a_parse_attempt(monkeypatch):
         return real_parse(raw)
 
     good = ('{"pic_id": "agent-a", "steps": [{"step_id": "s1", "title": "làm việc",'
-            ' "assigned_to": "agent-a", "deps": [], "acceptance": "xong"}]}')
+            ' "assigned_to": "agent-a", "deps": [], "acceptance": "kèm 1 file"}]}')
     bodies = iter([_result("{cụt", "length"), _result(good, "stop")])
     monkeypatch.setattr(mod, "parse_decomposed_task", _spy)
     monkeypatch.setattr("my_crew.llm.team_task_prompt.build_team_decompose_messages",

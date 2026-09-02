@@ -129,7 +129,11 @@ vì đợi nhịp phút); (c) row mint (review/fanout) → tick kế spawn trong
 vòng benchmark: gap dispatch từ ~253s/task (11% wall-clock) xuống **0–8s mọi đường**,
 kể cả dưới tải 2 task đồng thời. Song song per-task theo `company.yaml::
 team_task_concurrency` (dispatcher spawn tới `concurrency - running`); KHÔNG có
-single-flight per agent — hai bước cùng một agent chạy song song được nếu còn slot.
+single-flight per agent — hai bước cùng một agent chạy song song được nếu còn slot. **Khoá tick fleet-wide** (context-crew): tick do poke (thread riêng) và tick theo
+phút từng chạy song song lên cùng một hàng `needs_decision` — cả hai đốt một lần can thiệp rồi ghi
+đè phán quyết của nhau (đo live: retry có hướng dẫn bị reassign đè sau 19s, 4 can thiệp cho 1 lỗi).
+`run_team_tick` giữ `flock` không chặn trên `team_tick.lock` dưới team-tasks root; tick thua trả
+`status="tick_in_flight"`, không đọc store, không poke.
 
 ### 3.2a Integration health (`my_crew/server/integration_health.py`, v47)
 **Health check Docker chủ động** (`_docker_check`): probe `docker info` giới hạn 5s, báo ✓/✗ sạch khi daemon tắt/offline — panel Sức khỏe noti lỗi TRƯỚC khi giao việc deep_agent (no-shell step chạy 0-Docker qua `create_agent`, chỉ needs_shell→deep_agent thì dùng Docker).
@@ -164,6 +168,7 @@ không field dấu hiệu injection).
 - `team_task_graph.py` — chạy 1 bước: `perceive → work → (self_check | recover→work) →
   (deliver | rework→self_check)`. Consult đồng nghiệp trong `work`.
 - `task_decomposition.py` — chia việc ≤7 bước; validate (acyclic/authz/PIC); hash canonical.
+- `team_task_roster.py` — `planning_roster()`: roster cho decompose/sprint intake/replan, mỗi dòng `id (domain — gợi ý năng lực)` suy từ `Capability` (tier/web/mail) để planner giao bước cần công cụ đúng người; ids y hệt `assignable_staff()`.
 - `review_graph.py` — soát chéo (peer review).
 - `ops_*.py` — lệnh CEO: giao việc (`ops_assign_team_task`), chỉnh việc
   (`ops_adjust_team_task`), chat quản trị (`ops_chat`). v61: engine nhận catalog theo
@@ -418,6 +423,67 @@ Live fullflow suite (`tests/fullflow_live/`, v92): 18 case end-to-end vs model t
 `-m live`. Không `OPENROUTER_API_KEY` → skip ngoài lỗi xác thực. Case assert trên `route_json` 
 (route record chứ không prose), ổn định qua model nondeterminism.
 
+### 3.5g Context-crew: vai = bộ năng lực, ba hình thái đội, bench giả thuyết (v0.17)
+
+**Vai = bộ năng lực, không phải persona** (`team_task_roster.Capability(tier, web, mail, model)`):
+suy từ profile — `tier` = `agent_runtime.kind` (native không gọi tool, `create_agent` có bộ
+tool đọc, `deep_agent` thêm shell), `web_search` ⇒ web, `gws_context` + `gws_enabled` ⇒ mail,
+model hiệu lực (profile ghi đè hoặc fleet). Tier là một trường riêng: agent tầng tool và agent
+native cùng web + model vẫn là hai vai (đo live: thiếu tier, bước research của analyst
+`create_agent` bị gộp vào bước của writer native, toolset không bao giờ được bind). `fold_unjustified_steps(task,
+capability_of=…)` gộp hai bước kề nhau khi CÙNG bộ năng lực dù khác người được giao (bước của PIC
+thắng khi gộp, giữ bất biến PIC-terminal). Profile không đọc được ⇒ `None`, không bao giờ bằng
+một `None` khác — hai agent không ai đọc được không được gộp làm một.
+
+**Hợp đồng artifact** (`step_artifact_contract.py`): hand-off giữa hai bước là artifact, không
+phải hội thoại. Kind suy từ vị trí trong DAG: `findings` (bước thu thập không dep, `needs_web` ⇒
+phải có ≥1 URL `http`), `draft` (bước giữa ⇒ không rỗng), `final` (bước cuối ⇒ ≥200 ký tự),
+`verdict` (dòng review — `review_graph` chấm bằng schema riêng). `artifact_contract_gaps` chạy
+bằng code TRƯỚC self-check LLM, cùng đường rework với `machine_checkable_gaps`; worker nhận
+đúng một dòng hợp đồng trong prompt (`artifact_contract_line`). Kind lạ / text rỗng ⇒ không thêm
+gap (fail-open cho caller cũ).
+
+**Hình thái đội còn sống** (`crew_shape.classify_shape(task, signals)`, thứ tự ưu tiên):
+
+| Hình thái | Điều kiện | Ranh giới một agent mạnh không vượt được |
+|---|---|---|
+| `permission_chain` | có bước `needs_shell` / `external_write` / `needs_mail` | quyền (an toàn) — không bench, không bao giờ rút |
+| `do_review` | ≤3 bước, tín hiệu `needs_independent_review`; `mark_do_review` cắm `needs_review` vào bước cuối, reviewer ≠ author qua `pick_reviewer` | người chấm độc lập (H2 giữ) |
+
+Hình thái thứ ba `fanout` (≥2 bước `needs_web` không dep + bước gộp) đã bị bench 260902 loại
+(H1 + H3 chết, xem dưới): kế hoạch dạng toả ra/gộp lại nay không khớp hình thái nào ⇒ sprint
+như mọi chuỗi cùng công cụ; `sprint_query_budget` co giãn theo số thực thể nên độ rộng là
+việc của sprint. Fan-out RUNTIME của coordinator (`fanout_insert`, tách bước liệt kê thực thể
+trong một đội đã tồn tại) là cơ chế khác, không đổi. Nhãn `fanout` vẫn còn trong
+`route_stats` để đếm route cũ. Không khớp hình thái nào ⇒ sprint, `route.source="shape"`.
+`team:` ép hoặc refusal ⇒ vẫn team, ghi `shape="custom"` khi không khớp (tiền tố là quyết
+định của người giao, hình thái là quan sát). Refusal "ghi ra ngoài công ty" mà model quên cờ ⇒ `enforce_refusal_boundary` gắn
+`external_write` lên bước cuối — cổng an toàn thắng cổng hình thái. `route_json.signals` thêm
+`independent_sources`, `needs_independent_review`, `sensitive_tool`; mọi route team có
+`route.shape`; `route_stats` đếm theo shape.
+
+**Chống lãng phí** (cùng vòng): `MAX_REWORK=1`; can thiệp tối đa 1 cho bước cuối khi
+`self_do_step` đã nối (bước giữa giữ 2); bước `needs_web` mà search hỏng ⇒ lỗi công cụ ⇒
+machine retry (`MAX_STEP_RETRIES`), không đem artifact viết mù đi chấm; kế hoạch có bước không
+đo được (`unmeasurable_gap`: acceptance không có số / từ khoá đo / kết quả thực thi như test,
+build, exit / thực thể trong ngoặc) ⇒ retry rồi sprint `source="unmeasurable"` — trừ khi đề đã
+bị TỪ CHỐI sprint (shell, ghi ra ngoài, nhiều người): cổng an toàn thắng cổng đo được, raise cho
+CEO viết lại đề như `team:` ép (đo live: đề "clone repo rồi chạy test suite" từng trượt xuống
+sprint không có ranh giới shell nào); `cost_cap_usd` mặc định 1.0 USD
+cho tầng `create_agent`/`deep_agent` (`DEFAULT_STEP_COST_CAP_USD`, native giữ None), profile
+ghi đè.
+
+**Bench giả thuyết** (`bench/hypothesis_stats.py`): mỗi hình thái sống trên một giả thuyết có
+ngưỡng giết cố định TRƯỚC khi đo, min 4 case × 3 run, Wilson interval báo kèm điểm ước lượng.
+H1 fanout: thắng ≥2/3 cặp judge mù VÀ chi phí ≤3× sprint. H2 do_review: bắt ≥50% lỗi cài sẵn,
+bất đồng giữa các run ≤25%. H3 chuyên viên rẻ + điều phối mạnh: không thua judge VÀ chi phí
+≤70% sprint. Hình thái chết ⇒ rút khỏi `classify_shape`. **Kết quả vòng 260902** (4 case × 3
+run, judge mù 3 phiếu/cặp, sprint = 1 agent mạnh có web): H1 CHẾT — đội toả ra thắng 4/12
+(Wilson 0.14–0.61), chi phí 1.51× sprint; H3 CHẾT — chuyên viên rẻ (deepseek-v4-flash) dưới
+điều phối mạnh chỉ tốn 0.59× nhưng thua 8/12, không phải "bằng chất lượng"; H2 GIỮ — reviewer
+độc lập bắt 10/12 artifact cài lỗi (29/36 lỗi cài sẵn), bất đồng giữa run 8%. Chi tiết:
+`plans/reports/bench-260902-1140-context-crew-h1-h3-keep-kill-report.md`.
+
 ### 3.6 Action Gateway (`my_crew/actions/`, v30–v31, v67–v68 learned rules)
 `action_gateway.py` = cửa duy nhất. `hard_block.py` = Lớp A (chặn cứng, không duyệt được).
 Lớp B = phụ thuộc `safety.trust_mode` per-agent:
@@ -561,6 +627,15 @@ lỗi dữ liệu cần tool — bài học vòng 7); hint sai tự hồi phục
 ép). Bind hash có điều kiện như `needs_shell`. Hint-only, không phải quyền — tier native không vì thế
 có thêm tool nào. Decompose thêm QUY TẮC TÁCH SONG SONG: đề ≥4 thực thể độc lập cùng dạng → 2-3 bước
 collect deps rỗng, tên thực thể đích danh trong title + acceptance.
+
+**Context-crew thu hồi phép ép native theo `needs_web`**: tier là một trường của VAI
+(`Capability.tier` — bộ (tools, permissions, model, artifact schema)), không phải phỏng đoán tốc độ
+theo bước. Đo lại trên fleet có agent tier tools: bước tra lịch sử nội bộ được kế hoạch giao ĐÚNG
+cho agent tier tools bị ép native, không bind toolset nào, đốt hết mọi lần can thiệp chỉ để giải
+thích là không tìm được. `resolve_step_runtime` giờ: review/sprint → native; bước work `prefetched`
+(launcher đã nhét dữ liệu web vào prompt) chưa can thiệp → native; còn lại chạy đúng tier của
+assignee (fleet mặc định vẫn native nên tốc độ không đổi). Tốc độ đến từ planner gộp bước cùng
+tier, không từ việc ghi đè vai lúc dispatch.
 
 **v74.1–74.2 hoàn thiện (kiểm chứng qua 7 vòng benchmark, xem
 `docs/journals/260808-v74-multi-agent-speed.md`)**:

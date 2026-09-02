@@ -75,3 +75,16 @@ def test_both_graders_share_one_anchor_producer():
     check = build_self_check_messages(result_text="r", acceptance="- a")
 
     assert grader_today_line() in check[1]["content"]
+
+
+def test_the_worker_is_told_which_artifact_it_owes():
+    from my_crew.llm.team_task_prompt import build_team_step_messages
+
+    msgs = build_team_step_messages(
+        step_title="Tra cứu", artifact_contract="Bàn giao: bản THU THẬP cho bước sau dùng",
+    )
+    user = msgs[1]["content"]
+    assert "Bàn giao: bản THU THẬP" in user
+    assert user.index("Đầu việc") < user.index("Bàn giao")
+    # no contract ⇒ no line
+    assert "Bàn giao" not in build_team_step_messages(step_title="Tra cứu")[1]["content"]

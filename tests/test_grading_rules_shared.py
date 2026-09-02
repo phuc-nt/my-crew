@@ -104,3 +104,11 @@ def test_every_layer_accepts_an_honest_nonpublic_cell():
     assert "QUY TẮC Ô KHÔNG CÔNG KHAI" in _SYSTEM
     assert "QUY TẮC DỮ LIỆU KHÔNG CÔNG KHAI" in STUCK_JUDGE_SYSTEM
     assert "kèm nguồn đã tra là ĐẠT ô đó" in _DECOMPOSE_SYSTEM
+
+
+def test_the_ceiling_rule_scopes_the_grade_to_the_step_not_the_whole_brief():
+    """Measured live: a step whose criteria covered only part (1a) of a three-part brief
+    was failed for not delivering (1b) and (2) — the sibling steps' work. The rule must
+    say a step is ONE part and the untouched parts belong to other steps."""
+    assert "MỘT phần" in REQUEST_CEILING_RULE
+    assert "việc của bước khác" in REQUEST_CEILING_RULE

@@ -69,18 +69,25 @@ def test_deep_sandbox_valid():
     assert c.caps().sandbox == {"provider": "fake"}
 
 
-def test_cost_cap_surfaces_on_every_tier_and_defaults_to_none():
-    """Mặc định `None` ở CẢ BA tier — đó là thứ giữ cho tính năng này off trừ khi có người bật.
+def test_cost_cap_is_on_by_default_for_the_tool_tiers_and_off_for_native():
+    """Trần chi phí mỗi bước BẬT sẵn ở hai tier có vòng lặp công cụ, TẮT ở native.
 
-    Trước 0.16.0 test này tên `..._is_observability_only` và chỉ khẳng định giá trị round-trip.
-    Cái tên đó nay sai: `loop_cost_guard` đã enforce thật. Nguy hơn cái tên là chỗ nó KHÔNG
-    kiểm: không đâu ghim mặc định `None`. Ai đặt một số mặc định khác `None` cho bất kỳ tier
-    nào sẽ bật trần chi phí cho toàn fleet mà không test nào đỏ.
+    Trước context-crew mặc định là `None` ở cả ba tier (opt-in). Đổi vì vòng lặp công cụ
+    là chỗ duy nhất một bước tiêu tiền không giới hạn (mỗi vòng = một cuộc gọi trả phí +
+    một tool), nên lưới mặc định phải là một con số và profile nào cần hơn thì tự nâng.
+    Native không có vòng lặp — không có gì để chặn — nên vẫn `None`.
+
+    Ghim CẢ hai chiều: ai đặt native thành số sẽ "bật" trần cho tier không enforce nó;
+    ai đặt tool tier về `None` sẽ tắt lưới cho toàn fleet mà không test nào đỏ.
     """
-    for kind in ("native", "create_agent", "deep_agent"):
-        assert parse_agent_runtime_config({"kind": kind}).caps().cost_cap_usd is None, (
-            f"tier {kind} có trần chi phí mặc định — tính năng opt-in tự bật lên"
-        )
+    from my_crew.runtime_backends.config import DEFAULT_STEP_COST_CAP_USD
+
+    assert DEFAULT_STEP_COST_CAP_USD > 0
+    assert parse_agent_runtime_config({"kind": "native"}).caps().cost_cap_usd is None
+    for kind in ("create_agent", "deep_agent"):
+        assert parse_agent_runtime_config({"kind": kind}).caps().cost_cap_usd == (
+            DEFAULT_STEP_COST_CAP_USD
+        ), f"tier {kind} mất trần chi phí mặc định — lưới per-step tắt cho toàn fleet"
     c = parse_agent_runtime_config({"kind": "deep_agent", "cost_cap_usd": 4.0})
     assert c.caps().cost_cap_usd == 4.0
 

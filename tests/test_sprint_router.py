@@ -382,10 +382,18 @@ def _wire(monkeypatch, *, plan: SprintPlan | None = None):
         from my_crew.agent.task_decomposition import DecomposedTask, TeamStepPlan
 
         calls["decompose"] += 1
+        # Two parallel lookups merged by the PIC into a step that writes outside the
+        # company. The router only keeps a plan as a team when it has a surviving crew
+        # shape, so the stub plan must have one: the external write makes it a
+        # permission chain. (It used to be a plain fan-out; that shape was benched and
+        # killed, so a bare two-lookups-plus-merge plan now correctly runs as a sprint.)
         return DecomposedTask(steps=(
-            TeamStepPlan(step_id="s1", title="bước một", assigned_to="agent-a"),
+            TeamStepPlan(step_id="s1", title="bước một", assigned_to="agent-a",
+                         needs_web=True),
             TeamStepPlan(step_id="s2", title="bước hai", assigned_to="agent-b",
-                         deps=("s1",)),
+                         needs_web=True),
+            TeamStepPlan(step_id="s3", title="gộp lại", assigned_to="agent-a",
+                         deps=("s1", "s2"), external_write=True),
         ), pic_id="agent-a"), 0.01
 
     def _fake_intake(brief, staff, pic=""):
@@ -442,7 +450,7 @@ def test_team_shaped_brief_still_goes_through_decompose(monkeypatch):
 
     assert calls == {"decompose": 1, "intake": 0}
     assert "Kế hoạch phân rã" in reply
-    assert [s.step_type for s in _steps_of(slots["task_id"])] == ["work", "work"]
+    assert [s.step_type for s in _steps_of(slots["task_id"])] == ["work", "work", "work"]
 
 
 def test_team_prefix_overrides_a_sprint_shaped_brief(monkeypatch):
@@ -711,7 +719,8 @@ def test_every_router_branch_records_which_layer_decided(monkeypatch, brief, mod
     route = _route_of(slots["task_id"])
     assert (route["mode"], route["source"]) == (mode, source)
     assert route["reason"]
-    expected = {"brief_len", "entities", "distinct_asks", "material_transform"}
+    expected = {"brief_len", "entities", "distinct_asks", "material_transform",
+                "independent_sources", "needs_independent_review", "sensitive_tool"}
     if mode == "team":
         # Team routes carry the accepted plan's declared-boundary distribution too
         # (v93 graph-engineering) — sprint routes never pay for a decompose, so
@@ -747,3 +756,292 @@ def test_the_routing_record_carries_numbers_not_the_brief(monkeypatch):
     import json
 
     assert "Zenith" not in json.dumps(_route_of(slots["task_id"]), ensure_ascii=False)
+
+
+# --- an unmeasurable plan is not crew-shaped: sprint, unless the CEO forced team -------
+
+
+def test_an_unmeasurable_plan_runs_as_a_sprint_and_says_so_in_the_route(monkeypatch):
+    from my_crew.agent.task_decomposition import UnmeasurablePlanError
+
+    calls = _wire(monkeypatch)
+
+    def _refuse(brief, staff, pic=""):
+        calls["decompose"] += 1
+        raise UnmeasurablePlanError("bước 's1' chưa có tiêu chí nghiệm thu", cost_usd=0.05)
+
+    monkeypatch.setattr(mod, "_decompose_with_retries", _refuse)
+    slots = {"brief": _TEAM_SHAPED_BRIEF}
+
+    mod.preview_assign_team_task(slots)
+
+    route = _route_of(slots["task_id"])
+    assert (route["mode"], route["source"]) == ("sprint", "unmeasurable")
+    assert "tiêu chí" in route["reason"]
+    assert calls["intake"] == 1
+    assert [s.step_type for s in _steps_of(slots["task_id"])] == ["sprint"]
+
+
+def test_a_ceo_forced_team_is_not_silently_turned_into_a_sprint(monkeypatch):
+    """"team:" is the assigning human's decision: an unmeasurable plan under it fails
+    loudly (the CEO can rewrite the brief) rather than quietly running as one person."""
+    from my_crew.agent.task_decomposition import UnmeasurablePlanError
+
+    _wire(monkeypatch)
+
+    def _refuse(brief, staff, pic=""):
+        raise UnmeasurablePlanError("bước 's1' chưa có tiêu chí nghiệm thu")
+
+    monkeypatch.setattr(mod, "_decompose_with_retries", _refuse)
+
+    with pytest.raises(ValueError, match="tiêu chí"):
+        mod.preview_assign_team_task({"brief": "team: chuẩn bị demo cho khách hàng lớn"})
+
+
+def test_a_safety_refusal_is_not_turned_into_a_sprint_by_an_unmeasurable_plan(monkeypatch):
+    """Measured live: "clone repo ... rồi chạy test suite" was refused a sprint for
+    shell, the planner came back unmeasurable, and the fallback ran it as a sprint —
+    with no shell boundary at all, the very thing the refusal exists to keep. The
+    safety gate outranks the measurability gate the way it outranks the shape gate:
+    the assign fails loudly (the CEO can rewrite the brief), like a `team:` prefix."""
+    from my_crew.agent.task_decomposition import UnmeasurablePlanError
+
+    calls = _wire(monkeypatch)
+
+    def _refuse(brief, staff, pic=""):
+        calls["decompose"] += 1
+        raise UnmeasurablePlanError("bước 's1' chưa có tiêu chí nghiệm thu", cost_usd=0.05)
+
+    monkeypatch.setattr(mod, "_decompose_with_retries", _refuse)
+
+    with pytest.raises(ValueError, match="tiêu chí"):
+        mod.preview_assign_team_task(
+            {"brief": "Clone repo github.com/org/demo về rồi chạy test suite giúp anh."})
+    assert calls == {"decompose": 1, "intake": 0}
+
+
+# --- crew shapes: a team plan with none of the surviving ones is a sprint --------------
+
+
+def test_route_signals_carry_the_three_shape_signals():
+    assert intake_mod.route_signals("rà soát lại báo cáo quý")["needs_independent_review"] == 1
+    assert intake_mod.route_signals("tổng hợp báo cáo quý")["needs_independent_review"] == 0
+    assert intake_mod.route_signals("xem trước (preview) báo cáo")["needs_independent_review"] == 0
+    assert intake_mod.route_signals("gửi email báo giá cho khách")["sensitive_tool"] == 1
+    assert intake_mod.route_signals("đọc hộp thư rồi tóm tắt")["sensitive_tool"] == 1
+    assert intake_mod.route_signals("tóm tắt báo cáo")["sensitive_tool"] == 0
+    # Same counter as `entities` (parenthesised/colon lists; the prose branch stays
+    # sprint-only) — one source of truth, read under the name the fan-out shape uses.
+    signals = intake_mod.route_signals("so sánh phí sàn các bên (Shopee, Lazada, Tiki)")
+    assert signals["independent_sources"] == signals["entities"] == 3
+
+
+def test_reviewing_the_input_yourself_is_not_a_request_for_a_second_reviewer():
+    """Measured live: "Rà soát rồi lập báo cáo" — the CEO wants the author to READ the
+    material and then write — was routed as a do + review crew, and the unasked-for
+    review step then failed and stalled the task. Bare "rà soát" is the author's own
+    reading; only "rà soát lại" / "nhờ người khác" asks for another pair of eyes."""
+    brief = (
+        "Rà soát rồi lập báo cáo trong tuần về chính hoạt động của đội: (1) tra lịch sử "
+        "làm việc, (2) đọc lại thống kê định tuyến, (3) viết báo cáo ngắn."
+    )
+    assert intake_mod.route_signals(brief)["needs_independent_review"] == 0
+    assert intake_mod.route_signals("rà soát lại báo cáo quý")["needs_independent_review"] == 1
+    assert intake_mod.route_signals(
+        "viết báo cáo rồi nhờ người khác rà soát lại")["needs_independent_review"] == 1
+
+
+def test_a_team_plan_with_no_crew_shape_runs_as_a_sprint(monkeypatch):
+    """Two people in a chain, no lookups to parallelise, nobody asked for a reviewer, no
+    sensitive tool: nothing here needs a second context, so the crew would pay
+    coordination for nothing. The intake writes the sprint; the decompose spend rides
+    along; the route names the reason so route_stats can count it."""
+    calls = _wire(monkeypatch)
+
+    def _chain(brief, staff, pic=""):
+        calls["decompose"] += 1
+        return _plan(_step("s1", "agent-a"), _step("s2", "agent-b", deps=("s1",))), 0.01
+
+    monkeypatch.setattr(mod, "_decompose_with_retries", _chain)
+    slots = {"brief": _TEAM_SHAPED_BRIEF}
+
+    mod.preview_assign_team_task(slots)
+
+    assert calls == {"decompose": 1, "intake": 1}
+    route = _route_of(slots["task_id"])
+    assert (route["mode"], route["source"]) == ("sprint", "shape")
+    assert "không thuộc dạng đội nào" in route["reason"]
+    assert "shape" not in route  # sprint routes carry no shape
+    assert [s.step_type for s in _steps_of(slots["task_id"])] == ["sprint"]
+
+
+def test_a_fanout_shaped_plan_runs_as_a_sprint_because_the_bench_killed_the_shape(
+    monkeypatch,
+):
+    """Two parallel lookups merged by a third step used to be the `fanout` crew. Blind
+    judging (4 cases × 3 runs) had it beat the sprint 4/12 times at 1.5× the cost, and
+    the cheap-specialist variant lose 8/12 — so breadth is not a boundary a sprint
+    lacks, and the plan goes the same way as any other shapeless plan."""
+    calls = _wire(monkeypatch)
+
+    def _fanout(brief, staff, pic=""):
+        calls["decompose"] += 1
+        return _plan(_step("s1", "agent-a", needs_web=True),
+                     _step("s2", "agent-b", needs_web=True),
+                     _step("s3", "agent-a", deps=("s1", "s2"))), 0.01
+
+    monkeypatch.setattr(mod, "_decompose_with_retries", _fanout)
+    slots = {"brief": _TEAM_SHAPED_BRIEF}
+
+    mod.preview_assign_team_task(slots)
+
+    assert calls == {"decompose": 1, "intake": 1}
+    route = _route_of(slots["task_id"])
+    assert (route["mode"], route["source"]) == ("sprint", "shape")
+    assert "shape" not in route
+    assert [s.step_type for s in _steps_of(slots["task_id"])] == ["sprint"]
+
+
+def test_a_brief_asking_for_a_second_reader_keeps_a_small_plan_as_a_do_review_crew(
+    monkeypatch,
+):
+    """The review IS the crew here. Without the CEO's ask this a→b chain would run as a
+    sprint; with it the plan stays a team and its terminal step is flagged for a peer
+    review that the small-task waiver would otherwise have removed."""
+    calls = _wire(monkeypatch)
+
+    def _chain(brief, staff, pic=""):
+        calls["decompose"] += 1
+        return _plan(_step("s1", "agent-a"), _step("s2", "agent-b", deps=("s1",))), 0.01
+
+    monkeypatch.setattr(mod, "_decompose_with_retries", _chain)
+    slots = {"brief": _TEAM_SHAPED_BRIEF + "\n- nhờ người khác rà soát lại trước khi nộp"}
+
+    mod.preview_assign_team_task(slots)
+
+    assert calls == {"decompose": 1, "intake": 0}
+    route = _route_of(slots["task_id"])
+    assert (route["mode"], route["shape"]) == ("team", "do_review")
+    steps = {s.step_id: s for s in _steps_of(slots["task_id"])}
+    assert steps["s2"].needs_review is True
+    assert steps["s1"].needs_review is False
+
+
+def test_a_second_reader_ask_beats_the_degenerate_downgrade(monkeypatch):
+    """One person's linear work is normally folded into a sprint — but not when the CEO
+    asked for someone else to check it: the sprint has no independent reviewer."""
+    calls = _wire(monkeypatch)
+
+    def _one_person(brief, staff, pic=""):
+        calls["decompose"] += 1
+        return _plan(_step("s1", "agent-a", acceptance="- Xong"),
+                     _step("s2", "agent-a", deps=("s1",))), 0.01
+
+    monkeypatch.setattr(mod, "_decompose_with_retries", _one_person)
+    slots = {"brief": _TEAM_SHAPED_BRIEF + "\n- xong thì nhờ bạn khác phản biện"}
+
+    mod.preview_assign_team_task(slots)
+
+    route = _route_of(slots["task_id"])
+    assert (route["mode"], route["shape"]) == ("team", "do_review")
+
+
+def test_a_ceo_forced_team_that_matches_no_shape_is_recorded_as_custom(monkeypatch):
+    """The prefix is the human's decision; the shape is an observation. Recording
+    "custom" instead of refusing keeps the bench honest about what forced crews look
+    like without taking the CEO's choice away."""
+    calls = _wire(monkeypatch)
+
+    def _chain(brief, staff, pic=""):
+        calls["decompose"] += 1
+        return _plan(_step("s1", "agent-a"), _step("s2", "agent-b", deps=("s1",))), 0.01
+
+    monkeypatch.setattr(mod, "_decompose_with_retries", _chain)
+    slots = {"brief": "team: chuẩn bị demo cho khách hàng lớn"}
+
+    mod.preview_assign_team_task(slots)
+
+    route = _route_of(slots["task_id"])
+    assert (route["mode"], route["source"], route["shape"]) == ("team", "prefix", "custom")
+    assert [s.step_type for s in _steps_of(slots["task_id"])] == ["work", "work"]
+
+
+def test_a_refused_write_brief_stays_a_permission_chain_when_the_model_drops_the_flag(
+    monkeypatch,
+):
+    """The safety gate must outrank the shape gate. The brief says "gửi email", the
+    model's plan forgets `external_write`: the plan gets the flag back on its terminal
+    and stays a team, instead of falling through the no-shape branch into a sprint
+    that hardcodes writes off."""
+    calls = _wire(monkeypatch)
+
+    def _chain(brief, staff, pic=""):
+        calls["decompose"] += 1
+        return _plan(_step("s1", "agent-a", needs_web=True),
+                     _step("s2", "agent-b", deps=("s1",))), 0.01
+
+    monkeypatch.setattr(mod, "_decompose_with_retries", _chain)
+    slots = {"brief": "khảo sát 3 gói dịch vụ rồi gửi email báo giá cho khách"}
+
+    mod.preview_assign_team_task(slots)
+
+    assert calls == {"decompose": 1, "intake": 0}
+    route = _route_of(slots["task_id"])
+    assert (route["mode"], route["source"], route["shape"]) == (
+        "team", "refusal", "permission_chain")
+    steps = {s.step_id: s for s in _steps_of(slots["task_id"])}
+    assert steps["s2"].external_write is True
+    assert steps["s1"].external_write is False
+
+
+def test_a_refusal_with_no_tool_boundary_stays_a_team_recorded_as_custom(monkeypatch):
+    """"chia việc cho mỗi người" names no tool, so the plan shows none of the three
+    shapes — the refusal still holds: a team, labelled custom, never a sprint."""
+    calls = _wire(monkeypatch)
+
+    def _chain(brief, staff, pic=""):
+        calls["decompose"] += 1
+        return _plan(_step("s1", "agent-a"), _step("s2", "agent-b", deps=("s1",))), 0.01
+
+    monkeypatch.setattr(mod, "_decompose_with_retries", _chain)
+    slots = {"brief": "nghiên cứu thị trường, chia việc cho mỗi người một mảng"}
+
+    mod.preview_assign_team_task(slots)
+
+    assert calls == {"decompose": 1, "intake": 0}
+    route = _route_of(slots["task_id"])
+    assert (route["mode"], route["source"], route["shape"]) == ("team", "refusal", "custom")
+    assert [s.step_type for s in _steps_of(slots["task_id"])] == ["work", "work"]
+
+
+def test_a_ceo_forced_team_that_asks_for_a_second_reader_gets_one(monkeypatch):
+    """`team:` skips the gate but not the shape's plan change: the CEO who forces a
+    crew AND asks for a cross-check must get the reviewer the small-plan waiver would
+    otherwise remove — same as the gated do+review path."""
+    calls = _wire(monkeypatch)
+
+    def _chain(brief, staff, pic=""):
+        calls["decompose"] += 1
+        return _plan(_step("s1", "agent-a"), _step("s2", "agent-b", deps=("s1",))), 0.01
+
+    monkeypatch.setattr(mod, "_decompose_with_retries", _chain)
+    slots = {"brief": "team: soạn mô tả phạm vi tính năng đăng nhập, nhờ người khác soát chéo"}
+
+    mod.preview_assign_team_task(slots)
+
+    route = _route_of(slots["task_id"])
+    assert (route["mode"], route["source"], route["shape"]) == ("team", "prefix", "do_review")
+    steps = {s.step_id: s for s in _steps_of(slots["task_id"])}
+    assert steps["s2"].needs_review is True
+    assert steps["s1"].needs_review is False
+
+
+def test_sprint_intake_prompt_tells_the_model_to_route_tool_work_by_the_hint():
+    from my_crew.agent.sprint_intake import build_sprint_intake_messages
+
+    messages = build_sprint_intake_messages(
+        brief="tra lịch sử", staff=[("analyst", "research — có công cụ tra lịch sử")],
+    )
+
+    assert "QUY TẮC CÔNG CỤ" in messages[0]["content"]
+    assert "- analyst (research — có công cụ tra lịch sử)" in messages[1]["content"]

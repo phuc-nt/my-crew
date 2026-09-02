@@ -322,9 +322,11 @@ def test_decompose_falls_back_to_code_side_fanout_when_the_model_never_splits(
         "pic_id": "agent-a",
         "steps": [
             {"step_id": "research", "title": "Tra cứu cả 5 công cụ",
-             "assigned_to": "agent-a", "deps": [], "needs_web": True},
+             "assigned_to": "agent-a", "deps": [], "needs_web": True,
+             "acceptance": "kèm link nguồn"},
             {"step_id": "finalize", "title": "Tổng hợp báo cáo",
-             "assigned_to": "agent-a", "deps": ["research"]},
+             "assigned_to": "agent-a", "deps": ["research"],
+             "acceptance": "bản nộp có bảng so sánh"},
         ],
     })
     calls = []
@@ -363,9 +365,10 @@ def test_decompose_repairs_a_terminal_step_handed_to_the_wrong_agent(monkeypatch
         "pic_id": "agent-a",
         "steps": [
             {"step_id": "research", "title": "Tra cứu", "assigned_to": "agent-b",
-             "deps": []},
+             "deps": [], "acceptance": "kèm link nguồn"},
             {"step_id": "finalize", "title": "Tổng hợp báo cáo",
-             "assigned_to": "agent-b", "deps": ["research"]},
+             "assigned_to": "agent-b", "deps": ["research"],
+             "acceptance": "bản nộp có bảng so sánh"},
         ],
     })
     calls = []
@@ -395,9 +398,9 @@ def test_decompose_repair_honours_the_ceo_named_pic_over_the_model(monkeypatch):
         "pic_id": "agent-b",  # the model's own pick loses to the CEO's @-name
         "steps": [
             {"step_id": "research", "title": "Tra cứu", "assigned_to": "agent-b",
-             "deps": []},
+             "deps": [], "acceptance": "kèm link nguồn"},
             {"step_id": "finalize", "title": "Tổng hợp", "assigned_to": "agent-b",
-             "deps": ["research"]},
+             "deps": ["research"], "acceptance": "bản nộp có bảng so sánh"},
         ],
     })
 
@@ -422,8 +425,10 @@ def test_decompose_leaves_an_ambiguous_multi_terminal_plan_to_the_model(monkeypa
     plan = json.dumps({
         "pic_id": "agent-a",
         "steps": [
-            {"step_id": "one", "title": "Nhánh 1", "assigned_to": "agent-b", "deps": []},
-            {"step_id": "two", "title": "Nhánh 2", "assigned_to": "agent-b", "deps": []},
+            {"step_id": "one", "title": "Nhánh 1", "assigned_to": "agent-b", "deps": [],
+             "acceptance": "kèm link nguồn"},
+            {"step_id": "two", "title": "Nhánh 2", "assigned_to": "agent-b", "deps": [],
+             "acceptance": "kèm link nguồn"},
         ],
     })
     calls = []
@@ -439,3 +444,83 @@ def test_decompose_leaves_an_ambiguous_multi_terminal_plan_to_the_model(monkeypa
         mod._decompose_with_retries(
             "Tóm tắt chi phí", [("agent-a", "office"), ("agent-b", "office")])
     assert len(calls) == mod._MAX_DECOMPOSE_ATTEMPTS
+
+
+def test_decompose_sends_an_unmeasurable_step_back_then_refuses_the_plan(monkeypatch):
+    """A step whose acceptance nobody could grade gets the retry loop (the model is told
+    WHICH step and WHY); a model that never fixes it makes the plan not crew-shaped, and
+    that verdict must survive the loop as its own error so the router can fall back to
+    a sprint — a generic "không phân rã được" would end the assign instead."""
+    import json
+
+    from my_crew.agent.task_decomposition import UnmeasurablePlanError
+
+    # Two parallel branches into a merge: nothing here is a fold candidate, so the
+    # unmeasurable branch cannot disappear into a neighbour's measurable acceptance.
+    plan = json.dumps({
+        "pic_id": "agent-a",
+        "steps": [
+            {"step_id": "research", "title": "Tra cứu giá", "assigned_to": "agent-a",
+             "deps": [], "acceptance": "đầy đủ và chính xác"},
+            {"step_id": "research_2", "title": "Tra cứu nguồn cung", "assigned_to": "agent-a",
+             "deps": [], "acceptance": "kèm link nguồn"},
+            {"step_id": "finalize", "title": "Tổng hợp", "assigned_to": "agent-a",
+             "deps": ["research", "research_2"], "acceptance": "bản nộp có bảng so sánh"},
+        ],
+    })
+    calls = []
+
+    class _Llm:
+        def complete(self, messages, **_kw):
+            calls.append(messages)
+            return SimpleNamespace(content=plan, cost_usd=0.001)
+
+    monkeypatch.setattr(mod, "_build_llm", lambda: (_Llm(), None))
+
+    with pytest.raises(UnmeasurablePlanError) as info:
+        mod._decompose_with_retries("soạn báo cáo ngắn về giá thuê", [("agent-a", "office")])
+
+    assert len(calls) == mod._MAX_DECOMPOSE_ATTEMPTS
+    retry_prompt = str(calls[1])
+    assert "'research'" in retry_prompt and "không đo được" in retry_prompt
+    # The spend is not lost: the sprint fallback accounts for it.
+    assert info.value.cost_usd == pytest.approx(0.001 * mod._MAX_DECOMPOSE_ATTEMPTS)
+
+
+def test_a_mail_step_is_persisted_with_its_flag_so_the_confirmed_hash_still_verifies(
+    monkeypatch,
+):
+    """`decomposition_content_hash` binds `needs_mail` into the confirm-time hash, and
+    the ticker recomputes that hash over the persisted rows before every dispatch. A row
+    written WITHOUT the flag therefore fails that recheck and the task stalls on
+    `plan_hash mismatch` before its first step runs — measured live on a mail brief:
+    "Rà soát hộp thư..." → both steps pending forever, nothing ever spawned."""
+    from my_crew.agent.task_decomposition import (
+        DecomposedTask,
+        TeamStepPlan,
+        decomposition_content_hash,
+    )
+
+    plan = DecomposedTask(steps=(
+        TeamStepPlan(step_id="read_mail", title="đọc hộp thư", assigned_to="agent-a",
+                     needs_mail=True),
+        TeamStepPlan(step_id="summarize", title="tổng hợp", assigned_to="agent-a",
+                     deps=("read_mail",)),
+    ))
+    _wire_full_preview(monkeypatch)
+    monkeypatch.setattr(mod, "_decompose_with_retries", lambda brief, staff, pic: (plan, None))
+    _autopilot_company(monkeypatch)
+
+    slots = {"brief": "đọc hộp thư rồi tổng hợp đơn hàng tuần"}
+    mod.preview_assign_team_task(slots)
+
+    store = _store()
+    try:
+        task = store.get(slots["task_id"])
+    finally:
+        store.close()
+    by_id = {s.step_id: s for s in task.steps}
+    assert by_id["read_mail"].needs_mail is True
+    assert by_id["summarize"].needs_mail is False
+    # The exact check the ticker runs on every tick — over the rows, not the plan.
+    assert decomposition_content_hash(task) == task.plan_hash == slots["plan_hash"]

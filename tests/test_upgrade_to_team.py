@@ -52,8 +52,11 @@ def _wire(monkeypatch, seen: dict | None = None):
 
     def _load_profile(agent_id, *, data_dir):
         domain = {"coord-1": "pm", "content": "office", "researcher": "office"}[agent_id]
+        # Two DISTINCT roles: the researcher has web access, the writer does not. With
+        # identical tools + model the planner folds them into one step by design.
         return SimpleNamespace(domain=domain, config=SimpleNamespace(telegram=telegram),
-                               soul="", project="", memory="")
+                               soul="", project="", memory="",
+                               web_search=(agent_id == "researcher"))
 
     monkeypatch.setattr(loader_mod, "load_profile", _load_profile)
     monkeypatch.setattr(
@@ -69,9 +72,9 @@ def _wire(monkeypatch, seen: dict | None = None):
             content = json.dumps({
                 "steps": [
                     {"step_id": "s1", "title": "thu thập", "assigned_to": "researcher",
-                     "deps": []},
+                     "deps": [], "acceptance": "kèm 3 link nguồn"},
                     {"step_id": "s2", "title": "tổng hợp", "assigned_to": "content",
-                     "deps": ["s1"]},
+                     "deps": ["s1"], "acceptance": "bản nộp có bảng so sánh"},
                 ],
                 "pic_id": "content",
                 "requires_approval": True,

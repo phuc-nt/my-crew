@@ -442,9 +442,13 @@ class Service:
 
         Mirrors the listener-triggered inbox shape: same worker argv the minute cadence
         would use, just sooner. Does NOT advance `_last_fire` — the minute tick keeps
-        firing as the fallback, and an overlap costs one idempotent no-op worker (the
-        step lease/DB already serialize real actions). No coordinator configured → the
-        poke has no addressee, clean no-op.
+        firing as the fallback. An overlap with the cadence is NOT free by itself: the
+        step lease serializes spawns, but a stuck ruling is read-judge-write over the
+        same row, and two concurrent ticks each spent an intervention and overwrote each
+        other's ruling (measured live). `run_team_tick` therefore holds a fleet-wide
+        tick lock, and the overlapping worker reports `tick_in_flight` and exits without
+        reading the store. No coordinator configured → the poke has no addressee, clean
+        no-op.
         """
         from my_crew.runtime.company import load_company
 

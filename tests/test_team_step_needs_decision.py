@@ -164,3 +164,54 @@ def test_task_with_a_needs_decision_step_neither_aggregates_nor_dead_ends(tmp_pa
 
     assert not all(s.status == "done" for s in task.steps)
     assert _dead_end_result(SimpleNamespace(), task) is None
+
+
+# --- a capped draft is delivered for a decision, never reworked ----------------------
+
+
+def test_a_cost_capped_draft_that_fails_self_check_is_not_reworked(monkeypatch):
+    """The spend ceiling, not the worker, cut this draft short — a rework would run under
+    the same ceiling and (measured live) overwrite the capped text with a bare refusal,
+    losing the cap note the CEO needed to read. So the first failing check is terminal:
+    no rework call, the capped text is what deliver hands over, status needs_decision."""
+    from my_crew.runtime_backends.loop_cost_guard import with_cost_cap_gap_note
+
+    capped = with_cost_cap_gap_note("Tôi sẽ tra cứu lịch sử.", [0.004], 0.0005, 1)
+    reworks: list[str] = []
+    seen: dict[str, object] = {}
+
+    def run_rework(title, prior, failures):
+        reworks.append(prior)
+        return "bản sửa không có ghi chú trần", 0.02
+
+    def deliver_step(text, version, self_check_failed):
+        seen["deliver_args"] = (text, version, self_check_failed)
+        return True, text
+
+    deps = TeamTaskDeps(
+        read_handoff=lambda: "",
+        run_work=lambda title, handoff, hook: (capped, 0.004),
+        run_self_check=lambda result_text, acceptance: (False, ["chỉ có ý định"], 0.9),
+        run_rework=run_rework,
+        deliver_step=deliver_step,
+    )
+    graph = build_team_task_graph(deps=deps)
+
+    result = graph.invoke({"step_title": "tra lịch sử", "acceptance": "nêu một mạch việc"})
+
+    assert reworks == []
+    assert result["status"] == "needs_decision"
+    assert seen["deliver_args"][0] == capped  # the note survives to the artifact
+    assert seen["deliver_args"][2] is True
+
+
+def test_an_uncapped_failing_draft_still_gets_its_rework_round():
+    """Boundary of the rule above: without the cap note the rework budget applies as
+    before — one rework, then needs_decision."""
+    deps, seen = _graph_deps(verdicts=[(False, ["thieu phan A"], 0.3)])
+    graph = build_team_task_graph(deps=deps)
+
+    result = graph.invoke({"step_title": "soan", "acceptance": "phai co phan A"})
+
+    assert result["status"] == "needs_decision"
+    assert seen["deliver_args"][0].endswith("+sua")  # the rework ran once

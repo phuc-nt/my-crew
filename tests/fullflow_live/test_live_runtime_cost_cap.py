@@ -69,8 +69,11 @@ TIGHT_CAP_USD = 0.0005
 #:    lane; `test_the_live_cost_cap_brief_still_reaches_the_team_lane` (in
 #:    `tests/test_task_decomposition.py`) pins that offline so a reword cannot
 #:    silently send it back.
-#: 2. **A `needs_web` work step.** `resolve_step_runtime` gate 2 sends a plain work step to
-#:    native regardless of the profile, so without this flag the tools tier is unreachable.
+#: 2. **A tools-tier assignee.** `resolve_step_runtime` runs a work step on its assignee's
+#:    tier — the tier is a field of the ROLE, not a per-step guess — and the default fleet
+#:    is native, so the `tools_tier` seam on `seed_home` is what makes the loop, and with
+#:    it the ceiling, reachable at all. The work must land on THAT agent (the brief names
+#:    its corpus, the one only the tools tier can search).
 #: 3. **No prefetch.** `web_search` stays FALSE on the fleet: a non-empty prefetch bundle
 #:    marks the step prefetched and demotes it back to native. Measured — prefetch returns
 #:    0 chars on a `web_search:false` profile even where provider keys are configured.

@@ -38,11 +38,13 @@ import re
 from my_crew.agent.sprint_intake import strip_mode_prefix
 from my_crew.agent.task_decomposition import (
     DecompositionError,
+    UnmeasurablePlanError,
     fanout_gap,
     fanout_split,
     find_terminals,
     fold_unjustified_steps,
     parse_decomposed_task,
+    unmeasurable_gap,
     validate_decomposition,
 )
 
@@ -123,13 +125,14 @@ def _build_llm():
 
 
 def _staff_roster() -> list[tuple[str, str]]:
-    """`[(agent_id, domain), ...]` for every ENABLED registry agent eligible for a
-    team-task step — see `team_task_roster.assignable_staff` for the exclusion rules
-    (coordinator + admin agent are never assignable) shared with the dispatch-time
-    re-check (`task_decomposition.validate_decomposition`'s docstring)."""
-    from my_crew.agent.team_task_roster import assignable_staff
+    """`[(agent_id, domain + capability hint), ...]` for every ENABLED registry agent
+    eligible for a team-task step — see `team_task_roster.assignable_staff` for the
+    exclusion rules (coordinator + admin agent are never assignable) shared with the
+    dispatch-time re-check (`task_decomposition.validate_decomposition`'s docstring),
+    and `team_task_roster.planning_roster` for why the planner also sees the tools."""
+    from my_crew.agent.team_task_roster import planning_roster
 
-    return assignable_staff()
+    return planning_roster()
 
 
 #: v15 PIC prefix: "@<id> <việc>" — the CEO names the responsible staffer directly.
@@ -245,6 +248,7 @@ def _decompose_with_retries(
             # v64 shell guard: a needs_shell step nobody can run must fail HERE (the
             # retry loop lets the model drop the flag) — never at dispatch time.
             from my_crew.agent.team_task_roster import (
+                capability_map,
                 validate_mail_steps,
                 validate_shell_steps,
             )
@@ -263,8 +267,13 @@ def _decompose_with_retries(
             # defeats the splitter does the old fail-open (accept the packed plan)
             # remain — a valid-but-slow plan always beats a failed assign.
             gap = fanout_gap(brief, task)
-            if gap and _attempt < _MAX_DECOMPOSE_ATTEMPTS - 1:
-                raise DecompositionError(gap)
+            # Context-crew: every hand-off must be checkable without a conversation.
+            # A step nobody could grade goes back to the model with the exact gap
+            # (in the SAME retry as the fan-out bias, so neither starves the other);
+            # the final verdict is taken on the finished plan below.
+            measure_gap = unmeasurable_gap(task)
+            if (gap or measure_gap) and _attempt < _MAX_DECOMPOSE_ATTEMPTS - 1:
+                raise DecompositionError("; ".join(g for g in (gap, measure_gap) if g))
             if gap:
                 split = fanout_split(brief, task)
                 if split is not None:
@@ -301,7 +310,11 @@ def _decompose_with_retries(
             # mints is ever a fold candidate (its parallel steps are dep-less, its
             # finalize multi-dep). Re-validated with the same cheap-proof-over-trust
             # fail-open as `fanout_split`: a rejected fold keeps the unfolded plan.
-            folded, fold_count = fold_unjustified_steps(task)
+            # Context-crew: a change of person is not a boundary when both agents share
+            # the same capability tuple (tools + model) — see `Capability`.
+            folded, fold_count = fold_unjustified_steps(
+                task, capability_of=capability_map({a for a, _ in staff}).get,
+            )
             if fold_count:
                 try:
                     task = validate_decomposition(
@@ -317,7 +330,16 @@ def _decompose_with_retries(
                         "assign_team_task: fold rejected (%s) — keeping the "
                         "unfolded plan", fold_exc,
                     )
+            # Last attempt, final plan (post split + fold): a step that still cannot
+            # be graded makes the plan not crew-shaped — refused here so the router
+            # runs the brief as a sprint instead of paying for a crew whose steps
+            # can be neither accepted nor rejected.
+            measure_gap = unmeasurable_gap(task)
+            if measure_gap:
+                raise UnmeasurablePlanError(measure_gap, cost_usd=total_cost)
             return _widen_terminal_deps(task), total_cost
+        except UnmeasurablePlanError:
+            raise
         except DecompositionError as exc:
             last_error = str(exc)
             # Head of the raw completion rides the log (v76 UAT): "not valid JSON"
@@ -439,6 +461,12 @@ def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str
     is answerable from the same table as the outcome, instead of by re-deriving the
     decision from a brief whose router has since changed.
     """
+    from my_crew.agent.crew_shape import (
+        CUSTOM_SHAPE,
+        classify_shape,
+        enforce_refusal_boundary,
+        mark_do_review,
+    )
     from my_crew.agent.sprint_intake import (
         classify_brief,
         downgrade_to_sprint,
@@ -452,17 +480,31 @@ def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str
     def _route(mode: str, source: str, reason: str) -> dict:
         return {"mode": mode, "source": source, "reason": reason, "signals": signals}
 
-    def _team_route(source: str, reason: str, task) -> dict:
+    def _team_route(source: str, reason: str, task, shape: str) -> dict:
         # Team routes carry the declared-boundary distribution of the ACCEPTED plan
         # (post-fold) next to the brief signals: lane stats can then answer "what
         # boundaries do our plans claim?" from the same table as the outcome.
         # Copied, not mutated — `signals` is shared by every `_route` closure.
+        # `shape` (context-crew) names WHICH crew shape the plan is, so the bench can
+        # score each shape's hypothesis separately — sprint routes carry no shape.
         from my_crew.agent.task_decomposition import boundary_label_counts
 
         route = _route("team", source, reason)
         route["signals"] = {**signals,
                             "boundary_counts": boundary_label_counts(task)}
+        route["shape"] = shape
         return route
+
+    def _forced_team(source: str, reason: str, task, cost: float, refusal: str = "") -> tuple:
+        # A team the router did not get to gate (CEO prefix, safety refusal): the shape
+        # is observed, not enforced — "custom" when the plan matches no surviving shape.
+        # The two shapes that change the PLAN still apply: a refused brief keeps its
+        # write boundary, and a forced team the CEO wants checked gets its reviewer.
+        task = enforce_refusal_boundary(task, refusal)
+        shape = classify_shape(task, signals) or CUSTOM_SHAPE
+        if shape == "do_review":
+            task = mark_do_review(task)
+        return task, cost, False, _team_route(source, reason, task, shape)
 
     def _team_plan(why_team: str, source: str) -> tuple:
         """Chạy decompose team, rồi hạ xuống sprint nếu kế hoạch hoá ra là việc 1 người.
@@ -472,22 +514,70 @@ def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str
         đoán thừa về phía team thì kế hoạch thật sẽ tự khai ra, và ta chỉ mất đúng lượt
         decompose vốn đã trả tiền.
         """
-        task, cost = _decompose_with_retries(brief, staff, pic_requested)
+        try:
+            task, cost = _decompose_with_retries(brief, staff, pic_requested)
+        except UnmeasurablePlanError as exc:
+            if source == "refusal":
+                # The safety gate outranks the measurability gate, exactly as it
+                # outranks the shape gate below: a brief refused a sprint (shell, a
+                # write outside the company, several people) must not slip onto the
+                # sprint lane because the planner failed to write an acceptance line.
+                # Measured live: "clone repo ... rồi chạy test suite" was refused for
+                # shell, the plan came back unmeasurable, and the fallback ran it as a
+                # sprint with no approval boundary at all. Fail loudly instead — the
+                # CEO can rewrite the brief, the same way a `team:` prefix fails.
+                raise ValueError(
+                    f"Đề bài không chạy được ở chế độ 1 người ({why_team}) mà kế hoạch "
+                    f"đội lại không đo được: {exc}. Viết lại đề bài với tiêu chí "
+                    "nghiệm thu rõ hơn."
+                ) from exc
+            # Not crew-shaped: no step boundary the plan could measure. The sprint
+            # runs the brief as one person's work; the decompose spend rides along.
+            logger.info("assign_team_task: sprint mode (%s, nhưng %s)", why_team, exc)
+            plan, sprint_cost = sprint_intake(brief, staff, pic_requested)
+            return (_build_sprint_task(plan, pic_requested), sprint_cost + exc.cost_usd,
+                    True, _route("sprint", "unmeasurable", f"{why_team}; {exc}"))
+        refusal = sprint_refusal(brief) if source == "refusal" else ""
+        task = enforce_refusal_boundary(task, refusal)
+        shape = classify_shape(task, signals)
+        if shape == "do_review":
+            # The review IS the crew: a small plan the CEO asked a second reader for
+            # stays a team even when one person does all the work — the degenerate
+            # check below would fold it into a sprint and lose the independent grader.
+            task = mark_do_review(task)
+            return task, cost, False, _team_route(source, why_team, task, shape)
         plan = downgrade_to_sprint(brief, task)
-        if plan is None:
-            return task, cost, False, _team_route(source, why_team, task)
-        logger.info("assign_team_task: sprint mode (%s, nhưng kế hoạch suy biến %d bước "
-                    "cùng %r)", why_team, len(task.steps), plan.assigned_to)
-        return (_build_sprint_task(plan, pic_requested), cost, True,
-                _route("sprint", "downgrade",
-                       f"{why_team}; kế hoạch suy biến {len(task.steps)} bước 1 người"))
+        if plan is not None:
+            logger.info("assign_team_task: sprint mode (%s, nhưng kế hoạch suy biến %d bước "
+                        "cùng %r)", why_team, len(task.steps), plan.assigned_to)
+            return (_build_sprint_task(plan, pic_requested), cost, True,
+                    _route("sprint", "downgrade",
+                           f"{why_team}; kế hoạch suy biến {len(task.steps)} bước 1 người"))
+        if shape is None and refusal:
+            # The safety gate outranks the shape gate: a brief refused a sprint (shell,
+            # several people, a long horizon) stays a team even when its plan shows no
+            # boundary of the three — recorded as "custom", like a CEO-forced team.
+            return task, cost, False, _team_route(source, why_team, task, CUSTOM_SHAPE)
+        if shape is None:
+            # Not one person's work, but no boundary a sprint lacks either (no second
+            # reader asked for, no sensitive tool — and parallel sources no longer count,
+            # the fan-out shape was benched and killed): the crew would pay coordination
+            # for nothing. The sprint intake writes the one-step plan; the decompose
+            # spend rides along like the unmeasurable path.
+            why_shape = (f"kế hoạch {len(task.steps)} bước không thuộc dạng đội nào "
+                         "(làm + soát, chuỗi quyền)")
+            logger.info("assign_team_task: sprint mode (%s, nhưng %s)", why_team, why_shape)
+            plan, sprint_cost = sprint_intake(brief, staff, pic_requested)
+            return (_build_sprint_task(plan, pic_requested), cost + sprint_cost, True,
+                    _route("sprint", "shape", f"{why_team}; {why_shape}"))
+        return task, cost, False, _team_route(source, why_team, task, shape)
 
     if forced_mode == "team":
         # CEO gõ "team:" là quyết định của người giao việc, không phải phỏng đoán —
         # không hạ chế độ ở đây kể cả khi kế hoạch trông suy biến.
         logger.info("assign_team_task: team mode (CEO ép bằng tiền tố)")
         task, cost = _decompose_with_retries(brief, staff, pic_requested)
-        return task, cost, False, _team_route("prefix", "CEO ép bằng tiền tố", task)
+        return _forced_team("prefix", "CEO ép bằng tiền tố", task, cost)
 
     if forced_mode == "sprint":
         # Tiền tố của CEO thắng bộ ĐOÁN, nhưng không gỡ được bốn loại trừ cứng: sprint
@@ -500,8 +590,8 @@ def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str
             # thắng tiền tố" ở một chỗ đọc là thấy.
             logger.info("assign_team_task: team mode (CEO ép sprint nhưng %s)", refusal)
             task, cost = _decompose_with_retries(brief, staff, pic_requested)
-            return (task, cost, False,
-                    _team_route("refusal", f"CEO ép sprint nhưng {refusal}", task))
+            return _forced_team("refusal", f"CEO ép sprint nhưng {refusal}", task, cost,
+                                refusal=refusal)
         want_sprint, reason, source = True, "CEO ép bằng tiền tố", "prefix"
     else:
         want_sprint, reason = classify_brief(brief)
@@ -588,7 +678,11 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
          "needs_review": s.needs_review,
          "needs_shell": s.needs_shell,  # v45 tier-0 routing
          "needs_web": s.needs_web,  # v74 — hash-bound conditionally
-         "external_write": s.external_write}  # v63 review-waiver + conditional hash
+         "external_write": s.external_write,  # v63 review-waiver + conditional hash
+         # Hash-bound like needs_web: the confirm-time hash carries this flag, so a row
+         # persisted without it fails the dispatch-time recheck and the task stalls on
+         # `plan_hash mismatch` before its first step runs (measured live on a mail brief).
+         "needs_mail": s.needs_mail}
         for s in task.steps
     ]
 

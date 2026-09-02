@@ -107,7 +107,7 @@ def test_a_rework_that_shrinks_the_failure_list_earns_the_next_round():
         (False, ["thiếu B"], 0.5),
     ])
     graph = build_team_task_graph(deps=deps)
-    result = graph.invoke({"step_title": "draft", "acceptance": "phải có A và B"})
+    result = graph.invoke({"step_title": "draft", "acceptance": "phải có A và B", "max_rework": 2})
 
     assert calls["rework_calls"] == 2
     assert result["self_check_failed"] is True
@@ -153,7 +153,7 @@ def test_exhaustion_delivers_the_best_draft_when_reworks_regress():
         (False, ["thiếu A", "thiếu B", "thiếu C"], 0.2),  # draft v0+fix1+fix2 regressed
     ])
     graph = build_team_task_graph(deps=deps)
-    result = graph.invoke({"step_title": "draft", "acceptance": "phải có A và B"})
+    result = graph.invoke({"step_title": "draft", "acceptance": "phải có A và B", "max_rework": 2})
 
     assert calls["rework_calls"] == 2
     assert result["self_check_failed"] is True
@@ -232,9 +232,9 @@ def test_coordinator_guidance_is_consumed_by_the_first_rework_only():
         deliver_step=lambda text, version, failed: (True, f"[done] {text}"),
     )
     graph = build_team_task_graph(deps=deps)
-    graph.invoke({"step_title": "draft", "acceptance": "phải có phần A"})
+    graph.invoke({"step_title": "draft", "acceptance": "phải có phần A", "max_rework": 2})
 
-    assert len(handoffs) == 2, "budget is 2 reworks"
+    assert len(handoffs) == 2, "a 2-rework budget runs both rounds"
     assert "Lần trước thiếu mục B" in handoffs[0], "first rework still acts on it"
     assert "Lần trước thiếu mục B" not in handoffs[1], (
         "second rework must not replay guidance the first one already consumed"

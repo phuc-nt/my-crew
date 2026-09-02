@@ -45,6 +45,20 @@ def migrate_legacy_data_dir() -> bool:
 
     target_root.mkdir(parents=True, exist_ok=True)
     for name in legacy_present:
-        shutil.move(str(DATA_DIR / name), str(target_root / name))  # same fs ⇒ rename
+        src, dst = DATA_DIR / name, target_root / name
+        try:
+            shutil.move(str(src), str(dst))  # same fs ⇒ rename
+        except FileNotFoundError:
+            # Workers start together — the tick spawns one per agent — and two can pass the
+            # guard above before either has created the target. The first rename wins; the
+            # sibling then finds `src` gone. Nothing was lost, so a worker must not die at
+            # startup over it (measured live 2026-09-02: a worker exited in `main()` this
+            # way while the store sat safely under `default/`).
+            if dst.exists() and not src.exists():
+                logger.info(
+                    "legacy migration: .data/%s already moved by a sibling worker", name
+                )
+                continue
+            raise
         logger.info("legacy migration: moved .data/%s → .data/agents/default/%s", name, name)
     return True

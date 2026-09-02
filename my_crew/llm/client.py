@@ -5,10 +5,11 @@ LangChain's ChatOpenAI, because ChatOpenAI drops OpenRouter's non-standard
 `cost`/usage extras that the budget tracker needs.
 
 Every call is budget-gated (before) and cost-recorded (after), and is bounded:
-a request timeout plus a small bounded retry on transient errors, so a hung
-provider cannot stall the agent (code-standards.md §6). With a v4 M9 model_chain
-the bound is per-model (~3×60s each), so worst case scales by chain length —
-keep chains short (2-3 models).
+a request timeout, an idle deadline on the streamed answer (`_STREAM_IDLE_S`, because
+OpenRouter keeps a stalled socket busy with keep-alive bytes and the read timeout alone
+never fires), plus a small bounded retry on transient errors, so a hung provider cannot
+stall the agent (code-standards.md §6). With a v4 M9 model_chain the bound is per-model, so
+worst case scales by chain length — keep chains short (2-3 models).
 """
 
 from __future__ import annotations
@@ -16,10 +17,13 @@ from __future__ import annotations
 import json
 import logging
 import random
+import threading
 import time
 from dataclasses import dataclass
+from functools import partial
 
 from openai import APIConnectionError, APITimeoutError, OpenAI, RateLimitError
+from openai.lib.streaming.chat import ChatCompletionStreamState
 
 from my_crew.config.settings import OPENROUTER_BASE_URL, Settings
 from my_crew.llm.budget_tracker import BudgetTracker
@@ -31,6 +35,27 @@ logger = logging.getLogger(__name__)
 
 # Bounded I/O: per-request timeout and a bounded retry budget for transient faults.
 _REQUEST_TIMEOUT_S = 60.0
+# Idle ceiling on ONE attempt, enforced from OUTSIDE the SDK call. `_REQUEST_TIMEOUT_S` is
+# httpx's per-read timeout and OpenRouter defeats it by design: while an upstream provider
+# stalls, it keeps the socket busy with keep-alive bytes (whitespace on a non-streaming
+# body, SSE comments on a stream), so the socket never goes quiet. Measured live
+# (2026-09-02): one decompose call sat past 900s receiving 23k chars of whitespace before
+# the body ended with no JSON at all (`Expecting value: line 4285 column 1`), and the
+# synchronous delegate behind it never answered the CEO.
+#
+# A plain wall-clock ceiling (240s) was tried first and was the wrong bound: the same
+# evening the same model answered at ~23 tokens/s, a legitimate 4.5k-token review took
+# 190s, and a full decompose could outlive any ceiling short enough to catch a hang. So
+# every call STREAMS, and the bound is idle time. The SDK drops keep-alive comments, hence
+# a chunk is progress and silence is a stall: a slow answer is never abandoned, a silent
+# one is — on its worker thread, after `_STREAM_IDLE_S` without a chunk. Sized above the
+# longest silence a healthy call shows (first-token latency on a queued request, or a
+# reasoning model thinking before it emits), not for a hang.
+_STREAM_IDLE_S = 120.0
+# Silent attempts in a row before the model is given up for this call. One is a blip and
+# retries like a timeout; a second is the provider, and the chain (or the caller's own
+# retry) is a better next move than a third `_STREAM_IDLE_S` of silence.
+_MAX_STALLED_ATTEMPTS = 2
 # v91 multi-provider: a chain entry may be prefixed `provider::model` to route it at a
 # non-OpenRouter OpenAI-compatible endpoint. `::` because OpenRouter ids already spend
 # `/` (org/model) and `:` (`:free`-style suffixes); no known model id contains `::`.
@@ -51,7 +76,80 @@ _RETRY_JITTER_FLOOR = 0.5  # jitter multiplier floor so a wait never collapses t
 # json.JSONDecodeError: OpenRouter can 200 with a malformed body (proxy truncation, upstream
 # hiccup); the SDK lets the raw parse error escape. That is a transient provider fault, not a
 # caller bug — retry it, and on exhaustion the ProviderCallError wrapper advances the model chain.
-_RETRYABLE = (APITimeoutError, APIConnectionError, RateLimitError, json.JSONDecodeError)
+class RequestDeadlineExceeded(Exception):
+    """One attempt went `_STREAM_IDLE_S` without a chunk. Transient by construction (the
+    provider was still connected, just not answering), so it retries like a timeout and,
+    on exhaustion, advances the model chain through `ProviderCallError`."""
+
+
+_RETRYABLE = (
+    APITimeoutError, APIConnectionError, RateLimitError, json.JSONDecodeError,
+    RequestDeadlineExceeded,
+)
+
+
+class _Progress:
+    """Monotonic time of the last chunk on a streaming call; the idle watchdog in
+    `_run_until_idle` measures silence from it."""
+
+    __slots__ = ("at",)
+
+    def __init__(self) -> None:
+        self.at = time.monotonic()
+
+    def touch(self) -> None:
+        self.at = time.monotonic()
+
+
+def _run_until_idle(fn, idle_s: float, *, what: str, progress: _Progress):
+    """Run `fn()` on a daemon thread and return its result, or raise
+    `RequestDeadlineExceeded` once `idle_s` passes with no `progress.touch()`.
+
+    The thread is abandoned, not killed — Python cannot interrupt a blocking socket read —
+    so a stalled call keeps its socket until the provider closes it. That is the whole
+    trade: a leaked thread per hang, against a step (or the CEO's synchronous delegate)
+    waiting an unbounded time for bytes that are not an answer. An exception raised
+    inside `fn` is re-raised on the caller's thread unchanged, so the retry loop sees the
+    same types it always did."""
+    outcome: dict = {}
+
+    def _target() -> None:
+        try:
+            outcome["value"] = fn()
+        except BaseException as exc:  # noqa: BLE001 — re-raised on the caller's thread
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=_target, name=f"llm-{what}", daemon=True)
+    worker.start()
+    while True:
+        # Wait exactly until the current silence would become a stall, then re-check:
+        # a chunk that landed meanwhile pushed the deadline out.
+        worker.join(max(idle_s - (time.monotonic() - progress.at), 0.01))
+        if not worker.is_alive():
+            break
+        if time.monotonic() - progress.at >= idle_s:
+            raise RequestDeadlineExceeded(
+                f"{what} silent for {idle_s:.0f}s — abandoned"
+            )
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["value"]
+
+
+def _stream_completion(client, *, progress: _Progress, **request):
+    """One chat completion over SSE, reassembled into the SDK's `ChatCompletion` shape.
+
+    Every chunk touches `progress`. The trailing choice-less chunk carries `usage`
+    (`include_usage`), which OpenRouter extends with `cost` exactly as it does on a
+    non-streaming body — so `extract_usage` reads the result unchanged."""
+    state = ChatCompletionStreamState()
+    stream = client.chat.completions.create(
+        stream=True, stream_options={"include_usage": True}, **request
+    )
+    for chunk in stream:
+        progress.touch()
+        state.handle_chunk(chunk)
+    return state.get_final_completion()
 
 Message = dict[str, str]
 
@@ -461,16 +559,33 @@ class LlmClient:
         last_exc: Exception | None = None
         total_slept = 0.0
         extra_kwargs: dict = {"tools": tools} if tools is not None else {}
+        client = self._client_for(provider)
+        stalled = 0
         for attempt in range(_MAX_RETRIES + 1):
+            progress = _Progress()
             try:
-                return self._client_for(provider).chat.completions.create(
-                    model=model_id,
-                    messages=messages,
-                    extra_headers=headers,
-                    **extra_kwargs,
+                return _run_until_idle(
+                    partial(
+                        _stream_completion, client, progress=progress, model=model_id,
+                        messages=messages, extra_headers=headers, **extra_kwargs,
+                    ),
+                    _STREAM_IDLE_S,
+                    what=f"chat.completions({model_id})",
+                    progress=progress,
                 )
             except _RETRYABLE as exc:
                 last_exc = exc
+                if isinstance(exc, RequestDeadlineExceeded):
+                    stalled += 1
+                    if stalled >= _MAX_STALLED_ATTEMPTS:
+                        logger.warning(
+                            "OpenRouter transient error (attempt %d/%d): %s; silent %d "
+                            "attempts in a row, giving the model up for this call",
+                            attempt + 1, _MAX_RETRIES + 1, exc, stalled,
+                        )
+                        break
+                else:
+                    stalled = 0
                 if attempt == _MAX_RETRIES:
                     break
                 wait = _next_retry_wait(attempt, exc)

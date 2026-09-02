@@ -31,6 +31,19 @@ _SOURCE_LABELS = {
     "heuristic": "bộ đoán tự động",
     "downgrade": "hạ từ team xuống sprint",
     "upgrade": "đã nâng lên đội (mang theo bối cảnh)",
+    "unmeasurable": "kế hoạch đội không đo được → chạy nhanh",
+    "shape": "kế hoạch không thuộc dạng đội nào → chạy nhanh",
+}
+
+#: Dạng đội (context-crew) → nhãn người đọc. Khớp `CREW_SHAPES` + `CUSTOM_SHAPE` bên
+#: `crew_shape`; chỉ route team mới mang khoá `shape`.
+_SHAPE_LABELS = {
+    # Killed by the bench (a fan-out plan is a sprint now); the label stays so route
+    # rows written while the shape existed still count under their own name.
+    "fanout": "toả ra / gộp lại",
+    "do_review": "làm + soát độc lập",
+    "permission_chain": "chuỗi quyền",
+    "custom": "ngoài các dạng đội (CEO ép / rào an toàn)",
 }
 
 #: Bậc độ khó intake chấm cho việc chạy nhanh → nhãn người đọc. Việc chạy đội không
@@ -64,12 +77,18 @@ def run_route_stats(slots: dict[str, str]) -> str:
     # được khi bậc và kết cục nằm cùng một bản ghi.
     by_effort: dict[str, int] = {}
     dead_by_effort: dict[str, int] = {}
+    # Dạng đội của các việc chạy đội — câu hỏi bench H1–H3 cần: "mỗi dạng chạy bao
+    # nhiêu việc". Route team trước context-crew không có khoá này và bị bỏ qua.
+    by_shape: dict[str, int] = {}
     for route, _ in routes:
         mode = str(route.get("mode") or "?")
         source = str(route.get("source") or "?")
         is_dead_end = route.get("dead_end") is True
         by_mode[mode] = by_mode.get(mode, 0) + 1
         by_source[source] = by_source.get(source, 0) + 1
+        shape = str(route.get("shape") or "").strip()
+        if mode == "team" and shape:
+            by_shape[shape] = by_shape.get(shape, 0) + 1
         if is_dead_end:
             dead_ends += 1
         effort = str(route.get("effort") or "").strip().lower()
@@ -88,6 +107,12 @@ def run_route_stats(slots: dict[str, str]) -> str:
     lines.append("Ai quyết:")
     for source, count in sorted(by_source.items(), key=lambda kv: -kv[1]):
         lines.append(f"  • {_SOURCE_LABELS.get(source, source)}: {count}")
+
+    if by_shape:
+        lines.append("")
+        lines.append("Dạng đội (việc chạy đội):")
+        for shape, count in sorted(by_shape.items(), key=lambda kv: -kv[1]):
+            lines.append(f"  • {_SHAPE_LABELS.get(shape, shape)}: {count}")
 
     if by_effort:
         lines.append("")

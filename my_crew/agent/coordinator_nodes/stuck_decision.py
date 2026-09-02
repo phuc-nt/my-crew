@@ -164,6 +164,22 @@ def _judge(deps: CoordinatorDeps, task: TeamTask, step: TeamStep) -> StuckJudgem
         return StuckJudgement(decision="give_up", reason="không phán đoán được")
 
 
+def intervention_cap(deps: CoordinatorDeps, step: TeamStep) -> int:
+    """How many rulings THIS step gets before the coordinator must conclude.
+
+    `MAX_INTERVENTIONS` is the general cap. A terminal step (`final_deliverable`, the
+    one whose artifact IS the task's answer) on a coordinator that can write that
+    answer itself (`self_do_step` wired) gets ONE ruling: after a guided retry has
+    failed, a second round of guidance/reassign spends more than the coordinator
+    simply finishing the deliverable from the finished upstream work — which is what
+    give-up does here (`try_self_resolve`). Non-terminal steps keep the full cap: the
+    coordinator cannot stand in for a step whose output others still depend on.
+    """
+    if deps.self_do_step is not None and bool(getattr(step, "final_deliverable", False)):
+        return 1
+    return MAX_INTERVENTIONS
+
+
 def decide_stuck_step(
     deps: CoordinatorDeps, task: TeamTask, step: TeamStep,
 ) -> TickResult:
@@ -178,10 +194,11 @@ def decide_stuck_step(
     # a judge call that crashes or a process that dies mid-decision must still have
     # burned the attempt, or a crash-looping judge would retry forever for free.
     count = deps.store.bump_intervention(task.id, step.step_id)
-    if count > MAX_INTERVENTIONS:
+    cap = intervention_cap(deps, step)
+    if count > cap:
         return _give_up(
             deps, task, step,
-            f"đã can thiệp {MAX_INTERVENTIONS} lần mà bước '{step.title}' vẫn không đạt",
+            f"đã can thiệp {cap} lần mà bước '{step.title}' vẫn không đạt",
         )
 
     judgement = _judge(deps, task, step)
@@ -231,14 +248,25 @@ def _accept(
     and the acceptance reason is recorded on it for the CEO's audit. The row write is
     `mark_done_by_coordinator`: `done` from a `needs_decision` row only, attempt-
     guarded, review flag dropped — the judge's reading was the review.
+
+    EXCEPT on a plan routed as do+review: there the CEO asked for an independent
+    reviewer of the deliverable, and the judge only settled a self-check dispute —
+    it never read the work as a reviewer would. Measured live: the accept dropped
+    the flag, no review row was ever minted, and the task closed "sau soát chéo"
+    with nobody having cross-checked anything. On that shape the planned flag stays,
+    so `maybe_insert_review` still mints the reviewer row.
     """
     from my_crew.agent.coordinator_graph import TickResult
+    from my_crew.agent.crew_shape import DO_REVIEW_SHAPE
     from my_crew.agent.team_task_artifact import read_step_artifact, write_step_artifact
     from my_crew.runtime.team_task_paths import team_tasks_root
 
     reason = " ".join(judgement.reason.split()) or "kết quả đã đạt tiêu chí của bước"
+    route = deps.store.get_route(task.id) or {}
+    keep_review = route.get("shape") == DO_REVIEW_SHAPE
     if not deps.store.mark_done_by_coordinator(
         task.id, step.step_id, outcome_ref=step.outcome_ref, attempt_id=step.attempt_id,
+        keep_review=keep_review,
     ):
         logger.warning(
             "team-tick: accept on %s/%s matched no row (not needs_decision on attempt %s)",

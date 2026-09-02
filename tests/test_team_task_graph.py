@@ -419,3 +419,50 @@ def test_the_artifact_records_only_the_final_rounds_defects(tmp_path, monkeypatc
         "only the round that rejected the DELIVERED draft may be reported; earlier "
         f"rounds describe drafts that no longer exist, got {failures}"
     )
+
+
+# --- a needs_web step's search is part of the work, not a garnish ---------------------
+
+
+def _broken_hook(_query: str) -> str:
+    raise RuntimeError("brave 422")
+
+
+def test_a_failing_search_on_a_needs_web_step_fails_the_work_call(tmp_path):
+    """A findings step written without its search is a tool error for the machine retry,
+    not an artifact for a grader to rule on — so the work call fails before any model
+    call is made (settings=None proves none was)."""
+    import pytest
+
+    deps = default_team_task_deps(
+        settings=None, step_title="Tra cứu giá thuê văn phòng quận 1", data_dir=tmp_path,
+        task_id="t-web", step_seq=1, search_hook=_broken_hook, requires_search=True,
+    )
+    with pytest.raises(RuntimeError, match="tra cứu web thất bại"):
+        deps.run_work("Tra cứu giá thuê văn phòng quận 1", "", deps.search_hook)
+
+
+def test_a_failing_search_stays_best_effort_when_the_step_does_not_need_the_web(
+    tmp_path, monkeypatch,
+):
+    from types import SimpleNamespace
+
+    import my_crew.llm.client as llm_client_mod
+
+    class _FakeLlm:
+        def __init__(self, _settings):
+            pass
+
+        def complete(self, _messages, **_kw):
+            return SimpleNamespace(content="bản nháp xong", cost_usd=0.01)
+
+    monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)
+    settings = build_settings_from_dict({"data_dir": tmp_path})
+    deps = default_team_task_deps(
+        settings=settings, step_title="Soạn nháp giá thuê", data_dir=tmp_path,
+        task_id="t-nw", step_seq=1, search_hook=_broken_hook,
+    )
+
+    text, _cost = deps.run_work("Soạn nháp giá thuê", "", deps.search_hook)
+
+    assert text == "bản nháp xong"

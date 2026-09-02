@@ -13,6 +13,7 @@ run-event plumbing as every other generic kind.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import logging
 import os
@@ -63,6 +64,23 @@ def poke_worthy(action: str) -> bool:
     return action in _POKE_WORTHY_ACTIONS
 
 
+#: One coordinator tick at a time, fleet-wide. Two tick processes reach the store at
+#: once whenever a poke-triggered tick (worker exit → `Service.run_poked_team_tick`, on
+#: its own thread) overlaps the minute cadence. Dispatch is idempotent under that (the
+#: step lease serializes spawns), but a stuck RULING is not: both ticks read the same
+#: `needs_decision` row, both spend an intervention before judging, and both write a
+#: ruling — measured live, the first tick's guided retry (reset to pending on the
+#: capable assignee) was overwritten 19s later by the second tick's reassign to an
+#: agent without the tools, and the row showed four interventions for one failure.
+#: An exclusive, non-blocking flock on this sidecar makes the overlap a clean skip:
+#: the store is the source of truth, so the tick that lost the race has nothing to do
+#: that the winner is not already doing, and the minute cadence remains the fallback.
+_TICK_LOCK_NAME = "team_tick.lock"
+
+#: The run-event status a tick reports when another tick already holds the lock.
+TICK_IN_FLIGHT_STATUS = "tick_in_flight"
+
+
 def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) -> dict:
     """One `team-tick`: advance ONE open team task by ONE action, return a run-event dict.
 
@@ -70,7 +88,25 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
     for the Telegram escalation (its own `config.telegram`) and for the LLM aggregate call
     (its own `settings.require_api_key()`-gated client). No open task is a clean success
     (mirrors `run_tasks`'s "a tick with zero due tasks is a SUCCESS").
+
+    Serialized fleet-wide through `_TICK_LOCK_NAME`: a tick that finds another tick in
+    flight reports `TICK_IN_FLIGHT_STATUS` and touches nothing — no store read, no
+    ruling, no poke.
     """
+    lock_path = team_tasks_root() / _TICK_LOCK_NAME
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            logger.info("team-tick: another tick holds %s — skipping this one", lock_path.name)
+            return {"status": TICK_IN_FLIGHT_STATUS, "checked": 0, "cost_usd": None,
+                    "delivered": False}
+        return _run_team_tick_locked(loaded, settings, now=now)
+
+
+def _run_team_tick_locked(loaded: Any, settings: Any, *, now: datetime | None) -> dict:
+    """The tick body; the caller holds the fleet-wide tick lock."""
     company = load_company()
     cap_usd = company.team_task_cap_usd
 

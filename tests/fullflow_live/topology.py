@@ -193,15 +193,14 @@ def seed_home(home: Path, *, api_key: str, extra_env: dict[str, str] | None = No
         encoding="utf-8",
     )
 
-    role_models = "\n".join(f"ROLE_MODEL_{k.upper()}={v}" for k, v in LIVE_ROLE_MODELS.items())
     lines = [
         f"OPENROUTER_API_KEY={api_key}",
         f"OPENROUTER_MODEL={LIVE_MODEL}",
+        f"OPENROUTER_ROLE_MODELS={role_models_env()}",
         "DRY_RUN=false",
         # Placeholder only — satisfies the config shape the escalation guard reads.
         # Deliberately not a real token: nothing in this suite may message Telegram.
         "MY_CREW_TEST_TELEGRAM_TOKEN=topology-test-not-a-real-token",
-        role_models,
     ]
     for key, value in (extra_env or {}).items():
         lines.append(f"{key}={value}")
@@ -296,6 +295,37 @@ def _decode(raw: bytes) -> Any:
         return text
 
 
+def role_models_env() -> str:
+    """`LIVE_ROLE_MODELS` in the one form the config reads from the environment —
+    `OPENROUTER_ROLE_MODELS=role=model,...` (see `_d_role_models`)."""
+    return ",".join(f"{k}={v}" for k, v in LIVE_ROLE_MODELS.items())
+
+
+def serve_env(home: Path, *, port: int, api_key: str,
+              env_overrides: dict[str, str] | None = None) -> dict[str, str]:
+    """The environment `serve` boots with: the developer's, plus the fleet's own values.
+
+    The model is set HERE and not only in the seeded `.env`, because the child loads that
+    file without override and the pytest process usually already carries
+    `OPENROUTER_MODEL` — `build_settings_from_env()` at import time in any test module
+    loads the repo's `.env` into `os.environ`. Measured 2026-09-02: every live run to
+    that point had declared haiku and served the developer's default model, and the
+    difference showed up as 23 tokens/s reviews and a 900s timeout on a slow evening.
+    A case's `env_overrides` still win, so one can pin another model on purpose."""
+    env = dict(os.environ)
+    env.update({
+        "MY_CREW_HOME": str(home),
+        "PORT": str(port),
+        "BIND_HOST": "127.0.0.1",
+        "MY_CREW_TICK_INTERVAL_S": TEST_TICK_INTERVAL_S,
+        "OPENROUTER_API_KEY": api_key,
+        "OPENROUTER_MODEL": LIVE_MODEL,
+        "OPENROUTER_ROLE_MODELS": role_models_env(),
+    })
+    env.update(env_overrides or {})
+    return env
+
+
 def boot(home: Path, *, api_key: str, env_overrides: dict[str, str] | None = None,
          seed: bool = True) -> ServeProcess:
     """Seed (optionally) and start `my-crew serve`; return once /health answers.
@@ -307,15 +337,7 @@ def boot(home: Path, *, api_key: str, env_overrides: dict[str, str] | None = Non
     (home / ".topology-owned").write_text("fixture-owned fleet\n", encoding="utf-8")
 
     port = _free_port()
-    env = dict(os.environ)
-    env.update({
-        "MY_CREW_HOME": str(home),
-        "PORT": str(port),
-        "BIND_HOST": "127.0.0.1",
-        "MY_CREW_TICK_INTERVAL_S": TEST_TICK_INTERVAL_S,
-        "OPENROUTER_API_KEY": api_key,
-    })
-    env.update(env_overrides or {})
+    env = serve_env(home, port=port, api_key=api_key, env_overrides=env_overrides)
     # Auth is OFF unless a case sets a hash: an unset WEB_AUTH_PASSWORD_HASH is the
     # documented localhost-dev path, and the one case that cares sets it explicitly.
 
@@ -351,9 +373,14 @@ def boot(home: Path, *, api_key: str, env_overrides: dict[str, str] | None = Non
 #: `waiting_clarify`-equivalents belong here: measured live, an ordinary brief can run,
 #: spend real money, then park asking the CEO a question. Nobody answers in a test, so
 #: "settled" (finished OR parked on a human) is the only honest end condition.
+#:
+#: `stalled` is settled too: every stall path now concludes the task (final summary
+#: written, delivery attempted) before the coordinator lets go of it, so nothing moves
+#: it again without a human. Measured live: a task stalled on a dead review step sat
+#: fully concluded while the harness polled it to the full timeout and then failed.
 SETTLED_TASK_STATES = frozenset(
     {"done", "done_with_gaps", "delivered", "cancelled", "failed", "blocked",
-     "needs_decision"}
+     "needs_decision", "stalled"}
 )
 #: The same idea one level down — a step parked on a human holds its task at `open`.
 SETTLED_STEP_STATES = frozenset({"waiting_clarify", "needs_decision", "blocked"})
@@ -483,6 +510,37 @@ def task_status(server: ServeProcess, task_id: str) -> dict[str, Any]:
     return body
 
 
+#: A dependency in one of these lets a `pending` step spawn on the next tick. Anything else
+#: (parked, still pending itself, failed) holds it back.
+_UNBLOCKING_DEP_STATES = frozenset({"done", "done_with_gaps"})
+
+
+def _cannot_move(step: dict[str, Any], by_id: dict[str, dict[str, Any]],
+                 seen: tuple[str, ...] = ()) -> bool:
+    """True when nothing the fleet does on its own will change this step's status.
+
+    Finished and parked steps cannot move by definition. A `pending` step cannot move
+    while at least one of its dependencies is itself stuck — parked on a human, finished
+    without success, or pending behind such a step (followed transitively). Measured
+    2026-09-02: `[waiting_clarify, pending, pending]` with the pending pair depending on
+    the parked step sat 14 minutes of `no actionable step in any open task` and then
+    failed a case on the clock whose assertions all held."""
+    st = step.get("status")
+    if st in SETTLED_STEP_STATES or st in FINISHED_STEP_STATES:
+        return True
+    if st != "pending":
+        return False
+    for dep_id in step.get("deps") or []:
+        dep = by_id.get(dep_id)
+        if dep is None or dep_id in seen:
+            continue
+        if dep.get("status") not in _UNBLOCKING_DEP_STATES and _cannot_move(
+            dep, by_id, seen + (dep_id,)
+        ):
+            return True
+    return False
+
+
 def is_settled(status: dict[str, Any]) -> bool:
     state = (status.get("state") or {}).get("status")
     if state in SETTLED_TASK_STATES:
@@ -490,13 +548,14 @@ def is_settled(status: dict[str, Any]) -> bool:
     steps = status.get("steps") or []
     if not steps:
         return False
+    by_id = {s.get("step_id"): s for s in steps}
     statuses = [s.get("status") for s in steps]
     # No step can still move on its own, AND at least one is parked on a human. The second
     # clause matters: an all-finished set means the TASK state is the authority (it may
     # still be mid-aggregate), so let the task-level check above own that case.
-    return all(
-        st in SETTLED_STEP_STATES or st in FINISHED_STEP_STATES for st in statuses
-    ) and any(st in SETTLED_STEP_STATES for st in statuses)
+    return all(_cannot_move(s, by_id) for s in steps) and any(
+        st in SETTLED_STEP_STATES for st in statuses
+    )
 
 
 def wait_until_settled(server: ServeProcess, task_id: str, *,

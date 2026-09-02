@@ -44,19 +44,25 @@ def test_a1_a_short_lookup_brief_runs_the_fast_lane_end_to_end(live_run):
 
 
 @pytest.mark.live_slow
-def test_a2_a_multi_part_brief_runs_the_crew_lane(live_run):
-    """Ba đầu việc khác chất → lane đội, DAG nhiều bước có người nhận khác nhau."""
+def test_a2_a_multi_part_brief_with_no_surviving_boundary_comes_back_as_a_sprint(live_run):
+    """Ba đầu việc, trong đó phần khảo sát liệt kê 4 đối thủ → bộ đoán đẩy sang đội và
+    model dựng kế hoạch nhiều bước. Trước đây kế hoạch dạng toả ra/gộp lại giữ được lane
+    đội; bench đã loại dạng đó (đội thắng judge mù 4/12), nên nguồn song song không còn
+    là ranh giới. Không có người soát được xin, không có công cụ nhạy ⇒ cổng dạng đội
+    trả về sprint và ghi đúng lý do — khác `test_a7` ở chỗ đường đi ở đây là XÁC ĐỊNH:
+    phải qua decompose rồi mới bị cổng dạng đội trả về (`source="shape"`)."""
     run = live_run()
     out = _assign(run, (
-        "Làm giúp anh 3 việc: (1) khảo sát 5 đối thủ chính trong mảng giao đồ ăn, "
-        "(2) viết bản tóm tắt định vị sản phẩm của mình, "
-        "(3) dựng kế hoạch truyền thông 2 tuần tới."
+        "Làm giúp anh 3 việc: (1) khảo sát 4 đối thủ giao đồ ăn: GrabFood, ShopeeFood, "
+        "Baemin, Gojek về phí và khuyến mãi, (2) viết bản tóm tắt định vị sản phẩm "
+        "của mình, (3) dựng kế hoạch truyền thông 2 tuần tới."
     ))
-    assert out["route"].get("mode") == "team", out["route"]
+    route = out["route"]
+    assert (route.get("mode"), route.get("source")) == ("sprint", "shape"), route
+    assert "shape" not in route, route
 
-    run.h.pump(ticks=2)
     steps = run.h.step_rows(out["task_id"])
-    assert len(steps) >= 2, f"đề 3 phần phải ra DAG nhiều bước: {steps}"
+    assert [s["step_type"] for s in steps] == ["sprint"], steps
 
 
 # --- A3/A4: rào an toàn — định tuyến rồi DỪNG ---------------------------------------
@@ -126,9 +132,10 @@ def test_a7_a_one_person_brief_ends_up_on_the_fast_lane(live_run):
     """Lưới đỡ team→sprint. Đề vượt ngưỡng cấu trúc nên bộ đoán đẩy sang team, nhưng
     kế hoạch model dựng ra lại chỉ ra một người → hạ về sprint.
 
-    Assert theo TẬP CHẤP NHẬN vì hai đường đều đúng: hoặc bộ đoán đã thấy ngay đây là
-    việc một người (`heuristic`), hoặc phải qua decompose mới lộ (`downgrade`). Điều
-    phải đúng là lane cuối cùng — sprint — chứ không phải model đi đường nào."""
+    Assert theo TẬP CHẤP NHẬN vì ba đường đều đúng: bộ đoán thấy ngay đây là việc một
+    người (`heuristic`), phải qua decompose mới lộ (`downgrade`), hoặc kế hoạch nhiều
+    người nhưng không có ranh giới nào của các dạng đội còn lại (`shape`). Điều phải đúng là
+    lane cuối cùng — sprint — chứ không phải model đi đường nào."""
     run = live_run()
     out = _assign(run, (
         "Anh cần một bản tóm tắt ngắn về tình hình giá thép xây dựng trong nước "
@@ -136,17 +143,29 @@ def test_a7_a_one_person_brief_ends_up_on_the_fast_lane(live_run):
     ))
     route = out["route"]
     assert route.get("mode") == "sprint", route
-    assert route.get("source") in {"downgrade", "heuristic"}, route
+    assert route.get("source") in {"downgrade", "heuristic", "shape"}, route
 
 
-def test_a8_too_many_entities_goes_to_the_crew_lane(live_run):
-    """Quá nhiều thực thể là tín hiệu CẤU TRÚC: một chuyến sprint có ngân sách truy vấn
-    hữu hạn, 12 mục thì chắc chắn không đủ để phủ."""
+def test_a8_too_many_entities_still_ends_as_a_sprint_since_breadth_is_no_boundary(live_run):
+    """Quá nhiều thực thể vẫn là tín hiệu CẤU TRÚC cho bộ đoán (đẩy sang đội để model
+    dựng kế hoạch), nhưng kế hoạch đó chỉ có thể là toả ra/gộp lại — dạng đội bench đã
+    loại — nên cổng dạng đội trả về sprint. Phủ 12 mục là việc của sprint:
+    `sprint_query_budget` co giãn theo số thực thể liệt kê (có trần), không còn là
+    ngân sách phẳng 6 slot từng khiến 12 mục "chắc chắn không đủ"."""
     run = live_run()
     out = _assign(run, (
         "So sánh giúp anh 12 sàn TMĐT: Shopee, Lazada, Tiki, Sendo, TikTok Shop, "
         "Amazon, eBay, Alibaba, Taobao, Coupang, Rakuten, Mercado Libre."
     ))
     route = out["route"]
-    assert route.get("mode") == "team", route
+    assert (route.get("mode"), route.get("source")) == ("sprint", "shape"), route
     assert route.get("signals", {}).get("entities", 0) >= 8, route
+    steps = run.h.step_rows(out["task_id"])
+    assert [s["step_type"] for s in steps] == ["sprint"], steps
+    # The step rows carry no routing flags; the stored step does.
+    store = run.h.store()
+    try:
+        sprint_step = store.get_step(out["task_id"], steps[0]["step_id"])
+    finally:
+        store.close()
+    assert sprint_step.needs_web, sprint_step

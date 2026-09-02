@@ -83,6 +83,69 @@ def test_facts_line_blank_when_coverage_is_incomplete():
     assert checked_facts_line(_ACCEPTANCE_5, "Chỉ có Shopee.") == ""
 
 
+# --- precision: code demands only what a substring can prove -----------------------
+#
+# Rework is capped at one round, so a wrong "missing" verdict here is not a cheap
+# recover any more: the second one parks the step for the CEO, and the rework's text
+# replaces the first attempt's artifact. Three live steps in one run were lost to the
+# three shapes below — each pinned so the parser cannot drift back.
+
+
+def test_an_example_list_in_the_criteria_is_not_a_demand():
+    # "(ví dụ: ...)" illustrates what the author had in mind; the result may name others.
+    acceptance = ("- Nêu được 4 rủi ro khác nhau (ví dụ: suy giảm chất lượng code, "
+                  "quá tải công việc, xung đột phiên bản, mất dữ liệu)")
+    artifact = "1. Bàn giao thiếu ngữ cảnh\n2. Nợ kỹ thuật\n3. Lệch ưu tiên\n4. Kiệt sức"
+    assert entity_coverage(acceptance, artifact) == []
+    assert machine_checkable_gaps(acceptance, artifact) == []
+
+
+def test_a_colon_led_example_list_is_not_a_demand_either():
+    acceptance = "- 4 thói quen hằng tuần, chẳng hạn: standup hàng ngày, retro cuối tuần"
+    assert entity_coverage(acceptance, "Họp kế hoạch, review code, demo, 1:1.") == []
+
+
+def test_a_lowercase_attribute_clause_in_brackets_is_not_a_demand():
+    # "(có điểm khởi đầu và điểm kết thúc rõ ràng)" describes the deliverable; a result
+    # meets it in its own words, so only the LLM checker can judge it.
+    acceptance = ("- Xác định đúng một mạch việc hoàn chỉnh (có điểm khởi đầu và điểm "
+                  "kết thúc rõ ràng)")
+    assert entity_coverage(acceptance, "Mạch việc bắt đầu 2/6 và khép lại 20/6.") == []
+
+
+def test_a_lowercase_slash_pair_is_not_a_demand():
+    acceptance = "- Bảng gồm: rủi ro/thói quen, dấu hiệu/lợi ích, giải pháp/cách duy trì"
+    artifact = "| Rủi ro | Dấu hiệu | Giải pháp |\n| Thói quen | Lợi ích | Cách duy trì |"
+    assert entity_coverage(acceptance, artifact) == []
+
+
+def test_named_examples_are_still_illustrative():
+    # The example filter runs before the name filter: a capitalised example is
+    # still only an example.
+    acceptance = "- So sánh ít nhất 3 sàn (ví dụ: Shopee, Lazada, Tiki)"
+    assert entity_coverage(acceptance, "Sendo, Chợ Tốt và Facebook Marketplace.") == []
+
+
+def test_real_names_are_still_demanded_next_to_an_example_clause():
+    acceptance = ("- Phải có: Shopee, Lazada và Tiki (ví dụ về điểm mạnh: giao nhanh, "
+                  "rẻ, nhiều mã)")
+    assert entity_coverage(acceptance, "Shopee và Lazada dẫn đầu.") == ["Tiki"]
+
+
+def test_a_count_before_the_word_example_is_not_an_example_clause():
+    # "3 ví dụ" is a quantity, not an illustration marker: the count check still runs.
+    acceptance = "- liệt kê 3 ví dụ"
+    assert machine_checkable_gaps(acceptance, "- A\n- B") == [
+        "tiêu chí đòi ít nhất 3 mục nhưng kết quả chỉ có 2 mục dạng danh sách"
+    ]
+
+
+def test_facts_line_counts_only_the_demanded_names():
+    acceptance = "- Phải có: Shopee, Lazada và Tiki (ví dụ: giá, phí, kho)"
+    line = checked_facts_line(acceptance, "Shopee, Lazada, Tiki đều có mặt.")
+    assert "3/3" in line
+
+
 # --- wiring: the real `_run_self_check` closure ------------------------------------
 
 
@@ -188,3 +251,31 @@ def test_code_facts_line_enters_plain_not_wrapped():
                                      code_facts=fact)
     user = msgs[-1]["content"]
     assert fact in user
+
+
+# --- item counts: "liệt kê đúng N" is a demand, and the fact line is not a ceiling ----
+
+
+def test_liet_ke_dung_n_is_a_count_demand():
+    """"Liệt kê đúng 4 rủi ro" demands four list items exactly like "liệt kê 4" does —
+    measured live, the "đúng" left the demand unread and a per-item sub-count ("ít nhất
+    2 biện pháp") became the only number the check knew about."""
+    acceptance = "- Liệt kê đúng 4 rủi ro vận hành\n- Mỗi rủi ro có ít nhất 2 biện pháp"
+    two_items = "- rủi ro A\n- rủi ro B"
+
+    gaps = machine_checkable_gaps(acceptance, two_items)
+
+    assert any("ít nhất 4" in g for g in gaps), gaps
+
+
+def test_the_item_count_fact_says_not_fewer_than_never_the_criteria_demand_n():
+    """Live, "kết quả có 28 mục (tiêu chí đòi 2)" read to the grader as "two were asked
+    for, 28 delivered" and was cited as a failure. The fact must state the direction."""
+    acceptance = "- Mỗi rủi ro có ít nhất 2 biện pháp phòng ngừa"
+    many = "\n".join(f"- biện pháp {i}" for i in range(28))
+
+    line = checked_facts_line(acceptance, many)
+
+    assert "không ít hơn con số tối thiểu 2" in line
+    assert "KHÔNG phải lỗi" in line
+    assert "tiêu chí đòi 2" not in line

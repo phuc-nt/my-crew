@@ -219,6 +219,73 @@ def test_run_review_step_malformed_llm_json_raises_review_verdict_error(tmp_path
         run_review_step(None, _settings(tmp_path), data_dir=tmp_path, review_input=_input())
 
 
+# --- an empty completion is a glitch, not a verdict: one re-ask before the step fails --
+#
+# Measured live: a cheap reviewer model answered an empty string (six completion tokens),
+# the review step died on the parse, and the whole task stalled as a "dead step" for the
+# CEO to sort out. A single retry against the same prompt is the machine-retry the
+# runtime already applies to tool errors — applied to the one LLM call that has a
+# strict output contract.
+
+
+def _wire_llm_sequence(monkeypatch, contents: list[str]):
+    calls: list[list[dict]] = []
+    queue = list(contents)
+
+    class _FakeLlm:
+        def __init__(self, _settings):
+            pass
+
+        def complete(self, messages, **_kw):
+            calls.append(messages)
+            return _FakeResult(queue.pop(0))
+
+    monkeypatch.setattr(llm_client_mod, "LlmClient", _FakeLlm)
+    return calls
+
+
+class _Telemetry:
+    def __init__(self):
+        self.records: list[dict] = []
+
+    def record(self, **kw):
+        self.records.append(kw)
+
+
+def test_run_review_step_empty_completion_is_re_asked_once_and_the_retry_verdict_lands(
+    tmp_path, monkeypatch,
+):
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": "x", "version": "attempt-1"})
+    calls = _wire_llm_sequence(
+        monkeypatch, ["", json.dumps({"passed": False, "failures": ["thiếu số liệu"]})]
+    )
+    telemetry = _Telemetry()
+
+    out = run_review_step(
+        None, _settings(tmp_path), data_dir=tmp_path, review_input=_input(),
+        telemetry=telemetry,
+    )
+
+    assert out["status"] == "done" and out["passed"] is False
+    assert out["failures"] == ["thiếu số liệu"]
+    # Same prompt both times — a re-ask, not a different question.
+    assert len(calls) == 2 and calls[0] == calls[1]
+    # Both provider calls cost money, so both are on the bill.
+    assert len(telemetry.records) == 2
+
+
+def test_run_review_step_two_empty_completions_still_fail_the_step(tmp_path, monkeypatch):
+    write_step_artifact(tmp_path, "t1", 1, {"result_text": "x", "version": "attempt-1"})
+    calls = _wire_llm_sequence(monkeypatch, ["", "", json.dumps({"passed": True})])
+
+    from my_crew.agent.review_graph import ReviewVerdictError
+
+    with pytest.raises(ReviewVerdictError):
+        run_review_step(None, _settings(tmp_path), data_dir=tmp_path, review_input=_input())
+    # Bounded: the third, valid answer is never requested.
+    assert len(calls) == 2
+
+
 # --- handoff: the reviewer must SEE what the reviewed step was given -------------------
 #
 # Peer review used to grade output-only. A step whose input said "KHÔNG CÓ KẾT QUẢ" and

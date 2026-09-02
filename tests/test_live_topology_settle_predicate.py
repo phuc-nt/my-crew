@@ -20,13 +20,18 @@ import pytest
 from tests.fullflow_live.topology import is_settled
 
 
-def _status(state: str | None, *step_statuses: str) -> dict:
+def _status(state: str | None, *steps: str | tuple) -> dict:
     """A task-status payload shaped like `build_task_status`'s output, trimmed to the
-    two fields `is_settled` actually reads."""
-    return {
-        "state": {"status": state},
-        "steps": [{"status": s} for s in step_statuses],
-    }
+    fields `is_settled` actually reads. A step is a status string, or
+    `(step_id, status, deps)` when the dependency graph matters."""
+    rows = []
+    for i, step in enumerate(steps):
+        if isinstance(step, str):
+            rows.append({"step_id": f"s{i}", "status": step, "deps": []})
+        else:
+            step_id, status, deps = step
+            rows.append({"step_id": step_id, "status": status, "deps": list(deps)})
+    return {"state": {"status": state}, "steps": rows}
 
 
 @pytest.mark.parametrize("terminal", ["done", "delivered", "cancelled", "failed"])
@@ -57,6 +62,44 @@ def test_all_finished_steps_defer_to_the_task_state():
     the task level (aggregate/delivery). Settling here would race the aggregate step and
     read costs and outputs before they are written."""
     assert not is_settled(_status("open", "done", "done"))
+
+
+def test_pending_steps_behind_a_parked_dependency_settle():
+    """The second measured regression, on the mail-gate case: the first step parked on a
+    CEO question and the two behind it stayed `pending` because their dependency never
+    finished. The coordinator logged `no actionable step in any open task` for 14 minutes;
+    the case failed on the clock with every assertion satisfied. A pending step that
+    nothing but the CEO can unblock is as stopped as the step it waits on."""
+    assert is_settled(_status(
+        "open",
+        ("read_emails", "waiting_clarify", []),
+        ("build_table", "pending", ["read_emails"]),
+        ("finalize_report", "pending", ["read_emails", "build_table"]),
+    ))
+
+
+def test_a_pending_step_whose_dependencies_are_all_done_does_NOT_settle():
+    """Blocked-by-parked is not blocked-by-anything: a pending step whose deps have all
+    finished will be spawned on the next tick, so the task is still moving."""
+    assert not is_settled(_status(
+        "open",
+        ("ask", "waiting_clarify", []),
+        ("gather", "done", []),
+        ("write", "pending", ["gather"]),
+    ))
+
+
+def test_a_pending_step_with_no_dependencies_does_NOT_settle():
+    assert not is_settled(_status("open", ("ask", "waiting_clarify", []), ("free", "pending", [])))
+
+
+def test_a_pending_step_behind_a_running_dependency_does_NOT_settle():
+    assert not is_settled(_status(
+        "open",
+        ("ask", "waiting_clarify", []),
+        ("gather", "running", []),
+        ("write", "pending", ["gather"]),
+    ))
 
 
 def test_no_steps_never_settles():

@@ -28,7 +28,7 @@ def run_goal_replan(slots: dict[str, str]) -> str:
     it exactly like the CEO's own one-touch handlers."""
     from my_crew.agent.task_decomposition import DecompositionError, decomposition_content_hash
     from my_crew.agent.team_task_amend_prompt import amend_with_retries
-    from my_crew.agent.team_task_roster import assignable_staff
+    from my_crew.agent.team_task_roster import planning_roster
     from my_crew.runtime.office_room_append import append_office_event, room_for_task
     from my_crew.runtime.team_task_amend import full_dag_plan_hash
     from my_crew.runtime.team_task_paths import team_tasks_db_path
@@ -47,7 +47,7 @@ def run_goal_replan(slots: dict[str, str]) -> str:
 
         try:
             new_pending, combined, cost = amend_with_retries(
-                task, _replan_request(task), assignable_staff(),
+                task, _replan_request(task), planning_roster(),
             )
         except DecompositionError as exc:
             raise ValueError(f"không soạn được kế hoạch thay thế: {exc}") from None

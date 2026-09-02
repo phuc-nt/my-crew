@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from my_crew.llm import client as c
+from tests.chat_stream_fakes import fake_stream
 
 
 class _Headers:
@@ -199,8 +200,203 @@ def test_success_on_retry_returns(monkeypatch):
                     state["n"] += 1
                     if state["n"] < 2:
                         raise _timeout()
-                    return "OK"
+                    return fake_stream("OK")
 
     monkeypatch.setattr(cl, "_client_for", lambda _p: _Flaky())
-    assert cl._call_with_retry([{"role": "user", "content": "hi"}], "x/y") == "OK"
+    result = cl._call_with_retry([{"role": "user", "content": "hi"}], "x/y")
+    assert result.choices[0].message.content == "OK"
     assert state["n"] == 2  # failed once, succeeded on retry
+
+
+# --- streamed answers, idle deadline, stall cap ----------------------------------------
+
+def test_a_streamed_answer_is_reassembled_with_finish_reason_usage_and_cost(monkeypatch):
+    """Every call streams; what the rest of the client reads is the SDK's reassembled
+    completion — content joined across deltas, `finish_reason`, and the trailing usage
+    chunk with OpenRouter's `cost` still attached for `extract_usage`."""
+    from my_crew.llm.cost import extract_usage
+
+    cl = _client()
+    seen = {}
+
+    class _Streaming:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    seen.update(kw)
+                    return fake_stream("one two three", cost=0.0042)
+
+    monkeypatch.setattr(cl, "_client_for", lambda _p: _Streaming())
+    result = cl._call_with_retry([{"role": "user", "content": "hi"}], "x/y")
+
+    assert seen["stream"] is True
+    assert seen["stream_options"] == {"include_usage": True}
+    assert result.choices[0].message.content == "one two three"
+    assert result.choices[0].finish_reason == "stop"
+    usage = extract_usage(result)
+    assert usage.prompt_tokens == 10 and usage.completion_tokens == 5
+    assert usage.cost_usd == pytest.approx(0.0042)
+
+
+def test_a_streamed_tool_call_is_reassembled_across_deltas(monkeypatch):
+    """Tool arguments arrive in pieces keyed by index; the tool-calling path reads the
+    assembled `message.tool_calls`, so a split must land as one call with whole JSON."""
+    cl = _client()
+
+    class _ToolStream:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    return fake_stream(tool_call=("web_search", '{"q": "giá xe điện"}'))
+
+    monkeypatch.setattr(cl, "_client_for", lambda _p: _ToolStream())
+    result = cl._call_with_retry(
+        [{"role": "user", "content": "hi"}],
+        "x/y",
+        tools=[{"type": "function", "function": {"name": "web_search"}}],
+    )
+
+    (call,) = result.choices[0].message.tool_calls
+    assert call.id == "call_1"
+    assert call.function.name == "web_search"
+    assert call.function.arguments == '{"q": "giá xe điện"}'
+    assert result.choices[0].finish_reason == "tool_calls"
+
+
+def test_a_slow_but_progressing_stream_is_never_abandoned(monkeypatch):
+    """The bound is idle time, not wall-clock: a model answering at a crawl keeps
+    touching progress with every chunk, so a stream far longer than the idle ceiling
+    still completes. Measured live, a legitimate review ran 190s at ~23 tokens/s — the
+    wall-clock ceiling this replaced would have killed it."""
+    monkeypatch.setattr(c, "_STREAM_IDLE_S", 0.2)
+    cl = _client()
+
+    def _crawl():
+        for chunk in fake_stream("slow answer", cost=0.001):
+            c.time.sleep(0.08)  # each gap well inside the idle ceiling…
+            yield chunk  # …while the whole stream (~0.5s) runs past it
+
+    class _Crawling:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    return _crawl()
+
+    monkeypatch.setattr(cl, "_client_for", lambda _p: _Crawling())
+    result = cl._call_with_retry([{"role": "user", "content": "hi"}], "x/y")
+    assert result.choices[0].message.content == "slow answer"
+
+
+def _stalled_sdk(calls: dict, release):
+    """A provider that connects and then sends nothing — the keep-alive-only socket the
+    SDK's per-read timeout never catches."""
+
+    class _Stalled:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    calls["n"] += 1
+                    release.wait(5)
+                    return fake_stream("too late")
+
+    return _Stalled()
+
+
+def test_a_silent_stream_is_abandoned_and_retried(monkeypatch):
+    """OpenRouter keeps a stalled socket busy with keep-alive bytes, so the SDK's
+    per-read timeout never fires; measured live, one decompose sat past 900s that way.
+    The idle deadline is the bound that does fire: the attempt is abandoned on its
+    worker thread, counted as transient, and the loop moves on."""
+    import threading
+
+    slept = []
+    monkeypatch.setattr(c.time, "sleep", lambda w: slept.append(w))
+    monkeypatch.setattr(c.random, "uniform", lambda a, b: 1.0)
+    monkeypatch.setattr(c, "_STREAM_IDLE_S", 0.05)
+    cl = _client()
+    release = threading.Event()
+    calls = {"n": 0}
+    monkeypatch.setattr(cl, "_client_for", lambda _p: _stalled_sdk(calls, release))
+    started = c.time.monotonic()
+    try:
+        with pytest.raises(c.ProviderCallError) as info:
+            cl._call_with_retry([{"role": "user", "content": "hi"}], "x/y")
+    finally:
+        release.set()  # let the abandoned workers exit instead of outliving the test
+    assert "silent for" in str(info.value)
+    assert calls["n"] >= 2  # abandoned once, retried at least once
+    # The caller was never held for the provider's 5s "stall" — the point of the bound.
+    assert c.time.monotonic() - started < 2.0
+
+
+def test_two_silent_attempts_in_a_row_give_the_model_up_early(monkeypatch):
+    """One stall is a blip; a second in a row is the provider. Burning all five attempts
+    on silence would hold a step for 5×`_STREAM_IDLE_S` before the chain could advance,
+    so the loop stops at `_MAX_STALLED_ATTEMPTS` and raises for the chain instead."""
+    import threading
+
+    monkeypatch.setattr(c.time, "sleep", lambda w: None)
+    monkeypatch.setattr(c, "_STREAM_IDLE_S", 0.05)
+    cl = _client()
+    release = threading.Event()
+    calls = {"n": 0}
+    monkeypatch.setattr(cl, "_client_for", lambda _p: _stalled_sdk(calls, release))
+    try:
+        with pytest.raises(c.ProviderCallError):
+            cl._call_with_retry([{"role": "user", "content": "hi"}], "x/y")
+    finally:
+        release.set()
+    assert calls["n"] == c._MAX_STALLED_ATTEMPTS
+    assert c._MAX_STALLED_ATTEMPTS < c._MAX_RETRIES + 1  # the cap is the point
+
+
+def test_a_stall_followed_by_an_answer_recovers(monkeypatch):
+    """The stall counter is consecutive: a blip that clears on the next attempt returns
+    that attempt's answer, and a later timeout resets the count."""
+    import threading
+
+    monkeypatch.setattr(c.time, "sleep", lambda w: None)
+    monkeypatch.setattr(c, "_STREAM_IDLE_S", 0.05)
+    cl = _client()
+    release = threading.Event()
+    calls = {"n": 0}
+
+    class _StallThenAnswer:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    calls["n"] += 1
+                    if calls["n"] == 1:
+                        release.wait(5)
+                    return fake_stream("recovered")
+
+    monkeypatch.setattr(cl, "_client_for", lambda _p: _StallThenAnswer())
+    try:
+        result = cl._call_with_retry([{"role": "user", "content": "hi"}], "x/y")
+    finally:
+        release.set()
+    assert result.choices[0].message.content == "recovered"
+    assert calls["n"] == 2
+
+
+def test_a_non_transient_error_inside_the_idle_thread_propagates_unchanged(monkeypatch):
+    """The worker thread must not launder exception types: a caller bug (or a 4xx the
+    SDK raises as a non-retryable error) still surfaces as itself, not as a stall."""
+    monkeypatch.setattr(c, "_STREAM_IDLE_S", 5.0)
+    cl = _client()
+
+    class _Bug:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**kw):
+                    raise ValueError("bad request shape")
+
+    monkeypatch.setattr(cl, "_client_for", lambda _p: _Bug())
+    with pytest.raises(ValueError, match="bad request shape"):
+        cl._call_with_retry([{"role": "user", "content": "hi"}], "x/y")

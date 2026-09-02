@@ -20,9 +20,11 @@ v20.5 adds per-runtime guardrail caps via `caps()`:
     tier — this one is narrower (one step) and earlier (before the coordinator's next tick). The
     other work loops (`react_loop`, `deep_agent_loop`) run inside LangChain's `agent.invoke` and
     learn their cost only afterwards, so they stay bounded by `runtime_loop_limit` alone and this
-    cap does not claim to cover them. None (every kind's default) ⇒ no per-step ceiling; `0` is
-    REJECTED at parse rather than treated as unlimited, because the guard runs before the first
-    call and a zero cap would end every step at round 0 with nothing to show for it.
+    cap does not claim to cover them. The tool tiers default to `DEFAULT_STEP_COST_CAP_USD`
+    (on by default since the context-crew round; opt-in before); native defaults to None, no
+    per-step ceiling. `0` is REJECTED at parse rather than treated as unlimited, because the
+    guard runs before the first call and a zero cap would end every step at round 0 with
+    nothing to show for it.
   - `sandbox` — the deep-agent sandbox config (`{provider: fake|docker}`), REQUIRED for
     deep_agent (Phase 2/3), rejected on other kinds.
 """
@@ -62,12 +64,24 @@ class RuntimeCaps:
     sandbox: dict | None
 
 
+#: Default per-STEP spend ceiling for the tool tiers (USD). On by default: a tool loop is
+#: the only place a single step can spend without bound (every round is a paid call plus
+#: a tool), so the fleet-wide default is a cap, and a profile raises it explicitly
+#: (`agent_runtime.cost_cap_usd`). Native has no loop — nothing to cap — and stays None.
+#: Half the task-level default (`DEFAULT_TEAM_TASK_CAP_USD`), so one runaway step can
+#: never eat the whole task's budget.
+DEFAULT_STEP_COST_CAP_USD = 1.0
+
 #: Default caps per kind. Freedom rises native < create_agent < deep_agent, so does the loop
 #: budget; deep_agent additionally REQUIRES a sandbox (enforced at parse).
 _DEFAULT_CAPS: dict[str, RuntimeCaps] = {
     "native": RuntimeCaps(runtime_loop_limit=0, cost_cap_usd=None, sandbox=None),
-    "create_agent": RuntimeCaps(runtime_loop_limit=MAX_LOOP_STEPS, cost_cap_usd=None, sandbox=None),
-    "deep_agent": RuntimeCaps(runtime_loop_limit=16, cost_cap_usd=None, sandbox=None),
+    "create_agent": RuntimeCaps(
+        runtime_loop_limit=MAX_LOOP_STEPS, cost_cap_usd=DEFAULT_STEP_COST_CAP_USD, sandbox=None,
+    ),
+    "deep_agent": RuntimeCaps(
+        runtime_loop_limit=16, cost_cap_usd=DEFAULT_STEP_COST_CAP_USD, sandbox=None,
+    ),
 }
 
 

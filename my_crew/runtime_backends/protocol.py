@@ -97,8 +97,8 @@ class SandboxUnavailableForShellStep(RuntimeError):
 def resolve_step_runtime(
     loaded: LoadedProfile | None, step: Any, *, prefetched: bool = False,
 ) -> AgentRuntime:
-    """v45 per-step routing: pick the runtime for ONE step by its `needs_shell` flag + the
-    assignee profile's configured kind.
+    """Per-step routing: pick the runtime for ONE step by its `needs_shell` flag, its
+    step type, and the assignee profile's configured kind (the role's tier).
 
     Rules (fail-closed by construction — the light tier has NO shell):
       - `needs_shell=True`  → deep_agent (Docker sandbox). The profile MUST carry a sandbox config;
@@ -133,36 +133,38 @@ def resolve_step_runtime(
             )
         return _runtime_for_kind("deep_agent")
 
-    # v74 speed routing: a step that needs NO live-web lookup runs native one-shot —
-    # measured (task b4c227ec37ba): a grading step on the deep tier cost 548s and a
-    # synthesis step on the tool loop 780s, vs ~60-120s native, with identical inputs.
+    # Which tier a WORK step runs on is the assignee's role, not a per-step speed
+    # guess. A role is (tools, permissions, model, artifact schema): an agent the
+    # operator put on the tools tier is on it BECAUSE its steps need tools the native
+    # tier never binds — `history.search`, the read toolset, mail — and the planner
+    # already treats tier as a role field (`Capability.tier`) when it merges steps.
+    # The earlier rule sent every work step with `needs_web=False` native regardless
+    # of the profile (measured once as a speed win: 548-780s on the loop vs 60-120s
+    # native for grading/synthesis). Measured again on a tools-tier fleet it broke the
+    # role: an internal-history lookup step planned FOR the tools-tier agent ran native,
+    # bound no toolset, and burned every intervention explaining it could not search.
+    # Speed now comes from the planner (merge same-tier steps, keep the default fleet
+    # native), not from overriding the role at dispatch.
     #   - review rows are pure grading over inputs already in hand → always native;
+    #   - a sprint step is ALWAYS native (v77): its work loop (`sprint_runner`) does its
+    #     own searching in code and rides the graph's `work_override` seam, which only
+    #     the native runtime honors — a tool-calling tier would silently discard the
+    #     whole pipeline and hand the model back the react loop sprint mode avoids;
+    #   - `prefetched=True` (v75) means the launcher already fetched this step's web
+    #     data into the prompt — the web capability the tier held over native for this
+    #     step is spent, so an un-intervened work step runs the fast one-shot tier.
+    #     Callers only set it for un-intervened work steps; after a ruling the agent
+    #     tier is re-armed so a wrong hint costs one attempt, not the step;
+    #   - `needs_mail` (v92) is never cancelled by `prefetched`: the mail tools reach a
+    #     step only through the read toolset, and there is no prefetch seam for mail;
     #   - rework rows keep the agent's tier: fixing a DATA defect may need the tools
     #     the original work had (round-7 lesson — a toolless fixer degrades honestly
-    #     but uselessly);
-    #   - a WRONG needs_web=False self-heals: after the first coordinator ruling
-    #     (intervention_count >= 1) the forcing is dropped and the step runs the
-    #     agent's own tier. Hint-only, never permissions.
-    # v75 phase 3: `prefetched=True` means the launcher already fetched this step's
-    # web data into the prompt — the ONLY capability the agent tier held over native
-    # for this step is spent, so it runs the fast one-shot tier. Callers only set it
-    # for un-intervened work steps (self-heal after a ruling keeps the agent tier).
-    # v77: a sprint step is ALWAYS native. Its work loop (`sprint_runner`) does its own
-    # searching in code and rides the graph's `work_override` seam, which only the native
-    # runtime honors — routing it to a tool-calling tier would silently discard the whole
-    # pipeline and hand the model back the react loop this mode exists to avoid.
-    # v92: `needs_mail` must ALSO hold a step off native. The mail tools reach a step only
-    # through the read toolset, which `team_step_runner` wires for non-native tiers only —
-    # so routing a mail step native would strip the very tool it declared it needs, and it
-    # would fail exactly the way the task that motivated this flag did (an honest "em không
-    # có quyền" for $0.029). Unlike `needs_web` there is no prefetch seam for mail, so the
-    # flag is not cancelled by `prefetched`.
+    #     but uselessly).
     step_type = str(getattr(step, "step_type", "work") or "work")
-    needs_web = bool(getattr(step, "needs_web", False)) and not prefetched
     needs_mail = bool(getattr(step, "needs_mail", False))
     intervened = int(getattr(step, "intervention_count", 0) or 0) > 0
     if step_type in ("review", "sprint") or (
-        step_type == "work" and not needs_web and not needs_mail and not intervened
+        step_type == "work" and prefetched and not needs_mail and not intervened
     ):
         return NativeGraphRuntime()
 

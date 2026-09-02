@@ -12,7 +12,11 @@ re-deriving (or hallucinating) it.
 Everything here is fail-open: acceptance text this code cannot confidently parse
 contributes nothing, and any internal error means "no gaps found" — the LLM checker
 then behaves exactly as before. A false negative costs nothing (the checker still
-grades); a false positive costs one cheap recover round, never the task.
+grades). A false POSITIVE is no longer cheap: rework is capped at one round, so a
+second wrong "missing" verdict parks the step for the CEO, and the rework's answer
+replaces whatever the first attempt produced (a capped tool loop's partial result
+and its cost note included). Precision therefore beats recall here — code only
+demands what it can be sure the criteria demand, see `demanded_entities`.
 
 Imports `listed_entities` from `sprint_runner` rather than copying it — the entity
 grammar (parenthesised subjects beat colon attributes, etc.) was hardened by real
@@ -24,33 +28,59 @@ from __future__ import annotations
 import logging
 import re
 
-from my_crew.runtime.sprint_runner import listed_entities
+from my_crew.runtime.sprint_runner import _capitalised_name_word, listed_entities
 
 logger = logging.getLogger(__name__)
 
+#: An illustrative list — "(ví dụ: suy giảm chất lượng code, quá tải công việc)",
+#: "chẳng hạn: standup, retro" — names things the author had in mind, not things
+#: the result must contain. Three live steps were parked in one run because the
+#: decomposer writes acceptance this way and the checker read each example as a
+#: named demand. The marker must open the clause: "3 ví dụ" (a count) stays.
+_EXAMPLE_CLAUSE_RE = re.compile(
+    r"\(\s*(?:ví dụ|vd|e\.g\.|chẳng hạn|như)\b[^)]*\)"
+    r"|\b(?:ví dụ|vd|e\.g\.|chẳng hạn)\s*:[^.\n]*",
+    re.IGNORECASE,
+)
+
+
+def demanded_entities(criteria: str) -> list[str]:
+    """The names in `criteria` that a result can be held to by substring search.
+
+    Two filters over `listed_entities`, both about what a literal match can prove:
+
+    - example clauses are dropped before parsing — an illustration is not a demand;
+    - only NAMES survive — an item with a capitalised (or numeric) word, the same
+      discriminator the sprint uses to tell "Shopee" from "giá gói cá nhân". A
+      lowercase item is an attribute phrase ("có điểm khởi đầu", "giải pháp/cách
+      duy trì") that a result satisfies in its own words, so its presence is the
+      LLM checker's call, never a substring's.
+    """
+    cleaned = _EXAMPLE_CLAUSE_RE.sub("", criteria or "")
+    out: list[str] = []
+    for entity in listed_entities(cleaned):
+        name = entity.strip()
+        if name and any(_capitalised_name_word(w) for w in name.split()):
+            out.append(name)
+    return out
+
 
 def entity_coverage(criteria: str, artifact: str) -> list[str]:
-    """Entities enumerated in `criteria` that `artifact` never mentions.
+    """Entities demanded by `criteria` that `artifact` never mentions.
 
     Matching is deliberately loose — case-insensitive substring, same as the
-    sprint's `coverage_gaps` — because the cost of a wrong "missing" verdict is
-    one recover round, while a strict matcher would miss aliases constantly.
-    No enumeration in the criteria ⇒ no entities ⇒ no gaps (fail-open).
+    sprint's `coverage_gaps` — because a strict matcher would miss aliases
+    constantly. No demanded entity in the criteria ⇒ no gaps (fail-open).
     """
     text = (artifact or "").lower()
-    gaps: list[str] = []
-    for entity in listed_entities(criteria or ""):
-        name = entity.strip()
-        if name and name.lower() not in text:
-            gaps.append(name)
-    return gaps
+    return [name for name in demanded_entities(criteria) if name.lower() not in text]
 
 
 #: An explicit quantity demand in acceptance prose — "liệt kê 5 xu hướng",
 #: "ít nhất 3 ví dụ", "tối thiểu 2 nguồn", "đủ 4 mục". Only these lead-ins count:
 #: a bare number ("bảng 2 cột", "quý 3") is NOT a quantity contract.
 _MIN_ITEMS_RE = re.compile(
-    r"(?:liệt kê|ít nhất|tối thiểu|đủ)\s+(\d{1,2})\b", re.IGNORECASE
+    r"(?:liệt kê(?:\s+đúng)?|ít nhất|tối thiểu|đủ|đúng)\s+(\d{1,2})\b", re.IGNORECASE
 )
 
 #: A list-shaped line in the artifact: bullet or numbered. Used only to COUNT
@@ -71,7 +101,7 @@ def machine_checkable_gaps(acceptance: str, artifact: str) -> list[str]:
     wrong, which is NOT a pass — it only means the LLM checker takes over.
 
     Two cheap checks this round, nothing free-form:
-    - entity coverage: every entity the acceptance enumerates must be mentioned;
+    - entity coverage: every NAME the acceptance enumerates must be mentioned;
     - minimum item count: an explicit "liệt kê 5 ..."-style demand must be met by
       at least that many list-shaped lines — checked only when the artifact
       actually uses list form (a prose answer is not countable ⇒ fail-open).
@@ -102,7 +132,7 @@ def checked_facts_line(acceptance: str, artifact: str) -> str:
     """
     try:
         facts: list[str] = []
-        entities = [e for e in listed_entities(acceptance or "") if e.strip()]
+        entities = demanded_entities(acceptance)
         if entities and not entity_coverage(acceptance, artifact):
             facts.append(
                 f"đủ {len(entities)}/{len(entities)} thực thể nêu trong tiêu chí "
@@ -112,7 +142,13 @@ def checked_facts_line(acceptance: str, artifact: str) -> str:
         if need >= 2:
             have = len(_LIST_ITEM_RE.findall(artifact or ""))
             if have >= need:
-                facts.append(f"kết quả có {have} mục dạng danh sách (tiêu chí đòi {need})")
+                # Phrased as "not fewer than", never "the criteria demand N": measured
+                # live, "(tiêu chí đòi 2)" next to 28 counted lines read to the grader
+                # as "the criteria want two, this has 28" and became a failure.
+                facts.append(
+                    f"kết quả có {have} dòng dạng danh sách, không ít hơn con số tối "
+                    f"thiểu {need} mà tiêu chí nêu (nhiều dòng hơn KHÔNG phải lỗi)"
+                )
         if not facts:
             return ""
         return "CODE ĐÃ KIỂM (dữ kiện đo bằng máy, không phải nhận định): " + "; ".join(facts) + "."

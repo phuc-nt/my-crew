@@ -605,6 +605,14 @@ def _run_graph(
         and getattr(step, "step_type", "work") == "work"
     )
     _toolless = step_is_toolless(step)
+    # Context-crew: the artifact this step owes its dependents, derived from its DAG
+    # position (dep-less web collect ⇒ findings, terminal ⇒ final, else draft).
+    from my_crew.agent.step_artifact_contract import contract_for
+
+    _extra["artifact_contract"] = contract_for(step)
+    # A needs_web step's search is part of the work, not a garnish: when it fails the
+    # step fails (machine retry), rather than being graded on an artifact written blind.
+    _extra["requires_search"] = bool(getattr(step, "needs_web", False))
     # The sprint pipeline REPLACES the work node — it runs its own searches (via
     # `prefetch_queries`, same gates and audit trail) and never calls the graph's
     # pre-work hook. Everything downstream of `work` (self_check → rework → deliver →

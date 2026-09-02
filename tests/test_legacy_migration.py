@@ -77,3 +77,28 @@ def test_existing_target_not_clobbered(tmp_path, monkeypatch):
     assert (target / "dedup.db").read_text(encoding="utf-8") == "EXISTING"
     # the legacy top-level dedup.db is left in place (not moved)
     assert (data_dir / "dedup.db").read_text(encoding="utf-8") == "dedup"
+
+
+def test_a_sibling_worker_moving_first_does_not_crash_this_one(tmp_path, monkeypatch):
+    """Two workers start together and both pass the once-only guard; the second one's
+    rename finds the store already gone. Measured live: a worker died in `main()` this
+    way while the store sat safely under `default/`. Its move must be recognised as the
+    sibling's work and skipped, not raised."""
+    data_dir = tmp_path / ".data"
+    data_dir.mkdir()
+    _make_legacy(data_dir)
+    monkeypatch.setattr(lm, "DATA_DIR", data_dir)
+    real_move = lm.shutil.move
+
+    def _sibling_lands_first(src, dst):
+        real_move(src, dst)  # the sibling's rename wins the race…
+        return real_move(src, dst)  # …and ours finds nothing left to move
+
+    monkeypatch.setattr(lm.shutil, "move", _sibling_lands_first)
+
+    assert migrate_legacy_data_dir() is True
+    target = data_dir / "agents" / "default"
+    assert (target / "budget" / "budget-2026-06.json").exists()
+    assert (target / "checkpoints.db").read_text(encoding="utf-8") == "ckpt"
+    assert not (data_dir / "budget").exists()
+    assert (data_dir / "foo.txt").exists()  # still never touched

@@ -65,11 +65,19 @@ def test_t1_fleet_boots_serves_health_and_ticks(fleet):
     # Proof the scheduler child is LOOPING, not merely spawned. Deliberately not the
     # supervisor's own "running web, scheduler" banner, nor the one-shot "service
     # started" line: both print before the loop does any work, so a scheduler that
-    # crashed on its first iteration would still satisfy them. The loop emits a
-    # per-tick reaper line, so requiring the count to GROW is the honest signal.
+    # crashed on its first iteration would still satisfy them. The loop touches the
+    # coordinator heartbeat on EVERY pass — the same file `/api/office/health/coordinator`
+    # reads — so watching its mtime advance is the honest signal. (An earlier version
+    # counted "sandbox reaper" log lines; the reaper only logs when Docker is absent or
+    # something was actually reaped, so on a machine with Docker up a healthy loop
+    # printed nothing and the case went red for no product reason.)
+    heartbeat = fleet.home / ".data" / "coordinator.heartbeat"
+    beats: set[int] = set()
+
     def ticked_twice():
-        occurrences = fleet.log().count("sandbox reaper")
-        return occurrences if occurrences >= 2 else None
+        if heartbeat.exists():
+            beats.add(heartbeat.stat().st_mtime_ns)
+        return len(beats) if len(beats) >= 2 else None
 
     poll_until(
         ticked_twice, timeout_s=30, interval_s=1,

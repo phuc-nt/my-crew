@@ -109,7 +109,7 @@ AskColleagueHook = Callable[[str, str], tuple[str, float]]
 
 #: Hard ceiling on rework attempts per step run — exhausted ⇒ deliver anyway with
 #: `self_check_failed=True` (a stuck self-check must never loop forever, R5).
-MAX_REWORK = 2
+MAX_REWORK = 1
 
 
 def _normalize_failure(text: str) -> str:
@@ -308,6 +308,8 @@ def default_team_task_deps(
     allow_split: bool = False,
     guidance: str = "",
     deterministic_precheck: bool = True,
+    artifact_contract=None,
+    requires_search: bool = False,
 ) -> TeamTaskDeps:
     """Wire the real collaborators. Lazy imports keep graph-build network-free.
 
@@ -320,12 +322,27 @@ def default_team_task_deps(
     per-attempt values the state schema already carries (`state["acceptance"]`,
     `state["attempt_id"]`) and nodes read directly from state.
 
+    `artifact_contract` (context-crew): the `step_artifact_contract.ArtifactContract`
+    this step owes its dependents — one prompt line in `work`, one deterministic gap
+    check in `self_check` beside the acceptance pre-check. None ⇒ neither (legacy
+    callers and tests grade exactly as before).
+
+    `requires_search` (context-crew): True when the step is `needs_web`. A search-hook
+    failure then FAILS the work call instead of continuing without the search — a
+    findings step written blind is a tool error the coordinator's machine retry
+    (`MAX_STEP_RETRIES`) should re-run, not an artifact for a grader to rule on. False
+    (default) keeps the search best-effort, exactly as before.
+
     `self_id` (M33): the assignee running THIS step — required for `ask_colleague`'s
     "never consult yourself" guard. Blank (default) ⇒ `ask_colleague` is wired as None
     (consult off, byte-identical pre-M33 behavior) rather than wiring a real hook that
     could not tell "colleague" from "self"; a caller that wants consult enabled MUST
     pass the real assignee id.
     """
+    from my_crew.agent.step_artifact_contract import (
+        artifact_contract_gaps,
+        artifact_contract_line,
+    )
     from my_crew.llm.client import LlmClient
     from my_crew.llm.team_task_check_prompt import (
         build_rework_messages,
@@ -407,7 +424,12 @@ def default_team_task_deps(
             query = build_search_query(title, handoff)
             try:
                 search_text = hook(query) if query else ""
-            except Exception as exc:  # noqa: BLE001 — search is best-effort, never fatal
+            except Exception as exc:  # noqa: BLE001 — best-effort unless the step NEEDS the web
+                if requires_search:
+                    # A needs_web step without its search is a tool failure: let the
+                    # call fail so the machine retry re-runs it, instead of grading
+                    # (and reworking, and ruling on) an artifact written blind.
+                    raise RuntimeError(f"tra cứu web thất bại: {exc}") from exc
                 logger.warning("team-step search hook failed, continuing without it: %s", exc)
                 search_text = ""
         try:
@@ -422,6 +444,7 @@ def default_team_task_deps(
                     capability=context.capability,
                     skills=select_skill_text(context, "internal", kind="team-step"),
                     company_docs=company_docs_text(context, "internal"),
+                    artifact_contract=artifact_contract_line(artifact_contract),
                 ),
                 role="content",
             )
@@ -477,6 +500,10 @@ def default_team_task_deps(
             )
 
             code_gaps = machine_checkable_gaps(criteria, result_text)
+            # Artifact contract (context-crew): what the step OWES its dependents —
+            # a sourceless findings artifact or a stub final fails here, not at a
+            # judge, on the same rework path.
+            code_gaps += artifact_contract_gaps(artifact_contract, result_text)
             if code_gaps:
                 return False, code_gaps, 1.0
             code_facts = checked_facts_line(criteria, result_text)
@@ -994,7 +1021,16 @@ def _make_team_task_nodes(deps: TeamTaskDeps, *, interrupt_on_clarify: bool = Fa
             rework_count > 0 and not passed
             and rework_made_no_progress(prior_failures, list(failures))
         )
-        exhausted = (not passed) and (rework_count >= max_rework or no_progress)
+        # A draft the spend ceiling cut short fails its criteria BECAUSE the budget ran
+        # out, not because the worker misjudged the work — and a rework runs under the
+        # same ceiling, so it can only re-spend the allowance and then overwrite the
+        # capped draft (measured live: the rework replaced the capped text with a bare
+        # refusal, and the cap note the CEO needed to see was gone). Deliver the capped
+        # draft as-is and let the CEO decide (raise the cap, or accept the partial).
+        from my_crew.runtime_backends.loop_cost_guard import carries_cost_cap_note
+
+        capped = carries_cost_cap_note(result_text)
+        exhausted = (not passed) and (capped or rework_count >= max_rework or no_progress)
         out: dict = {
             "self_check_passed": passed, "check_failures": failures,
             "check_confidence": confidence, "check_reasons": reasons,
@@ -1203,6 +1239,8 @@ def build_team_task_graph(
     allow_split: bool = False,
     guidance: str = "",
     deterministic_precheck: bool = True,
+    artifact_contract=None,
+    requires_search: bool = False,
 ) -> CompiledStateGraph:
     """Build + compile the team-task step graph. `deps` defaults to real wiring.
 
@@ -1232,6 +1270,7 @@ def build_team_task_graph(
             self_id=self_id, work_override=work_override, telemetry=telemetry,
             allow_split=allow_split, guidance=guidance,
             deterministic_precheck=deterministic_precheck,
+            artifact_contract=artifact_contract, requires_search=requires_search,
         )
     perceive, work, await_clarify, self_check, rework, recover, deliver = \
         _make_team_task_nodes(deps, interrupt_on_clarify=checkpointer is not None)

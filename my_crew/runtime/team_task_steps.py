@@ -705,7 +705,7 @@ def mark_step_dropped(
 def mark_done_by_coordinator(
     conn: sqlite3.Connection, task_id: str, step_id: str, *,
     outcome_ref: str | None = None, cost_usd: float | None = None,
-    attempt_id: str | None = None,
+    attempt_id: str | None = None, keep_review: bool = False,
 ) -> bool:
     """The coordinator finished a step its assignee could not: `done` + `needs_review
     = 0` in one write, from a dead or judged-unrecoverable row only (`failed`,
@@ -718,6 +718,10 @@ def mark_done_by_coordinator(
     result is the last word on the step — minting a peer review over it would feed the
     rework loop the fallback exists to end. The step's cost accumulates (the failed
     attempt already spent; the fallback spends more) and rolls into the task total.
+
+    `keep_review=True` leaves the flag as planned: the caller has a reason the
+    coordinator's reading is NOT the last word — a plan the CEO shaped as do+review,
+    where the review is the deliverable's second pair of eyes, not a rework device.
     """
     where = ("WHERE task_id = ? AND step_id = ? "
              "AND status IN ('failed', 'timeout', 'needs_decision')")
@@ -725,8 +729,9 @@ def mark_done_by_coordinator(
     if attempt_id is not None:
         where += " AND attempt_id = ?"
         params = (*params, attempt_id)
+    review_sql = "needs_review" if keep_review else "0"
     cur = conn.execute(
-        "UPDATE team_steps SET status = 'done', needs_review = 0, "
+        f"UPDATE team_steps SET status = 'done', needs_review = {review_sql}, "
         "outcome_ref = COALESCE(?, outcome_ref), "
         "cost_usd = COALESCE(cost_usd, 0) + COALESCE(?, 0) " + where,
         (outcome_ref, cost_usd, *params),

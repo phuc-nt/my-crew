@@ -18,12 +18,24 @@ def _dag_email_steps() -> list[dict]:
     return [
         {"step_id": "draft", "title": "Soạn nháp email mời họp",
          "assigned_to": "secretary", "deps": [],
-         "acceptance": "đủ thời gian, địa điểm, agenda", "needs_review": False},
+         "acceptance": "nêu đủ 3 mục: thời gian, địa điểm, agenda", "needs_review": False},
         {"step_id": "finalize", "title": "Chốt email mời họp",
          "assigned_to": "writer", "deps": ["draft"],
-         "acceptance": "email hoàn chỉnh, tự dừng chờ CEO duyệt",
+         "acceptance": "email hoàn chỉnh dưới 200 từ, tự dừng chờ CEO duyệt",
          "needs_review": True, "external_write": True},
     ]
+
+
+def _final_email(headline: str) -> str:
+    """A terminal artifact long enough to clear the final-deliverable floor: the CEO
+    reads this text directly, so the artifact contract rejects a one-line stub and
+    would send the step into rework."""
+    return (
+        f"{headline}\n\nKính gửi cả đội,\n\nMời mọi người họp review quý 3.\n"
+        "- Thời gian: 10h thứ Sáu.\n- Địa điểm: phòng A.\n"
+        "- Agenda: (1) số liệu quý 3, (2) việc trễ, (3) kế hoạch quý 4.\n\n"
+        "Vui lòng xác nhận tham dự trước thứ Năm.\n\nTrân trọng,\nThư ký"
+    )
 
 
 def _happy_rules() -> list:
@@ -31,8 +43,9 @@ def _happy_rules() -> list:
         rules.intent_assign_team_task(),
         rules.propose_no_consult(),
         rules.decompose(_dag_email_steps(), title="Email mời họp quý 3"),
-        rules.step_work("Soạn nháp email mời họp", "Nháp: 10h thứ Sáu, phòng A, 3 mục."),
-        rules.step_work("Chốt email mời họp", "Email chốt: 10h thứ Sáu, phòng A, agenda 3 mục."),
+        rules.step_work("Soạn nháp email mời họp",
+                        "Nháp: thời gian 10h thứ Sáu, địa điểm phòng A, agenda 3 mục."),
+        rules.step_work("Chốt email mời họp", _final_email("Email chốt: 10h thứ Sáu, phòng A.")),
         rules.self_check_pass(),
         rules.peer_review(True),
         *rules.utility_rules(),
@@ -95,8 +108,9 @@ def test_small_internal_task_waives_peer_review(fullflow):
         rules.intent_assign_team_task(),
         rules.propose_no_consult(),
         rules.decompose(_internal_steps(), title="Email nội bộ"),
-        rules.step_work("Soạn nháp email mời họp", "Nháp nội bộ."),
-        rules.step_work("Chốt email mời họp", "Bản chốt nội bộ."),
+        rules.step_work("Soạn nháp email mời họp",
+                        "Nháp nội bộ: thời gian 10h thứ Sáu, địa điểm phòng A, agenda 3 mục."),
+        rules.step_work("Chốt email mời họp", _final_email("Bản chốt nội bộ.")),
         rules.self_check_pass(),
         # NO peer_review rule: if the product minted one anyway, the review
         # call would hit ScriptedLlm unmatched and fail the scenario loudly.
@@ -104,7 +118,7 @@ def test_small_internal_task_waives_peer_review(fullflow):
         rules.catch_all_content(),
     ])
 
-    h.trigger("Nhờ đội soạn email mời họp nội bộ nhé")
+    h.trigger("team: Nhờ đội soạn email mời họp nội bộ nhé")
     h.trigger("ok")
     h.pump(8)
 
@@ -124,13 +138,14 @@ def test_review_fail_then_rework_then_pass(fullflow):
         rules.intent_assign_team_task(),
         rules.propose_no_consult(),
         rules.decompose(_dag_email_steps(), title="Email mời họp quý 3"),
-        rules.step_work("Soạn nháp email mời họp", "Nháp: 10h thứ Sáu, phòng A."),
-        rules.step_work("Chốt email mời họp", "Email chốt (thiếu agenda)."),
+        rules.step_work("Soạn nháp email mời họp",
+                        "Nháp: thời gian 10h thứ Sáu, địa điểm phòng A, agenda 3 mục."),
+        rules.step_work("Chốt email mời họp", _final_email("Email chốt (thiếu agenda).")),
         rules.self_check_pass(),
         rules.peer_review(False, ["Thiếu agenda 3 mục"], once=True),
         rules.peer_review(True),
         *rules.utility_rules(),
-        rules.catch_all_content("Email chốt đã bổ sung agenda 3 mục."),
+        rules.catch_all_content(_final_email("Email chốt đã bổ sung agenda 3 mục.")),
     ])
 
     h.trigger("Nhờ đội soạn email mời họp review quý 3 nhé")
@@ -158,8 +173,9 @@ def test_review_exhausted_delivers_with_reviewer_objections(fullflow):
         rules.intent_assign_team_task(),
         rules.propose_no_consult(),
         rules.decompose(_dag_email_steps(), title="Email mời họp quý 3"),
-        rules.step_work("Soạn nháp email mời họp", "Nháp."),
-        rules.step_work("Chốt email mời họp", "Email chốt còn lỗi."),
+        rules.step_work("Soạn nháp email mời họp",
+                        "Nháp: thời gian 10h thứ Sáu, địa điểm phòng A, agenda 3 mục."),
+        rules.step_work("Chốt email mời họp", _final_email("Email chốt còn lỗi.")),
         rules.self_check_pass(),
         rules.peer_review(False, ["Sai định dạng ngày"]),  # trượt MỌI vòng
         *rules.utility_rules(),

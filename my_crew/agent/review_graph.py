@@ -70,6 +70,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+#: How many times the reviewer model is asked for a verdict before the step fails. Two:
+#: one honest retry absorbs an empty/garbled completion; more would let a model that
+#: cannot produce the JSON burn the review budget on the same question.
+_MAX_VERDICT_ATTEMPTS = 2
+
 
 class ReviewVerdict(BaseModel):
     """The review LLM call's parsed judgment — binary + failures-first (no steering
@@ -247,23 +252,36 @@ def run_review_step(
             )
 
     llm = LlmClient(settings)
-    result = llm.complete(
-        build_review_messages(
-            result_text=result_text, acceptance=review_input.acceptance, persona=context.persona,
-            handoff=review_input.handoff, transcript_evidence=transcript_evidence,
-        ),
-        role="review",
+    messages = build_review_messages(
+        result_text=result_text, acceptance=review_input.acceptance, persona=context.persona,
+        handoff=review_input.handoff, transcript_evidence=transcript_evidence,
     )
-    verdict = parse_review_verdict(result.content)
-
-    # Review uses LlmClient directly → a real provider cost, same as the native work path.
-    # getattr-tolerant so a partial/fake result records exact provenance with null tokens.
-    if telemetry is not None:
-        telemetry.record(
-            input_tokens=getattr(result, "prompt_tokens", None),
-            output_tokens=getattr(result, "completion_tokens", None),
-            cost_source="exact",
-        )
+    # A reviewer that returns nothing (measured live: a cheap model answered an empty
+    # string for six completion tokens) is a machine failure, not a verdict. Re-asking once
+    # is cheaper than the alternative — the review step dying, the task stalling on a
+    # "dead step", and the CEO being asked to intervene on a glitch. Bounded so a model
+    # that never answers in JSON still fails the step instead of looping.
+    for attempt in range(1, _MAX_VERDICT_ATTEMPTS + 1):
+        result = llm.complete(messages, role="review")
+        # Every attempt is a real provider call, so every attempt is recorded — the
+        # telemetry must add up to what the provider bills, not to the last try.
+        # getattr-tolerant so a partial/fake result records exact provenance with null tokens.
+        if telemetry is not None:
+            telemetry.record(
+                input_tokens=getattr(result, "prompt_tokens", None),
+                output_tokens=getattr(result, "completion_tokens", None),
+                cost_source="exact",
+            )
+        try:
+            verdict = parse_review_verdict(result.content)
+            break
+        except ReviewVerdictError as exc:
+            if attempt >= _MAX_VERDICT_ATTEMPTS:
+                raise
+            logger.warning(
+                "review-step %s/seq=%s: verdict unparseable, re-asking once: %s",
+                review_input.task_id, review_input.graded_seq, exc,
+            )
 
     write_review_verdict_artifact(
         data_dir, review_input.task_id, review_input.verdict_seq, review_input.review_round,
