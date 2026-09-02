@@ -286,165 +286,25 @@ def _reassign(
     )
 
 
-#: The bar for "this done step produced something worth handing the CEO anyway".
-#: Same order of magnitude as the lane-judge's minimum-deliverable threshold (600
-#: chars) but deliberately lower: salvage accompanies an honest failure note, so a
-#: shorter-but-real intermediate result still beats delivering nothing.
-_MIN_SALVAGE_CHARS = 400
-
-#: Ceiling on how much salvaged text rides the delivery summary — the summary lands
-#: in a chat room, not a file store, so a full report is trimmed at a line boundary
-#: rather than posted wholesale.
-_MAX_SALVAGE_CHARS = 6000
-
-
-def _best_done_result(task: TeamTask) -> tuple[str, str] | None:
-    """The most-downstream substantive result this task actually produced.
-
-    Walks the task's steps from highest `seq` down and returns `(step title,
-    result_text)` for the first `done` step whose artifact carries at least
-    `_MIN_SALVAGE_CHARS` of result text — or None when nothing qualifies. Highest seq
-    wins because later steps consume earlier ones: a finished draft outranks the raw
-    source list it was built from.
-    """
-    from my_crew.agent.team_task_artifact import read_step_artifact
-    from my_crew.runtime.team_task_paths import team_tasks_root
-
-    root = team_tasks_root()
-    for s in sorted(task.steps, key=lambda s: s.seq, reverse=True):
-        if s.status != "done":
-            continue
-        artifact = read_step_artifact(root, task.id, s.seq) or {}
-        text = str(artifact.get("result_text") or "").strip()
-        if len(text) >= _MIN_SALVAGE_CHARS:
-            return s.title, text
-    return None
-
-
-def _is_skippable(task: TeamTask, step: TeamStep) -> bool:
-    """May this stuck step be skipped (dropped with a gap note) instead of killing
-    the task?
-
-    Measured (bench lanes5-8): every team-lane stall hit `_give_up` on the FIRST
-    research step, so 0/5 rounds ever delivered anything — the all-or-nothing pipeline
-    was the team lane's whole failure mode. A non-terminal step's gap can ride the
-    handoff honestly (the placeholder text forbids downstream fabrication), so the
-    task should degrade and continue instead of dying.
-
-    Deliberately narrow: plain `work` steps only. A terminal step (no other content
-    step consumes it) IS the deliverable — skipping it delivers nothing, so it keeps
-    the real give_up + salvage. Review/rework rows are excluded because a rework
-    REPLACES its parent's artifact: a placeholder at the rework's seq would leave the
-    parent's rejected content as the surviving handoff, delivering exactly what the
-    review refused. And there must be at least one other live step left — skipping the
-    only remaining work just delays the same conclusion by one tick.
-    """
-    if step.step_type != "work":
-        return False
-    content_dep_targets = {
-        d for s in task.steps if s.step_type in ("work", "sprint") for d in s.deps
-    }
-    if step.step_id not in content_dep_targets:
-        return False  # terminal: nothing downstream consumes it — it IS the delivery
-    # `needs_decision` counts as live: a stuck sibling may itself be skipped or
-    # resumed on its own tick (same liveness set the dispatcher uses) — two stuck
-    # steps must not talk each other into killing a task the skip path could save.
-    return any(
-        s.step_id != step.step_id
-        and s.status in ("pending", "running", "awaiting_approval",
-                         "waiting_clarify", "needs_decision")
-        for s in task.steps
-    )
-
-
-def _skip_step_with_gap(
-    deps: CoordinatorDeps, task: TeamTask, step: TeamStep, reason: str,
-) -> TickResult | None:
-    """Convert a non-terminal give_up ruling into a skip: placeholder artifact with
-    the judge's reason, step dropped, task keeps running. Returns None when the step
-    must not (or could not) be skipped — the caller then falls through to the real
-    give_up. A refused store write (attempt guard matched no row) also returns None:
-    the legacy path's pending-pinned fallback already knows how to terminate safely.
-    """
-    from my_crew.agent.coordinator_graph import TickResult, _reflect_safely
-    from my_crew.agent.ops_stalled_task import drop_step_with_placeholder
-
-    if not _is_skippable(task, step):
-        return None
-    if not drop_step_with_placeholder(deps.store, task, step, reason=reason):
-        # Refused write: this snapshot's attempt lease is stale. Re-read before
-        # falling back — if the row is already `done`, a CONCURRENT decider (their
-        # tick overlapped ours across the judge LLM call) skipped it first, and the
-        # legacy give_up would stall a task whose pipeline is validly running. The
-        # drop clears attempt_id, so acknowledging the sibling's skip is the only
-        # correct move. Any other status means a genuine reset/reassign happened:
-        # fall through to the legacy path, whose pending-pinned fallback knows how
-        # to terminate safely.
-        fresh = deps.store.get_step(task.id, step.step_id)
-        if fresh is not None and fresh.status == "done":
-            logger.info(
-                "team-tick: skip-with-gap on %s/%s already done by a concurrent "
-                "decider — acknowledging", task.id, step.step_id,
-            )
-            return TickResult(
-                task_id=task.id, action="step_skipped",
-                detail=f"{step.step_id}: đã bỏ qua bởi phiên điều phối song song",
-            )
-        logger.warning(
-            "team-tick: skip-with-gap on %s/%s refused by attempt guard — falling "
-            "back to give_up", task.id, step.step_id,
-        )
-        return None
-    note = (
-        f"Bước '{step.title}' bỏ qua vì {reason} — đội chạy tiếp các bước còn lại, "
-        "kết quả cuối sẽ ghi rõ khoảng trống này."
-    )
-    deps.escalate(task, step, "stuck", note)
-    _reflect_safely(deps, task, "stuck", f"skipped step '{step.title}': {reason}")
-    return TickResult(
-        task_id=task.id, action="step_skipped",
-        detail=f"{step.step_id}: {reason}"[:80],
-    )
-
-
 def _give_up(
     deps: CoordinatorDeps, task: TeamTask, step: TeamStep, reason: str,
 ) -> TickResult:
-    """Conclude that the step cannot be completed — and decide whether the TASK dies
-    with it.
+    """Conclude that the assignee cannot complete the step — and decide what the
+    coordinator does about it.
 
-    Non-terminal work step → degrade-and-continue: the step is skipped with a gap
-    note (see `_skip_step_with_gap`) and the pipeline keeps going; the delivery will
-    say "hoàn thành với khoảng trống" instead of nothing. Terminal step (or a
-    review/rework, or the last live step) → the original ending: the step is marked
-    `failed` and the TASK is stalled with a `final_summary` naming the reason, so the
-    existing delivery path carries an honest "không làm được vì X" to the CEO rather
-    than silence or a fake success.
+    First the coordinator tries to resolve it itself (`try_self_resolve`): write the
+    result with its own model call, or — for a non-terminal work step — skip it with a
+    gap note so the pipeline keeps going. Only when neither applies does the TASK die
+    with the step: the step is marked `failed` and the task is concluded through
+    `conclude_task_failed`, so the CEO receives an honest "không làm được vì X" with
+    the best finished work attached rather than silence or a fake success.
     """
-    from my_crew.agent.coordinator_graph import TickResult, _reflect_safely
+    from my_crew.agent.coordinator_nodes.self_resolve import try_self_resolve
+    from my_crew.agent.coordinator_nodes.stall_conclusion import conclude_task_failed
 
-    skipped = _skip_step_with_gap(deps, task, step, reason)
-    if skipped is not None:
-        return skipped
-    summary = f"Việc '{task.title}' KHÔNG LÀM ĐƯỢC: bước '{step.title}' — {reason}."
-    # Measured live (lanes6, team/ecommerce): a finished report sat in the step-3
-    # artifact while the QA step stalled the task, and this delivery carried only the
-    # abandonment note — the CEO never saw work that already existed. Attach the best
-    # done result AFTER the failure line: the first sentence must keep saying the task
-    # failed (humans and the lane judge both read that line to classify the outcome).
-    salvage = _best_done_result(task)
-    if salvage is not None:
-        salvage_title, salvage_text = salvage
-        if len(salvage_text) > _MAX_SALVAGE_CHARS:
-            cut = salvage_text.rfind("\n", 0, _MAX_SALVAGE_CHARS)
-            salvage_text = (
-                salvage_text[: cut if cut > 0 else _MAX_SALVAGE_CHARS].rstrip()
-                + "\n[... đã cắt bớt cho vừa bản tin]"
-            )
-        summary = (
-            f"{summary}\n\nPhần đã làm được trước khi kẹt (bước '{salvage_title}'):\n"
-            f"{salvage_text}"
-        )
+    resolved = try_self_resolve(deps, task, step, reason)
+    if resolved is not None:
+        return resolved
     # attempt-guarded like every other ticker-side terminal write: `step` is a snapshot
     # read at the top of this tick, so a concurrent re-reservation (a CEO's manual
     # retry, a second ticker) must make this a clean no-op rather than clobber the
@@ -467,10 +327,10 @@ def _give_up(
                 "attempt %s nor pending; leaving it as-is",
                 task.id, step.step_id, step.attempt_id or "<none>",
             )
-    deps.store.set_delivery(task.id, status="pending", summary=summary)
-    deps.store.set_task_status(task.id, "stalled")
-    delivered = deps.deliver_room(task, summary) is not False
-    deps.store.set_delivery(task.id, status="delivered" if delivered else "failed")
-    deps.escalate(task, step, "gave_up", summary)
-    _reflect_safely(deps, task, "stalled", f"gave up on step '{step.title}': {reason}")
-    return TickResult(task_id=task.id, action="gave_up", detail=f"{step.step_id}: {reason}"[:80])
+    return conclude_task_failed(
+        deps, task,
+        f"Việc '{task.title}' KHÔNG LÀM ĐƯỢC: bước '{step.title}' — {reason}.",
+        step=step, event_kind="gave_up", reflect_outcome="stalled",
+        reflect_detail=f"gave up on step '{step.title}': {reason}",
+        action="gave_up", detail=f"{step.step_id}: {reason}",
+    )

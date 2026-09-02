@@ -143,24 +143,37 @@ def test_verify_plan_hash_gate_defaults_missing_system_inserted_attr_to_zero():
 
 def test_verify_plan_hash_still_stalls_on_a_genuine_confirmed_row_mismatch():
     """The gate must not become a blanket bypass: a mismatch among CONFIRMED
-    (system_inserted=0) rows still stalls the task exactly like before."""
+    (system_inserted=0) rows still stalls the task — and, like every stall, the
+    stall arrives as a delivered conclusion (summary persisted, room post, then the
+    escalation alert), never as a bare status flip."""
     from my_crew.agent.coordinator_graph import _verify_plan_hash
 
+    # `seq`/`status` are what the conclusion's salvage walk reads off each step.
     confirmed_step = SimpleNamespace(
         step_id="s1", title="draft", assigned_to="agent-a", deps=(), system_inserted=0,
+        seq=1, status="open",
     )
     task = _task(steps=[confirmed_step], plan_hash="tampered-hash-value")
     escalated: list[str] = []
     store_calls: list[str] = []
+    delivered: list[str] = []
     deps = SimpleNamespace(
-        store=SimpleNamespace(set_task_status=lambda tid, status: store_calls.append(status)),
+        store=SimpleNamespace(
+            set_task_status=lambda tid, status: store_calls.append(status),
+            set_delivery=lambda tid, status, summary=None: store_calls.append(
+                f"delivery:{status}"
+            ),
+        ),
+        deliver_room=lambda t, summary: delivered.append(summary),
         escalate=lambda t, s, kind, msg: escalated.append(kind),
+        reflect=lambda t, outcome, detail: None,
     )
     result = _verify_plan_hash(deps, task)
     assert result is not None
     assert result.action == "stalled"
     assert escalated == ["plan_hash_mismatch"]
-    assert store_calls == ["stalled"]
+    assert store_calls == ["delivery:pending", "stalled", "delivery:delivered"]
+    assert len(delivered) == 1 and "KHÔNG LÀM ĐƯỢC" in delivered[0]
 
 
 def test_replace_steps_via_dataclasses_replace_preserves_confirmed_ordering(tmp_path):

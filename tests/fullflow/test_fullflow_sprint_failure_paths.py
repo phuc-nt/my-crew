@@ -136,11 +136,15 @@ def test_sprint_review_fail_then_rework_then_pass(fullflow):
     assert sum("HOÀN THÀNH" in t for t in h.sent_texts()) == 1
 
 
-def test_sprint_dead_end_escalates_once_with_team_upgrade_hint(fullflow):
-    """Đường bế tắc thật của sprint: self-check trượt mọi vòng → hết budget rework →
-    needs_decision → thẩm phán kẹt phán give_up → stalled + escalate `gave_up` mang
-    gợi ý `team:` (đổi chế độ là thuốc duy nhất — reassign chạy lại pipeline y hệt),
-    route_json ghi dấu dead_end cho bộ đếm định tuyến, và không flood sau đó."""
+#: Lời gọi content duy nhất mang vai trò điều phối tự làm — marker của nó là dòng
+#: vai trò ở đầu handoff (`self_resolve._ROLE_NOTE`).
+_SELF_DO_MARKER = "VAI TRÒ: bạn là điều phối viên"
+
+
+def _sprint_dead_end_rules(self_do_respond: str) -> list[LlmRule]:
+    """Self-check trượt mọi vòng → hết budget rework → needs_decision → thẩm phán kẹt
+    phán give_up. `self_do_respond` là điều điều phối viết ra khi tự làm bước ('' =
+    model không viết được gì → điều phối bó tay)."""
     import json
 
     self_check_fail = json.dumps(
@@ -152,10 +156,11 @@ def test_sprint_dead_end_escalates_once_with_team_upgrade_hint(fullflow):
          "reason": "không có dữ liệu ngày nghỉ chính thức để viết đúng"},
         ensure_ascii=False,
     )
-    h = fullflow(rules=[
+    return [
         rules.intent_assign_team_task(),
         rules.propose_no_consult(),
         rules.sprint_intake(GOAL, assigned_to="writer"),
+        LlmRule(role="content", marker=_SELF_DO_MARKER, respond=self_do_respond),
         rules.step_work("thông báo nghỉ lễ", "Thông báo còn lỗi."),
         LlmRule(role="review", marker='"confidence"', respond=self_check_fail),
         # Prompt thẩm phán kẹt là lời gọi review duy nhất chứa danh sách roster.
@@ -163,7 +168,51 @@ def test_sprint_dead_end_escalates_once_with_team_upgrade_hint(fullflow):
         rules.peer_review(True),
         *rules.utility_rules(),
         rules.catch_all_content(),
-    ])
+    ]
+
+
+def test_sprint_dead_end_is_finished_by_the_coordinator(fullflow):
+    """Khi người được giao bó tay, điều phối tự viết bước đó rồi giao hàng: việc
+    `done`/`delivered`, bản tin nêu rõ phần nào do điều phối viết, đúng 1 cảnh báo
+    "điều phối tự làm", KHÔNG có gợi ý đổi chế độ và KHÔNG ghi dấu bế tắc định tuyến
+    (bộ định tuyến không đoán sai — việc đã xong)."""
+    h = fullflow(rules=_sprint_dead_end_rules("Thông báo nghỉ lễ do điều phối viết."))
+
+    h.trigger(GOAL)
+    h.trigger("ok")
+    h.pump(16)
+
+    final = h.task_rows()[0]
+    assert final["status"] == "done", f"điều phối tự làm phải kết thúc việc: {final}"
+    assert final["delivery_status"] == "delivered"
+
+    sent = h.sent_texts()
+    self_do_alerts = [t for t in sent if "Điều phối tự làm bước" in t]
+    assert len(self_do_alerts) == 1, sent
+    assert not any(f"upgrade_to_team {final['id']}" in t for t in sent), sent
+    assert not any("KHÔNG LÀM ĐƯỢC" in t for t in sent), sent
+    done_msgs = [t for t in sent if "Điều phối tự làm thay" in t]
+    assert len(done_msgs) == 1, sent
+    assert "HOÀN THÀNH" in done_msgs[0]
+
+    store = h.store()
+    try:
+        route = store.get_route(final["id"])
+    finally:
+        store.close()
+    assert route is None or route.get("dead_end") is not True, route
+
+    before = h.sent_texts()
+    h.pump(4)
+    assert h.sent_texts() == before, "không flood sau khi giao hàng"
+
+
+def test_sprint_dead_end_escalates_once_with_team_upgrade_hint(fullflow):
+    """Đường bế tắc thật của sprint khi cả điều phối cũng không viết được gì: stalled
+    NHƯNG vẫn có bản kết luận giao tới CEO, escalate `gave_up` mang gợi ý
+    `upgrade_to_team` (đổi chế độ là thuốc duy nhất — reassign chạy lại pipeline y
+    hệt), route_json ghi dấu dead_end cho bộ đếm định tuyến, và không flood sau đó."""
+    h = fullflow(rules=_sprint_dead_end_rules(""))
 
     h.trigger(GOAL)
     h.trigger("ok")
@@ -171,15 +220,19 @@ def test_sprint_dead_end_escalates_once_with_team_upgrade_hint(fullflow):
 
     final = h.task_rows()[0]
     assert final["status"] == "stalled", f"give_up phải stall task: {final}"
+    # Không bao giờ stall tay không: bản kết luận là bản tin giao tới CEO.
+    assert final["delivery_status"] == "delivered", final
 
-    # Gợi ý đổi chế độ giờ là lệnh một chạm mang theo kết quả dở dang, không còn là
-    # lời nhắc CEO tự gõ lại đề sau tiền tố `team:`.
+    # Gợi ý đổi chế độ là lệnh một chạm mang theo kết quả dở dang, đúng một lần.
     hint_msgs = [t for t in h.sent_texts() if f"upgrade_to_team {final['id']}" in t]
     assert len(hint_msgs) == 1, (
         f"đúng 1 tin escalate mang gợi ý đổi chế độ: {h.sent_texts()}"
     )
     assert "KHÔNG LÀM ĐƯỢC" in hint_msgs[0], hint_msgs[0]
     assert not any("HOÀN THÀNH" in t for t in h.sent_texts())
+    # Bản kết luận tới CEO qua đường giao hàng (⛔), tách khỏi tin cảnh báo.
+    conclusions = [t for t in h.sent_texts() if t.startswith("⛔")]
+    assert len(conclusions) == 1, h.sent_texts()
 
     # Bộ định tuyến được báo là đã đoán sai về phía sprint — quyết định gốc giữ
     # trong `previous` để còn đếm được "đường nào dẫn tới bế tắc".

@@ -702,6 +702,44 @@ def mark_step_dropped(
     return cur.rowcount > 0
 
 
+def mark_done_by_coordinator(
+    conn: sqlite3.Connection, task_id: str, step_id: str, *,
+    outcome_ref: str | None = None, cost_usd: float | None = None,
+    attempt_id: str | None = None,
+) -> bool:
+    """The coordinator finished a step its assignee could not: `done` + `needs_review
+    = 0` in one write, from a dead or judged-unrecoverable row only (`failed`,
+    `timeout`, `needs_decision` — the same set `mark_step_dropped` accepts, for the
+    same reason: any other status is live or already-good work this must not clobber).
+
+    Unlike a drop, the attempt lease is KEPT: `is_dropped_step` reads a `done` row with
+    no lease as a placeholder, and this row carries real content that dependents and
+    the aggregate must read as such. The review flag falls because the coordinator's
+    result is the last word on the step — minting a peer review over it would feed the
+    rework loop the fallback exists to end. The step's cost accumulates (the failed
+    attempt already spent; the fallback spends more) and rolls into the task total.
+    """
+    where = ("WHERE task_id = ? AND step_id = ? "
+             "AND status IN ('failed', 'timeout', 'needs_decision')")
+    params: tuple[Any, ...] = (task_id, step_id)
+    if attempt_id is not None:
+        where += " AND attempt_id = ?"
+        params = (*params, attempt_id)
+    cur = conn.execute(
+        "UPDATE team_steps SET status = 'done', needs_review = 0, "
+        "outcome_ref = COALESCE(?, outcome_ref), "
+        "cost_usd = COALESCE(cost_usd, 0) + COALESCE(?, 0) " + where,
+        (outcome_ref, cost_usd, *params),
+    )
+    updated = cur.rowcount > 0
+    if updated and cost_usd:
+        conn.execute(
+            "UPDATE team_tasks SET cost_usd_total = cost_usd_total + ? WHERE id = ?",
+            (cost_usd, task_id),
+        )
+    return updated
+
+
 def set_step_status(
     conn: sqlite3.Connection, task_id: str, step_id: str, status: str, *,
     outcome_ref: str | None = None, cost_usd: float | None = None,

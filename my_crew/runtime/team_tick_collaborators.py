@@ -295,6 +295,7 @@ def make_aggregate(loaded: Any, settings: Any):
     """
 
     def _aggregate(task: TeamTask) -> tuple[str, float | None]:
+        from my_crew.agent.coordinator_nodes.self_resolve import COORDINATOR_FALLBACK_KEY
         from my_crew.agent.ops_stalled_task import (
             DROP_PLACEHOLDER_PREFIX,
             DROP_REASON_PREFIX,
@@ -322,6 +323,7 @@ def make_aggregate(loaded: Any, settings: Any):
         parts: list[str] = []
         note_lines: list[str] = []
         gap_lines: list[str] = []
+        fallback_lines: list[str] = []
         # parent step_id → one "unresolved objection" line. A failed verdict whose
         # round never minted a rework is exactly "review cap exhausted" (below the cap
         # a failed review ALWAYS mints one), and since the ticker no longer stalls at
@@ -369,6 +371,15 @@ def make_aggregate(loaded: Any, settings: Any):
             text = ""
             if artifact:
                 text = str(artifact.get("result_text") or artifact.get("status") or "")
+                # The coordinator wrote this step in the assignee's place. Named in
+                # CODE, like the gap header: the CEO must know who wrote which part,
+                # and the summarizer cannot be trusted to say so.
+                fallback_reason = str(artifact.get(COORDINATOR_FALLBACK_KEY) or "").strip()
+                if fallback_reason:
+                    fallback_lines.append(
+                        f"bước '{step.title}' (người được giao không hoàn thành: "
+                        f"{fallback_reason})"
+                    )
             # A dropped step's placeholder means the delivery has a real hole in it.
             # Naming the hole is done in CODE (deterministic header below), not by
             # hoping the summarizer LLM mentions it — and the header must NEVER use
@@ -408,7 +419,13 @@ def make_aggregate(loaded: Any, settings: Any):
             + "; ".join(unresolved_by_step.values()) + ".\n\n"
             if unresolved_by_step else ""
         )
-        headers = gap_header + review_header
+        # Never phrased "KHÔNG LÀM ĐƯỢC" either: the task delivered, the coordinator
+        # simply did part of it.
+        fallback_header = (
+            "Điều phối tự làm thay: " + "; ".join(fallback_lines) + ".\n\n"
+            if fallback_lines else ""
+        )
+        headers = gap_header + review_header + fallback_header
         fallback_summary = (
             headers + f"Việc '{task.title}' đã hoàn tất:\n" + "\n".join(parts)
         )

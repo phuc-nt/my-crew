@@ -68,6 +68,8 @@ from my_crew.agent.coordinator_nodes.review_insert import (
     maybe_insert_review,
     maybe_insert_review_after_rework,
 )
+from my_crew.agent.coordinator_nodes.self_resolve import try_self_resolve
+from my_crew.agent.coordinator_nodes.stall_conclusion import conclude_task_failed
 from my_crew.agent.coordinator_nodes.stuck_decision import decide_stuck_step
 from my_crew.agent.coordinator_nodes.tick_actions import (
     aggregate_and_deliver,
@@ -249,6 +251,12 @@ class CoordinatorDeps:
     # coerces to `give_up` — a caller that does not wire a judge concludes honestly
     # instead of silently retrying forever, and no existing test gains an LLM call.
     judge_stuck_step: Callable[[str, TeamStep], Any] = lambda _brief, _step: None
+    # The coordinator doing a step's work itself when its assignee could not: given
+    # the task, the step and the handoff the worker had, returns `(result_text,
+    # cost_usd)` or None. Unset (the default, and the no-API-key wiring) ⇒ the
+    # coordinator never writes work and the stuck ladder goes straight to
+    # skip-with-gap or a delivered conclusion.
+    self_do_step: Callable[[TeamTask, TeamStep, str], tuple[str, float | None] | None] | None = None
     now: Callable[[], datetime] = lambda: datetime.now(UTC)
 
 
@@ -270,7 +278,7 @@ class TickResult:
     task_id: str | None
     action: str  # "none" | "spawned" | "failed" | "timeout_escalated" | "aggregated" |
     #               "step_skipped" — a non-terminal stuck step converted to a
-    #               skip-with-gap (`stuck_decision._skip_step_with_gap`), task keeps
+    #               skip-with-gap (`self_resolve._skip_step_with_gap`), task keeps
     #               running |
     #               "cap_exceeded" | "stalled" — plan_hash mismatch at dispatch-read,
     #               OR a dead-end step (failed/timeout, no retry left) with no other
@@ -366,15 +374,17 @@ def _act_on_task(deps: CoordinatorDeps, task: TeamTask) -> TickResult:
             logger.warning("cap halt raised for task %s (bỏ qua)", task.id, exc_info=True)
             halted = 0
         halted_note = f" Đã dừng {halted} bước đang chạy để không đốt thêm." if halted else ""
-        deps.escalate(
-            task, None, "cost_cap_exceeded",
-            f"Việc '{task.title}' vượt trần chi phí (${cap.spent_usd:.4f} > "
-            f"${cap.cap_usd:.2f}) — đã dừng, cần CEO xem lại.{halted_note}",
+        # A policy stop, not a recoverable step: no self-resolve ladder here — but it
+        # still ends as a delivered conclusion (with whatever finished work exists),
+        # never a bare status flip the CEO has to discover in the event log.
+        return conclude_task_failed(
+            deps, task,
+            f"Việc '{task.title}' KHÔNG LÀM ĐƯỢC: vượt trần chi phí (${cap.spent_usd:.4f} > "
+            f"${cap.cap_usd:.2f}) — đã dừng để không đốt thêm.{halted_note}",
+            step=None, event_kind="cost_cap_exceeded", reflect_outcome="cap_exceeded",
+            reflect_detail=f"${cap.spent_usd:.4f} > ${cap.cap_usd:.2f}",
+            action="cap_exceeded", detail=f"${cap.spent_usd:.4f} > ${cap.cap_usd:.2f}",
         )
-        _reflect_safely(deps, task, "cap_exceeded",
-                        f"${cap.spent_usd:.4f} > ${cap.cap_usd:.2f}")
-        return TickResult(task_id=task.id, action="cap_exceeded",
-                          detail=f"${cap.spent_usd:.4f} > ${cap.cap_usd:.2f}")
     _maybe_warn_cost_cap(deps, task, cap)
 
     # v34 P4: runtime fan-out — mint sub/gather rows for a done step that proposed a
@@ -552,15 +562,27 @@ def _dead_end_result(deps: CoordinatorDeps, task: TeamTask) -> TickResult | None
     if in_flight:
         return None
 
-    deps.store.set_task_status(task.id, "stalled")
+    # Before the task dies with its dead step, the coordinator gets one pass at
+    # resolving it: do the step itself, or skip it with a gap note when dependents can
+    # carry the hole. One action per tick — a task with several dead steps resolves
+    # them one tick at a time, and re-enters here (still `open`) until none are left
+    # or none can be resolved.
+    for dead in sorted(dead_steps, key=lambda s: s.seq):
+        resolved = try_self_resolve(
+            deps, task, dead, "bước thất bại/quá hạn và đã hết lượt thử lại",
+        )
+        if resolved is not None:
+            return resolved
+
     names = ", ".join(f"'{s.title}'" for s in dead_steps)
-    deps.escalate(
-        task, None, "task_stalled_dead_step",
-        f"Việc '{task.title}' bị dừng: (các) bước {names} thất bại/quá hạn và không "
-        "còn được thử lại — cần CEO xem lại.",
+    return conclude_task_failed(
+        deps, task,
+        f"Việc '{task.title}' KHÔNG LÀM ĐƯỢC: (các) bước {names} thất bại/quá hạn và "
+        "không còn được thử lại.",
+        step=None, event_kind="task_stalled_dead_step", reflect_outcome="stalled",
+        reflect_detail=f"dead step(s): {names}",
+        action="stalled", detail=f"dead step(s): {names}",
     )
-    _reflect_safely(deps, task, "stalled", f"dead step(s): {names}")
-    return TickResult(task_id=task.id, action="stalled", detail=f"dead step(s): {names}")
 
 
 def _verify_plan_hash(deps: CoordinatorDeps, task: TeamTask) -> TickResult | None:
@@ -603,11 +625,10 @@ def _verify_plan_hash(deps: CoordinatorDeps, task: TeamTask) -> TickResult | Non
     if task.plan_hash == recomputed:
         return None
 
-    deps.store.set_task_status(task.id, "stalled")
-    deps.escalate(
-        task, None, "plan_hash_mismatch",
-        f"Việc '{task.title}' bị dừng: kế hoạch trên đĩa không khớp kế hoạch đã được "
-        "CEO xác nhận — cần CEO xem lại.",
+    return conclude_task_failed(
+        deps, task,
+        f"Việc '{task.title}' KHÔNG LÀM ĐƯỢC: kế hoạch trên đĩa không khớp kế hoạch đã "
+        "được CEO xác nhận — đã dừng để không chạy một kế hoạch chưa được duyệt.",
+        step=None, event_kind="plan_hash_mismatch", reflect_outcome="stalled",
+        reflect_detail="plan_hash mismatch", action="stalled", detail="plan_hash mismatch",
     )
-    _reflect_safely(deps, task, "stalled", "plan_hash mismatch")
-    return TickResult(task_id=task.id, action="stalled", detail="plan_hash mismatch")

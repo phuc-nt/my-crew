@@ -111,6 +111,26 @@ AskColleagueHook = Callable[[str, str], tuple[str, float]]
 #: `self_check_failed=True` (a stuck self-check must never loop forever, R5).
 MAX_REWORK = 2
 
+
+def _normalize_failure(text: str) -> str:
+    """Grader phrasing that differs only in case, spacing or trailing punctuation is the
+    same finding."""
+    return " ".join(str(text).lower().split()).rstrip(".;,!")
+
+
+def rework_made_no_progress(prior: list[str], current: list[str]) -> bool:
+    """True when the last rework fixed NOTHING the grader had asked for: every finding
+    of the previous round is still in this round's list (same or grown). A list of the
+    same length but different content is progress — the old defects went away and the
+    grader found new ones — and earns the next round. Byte-identical repeats are the
+    signal measured on the bench; a differently worded repeat is let through, so this
+    can under-fire but never stops a rework that moved the draft."""
+    if not prior or not current:
+        return False
+    prior_set = {_normalize_failure(f) for f in prior}
+    current_set = {_normalize_failure(f) for f in current}
+    return prior_set <= current_set
+
 #: Header of the coordinator's "last attempt was rejected" note inside the handoff
 #: block. It is a one-shot instruction, not standing context: it describes the draft a
 #: PREVIOUS attempt delivered, so once a rework round has acted on it the draft it
@@ -964,7 +984,17 @@ def _make_team_task_nodes(deps: TeamTaskDeps, *, interrupt_on_clarify: bool = Fa
         # reads this same pair of facts to pick "deliver" vs "rework"; setting the
         # flag HERE (not in a separate node) keeps the two decisions computed from
         # the identical snapshot, so they can never disagree.
-        exhausted = (not passed) and rework_count >= max_rework
+        # A rework that left every previous finding standing changed nothing the
+        # grader cares about; spending the remaining budget on it re-learns the same
+        # failure. `check_failures` at this point still holds the PREVIOUS round's
+        # findings (the rework node writes only the new draft), so the comparison is
+        # round-over-round.
+        prior_failures = list(state.get("check_failures") or [])
+        no_progress = (
+            rework_count > 0 and not passed
+            and rework_made_no_progress(prior_failures, list(failures))
+        )
+        exhausted = (not passed) and (rework_count >= max_rework or no_progress)
         out: dict = {
             "self_check_passed": passed, "check_failures": failures,
             "check_confidence": confidence, "check_reasons": reasons,
@@ -1129,10 +1159,15 @@ def route_after_work(state: TeamStepState) -> str:
 
 def route_after_check(state: TeamStepState) -> str:
     """Conditional edge out of `self_check`: `passed` -> deliver; otherwise rework
-    while budget remains; budget exhausted -> deliver anyway (flagged), never loop
-    forever (R5). Reads ONLY `self_check_passed` + the rework counter — `check_confidence`
-    is observability-only, never a routing input (binary pass/fail is the contract)."""
+    unless `self_check` concluded the loop is exhausted (budget spent, or the last
+    rework made no progress) -> deliver anyway (flagged), never loop forever (R5).
+    Reads the verdict `self_check` wrote rather than recomputing it, so the node and
+    the edge can never disagree; the budget counter stays as a backstop.
+    `check_confidence` is observability-only, never a routing input (binary
+    pass/fail is the contract)."""
     if state.get("self_check_passed", False):
+        return "deliver"
+    if state.get("self_check_failed", False):
         return "deliver"
     max_rework = state.get("max_rework", MAX_REWORK)
     if state.get("rework_count", 0) < max_rework:

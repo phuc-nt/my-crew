@@ -966,6 +966,21 @@ class TeamTaskStore:
         self._conn.commit()
         return updated
 
+    def mark_done_by_coordinator(self, task_id: str, step_id: str, *,
+                                 outcome_ref: str | None = None,
+                                 cost_usd: float | None = None,
+                                 attempt_id: str | None = None) -> bool:
+        """The coordinator's own result lands on a step its assignee could not
+        finish — see `_steps.mark_done_by_coordinator` for the status guard and why
+        the attempt lease stays while the review flag falls. Attempt-guarded like the
+        drop: a concurrent re-reservation makes this a no-op, never a clobber."""
+        updated = _steps.mark_done_by_coordinator(
+            self._conn, task_id, step_id, outcome_ref=outcome_ref, cost_usd=cost_usd,
+            attempt_id=attempt_id,
+        )
+        self._conn.commit()
+        return updated
+
     def insert_step(self, task_id: str, step: dict[str, Any], *,
                     needs_review: bool = False, needs_web: bool = False,
                     needs_mail: bool = False) -> None:

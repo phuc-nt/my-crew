@@ -4,9 +4,13 @@
 Load-bearing:
 - fail-then-pass: `work` runs exactly once, `rework` runs exactly once, `deliver`
   receives `self_check_failed=False`.
-- fail-fail (budget exhausted at `max_rework=2`): `rework` runs exactly twice,
-  `rework_count==2` at delivery, `deliver` receives `self_check_failed=True` — a
-  stuck self-check must still deliver (R5: never loop forever), just flagged.
+- fail-fail with the SAME findings: `rework` runs exactly once — a round that left
+  every previous finding standing changed nothing, so the loop stops there instead
+  of spending the rest of the `max_rework=2` budget; `deliver` receives
+  `self_check_failed=True` — a stuck self-check must still deliver (R5: never loop
+  forever), just flagged.
+- fail-fail with CHANGED findings (old ones fixed, new ones found, or fewer left):
+  the budget is spent in full — progress earns the next round.
 - pass-immediately: `deliver` runs with no `rework` call at all.
 - keep-best on exhaustion: reworks can REGRESS a draft; when the budget runs out,
   `deliver` receives the failing non-blank draft with the FEWEST failures, not the
@@ -81,13 +85,33 @@ def test_fail_fail_exhausts_rework_budget_and_delivers_flagged():
     result = graph.invoke({"step_title": "draft", "acceptance": "phải có phần A"})
 
     assert calls["work_calls"] == 1
-    assert calls["rework_calls"] == 2  # capped at max_rework=2, never loops forever
-    assert result["rework_count"] == 2
+    # The rework left the same finding standing, so the second budgeted round is
+    # skipped: nothing about the draft moved, and a third identical grading would only
+    # cost money.
+    assert calls["rework_calls"] == 1
+    assert result["rework_count"] == 1
     assert result["self_check_failed"] is True
     assert calls["deliver_args"][2] is True
-    # Every round failed with the SAME failure count — a keep-best tie, which goes to
+    # Both rounds failed with the SAME failure count — a keep-best tie, which goes to
     # the newest draft: deliver runs with the LATEST result, not a blank/aborted one.
-    assert calls["deliver_args"][0] == "draft v0+fix1+fix2"
+    assert calls["deliver_args"][0] == "draft v0+fix1"
+
+
+def test_a_rework_that_shrinks_the_failure_list_earns_the_next_round():
+    """Progress spends the budget in full: 2 failures -> 1 -> still 1 stops only at
+    the cap, never early (the second round's finding is a strict subset, so it counts
+    as progress; the third round repeats it, but the budget is gone anyway)."""
+    deps, calls = _make_deps(verdicts=[
+        (False, ["thiếu A", "thiếu B"], 0.3),
+        (False, ["thiếu B"], 0.5),
+        (False, ["thiếu B"], 0.5),
+    ])
+    graph = build_team_task_graph(deps=deps)
+    result = graph.invoke({"step_title": "draft", "acceptance": "phải có A và B"})
+
+    assert calls["rework_calls"] == 2
+    assert result["self_check_failed"] is True
+    assert calls["deliver_args"][0] == "draft v0+fix1+fix2"  # tie -> newer draft
 
 
 def test_pass_immediately_never_reworks():
@@ -197,10 +221,13 @@ def test_coordinator_guidance_is_consumed_by_the_first_rework_only():
         handoffs.append(handoff)
         return f"{prior_output}+fix{len(handoffs)}", 0.02
 
+    # Each round fails on a NEW finding: the previous one was fixed, so the loop keeps
+    # earning its next round and both budgeted reworks run.
+    rounds = iter([["thiếu A"], ["thiếu B"], ["thiếu C"]])
     deps = TeamTaskDeps(
         read_handoff=lambda: handoff_from_perceive,
         run_work=lambda title, handoff, hook: ("draft v0", 0.01),
-        run_self_check=lambda text, acceptance: (False, ["vẫn thiếu A"], 0.3),
+        run_self_check=lambda text, acceptance: (False, next(rounds), 0.3),
         run_rework=run_rework,
         deliver_step=lambda text, version, failed: (True, f"[done] {text}"),
     )

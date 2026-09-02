@@ -609,7 +609,7 @@ def test_give_up_without_a_substantive_done_step_delivers_the_plain_note(tmp_pat
 
 
 def test_salvage_is_capped_at_a_line_boundary(tmp_path):
-    from my_crew.agent.coordinator_nodes.stuck_decision import _MAX_SALVAGE_CHARS
+    from my_crew.agent.coordinator_nodes.stall_conclusion import _MAX_SALVAGE_CHARS
     from my_crew.agent.team_task_artifact import write_step_artifact
 
     store = _two_step_stuck_store(tmp_path)

@@ -28,6 +28,7 @@ from my_crew.runtime.company import load_company
 from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
 from my_crew.runtime.team_task_store import TeamStep, TeamTask, TeamTaskStore
 from my_crew.runtime.team_tick_collaborators import make_aggregate, make_deliver_room, make_escalate
+from my_crew.runtime.team_tick_self_do import make_self_do_step
 from my_crew.runtime.team_tick_stuck_judge import make_judge_stuck_step
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,7 @@ def run_team_tick(loaded: Any, settings: Any, *, now: datetime | None = None) ->
             deliver_room=make_deliver_room(loaded, settings),
             escalate=make_escalate(loaded, settings),
             judge_stuck_step=make_judge_stuck_step(settings),
+            self_do_step=make_self_do_step(loaded, settings),
             # Lessons live in the COORDINATOR's own namespace — it is the agent that
             # assigns work, so what it learns is about its own delegating. `loaded` IS
             # the coordinator here (this kind runs only on that agent), so its profile id
