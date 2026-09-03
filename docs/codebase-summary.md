@@ -1,7 +1,11 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-08-26 — as-built sau v92 "fast-crew lane routing v2"** (6 phase,
+> Status: **2026-09-03 — as-built 0.17.0** (PyPI; cổng 4660 BE passed / 1 skipped · 417 vitest · 44 e2e · tsc/ruff sạch).
+> 0.16.0→0.17.0: context-crew (vai = bộ `Capability(tier, web, mail, model)`, đội chỉ còn hai dạng `do_review`/`permission_chain`,
+> hand-off = artifact có hợp đồng + nguồn), coordinator tự làm/bỏ qua/accept bước chết và mọi đường stall đều kết luận,
+> `cost_cap_usd` MẶC ĐỊNH BẬT ở tier tools (1.0 USD), stream idle timeout 120s, tick lock fleet-wide, gỡ `academic_search`.
+> Mốc trước — **2026-08-26 — as-built sau v92 "fast-crew lane routing v2"** (6 phase,
 > chi tiết `plans/260825-1509-fast-crew-lane-routing-v2/`): routing upgrade + effort tier + live fullflow suite + benchmark v2.
 > v92 thêm: 2-lane routing steering (sprint→team lúc chạy), effort tier chấm độ khó (`low|medium|high` lưu `route_json`),
 > three miss-rates (dead_end/downgrade/upgrade), 4 benchmark modes (routing/release/tasks/judge), 18 live e2e case opt-in.
@@ -267,8 +271,9 @@
   `cost_cap_usd` (0.16.0: ENFORCE thật ở tier tools qua `loop_cost_guard.over_cost_cap`, hỏi giữa
   các vòng TRƯỚC cuộc gọi kế; trước đó observability-only vì chưa có seam per-agent — red-team C4.
   KHÔNG thay `company.team_task_cap_usd` (per-task, coordinator); `react_loop`/`deep_agent_loop`
-  chạy trong `agent.invoke` nên vẫn chỉ bị chặn bởi `runtime_loop_limit`. Mặc định `None` cả 3
-  tier = không trần; `0` bị reject ở parse vì nó giết mọi bước ở vòng 0) + `sandbox` (deep only).
+  chạy trong `agent.invoke` nên vẫn chỉ bị chặn bởi `runtime_loop_limit`. Mặc định **0.17.0**:
+  `create_agent`/`deep_agent` = 1.0 USD (nửa trần task), native = `None` (một cuộc gọi, không vòng);
+  profile ghi đè; `0` bị reject ở parse vì nó giết mọi bước ở vòng 0) + `sandbox` (deep only).
   Config tới runtime qua `build_task(runtime_config=)` (F1).
 - **DeepAgentRuntime cháy thật** (`deep_agent_runtime.py` + `deep_agent_loop.py`): `create_deep_agent`
   (deepagents 0.6.12, optional extra `[deep]`) chạy shell CHỈ trong sandbox. **Fail-closed up-front**

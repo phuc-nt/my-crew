@@ -1,12 +1,13 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built v95, đã ship tới 0.15.0 — arc v86–v95). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-08-30.
+> Lộ trình + trạng thái (as-built 0.17.0 — arc v86–v95 + các vòng 08-31→09-03). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Cập nhật: 2026-09-03.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v0.15.0 (PyPI, 2026-08-30 — arc
-v86–v95).** 4212 BE + 417 FE + 44 e2e test + 33 live fullflow (opt-in), ruff/tsc sạch.
+**Production-usable, single-user autonomy-first. Đã ship tới v0.17.0 (PyPI, 2026-09-03;
+0.16.0 ngày 09-01, 0.15.0 ngày 08-30).** 4660 BE + 417 FE + 44 e2e test + 66 live fullflow +
+8 live đơn lẻ (opt-in), ruff/tsc sạch.
 Mọi vòng E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out,
 UAT đối kháng, benchmark sprint-vs-team chấm mù, live e2e opt-in, release gate delta).
 
@@ -69,6 +70,34 @@ ròng 0 (khớp-chuỗi sai nghĩa). Routing 0 diff. Cổng: 4091 BE passed, ruf
 Việc vòng sau: xét lại tín hiệu `'trong tuần'`→nhiều-giai-đoạn (bắt nhầm hạn chót); rõ hóa
 phân rã bước review-and-finalize (tách "chốt bản cuối" khỏi "phán quyết" — case meeting_notes
 stalled vì mơ hồ này); bộ đề ≥30 case cho routing + đo lại tương quan sạch→thắng phi-cơ-học.
+
+**0.16.0 → 0.17.0 (08-31→09-03, ship 0.16.0 ngày 09-01 và 0.17.0 ngày 09-03):**
+**0.16.0 — rào ngân sách + rào đầu ra** (mượn ý OpenHuman): tool result >12k ký tự chuyển
+vào artifact, vòng lặp chỉ nhận preview (hết bị tính tiền lại mỗi vòng); mỗi dep góp tối đa
+8.000 ký tự vào prompt bước sau, artifact + work order giữ nguyên bản; mỗi lần đọc tool để
+lại một dòng audit; `cost_cap_usd` per-step ra đời (opt-in). Đo live cả hai rào (L2 mất 7
+vòng, lộ 1 bug sản phẩm + 1 bug phép đo); baseline journey `bench/journey_baseline_0.16.0.json`.
+**0.17.0 — đội tự quyết, luôn kết luận, và đội chỉ còn hai dạng**: (1) coordinator gặp bước
+chết thì **bỏ qua** (bước giữa, có anh em còn sống) hoặc **tự làm** từ deps (bước cuối), judge
+kẹt được ra phán quyết **accept** khi kết quả thật sự đạt tiêu chí; mọi đường stall (bỏ cuộc,
+vượt trần chi phí, lệch plan hash) đều ghi `final_summary` + giao vào phòng dưới đầu ⛔ + escalate
+một lần — bench 8/8 delivered, 0 stalled. (2) **Context-crew**: vai = bộ
+`Capability(tier, web, mail, model)`, hai bước kề cùng bộ gộp làm một; hand-off là artifact có
+hợp đồng theo loại (`findings` cần URL, `final` cần thân thật, `upstream_sources` bắt giữ nguồn);
+router chỉ giữ đội khi là **do + soát chéo độc lập** hoặc **chuỗi quyền**, còn lại chạy sprint
+(`route.source="shape"`). Bench giả thuyết (min 4 brief × 3 run, Wilson): giữ do+review (reviewer
+bắt 10/12 lỗi gieo), giết fan-out/merge (thắng 4/12 với 1.5× chi phí). (3) **Ngang chuẩn
+harness**: brief giao việc mang rubric nghiệm thu + tên bước anh em; `route.failure_mode` một
+mã kết cục theo nhóm MAST; H4 hiệu chuẩn bộ chấm (self-check + peer review cùng 3/12 báo động
+giả, 10/12 bắt được — giữ, sát vạch). (4) Vận hành: `cost_cap_usd` **bật mặc định** ở tier tools
+(1.0 USD, native không trần); stream idle timeout 120s thay read timeout bị keep-alive vô hiệu
+(đo live: một decompose treo >900s); team tick khoá fleet-wide; mail brief hết kẹt plan_hash;
+rework 1 vòng; gỡ tool `academic_search` (OpenAlex 429 theo IP). Live fullflow 66 case (63/66
+lượt đầu, 3 ca đỏ chạy lại xanh — biến thiên model) + S2 lộ bug self-do làm rơi soát chéo, vá
+`keeps_planned_review`. Cổng: 4660 BE / 417 FE / 44 e2e, ruff/tsc sạch; release + routing
+bench **0 delta** so v0.16.0 (routing chỉ thêm 3 khoá signal mới).
+Việc vòng sau: planner Haiku hay gộp 3 việc vào 1 bước; trục chất lượng deliverable vẫn chưa đo
+đủ mẫu (blind judge n≥3); reliability baseline vẫn ở 0.15.0.
 
 **v95 (zalo business fleet P2/P3/P4/P6 — 08-30, ship 0.15.0):** 4 phase của plan
 `260830-1311-zalo-business-fleet` (P1 kênh Zalo + P5 digital-assistant khách **hoãn**, chờ OA

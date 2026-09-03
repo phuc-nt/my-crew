@@ -3,7 +3,27 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
-## [Unreleased]
+## [0.17.0] — 2026-09-03
+
+What was measured before this cut, and what could not be: [docs/release-evidence-0.17.0.md](docs/release-evidence-0.17.0.md).
+
+A team task now always ends with a conclusion in the room. Until now a worker that gave
+up, a cost-cap breach, or a plan-hash mismatch could leave a task `stalled` with nothing
+delivered; every one of those paths now writes a summary of what was and was not done,
+delivers it under the ⛔ head, and escalates once. Before giving up at all, the
+coordinator skips a dead middle step or does a dead terminal step itself from its
+dependencies, and the stuck-step judge can rule that a result which failed its own
+self-check actually met the acceptance list.
+
+A crew is only kept when there is a boundary one strong agent cannot cross. A role is
+now a capability tuple (tier, web, mail, model); neighbouring steps that would run on
+the same tuple fold into one; the router keeps a team plan only as do + independent
+review or as a permission chain, and runs everything else as a sprint. The bench that
+decided this is in the repo, with its kill lines.
+
+Two defaults change. `cost_cap_usd` is now on for the tool tiers (1.0 USD per step,
+native stays uncapped), where 0.16.0 shipped it opt-in. The OpenAlex academic-search
+tool is removed; it rate-limited by IP and was never a dependable lookup.
 
 ### Added
 - **A worker step is briefed like a delegation, not a chat turn.** Every work and rework
@@ -29,17 +49,6 @@ Development history at finer grain lives in [docs/journals/](docs/journals/).
   on the line; all six false fails are one ambiguous rubric line (deposit in a 24-month
   total), and neither grader adds up a budget column.
 
-### Fixed
-- **The coordinator's own write over a stuck step dropped the CEO's cross-check.** On a
-  plan routed as do+review, a worker that gave up made the coordinator write the step
-  itself, and that fallback cleared the review flag: no reviewer was ever minted and the
-  task closed "after cross-check" with nobody having read it. The stuck-judge accept path
-  already kept the flag on that shape; the self-do path now shares the same rule
-  (`keeps_planned_review`). Measured live before the fix.
-- **The deterministic step gate read an amount as an item count.** "cộng đúng 90 triệu"
-  in a rubric became "at least 90 list items" and sent a correct five-week event plan to
-  rework on every calibration run. A unit or decimal right after the digits (tr, triệu,
-  tỷ, %, k, đ, vnd, usd, `1,5`) no longer counts as a quantity demand.
 - **Context-crew: a role is a capability tuple, a hand-off is an artifact, and a crew has one
   of two shapes.** `Capability(tier, web, mail, model)` is derived from the profile; two
   neighbouring plan steps split across agents with the same tuple now fold into one. Every
@@ -127,6 +136,16 @@ Development history at finer grain lives in [docs/journals/](docs/journals/).
   so those profiles keep loading, and the upgrade preview simply stops reporting the field.
 
 ### Fixed
+- **The coordinator's own write over a stuck step dropped the CEO's cross-check.** On a
+  plan routed as do+review, a worker that gave up made the coordinator write the step
+  itself, and that fallback cleared the review flag: no reviewer was ever minted and the
+  task closed "after cross-check" with nobody having read it. The stuck-judge accept path
+  already kept the flag on that shape; the self-do path now shares the same rule
+  (`keeps_planned_review`). Measured live before the fix.
+- **The deterministic step gate read an amount as an item count.** "cộng đúng 90 triệu"
+  in a rubric became "at least 90 list items" and sent a correct five-week event plan to
+  rework on every calibration run. A unit or decimal right after the digits (tr, triệu,
+  tỷ, %, k, đ, vnd, usd, `1,5`) no longer counts as a quantity demand.
 - **A stalled provider can no longer hold an LLM call open indefinitely.** OpenRouter keeps a stalled socket busy with keep-alive bytes, so the client's 60s read timeout never fired; measured live, one decompose sat past 900s and the synchronous delegate never answered. Every completion now streams and is bounded by idle time (`_STREAM_IDLE_S`, 120s without a chunk): a silent call is abandoned on its worker thread, counted as transient and retried; a second silent attempt in a row gives the model up for that call so the chain (or the caller's own retry) moves on instead of burning five attempts on silence. A slow answer is never cut — the same evening the live model ran at ~23 tokens/s and a legitimate review took 190s, which the wall-clock ceiling first tried in its place would have killed. Usage and OpenRouter's `cost` still arrive on the final streamed chunk, so cost accounting is unchanged.
 - **Two workers starting together no longer crash on the once-only `.data/` migration.** Both passed the guard before either created the target, the first rename won, and the second died in `main()` over a store that was already safely under `agents/default/`. The sibling's move is now recognised and skipped.
 - **The live harness now serves the fleet on the model it declares.** `boot()` inherited the developer's `OPENROUTER_MODEL` and the child's own `.env` could not override it, and the per-role models were written under a key the config never reads; every live run had declared haiku and served the default model. `serve_env()` sets both explicitly, guarded offline by `tests/test_live_topology_fleet_model.py`.
@@ -181,6 +200,17 @@ Development history at finer grain lives in [docs/journals/](docs/journals/).
   capability hint derived from the role tuple ("có công cụ tra lịch sử …; tra được web" /
   "không có công cụ — chỉ viết/suy luận"), and both prompts carry the rule to route
   tool steps by it (`planning_roster()`).
+
+### Verification
+Gates: 4660 BE passed / 1 skipped, 417 vitest, ruff and tsc clean, cold-start smoke
+`--browser` 6/6 on the built wheel. Routing and release benches against a `v0.16.0`
+worktree show no route or spend deltas (the routing rows differ only by three new signal
+keys). Live: 66 fullflow cases on a real fleet, 63 green first pass; the three reds
+reran green, the one red found on a second pass was a real bug (the coordinator's own
+write dropping a planned review) and is fixed above. A journey baseline was cut on a
+real fleet after the bump (`bench/journey_baseline_0.17.0.json`, 9 passed); it is the
+first one actually on the model the harness declares, so it is the first baseline the
+next release can compare cost against.
 
 ## [0.16.0] — 2026-09-01
 

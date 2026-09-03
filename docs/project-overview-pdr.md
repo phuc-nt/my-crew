@@ -1,7 +1,7 @@
 # Project Overview & PDR — my-crew
 
 > Product definition + requirements. Đọc file này TRƯỚC khi plan hay code.
-> Cập nhật: 2026-08-16 (v79 live). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified — PyPI 0.10.0**.
+> Cập nhật: 2026-09-03 (0.17.0). Trạng thái: **production-usable, single-user, autonomy-first, live E2E verified — PyPI 0.17.0** (đội chỉ giữ hai dạng có ranh giới thật: do + soát chéo độc lập, chuỗi quyền; mọi việc đội luôn kết thúc bằng kết luận; trần chi phí per-step bật mặc định ở tier tools).
 > Liên quan: [system-architecture](system-architecture.md) · [action-gateway-explainer](action-gateway-explainer.md) · [uat-theo-user-story](uat-theo-user-story.md).
 
 ## 1. Vấn đề
