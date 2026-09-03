@@ -110,6 +110,7 @@ def run_team_step(
                 loaded, settings, task_id=task_id, step=step, attempt_id=attempt_id,
                 task_title=task.title, on_node=_touch, telemetry=telemetry,
                 plan_hash=task.plan_hash or "", original_request=task.original_request,
+                siblings=tuple(getattr(task, "steps", None) or ()),
             )
         if result.get("status") == "waiting_clarify":
             # v34 P2: the graph paused on a CEO question. Persist the correlation id;
@@ -454,7 +455,7 @@ def _run_review(
 def _run_graph(
     loaded: Any, settings: Any, *, task_id: str, step, attempt_id: str = "",
     task_title: str = "", on_node: Callable[[], None] | None = None, telemetry=None,
-    plan_hash: str = "", original_request: str = "",
+    plan_hash: str = "", original_request: str = "", siblings: tuple = (),
 ) -> dict:
     """Build + invoke the team_task_graph for one step, checkpointed (v34 P1).
 
@@ -607,12 +608,31 @@ def _run_graph(
     _toolless = step_is_toolless(step)
     # Context-crew: the artifact this step owes its dependents, derived from its DAG
     # position (dep-less web collect ⇒ findings, terminal ⇒ final, else draft).
+    # The deps' hand-off feeds the provenance half of the contract (how many source
+    # links this step was given). Same read the work-order writer records; a failed
+    # read degrades to "no provenance demand", never to a failed step.
     from my_crew.agent.step_artifact_contract import contract_for
 
-    _extra["artifact_contract"] = contract_for(step)
+    try:
+        from my_crew.agent.team_task_graph import _read_deps_handoff
+
+        _dep_text = _read_deps_handoff(
+            team_tasks_root(), task_id, tuple(getattr(step, "deps", ()) or ())
+        )
+    except Exception:  # noqa: BLE001 — provenance is a bonus check on top of the contract
+        _dep_text = ""
+    _extra["artifact_contract"] = contract_for(step, dep_text=_dep_text)
     # A needs_web step's search is part of the work, not a garnish: when it fails the
     # step fails (machine retry), rather than being graded on an artifact written blind.
     _extra["requires_search"] = bool(getattr(step, "needs_web", False))
+    # The rubric this step is graded on and the scope the other steps own, in the
+    # worker's own prompt. `siblings` is the task's step list; the sprint override
+    # below carries its own acceptance and ignores the work-prompt copy.
+    from my_crew.agent.step_delegation_brief import delegation_brief, sibling_titles
+
+    _extra["delegation_brief"] = delegation_brief(
+        str(getattr(step, "acceptance", "") or ""), sibling_titles(step, siblings),
+    )
     # The sprint pipeline REPLACES the work node — it runs its own searches (via
     # `prefetch_queries`, same gates and audit trail) and never calls the graph's
     # pre-work hook. Everything downstream of `work` (self_check → rework → deliver →

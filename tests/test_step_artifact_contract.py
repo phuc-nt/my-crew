@@ -17,6 +17,7 @@ from my_crew.agent.step_artifact_contract import (
     artifact_contract_line,
     artifact_kind_for,
     contract_for,
+    upstream_source_count,
 )
 
 
@@ -63,3 +64,35 @@ def test_prompt_line_names_the_owed_artifact():
 def test_contract_for_reads_the_step_itself():
     c = contract_for(_step(needs_web=True))
     assert c == ArtifactContract(kind="findings", needs_web=True)
+
+
+def test_a_draft_or_final_fed_by_sourced_findings_must_keep_a_link():
+    fed = ArtifactContract("draft", upstream_sources=2)
+    assert artifact_contract_gaps(fed, "Giá A 30tr, giá B 28tr (theo bước trước)") != []
+    assert artifact_contract_gaps(fed, "Giá A 30tr — https://a.vn/p; giá B 28tr") == []
+    final = ArtifactContract("final", upstream_sources=1)
+    assert any("link" in g for g in artifact_contract_gaps(final, "x" * FINAL_MIN_CHARS))
+
+
+def test_no_upstream_sources_means_no_link_demand():
+    # a draft written from reasoning alone, or from an unsourced brief, is not asked
+    # to cite links it was never given; findings/verdict keep their own rules
+    assert artifact_contract_gaps(ArtifactContract("draft"), "Giá A 30tr, giá B 28tr") == []
+    assert artifact_contract_gaps(ArtifactContract("verdict", upstream_sources=3), "đạt") == []
+
+
+def test_upstream_sources_are_distinct_urls_in_the_deps_text():
+    assert upstream_source_count("") == 0
+    assert upstream_source_count("xem https://a.vn/x và https://a.vn/x rồi https://b.vn") == 2
+    c = contract_for(_step(deps=("a",)), dep_text="theo https://a.vn/x")
+    assert c == ArtifactContract(kind="draft", needs_web=False, upstream_sources=1)
+
+
+def test_the_prompt_line_asks_to_keep_links_only_when_sources_exist():
+    assert "Giữ link nguồn" in artifact_contract_line(ArtifactContract("final", upstream_sources=2))
+    assert "Giữ link nguồn" in artifact_contract_line(ArtifactContract("draft", upstream_sources=1))
+    assert "Giữ link nguồn" not in artifact_contract_line(ArtifactContract("final"))
+    assert "Giữ link nguồn" not in artifact_contract_line(
+        ArtifactContract("verdict", upstream_sources=2)
+    )
+

@@ -1106,3 +1106,117 @@ def test_a_task_with_no_store_row_at_all_never_blocks_the_escalation(tmp_path, m
     finally:
         store.close()
     assert message == "bước thất bại"
+
+
+# --- failure-mode stamp ---------------------------------------------------------------
+
+def _seed_route(tmp_path, task_id="t1", route=None):
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    store = TeamTaskStore(team_task_paths.team_tasks_db_path())
+    try:
+        store.create_task(task_id=task_id, title="viec")
+        store.set_route(task_id, route or {"mode": "team", "source": "heuristic",
+                                           "reason": "vì thế", "signals": {}})
+    finally:
+        store.close()
+
+
+def _read_route(task_id="t1"):
+    from my_crew.runtime import team_task_paths
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    store = TeamTaskStore(team_task_paths.team_tasks_db_path())
+    try:
+        return store.get_route(task_id)
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize("event_kind, mode", [
+    ("task_stalled_dead_step", "dead_step"),
+    ("plan_hash_mismatch", "plan_mismatch"),
+    ("review_rounds_exhausted", "verification_exhausted"),
+    ("cost_cap_exceeded", "cost_cap"),
+])
+def test_a_terminal_escalation_stamps_the_failure_mode_next_to_the_route(
+    tmp_path, event_kind, mode,
+):
+    """The route row is where the lane decision lives; the outcome of that decision
+    goes next to it so the retro reads "which lane ends how" from one record.
+    `source` is the shared namespace the manager-escalation prefix reads — it must
+    survive the stamp untouched."""
+    _seed_route(tmp_path)
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+
+    escalate(_task(), None, event_kind, "việc bị dừng")
+
+    route = _read_route()
+    assert route["failure_mode"] == mode
+    assert route["source"] == "heuristic"
+    assert route["mode"] == "team"
+
+
+def test_a_sprint_give_up_carries_both_the_dead_end_flag_and_the_failure_mode(tmp_path):
+    _seed_route(tmp_path, route={"mode": "sprint", "source": "heuristic",
+                                 "reason": "r", "signals": {}})
+    sprint_step = dataclasses.replace(_step(), step_type="sprint")
+    task = dataclasses.replace(_task(), steps=(sprint_step,))
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+
+    escalate(task, sprint_step, "gave_up", "không làm được")
+
+    route = _read_route()
+    assert route["dead_end"] is True
+    assert route["failure_mode"] == "step_exhausted"
+    assert route["source"] == "heuristic"
+
+
+def test_the_first_terminal_escalation_wins_and_a_later_one_does_not_rewrite_it(tmp_path):
+    """A stall followed by a give-up ruling on the same task is one failure, and the
+    mode the CEO first read about is the one the retro must keep counting."""
+    _seed_route(tmp_path)
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+
+    escalate(_task(), None, "review_rounds_exhausted", "soát không đạt")
+    escalate(_task(), _step(), "gave_up", "bỏ cuộc")
+
+    assert _read_route()["failure_mode"] == "verification_exhausted"
+
+
+@pytest.mark.parametrize("event_kind", ["stuck", "step_failed", "task_stuck"])
+def test_a_step_level_ruling_leaves_the_route_unstamped(tmp_path, event_kind):
+    """These rulings put the step BACK to pending; the task may still finish, so
+    counting it as failed now would inflate every retro."""
+    _seed_route(tmp_path)
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+
+    escalate(_task(), _step(), event_kind, "bước gặp khó")
+
+    assert "failure_mode" not in _read_route()
+
+
+def test_a_task_without_a_route_record_gets_no_stamp_and_no_crash(tmp_path):
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+
+    escalate(_task("no-route"), None, "task_stalled_dead_step", "việc bị dừng")
+
+    assert _read_route("no-route") is None
+
+
+def test_a_store_failure_while_stamping_never_blocks_the_escalation(
+    tmp_path, monkeypatch, caplog,
+):
+    from my_crew.runtime import team_tick_collaborators as tick_mod
+
+    def _boom(*_a, **_k):
+        raise OSError("db locked")
+
+    monkeypatch.setattr("my_crew.runtime.team_task_store.TeamTaskStore.get_route", _boom)
+    escalate = make_escalate(_loaded_no_telegram(), settings=SimpleNamespace())
+
+    with caplog.at_level("WARNING", logger=tick_mod.__name__):
+        escalate(_task(), None, "cost_cap_exceeded", "vượt trần")  # must not raise
+
+    assert any("kết cục thất bại" in r.getMessage() for r in caplog.records)

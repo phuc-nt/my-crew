@@ -249,24 +249,19 @@ def _accept(
     `mark_done_by_coordinator`: `done` from a `needs_decision` row only, attempt-
     guarded, review flag dropped — the judge's reading was the review.
 
-    EXCEPT on a plan routed as do+review: there the CEO asked for an independent
-    reviewer of the deliverable, and the judge only settled a self-check dispute —
-    it never read the work as a reviewer would. Measured live: the accept dropped
-    the flag, no review row was ever minted, and the task closed "sau soát chéo"
-    with nobody having cross-checked anything. On that shape the planned flag stays,
-    so `maybe_insert_review` still mints the reviewer row.
+    EXCEPT on a plan routed as do+review (`keeps_planned_review`): there the CEO
+    asked for an independent reviewer of the deliverable, and the judge only settled
+    a self-check dispute — it never read the work as a reviewer would.
     """
     from my_crew.agent.coordinator_graph import TickResult
-    from my_crew.agent.crew_shape import DO_REVIEW_SHAPE
+    from my_crew.agent.coordinator_nodes.self_resolve import keeps_planned_review
     from my_crew.agent.team_task_artifact import read_step_artifact, write_step_artifact
     from my_crew.runtime.team_task_paths import team_tasks_root
 
     reason = " ".join(judgement.reason.split()) or "kết quả đã đạt tiêu chí của bước"
-    route = deps.store.get_route(task.id) or {}
-    keep_review = route.get("shape") == DO_REVIEW_SHAPE
     if not deps.store.mark_done_by_coordinator(
         task.id, step.step_id, outcome_ref=step.outcome_ref, attempt_id=step.attempt_id,
-        keep_review=keep_review,
+        keep_review=keeps_planned_review(deps, task),
     ):
         logger.warning(
             "team-tick: accept on %s/%s matched no row (not needs_decision on attempt %s)",

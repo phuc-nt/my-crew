@@ -12,6 +12,8 @@ Load-bearing:
 
 from __future__ import annotations
 
+import pytest
+
 from my_crew.runtime.deterministic_step_check import (
     checked_facts_line,
     entity_coverage,
@@ -279,3 +281,33 @@ def test_the_item_count_fact_says_not_fewer_than_never_the_criteria_demand_n():
     assert "không ít hơn con số tối thiểu 2" in line
     assert "KHÔNG phải lỗi" in line
     assert "tiêu chí đòi 2" not in line
+
+
+@pytest.mark.parametrize(
+    "criteria",
+    [
+        "bảng ngân sách theo hạng mục cộng đúng 90 triệu",
+        "tổng chi phí đúng 90tr, có dòng tổng",
+        "giảm giá ít nhất 20% cho khách cũ",
+        "doanh thu tối thiểu 1,5 tỷ trong quý",
+        "đủ 50k lượt xem",
+    ],
+    ids=["trieu", "tr-suffix", "percent", "decimal-ty", "k-suffix"],
+)
+def test_an_amount_after_a_count_lead_in_is_not_an_item_demand(criteria):
+    """"cộng đúng 90 triệu" is a sum to reach. Read as "90 list lines" it failed a
+    correct five-week event plan on every calibration run, sending it to rework."""
+    artifact = "- Địa điểm: 30tr\n- Tiệc: 25tr\n- Dự phòng: 35tr\n"
+
+    assert machine_checkable_gaps(criteria, artifact) == []
+
+
+def test_a_count_demand_next_to_an_amount_still_counts():
+    """The amount exclusion is per match: the real item demand in the same rubric
+    survives it."""
+    criteria = "liệt kê 5 hạng mục, cộng đúng 90 triệu"
+    artifact = "- Địa điểm: 30tr\n- Tiệc: 25tr\n- Dự phòng: 35tr\n"
+
+    gaps = machine_checkable_gaps(criteria, artifact)
+
+    assert gaps == ["tiêu chí đòi ít nhất 5 mục nhưng kết quả chỉ có 3 mục dạng danh sách"]

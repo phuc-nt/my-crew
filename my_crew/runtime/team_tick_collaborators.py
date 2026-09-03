@@ -108,6 +108,42 @@ def _mark_route_dead_end(task_id: str) -> None:
                        task_id, exc_info=True)
 
 
+def _mark_route_failure(task_id: str, event_kind: str) -> None:
+    """Stamp the task's failure mode onto its route record, once.
+
+    The route record is where the routing decision lives; the failure mode is the
+    outcome of that decision, so it is written next to it and `route_stats` can read
+    "which lane ends how" from one row. Only terminal kinds map to a mode (see
+    `task_failure_mode`); everything else returns before touching the store. The
+    first terminal escalation wins — a later one on the same task (a stall followed
+    by a give-up ruling) must not rewrite history. Never touches `source`, the
+    shared namespace the manager-escalation prefix reads.
+
+    try/degrade like `_mark_route_dead_end`: bookkeeping must never block an alert
+    that is on its way to the CEO.
+    """
+    from my_crew.runtime.task_failure_mode import failure_mode_for
+
+    mode = failure_mode_for(event_kind)
+    if mode is None:
+        return
+    try:
+        from my_crew.runtime.team_task_paths import team_tasks_db_path
+        from my_crew.runtime.team_task_store import TeamTaskStore
+
+        store = TeamTaskStore(team_tasks_db_path())
+        try:
+            route = store.get_route(task_id)
+            if route is None or route.get("failure_mode"):
+                return
+            store.set_route(task_id, {**route, "failure_mode": mode})
+        finally:
+            store.close()
+    except Exception:
+        logger.warning("không ghi được kết cục thất bại vào route_json (%s)",
+                       task_id, exc_info=True)
+
+
 def _route_reason_block(task_id: str) -> str:
     """Dòng "việc này đang chạy đường nào và vì sao", cho cảnh báo kẹt.
 
@@ -627,6 +663,7 @@ def make_escalate(loaded: Any, settings: Any):
         if _is_sprint_dead_end(task, event_kind):
             message = message + _route_reason_block(task.id) + _sprint_upgrade_tail(task)
             _mark_route_dead_end(task.id)
+        _mark_route_failure(task.id, event_kind)
 
         # Whether the direct (fast-path) send below succeeded. Stamped into the room
         # milestone body so the mirror SKIPS re-pushing a notice the CEO already has —

@@ -233,12 +233,30 @@ def _append_self_do_event(task: TeamTask, step: TeamStep) -> None:
         logger.warning("team-tick: self-do room event failed for %s", task.id, exc_info=True)
 
 
+def keeps_planned_review(deps: CoordinatorDeps, task: TeamTask) -> bool:
+    """Whether a coordinator write over a step must leave its planned review flag up.
+
+    On a plan routed as do+review the CEO asked for an independent reader of the
+    deliverable. Whatever settles the step in the coordinator's hands — a stuck
+    judgement, or the coordinator writing the text itself — is not that reader, so
+    the flag stays and `maybe_insert_review` still mints the reviewer row. Measured
+    live twice before this rule reached both paths: the flag fell, no review row was
+    ever minted, and the task closed "sau soát chéo" with nobody having cross-checked.
+    On every other shape the coordinator's word is the last word (dropping the flag
+    is what ends the rework loop the fallback exists to end)."""
+    from my_crew.agent.crew_shape import DO_REVIEW_SHAPE
+
+    route = deps.store.get_route(task.id) or {}
+    return route.get("shape") == DO_REVIEW_SHAPE
+
+
 def _self_do_step(
     deps: CoordinatorDeps, task: TeamTask, step: TeamStep, reason: str,
 ) -> TickResult | None:
     """The coordinator writes the step's result itself. None ⇒ not attempted or not
     usable (no collaborator, guarded task/step type, model returned nothing, store
-    write refused) — the caller moves down the ladder."""
+    write refused) — the caller moves down the ladder. On a do+review plan the
+    written step keeps its review flag (`keeps_planned_review`)."""
     from my_crew.agent.coordinator_graph import TickResult, _reflect_safely
     from my_crew.agent.team_task_artifact import write_step_artifact
     from my_crew.runtime.team_task_paths import team_tasks_root
@@ -268,7 +286,7 @@ def _self_do_step(
     if not deps.store.mark_done_by_coordinator(
         task.id, step.step_id,
         outcome_ref=f"team-tasks/{task.id}/step-{step.seq}.json", cost_usd=cost_usd,
-        attempt_id=step.attempt_id,
+        attempt_id=step.attempt_id, keep_review=keeps_planned_review(deps, task),
     ):
         logger.warning(
             "team-tick: self-do on %s/%s refused by the store guard — falling through",

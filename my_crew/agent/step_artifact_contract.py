@@ -38,10 +38,24 @@ _URL_RE = re.compile(r"https?://\S+")
 
 @dataclass(frozen=True)
 class ArtifactContract:
-    """What one step owes: its artifact kind, and whether it must carry web evidence."""
+    """What one step owes: its artifact kind, whether it must carry web evidence, and
+    how many distinct source URLs its deps handed it.
+
+    `upstream_sources` is the provenance contract: a draft or final fed by sourced
+    findings must keep at least one of those links, or the sources are lost exactly at
+    the step whose output the CEO reads ("aggregate mất nguồn" in the crew assessment).
+    Counted over the DEPS' artifacts only — never the CEO brief — so a link the CEO
+    pasted into the request cannot make this demand fire.
+    """
 
     kind: str
     needs_web: bool = False
+    upstream_sources: int = 0
+
+
+def upstream_source_count(dep_text: str) -> int:
+    """Distinct URLs in the deps' hand-off text; 0 for blank input."""
+    return len(set(_URL_RE.findall(dep_text or "")))
 
 
 def artifact_kind_for(step) -> str:
@@ -61,9 +75,12 @@ def artifact_kind_for(step) -> str:
     return "draft"
 
 
-def contract_for(step) -> ArtifactContract:
+def contract_for(step, dep_text: str = "") -> ArtifactContract:
+    """`dep_text` is the deps' hand-off as the step will read it (the runner passes the
+    same read the work-order writer records); "" ⇒ no provenance demand."""
     return ArtifactContract(
         kind=artifact_kind_for(step), needs_web=bool(getattr(step, "needs_web", False)),
+        upstream_sources=upstream_source_count(dep_text),
     )
 
 
@@ -81,6 +98,16 @@ def artifact_contract_gaps(contract: ArtifactContract | None, text: str) -> list
         gaps.append(
             "bước thu thập phải để lại ít nhất một link nguồn (http…) cho bước sau trích dẫn "
             "— kết quả chưa có URL nào"
+        )
+    if (
+        contract.kind in ("draft", "final")
+        and contract.upstream_sources > 0
+        and not _URL_RE.search(body)
+    ):
+        gaps.append(
+            f"bước trước để lại {contract.upstream_sources} link nguồn — bản này phải giữ ít "
+            "nhất một link (http…) bên cạnh số liệu lấy từ đó, nếu không CEO không kiểm "
+            "chứng được"
         )
     if contract.kind == "final" and len(body) < FINAL_MIN_CHARS:
         gaps.append(
@@ -100,10 +127,15 @@ def artifact_contract_line(contract: ArtifactContract | None) -> str:
         if not contract.needs_web:
             base = "Bàn giao: bản THU THẬP cho bước sau dùng — ghi rõ nguồn của mỗi dữ kiện."
         return base
-    if contract.kind == "final":
-        return ("Bàn giao: BẢN NỘP CUỐI — CEO đọc trực tiếp, phải là câu trả lời hoàn chỉnh, "
-                "tự đứng được, không tham chiếu 'bước trước'.")
     if contract.kind == "verdict":
         return "Bàn giao: VERDICT soát chéo theo rubric cố định."
-    return ("Bàn giao: BẢN NHÁP cho bước sau tiếp tục — đủ nội dung để người sau không phải "
-            "hỏi lại.")
+    if contract.kind == "final":
+        base = ("Bàn giao: BẢN NỘP CUỐI — CEO đọc trực tiếp, phải là câu trả lời hoàn chỉnh, "
+                "tự đứng được, không tham chiếu 'bước trước'.")
+    else:
+        base = ("Bàn giao: BẢN NHÁP cho bước sau tiếp tục — đủ nội dung để người sau không "
+                "phải hỏi lại.")
+    if contract.upstream_sources > 0:
+        base += (" Giữ link nguồn của bước trước bên cạnh mỗi số liệu lấy từ đó — bản không "
+                 "còn link là bản mất nguồn.")
+    return base

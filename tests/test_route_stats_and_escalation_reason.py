@@ -282,3 +282,44 @@ def test_route_stats_omits_the_shape_section_when_no_team_route_carries_one():
     _seed("t1", _route("team", "heuristic"))
 
     assert "Dạng đội" not in run_route_stats({})
+
+
+# --- failure modes ---------------------------------------------------------------------
+
+def test_route_stats_counts_failure_modes_by_mode_and_by_mast_group():
+    """The retro must answer "lỗi ở đề, ở soát, hay ở máy" from one section: one line
+    per mode with its reader label, then the group split."""
+    _seed("t1", {**_route("team", "heuristic"), "failure_mode": "verification_exhausted"},
+          status="stalled")
+    _seed("t2", {**_route("sprint", "heuristic"), "failure_mode": "cost_cap"},
+          status="stalled")
+    _seed("t3", {**_route("sprint", "heuristic"), "failure_mode": "step_exhausted"},
+          status="stalled")
+    _seed("t4", _route("sprint", "heuristic"))
+
+    text = run_route_stats({})
+
+    assert "Kết cục thất bại (3 việc dừng không có kết quả):" in text
+    assert "soát mãi không đạt: 1" in text
+    assert "vượt trần chi phí: 1" in text
+    assert "hết lượt thử ở một bước: 1" in text
+    assert "Theo nhóm: hệ thống 2 · kiểm chứng 1" in text
+
+
+def test_route_stats_omits_the_failure_section_when_nothing_failed():
+    _seed("t1", _route("sprint", "heuristic"))
+    _seed("t2", {**_route("sprint", "heuristic"), "dead_end": True})
+
+    assert "Kết cục thất bại" not in run_route_stats({})
+
+
+def test_route_stats_keeps_a_mode_this_release_does_not_know():
+    """A route stamped by a newer release still counts, under its raw id and the
+    catch-all group — a retro that silently drops rows lies about the total."""
+    _seed("t1", {**_route("team", "heuristic"), "failure_mode": "novel_mode"},
+          status="stalled")
+
+    text = run_route_stats({})
+
+    assert "novel_mode: 1" in text
+    assert "Theo nhóm: khác 1" in text

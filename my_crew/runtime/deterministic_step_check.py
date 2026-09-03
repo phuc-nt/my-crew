@@ -78,9 +78,14 @@ def entity_coverage(criteria: str, artifact: str) -> list[str]:
 
 #: An explicit quantity demand in acceptance prose — "liệt kê 5 xu hướng",
 #: "ít nhất 3 ví dụ", "tối thiểu 2 nguồn", "đủ 4 mục". Only these lead-ins count:
-#: a bare number ("bảng 2 cột", "quý 3") is NOT a quantity contract.
+#: a bare number ("bảng 2 cột", "quý 3") is NOT a quantity contract. Neither is an
+#: AMOUNT after the same lead-in — "cộng đúng 90 triệu", "ít nhất 20%", "đủ 1,5 tỷ"
+#: name a sum to reach, not a number of list lines, so a unit or decimal right after
+#: the digits disqualifies the match.
 _MIN_ITEMS_RE = re.compile(
-    r"(?:liệt kê(?:\s+đúng)?|ít nhất|tối thiểu|đủ|đúng)\s+(\d{1,2})\b", re.IGNORECASE
+    r"(?:liệt kê(?:\s+đúng)?|ít nhất|tối thiểu|đủ|đúng)\s+(\d{1,2})\b"
+    r"(?!\s*(?:[.,]\d|%|tr\b|triệu|tỷ|tỉ|nghìn|ngàn|k\b|đ\b|đồng|vnd|usd|\$))",
+    re.IGNORECASE,
 )
 
 #: A list-shaped line in the artifact: bullet or numbered. Used only to COUNT

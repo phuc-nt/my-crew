@@ -6,6 +6,12 @@ a strong coordinator cost less at equal judged quality (H3). A shape whose hypot
 dies is removed from the router — so the arithmetic that decides "dies" must be fixed
 BEFORE the numbers arrive, and must be dumb enough to audit by hand.
 
+H4 is not a shape but the graders every shape leans on: a checker that fails clean
+work sends a correct artifact into rework and, with the rework budget spent, into a
+stall. Its rule is two-sided — catch enough planted errors AND pass enough clean
+artifacts — because either side alone is trivially satisfiable by a grader that
+always says the same thing.
+
 Thresholds are borrowed from dandori's routing bench: at least 4 cases × 3 runs before
 any verdict counts, and a Wilson interval on every proportion so a 3/4 that could be
 2/4 is reported as such. The keep rule itself uses the point estimate; the lower bound
@@ -29,6 +35,11 @@ H1_MAX_COST_RATIO = 3.0
 H2_MIN_CATCH_RATE = 0.5
 H2_MAX_DISAGREEMENT = 0.25
 H3_MAX_COST_RATIO = 0.7
+#: H4 — the graders' calibration. A clean artifact failed more than one time in four
+#: costs more rework than the planted errors it catches are worth; the catch line is
+#: H2's, since a grader is the same instrument whichever shape calls it.
+H4_MAX_FALSE_FAIL = 0.25
+H4_MIN_CATCH_RATE = H2_MIN_CATCH_RATE
 
 
 def wilson_interval(wins: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -150,13 +161,48 @@ def verdict_h3(*, wins: int, losses: int, n: int, crew_cost: float,
     })
 
 
-_VERDICTS = {"H1": verdict_h1, "H2": verdict_h2, "H3": verdict_h3}
+def verdict_calibration(*, false_fails: int, clean_graded: int, caught: int,
+                        seeded: int) -> HypothesisVerdict:
+    """H4: a grader fails ≤25% of clean artifacts while still catching ≥50% of planted
+    errors.
+
+    `false_fails`/`clean_graded` count every grading of a CLEAN artifact that came
+    back failed (every run counts, not the majority: each false fail is a rework the
+    CEO pays for). `caught`/`seeded` are H2's tallies for the same grader, so the
+    two sides of the rule are measured on the same instrument in the same session.
+    Both samples must reach the minimum on their own — twelve clean gradings say
+    nothing about catch rate and vice versa.
+    """
+    reasons: list[str] = []
+    false_fail_rate = false_fails / clean_graded if clean_graded else 0.0
+    ff_lo, ff_hi = wilson_interval(false_fails, clean_graded)
+    catch_rate = caught / seeded if seeded else 0.0
+    c_lo, c_hi = wilson_interval(caught, seeded)
+    if not min_sample_met(clean_graded):
+        reasons.append(f"sample {clean_graded} < {MIN_PAIRS} clean gradings")
+    if not min_sample_met(seeded):
+        reasons.append(f"sample {seeded} < {MIN_PAIRS} seeded errors")
+    if false_fail_rate > H4_MAX_FALSE_FAIL:
+        reasons.append(f"false-fail rate {false_fail_rate:.2f} > {H4_MAX_FALSE_FAIL:.2f}")
+    if catch_rate < H4_MIN_CATCH_RATE:
+        reasons.append(f"catch rate {catch_rate:.2f} < {H4_MIN_CATCH_RATE:.2f}")
+    return HypothesisVerdict("H4", not reasons, tuple(reasons), {
+        "false_fails": false_fails, "clean_graded": clean_graded,
+        "false_fail_rate": round(false_fail_rate, 3),
+        "false_fail_wilson_low": round(ff_lo, 3), "false_fail_wilson_high": round(ff_hi, 3),
+        "caught": caught, "seeded": seeded, "catch_rate": round(catch_rate, 3),
+        "catch_wilson_low": round(c_lo, 3), "catch_wilson_high": round(c_hi, 3),
+    })
+
+
+_VERDICTS = {"H1": verdict_h1, "H2": verdict_h2, "H3": verdict_h3, "H4": verdict_calibration}
 
 
 def verdict(hypothesis: str, **tallies) -> HypothesisVerdict:
-    """Dispatch to the hypothesis' own rule by name ("H1", "H2", "H3")."""
+    """Dispatch to the hypothesis' own rule by name ("H1" … "H4")."""
     try:
         rule = _VERDICTS[hypothesis.upper()]
     except KeyError:
-        raise ValueError(f"unknown hypothesis {hypothesis!r}; expected one of H1, H2, H3") from None
+        known = ", ".join(_VERDICTS)
+        raise ValueError(f"unknown hypothesis {hypothesis!r}; expected one of {known}") from None
     return rule(**tallies)

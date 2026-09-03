@@ -310,6 +310,7 @@ def default_team_task_deps(
     deterministic_precheck: bool = True,
     artifact_contract=None,
     requires_search: bool = False,
+    delegation_brief: str = "",
 ) -> TeamTaskDeps:
     """Wire the real collaborators. Lazy imports keep graph-build network-free.
 
@@ -332,6 +333,11 @@ def default_team_task_deps(
     findings step written blind is a tool error the coordinator's machine retry
     (`MAX_STEP_RETRIES`) should re-run, not an artifact for a grader to rule on. False
     (default) keeps the search best-effort, exactly as before.
+
+    `delegation_brief` (context-crew): the rubric + siblings' scope block
+    (`step_delegation_brief.delegation_brief`) rendered into BOTH the work and the
+    rework prompt. The self-check reads the same rubric from `state["acceptance"]`;
+    this is the worker's copy of it. "" ⇒ neither prompt changes.
 
     `self_id` (M33): the assignee running THIS step — required for `ask_colleague`'s
     "never consult yourself" guard. Blank (default) ⇒ `ask_colleague` is wired as None
@@ -438,6 +444,7 @@ def default_team_task_deps(
                     step_title=title,
                     handoff_context=handoff,
                     search_context=search_text,
+                    delegation_brief=delegation_brief,
                     persona=context.persona,
                     project=context.project,
                     memory=context.memory,
@@ -548,6 +555,7 @@ def default_team_task_deps(
                 build_rework_messages(
                     brief=brief, prior_output=prior_output, failures=failures,
                     persona=context.persona, handoff=handoff,
+                    delegation_brief=delegation_brief,
                 ),
                 role="content",
             )
@@ -1241,6 +1249,7 @@ def build_team_task_graph(
     deterministic_precheck: bool = True,
     artifact_contract=None,
     requires_search: bool = False,
+    delegation_brief: str = "",
 ) -> CompiledStateGraph:
     """Build + compile the team-task step graph. `deps` defaults to real wiring.
 
@@ -1271,6 +1280,7 @@ def build_team_task_graph(
             allow_split=allow_split, guidance=guidance,
             deterministic_precheck=deterministic_precheck,
             artifact_contract=artifact_contract, requires_search=requires_search,
+            delegation_brief=delegation_brief,
         )
     perceive, work, await_clarify, self_check, rework, recover, deliver = \
         _make_team_task_nodes(deps, interrupt_on_clarify=checkpointer is not None)

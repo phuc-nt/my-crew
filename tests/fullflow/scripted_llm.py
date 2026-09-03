@@ -16,6 +16,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from my_crew.agent.step_delegation_brief import SIBLINGS_HEADER
 from my_crew.llm.client import LlmResult, ToolExchange
 from my_crew.runtime.step_recorder import record_event
 
@@ -30,6 +31,16 @@ def tool_call(name: str, arguments: str, call_id: str = "call_1") -> dict:
     """One scripted tool call in the OpenAI wire shape (arguments = JSON string)."""
     return {"id": call_id, "type": "function",
             "function": {"name": name, "arguments": arguments}}
+
+
+def without_sibling_scope(prompt: str) -> str:
+    """The prompt minus its "VIỆC CỦA BƯỚC KHÁC" block (header through the next blank
+    line). Sibling titles there are boundaries, not this step's work."""
+    head, sep, tail = prompt.partition(SIBLINGS_HEADER)
+    if not sep:
+        return prompt
+    _block, _blank, rest = tail.partition("\n\n")
+    return head + rest
 
 
 @dataclass
@@ -61,6 +72,10 @@ class ScriptedLlm:
         role: str | None = None,
     ) -> LlmResult:
         text = "\n".join(str(m.get("content", "")) for m in messages)
+        # A worker prompt names the OTHER steps of the plan as a scope boundary; a
+        # scenario keys its work rules on step titles, so the boundary block must not
+        # let step B's rule answer step A's prompt.
+        match_text = without_sibling_scope(text)
         # The double honors the seam's v80 contract: the real `complete` records
         # llm_request/llm_response into the step transcript, so full-flow scenarios
         # must see the same transcript a real run produces (no-op outside a step).
@@ -69,7 +84,7 @@ class ScriptedLlm:
         for i, rule in enumerate(self._rules):
             if rule.role is not None and rule.role != role:
                 continue
-            if rule.marker not in text:
+            if rule.marker not in match_text:
                 continue
             rule.hits += 1
             content = rule.respond(text) if callable(rule.respond) else rule.respond

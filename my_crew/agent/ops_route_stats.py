@@ -80,6 +80,9 @@ def run_route_stats(slots: dict[str, str]) -> str:
     # Dạng đội của các việc chạy đội — câu hỏi bench H1–H3 cần: "mỗi dạng chạy bao
     # nhiêu việc". Route team trước context-crew không có khoá này và bị bỏ qua.
     by_shape: dict[str, int] = {}
+    # Kết cục thất bại, do `_mark_route_failure` đóng lúc việc dừng hẳn. Đếm theo
+    # mode và theo nhóm MAST để retro trả lời được "lỗi ở đề, ở soát, hay ở máy".
+    by_failure: dict[str, int] = {}
     for route, _ in routes:
         mode = str(route.get("mode") or "?")
         source = str(route.get("source") or "?")
@@ -91,6 +94,9 @@ def run_route_stats(slots: dict[str, str]) -> str:
             by_shape[shape] = by_shape.get(shape, 0) + 1
         if is_dead_end:
             dead_ends += 1
+        failure = str(route.get("failure_mode") or "").strip()
+        if failure:
+            by_failure[failure] = by_failure.get(failure, 0) + 1
         effort = str(route.get("effort") or "").strip().lower()
         if effort in _EFFORT_LABELS:
             by_effort[effort] = by_effort.get(effort, 0) + 1
@@ -125,6 +131,10 @@ def run_route_stats(slots: dict[str, str]) -> str:
             tail = f", {stuck} bế tắc" if stuck else ""
             lines.append(f"  • {_EFFORT_LABELS[effort]}: {count}{tail}")
 
+    if by_failure:
+        lines.append("")
+        lines.append(_render_failure_modes(by_failure))
+
     downgrades = by_source.get("downgrade", 0)
     if downgrades or dead_ends:
         lines.append("")
@@ -134,4 +144,31 @@ def run_route_stats(slots: dict[str, str]) -> str:
                          "chạy nhanh sau khi thấy kế hoạch thật")
         if dead_ends:
             lines.append(f"  • {dead_ends} việc chạy nhanh bế tắc, phải giao lại cho đội")
+    return "\n".join(lines)
+
+
+
+def _render_failure_modes(by_failure: dict[str, int]) -> str:
+    """"Kết cục thất bại" block: one line per mode, then the MAST-group split.
+
+    Modes this release does not know (stamped by a newer one) keep their raw id and
+    fall under "khác" in the group split rather than being dropped — a count that
+    quietly loses rows is worse than one with an unlabelled line.
+    """
+    from my_crew.runtime.task_failure_mode import (
+        FAILURE_MODE_LABELS,
+        GROUP_LABELS,
+        failure_group_for,
+    )
+
+    failed = sum(by_failure.values())
+    lines = [f"Kết cục thất bại ({failed} việc dừng không có kết quả):"]
+    by_group: dict[str, int] = {}
+    for mode, count in sorted(by_failure.items(), key=lambda kv: -kv[1]):
+        lines.append(f"  • {FAILURE_MODE_LABELS.get(mode, mode)}: {count}")
+        group = failure_group_for(mode) or "khác"
+        by_group[group] = by_group.get(group, 0) + count
+    parts = [f"{GROUP_LABELS.get(g, g)} {n}" for g, n in
+             sorted(by_group.items(), key=lambda kv: -kv[1])]
+    lines.append("  Theo nhóm: " + " · ".join(parts))
     return "\n".join(lines)

@@ -88,3 +88,29 @@ def test_the_worker_is_told_which_artifact_it_owes():
     assert user.index("Đầu việc") < user.index("Bàn giao")
     # no contract ⇒ no line
     assert "Bàn giao" not in build_team_step_messages(step_title="Tra cứu")[1]["content"]
+
+
+def test_the_worker_reads_its_rubric_after_the_contract_and_before_the_handoff():
+    from my_crew.llm.team_task_prompt import build_team_step_messages
+
+    msgs = build_team_step_messages(
+        step_title="Viết bản so sánh", artifact_contract="Bàn giao: BẢN NHÁP",
+        delegation_brief="TIÊU CHÍ NGHIỆM THU (bước này được chấm đúng theo đây):\n- đủ 3 hãng",
+        handoff_context="giá hãng A 30tr",
+    )
+    user = msgs[1]["content"]
+    assert "- đủ 3 hãng" in user
+    assert user.index("Bàn giao") < user.index("TIÊU CHÍ") < user.index("giá hãng A")
+    assert "TIÊU CHÍ" not in build_team_step_messages(step_title="Viết")[1]["content"]
+
+
+def test_the_rework_call_carries_the_same_rubric_block():
+    from my_crew.llm.team_task_check_prompt import build_rework_messages
+
+    msgs = build_rework_messages(
+        brief="Viết bản so sánh", prior_output="nháp", failures=["thiếu hãng C"],
+        delegation_brief="TIÊU CHÍ NGHIỆM THU (bước này được chấm đúng theo đây):\n- đủ 3 hãng",
+    )
+    user = msgs[1]["content"]
+    assert user.index("Đầu việc gốc") < user.index("- đủ 3 hãng") < user.index("nháp")
+

@@ -175,7 +175,7 @@ def build_self_check_messages(
 
 def build_rework_messages(
     *, brief: str, prior_output: str, failures: list[str], persona: str = "",
-    handoff: str = "",
+    handoff: str = "", delegation_brief: str = "",
 ) -> list[dict[str, str]]:
     """Messages for the rework node's LLM call: original brief + prior output +
     STRUCTURED failures, "fix ONLY listed failures."
@@ -196,12 +196,18 @@ def build_rework_messages(
     gets it: told "these figures are invented" without being shown that its source was
     empty, a rework call simply invents a different set and fails the same way. It
     keeps its own wrap, ahead of the prior output it is meant to be checked against.
+
+    `delegation_brief` is the same rubric + siblings' scope block the work call saw
+    (`step_delegation_brief`): a fix round graded against a rubric it cannot read
+    repeats the first round's blind spots. Right after the brief line; "" ⇒ omitted.
     """
     failures_text = "\n".join(f"- {f}" for f in failures) if failures else "(không có chi tiết)"
     wrapped_output = format_internal_content(prior_output, label="kết quả trước")
     wrapped_failures = format_internal_content(failures_text, label="danh sách lỗi cần sửa")
     wrapped_handoff = format_internal_content(handoff, label="ĐẦU VÀO bước này nhận được")
     parts = [f"Đầu việc gốc: {brief.strip()}"]
+    if delegation_brief.strip():
+        parts.append(delegation_brief.strip())
     if wrapped_handoff:
         parts.append(wrapped_handoff)
     if wrapped_output:

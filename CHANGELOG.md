@@ -6,6 +6,40 @@ Development history at finer grain lives in [docs/journals/](docs/journals/).
 ## [Unreleased]
 
 ### Added
+- **A worker step is briefed like a delegation, not a chat turn.** Every work and rework
+  prompt now carries the step's own acceptance rubric verbatim under "TIÊU CHÍ NGHIỆM THU"
+  and the titles of the sibling steps under "VIỆC CỦA BƯỚC KHÁC (KHÔNG làm ở đây)" —
+  objective, grading rule and scope boundary in one block (`step_delegation_brief.py`).
+  Review rows and system-inserted steps are not listed; the list is capped at six titles.
+- **Provenance travels with the artifact.** When a step's dependencies left N source URLs,
+  the artifact contract for a `draft`/`final` step demands at least one `http` link in the
+  body (`ArtifactContract.upstream_sources`); a summary that drops every source fails in
+  code before any grader sees it. Counted over dependency artifacts only — links the CEO
+  pasted into the brief do not create the demand.
+- **Every terminal stall carries one failure mode** (`task_failure_mode.py`): `cost_cap`,
+  `plan_mismatch`, `verification_exhausted`, `dead_step`, `step_exhausted`, each in a MAST
+  group (spec / verification / system). The escalation stamps `route.failure_mode` once
+  (first terminal event wins, `source` untouched); `route_stats` gains a "Kết cục thất bại"
+  section counting modes and groups. Step-level rulings that put a step back to pending
+  write nothing.
+- **Grader calibration verdict (H4)** in `bench/hypothesis_stats.py`: a grader keeps only
+  if its false-fail rate on CORRECT artifacts is ≤ 0.25 AND its catch rate on planted
+  errors is ≥ 0.50, each side with its own 12-sample floor, Wilson interval on both. Bench
+  on Haiku: self-check and peer review both 3/12 false fails, 10/12 caught — keep, exactly
+  on the line; all six false fails are one ambiguous rubric line (deposit in a 24-month
+  total), and neither grader adds up a budget column.
+
+### Fixed
+- **The coordinator's own write over a stuck step dropped the CEO's cross-check.** On a
+  plan routed as do+review, a worker that gave up made the coordinator write the step
+  itself, and that fallback cleared the review flag: no reviewer was ever minted and the
+  task closed "after cross-check" with nobody having read it. The stuck-judge accept path
+  already kept the flag on that shape; the self-do path now shares the same rule
+  (`keeps_planned_review`). Measured live before the fix.
+- **The deterministic step gate read an amount as an item count.** "cộng đúng 90 triệu"
+  in a rubric became "at least 90 list items" and sent a correct five-week event plan to
+  rework on every calibration run. A unit or decimal right after the digits (tr, triệu,
+  tỷ, %, k, đ, vnd, usd, `1,5`) no longer counts as a quantity demand.
 - **Context-crew: a role is a capability tuple, a hand-off is an artifact, and a crew has one
   of two shapes.** `Capability(tier, web, mail, model)` is derived from the profile; two
   neighbouring plan steps split across agents with the same tuple now fold into one. Every

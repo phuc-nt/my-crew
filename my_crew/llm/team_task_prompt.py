@@ -224,11 +224,17 @@ def build_team_step_messages(
     company_docs: str = "",
     capability: str = "",
     artifact_contract: str = "",
+    delegation_brief: str = "",
 ) -> list[dict[str, str]]:
     """Messages for one team-task step's LLM work call.
 
     `artifact_contract` (context-crew): one line naming the artifact this step owes
     the next (`step_artifact_contract.artifact_contract_line`); "" ⇒ omitted.
+
+    `delegation_brief`: the rubric this step is graded on plus the scope the other
+    steps own (`step_delegation_brief.delegation_brief`). Rendered after the contract
+    line and BEFORE the hand-off, so the worker reads what "done" means before it
+    reads the material; "" ⇒ omitted (legacy callers render byte-identically).
 
     `handoff_context` is the previous step's produced text (empty for the first
     step). `search_context` is the optional web-search result text — already
@@ -264,6 +270,8 @@ def build_team_step_messages(
     parts: list[str] = [worker_today_line(), f"Đầu việc: {step_title.strip()}"]
     if artifact_contract.strip():
         parts.append(artifact_contract.strip())
+    if delegation_brief.strip():
+        parts.append(delegation_brief.strip())
     wrapped_handoff = format_internal_content(handoff_context, label="kết quả bước trước")
     if wrapped_handoff:
         parts.append(wrapped_handoff)

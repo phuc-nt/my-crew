@@ -79,6 +79,36 @@ def test_a_dead_terminal_step_is_done_by_the_coordinator(tmp_path):
     assert "VAI TRÒ: bạn là điều phối viên" in handoff
 
 
+def test_self_do_on_a_do_review_plan_keeps_the_planned_review_and_mints_a_reviewer(
+    tmp_path, monkeypatch,
+):
+    """On a plan routed as do+review the CEO asked for an independent reader of the
+    deliverable. The coordinator writing the text itself is the author, not that
+    reader, so the fallback must not drop the planned flag. Measured live before
+    this: the worker gave up, the coordinator wrote the step, the flag fell, and the
+    task closed without any review row."""
+    import my_crew.agent.team_task_roster as roster_mod
+    from my_crew.agent.crew_shape import DO_REVIEW_SHAPE
+
+    store = _store(tmp_path)
+    _plan(store, steps=[{**_ONE_STEP[0], "needs_review": True}])
+    store.set_route("t1", {"mode": "team", "shape": DO_REVIEW_SHAPE})
+    store.reserve_step("t1", "s1")
+    store.mark_failed("t1", "s1")
+    monkeypatch.setattr(roster_mod, "assignable_staff",
+                        lambda: [("agent-a", "pm"), ("agent-b", "pm")])
+    deps = _deps(store, self_do_step=lambda task, step, handoff: ("kết quả", None))
+
+    assert run_one_tick(deps).action == "self_did"
+    assert store.get_step("t1", "s1").needs_review is True
+
+    assert run_one_tick(deps).action == "review_inserted"
+    review = next(s for s in store.get("t1").steps if s.step_type == "review")
+    assert review.parent_step_id == "s1"
+    assert review.assigned_to == "agent-b"
+    assert store.get("t1").status != "done"
+
+
 def test_after_self_do_the_next_tick_aggregates_and_delivers(tmp_path):
     store = _store(tmp_path)
     _dead_single_step(store)

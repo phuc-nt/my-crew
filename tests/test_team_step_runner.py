@@ -97,6 +97,75 @@ def test_run_graph_wires_self_id_to_the_assigned_agent(monkeypatch, tmp_path):
     assert captured.get("self_id") == "agent-a"
 
 
+def test_run_graph_hands_the_worker_its_rubric_and_the_siblings_scope(monkeypatch, tmp_path):
+    """The work prompt's brief is built here, from the step's own acceptance and the
+    task's OTHER content steps — the graph only renders what it is given."""
+    from my_crew.runtime import team_step_runner
+
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    captured: dict = {}
+
+    class _FakeGraph:
+        def stream(self, _initial_state, _config=None, stream_mode=None):  # noqa: ARG002
+            return iter(())
+
+    monkeypatch.setattr(
+        "my_crew.agent.team_task_graph.build_team_task_graph",
+        lambda **kwargs: captured.update(kwargs) or _FakeGraph(),
+    )
+    me = SimpleNamespace(
+        step_id="s2", title="viết báo cáo", acceptance="đủ 3 hãng, kèm nguồn", seq=2,
+        deps=("s1",), assigned_to="agent-a", step_type="work",
+    )
+    siblings = (
+        SimpleNamespace(step_id="s1", title="tra cứu giá", step_type="work"),
+        me,
+        SimpleNamespace(step_id="s3", title="soát chéo", step_type="review"),
+    )
+    team_step_runner._run_graph(
+        None, _settings(), task_id="task-1", step=me, attempt_id="att-1", siblings=siblings,
+    )
+
+    brief = captured.get("delegation_brief", "")
+    assert "đủ 3 hãng, kèm nguồn" in brief
+    assert "- tra cứu giá" in brief
+    assert "viết báo cáo" not in brief and "soát chéo" not in brief
+
+
+def test_run_graph_counts_the_deps_links_into_the_contract(monkeypatch, tmp_path):
+    """Provenance rides in from here: the deps' hand-off is read once and its distinct
+    URLs become `upstream_sources`; an unreadable hand-off leaves the contract at 0."""
+    from my_crew.runtime import team_step_runner
+
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    captured: dict = {}
+
+    class _FakeGraph:
+        def stream(self, _initial_state, _config=None, stream_mode=None):  # noqa: ARG002
+            return iter(())
+
+    monkeypatch.setattr(
+        "my_crew.agent.team_task_graph.build_team_task_graph",
+        lambda **kwargs: captured.update(kwargs) or _FakeGraph(),
+    )
+    monkeypatch.setattr(
+        "my_crew.agent.team_task_graph._read_deps_handoff",
+        lambda *_a, **_k: "giá A — https://a.vn/p ; giá B — https://b.vn/q",
+    )
+    step = SimpleNamespace(
+        step_id="s2", title="viết", acceptance="", seq=2, deps=("s1",), assigned_to="a",
+    )
+    team_step_runner._run_graph(None, _settings(), task_id="task-1", step=step, attempt_id="x")
+    assert captured["artifact_contract"].upstream_sources == 2
+
+    def _boom(*_a, **_k):
+        raise OSError("artifact unreadable")
+
+    monkeypatch.setattr("my_crew.agent.team_task_graph._read_deps_handoff", _boom)
+    team_step_runner._run_graph(None, _settings(), task_id="task-1", step=step, attempt_id="y")
+    assert captured["artifact_contract"].upstream_sources == 0
+
+
 class _FakeNonNativeRuntime:
     """A stand-in for a non-native (e.g. deep_agent) runtime — `build_task` just
     captures its kwargs so the test can assert what `_run_graph` threaded into it,

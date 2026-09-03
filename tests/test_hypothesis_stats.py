@@ -126,6 +126,47 @@ def test_h2_needs_twelve_seeded_errors():
     assert v.reasons == ("sample 9 < 12 seeded errors",)
 
 
+# ---- H4: the graders pass clean work and still catch planted errors -----------------
+
+
+def test_h4_keeps_at_exactly_a_quarter_false_fails_and_half_caught():
+    v = hs.verdict("H4", false_fails=3, clean_graded=12, caught=6, seeded=12)
+    assert v.keep
+    assert v.metrics["false_fail_rate"] == 0.25
+    assert v.metrics["catch_rate"] == 0.5
+
+
+def test_h4_dies_one_false_fail_over_the_line():
+    # A grader that fails a third of correct work sends correct work into rework and,
+    # with the rework budget spent, into a stall the CEO has to clear by hand.
+    v = hs.verdict("H4", false_fails=4, clean_graded=12, caught=12, seeded=12)
+    assert not v.keep
+    assert any("false-fail rate" in r for r in v.reasons)
+
+
+def test_h4_dies_when_it_passes_everything_including_the_planted_errors():
+    # Zero false fails is trivially reached by a grader that never fails anything;
+    # the catch side is what makes the rule two-sided.
+    v = hs.verdict("H4", false_fails=0, clean_graded=12, caught=5, seeded=12)
+    assert not v.keep
+    assert any("catch rate" in r for r in v.reasons)
+
+
+def test_h4_needs_both_samples_on_their_own():
+    v = hs.verdict("H4", false_fails=0, clean_graded=9, caught=12, seeded=12)
+    assert v.reasons == ("sample 9 < 12 clean gradings",)
+    v = hs.verdict("H4", false_fails=0, clean_graded=12, caught=9, seeded=9)
+    assert v.reasons == ("sample 9 < 12 seeded errors",)
+
+
+def test_h4_reports_a_wilson_interval_for_each_side():
+    v = hs.verdict("H4", false_fails=3, clean_graded=12, caught=6, seeded=12)
+    lo, hi = hs.wilson_interval(3, 12)
+    assert (v.metrics["false_fail_wilson_low"], v.metrics["false_fail_wilson_high"]) == (
+        round(lo, 3), round(hi, 3))
+    assert v.metrics["catch_wilson_low"] < 0.5 < v.metrics["catch_wilson_high"]
+
+
 # ---- H3: cheap specialists at equal quality ----------------------------------------
 
 
@@ -159,8 +200,8 @@ def test_h3_ties_count_toward_the_not_worse_interval():
 
 def test_verdict_dispatches_case_insensitively_and_rejects_unknown_names():
     assert hs.verdict("h1", wins=8, n=12, crew_cost=1, sprint_cost=1).hypothesis == "H1"
-    with pytest.raises(ValueError, match="H4"):
-        hs.verdict("H4")
+    with pytest.raises(ValueError, match="H1, H2, H3, H4"):
+        hs.verdict("H9")
 
 
 def test_every_reason_names_the_threshold_it_failed():

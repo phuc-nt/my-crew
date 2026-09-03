@@ -235,7 +235,8 @@ dead-end ở `runtime/team_tick_collaborators.py`; cột `route_json` ở `team_
 | Refusal cứng | `sprint_refusal` | 4 loại luôn về team: ghi-ra-ngoài, cần shell, CEO nêu cần nhiều người, việc dài nhiều giai đoạn |
 | Heuristic cấu trúc | `classify_brief` | **Mặc định sprint**; chỉ đẩy team khi >1200 ký tự, >10 thực thể, hoặc ≥3 đầu việc tách dòng |
 | Downgrade | `downgrade_to_sprint` | Chạy SAU decompose: plan suy biến (≤2 bước, 1 người, tuyến tính) → sprint, 0 lượt gọi model thêm |
-| Dead-end | `_is_sprint_dead_end` | Sprint bế tắc (`gave_up`) → gợi ý CEO giao lại `team:`; `_mark_route_dead_end` ghi đè `source` nhưng giữ phán quyết gốc dưới `previous` |
+| Dead-end | `_is_sprint_dead_end` | Sprint bế tắc (`gave_up`) → gợi ý CEO giao lại `team:`; `_mark_route_dead_end` ghi cờ riêng `dead_end` (KHÔNG đè `source`), phán quyết gốc giữ dưới `previous` |
+| Kết cục thất bại | `_mark_route_failure` | Mọi escalation KẾT THÚC việc ghi `route.failure_mode` một lần (enum 5 giá trị trong `task_failure_mode.py`, nhóm MAST spec/verification/system); phán quyết trả bước về pending không ghi gì; `route_stats` mục "Kết cục thất bại" |
 | Routing log | cột `route_json` | `mode`/`source`/`reason`/`signals`/`effort` — chỉ số, không chứa nguyên văn đề |
 
 **v93 — nhãn ranh giới + fold cấu trúc (graph-engineering cho decompose)**: mỗi bước
@@ -448,7 +449,7 @@ gap (fail-open cho caller cũ).
 | Hình thái | Điều kiện | Ranh giới một agent mạnh không vượt được |
 |---|---|---|
 | `permission_chain` | có bước `needs_shell` / `external_write` / `needs_mail` | quyền (an toàn) — không bench, không bao giờ rút |
-| `do_review` | ≤3 bước, tín hiệu `needs_independent_review`; `mark_do_review` cắm `needs_review` vào bước cuối, reviewer ≠ author qua `pick_reviewer` | người chấm độc lập (H2 giữ) |
+| `do_review` | ≤3 bước, tín hiệu `needs_independent_review`; `mark_do_review` cắm `needs_review` vào bước cuối, reviewer ≠ author qua `pick_reviewer`; điều phối viết đè (judge accept hoặc `self_do_step`) GIỮ cờ soát qua `keeps_planned_review` — điều phối là tác giả, không phải người đọc độc lập | người chấm độc lập (H2 giữ) |
 
 Hình thái thứ ba `fanout` (≥2 bước `needs_web` không dep + bước gộp) đã bị bench 260902 loại
 (H1 + H3 chết, xem dưới): kế hoạch dạng toả ra/gộp lại nay không khớp hình thái nào ⇒ sprint
@@ -483,6 +484,35 @@ run, judge mù 3 phiếu/cặp, sprint = 1 agent mạnh có web): H1 CHẾT — 
 điều phối mạnh chỉ tốn 0.59× nhưng thua 8/12, không phải "bằng chất lượng"; H2 GIỮ — reviewer
 độc lập bắt 10/12 artifact cài lỗi (29/36 lỗi cài sẵn), bất đồng giữa run 8%. Chi tiết:
 `plans/reports/bench-260902-1140-context-crew-h1-h3-keep-kill-report.md`.
+
+**Ngang chuẩn harness tham chiếu (vòng 260903)** — ba hợp đồng nhỏ, đo bằng bench đã có:
+
+- *Brief giao việc* (`step_delegation_brief.py`): worker nhận đúng tiêu chí nghiệm thu của
+  bước mình (khối `TIÊU CHÍ NGHIỆM THU`, nguyên văn) và danh sách tiêu đề các bước anh em
+  (khối `VIỆC CỦA BƯỚC KHÁC — KHÔNG làm ở đây`, bỏ dòng review + bước hệ thống chèn, tối đa
+  6). Cùng một khối đi vào cả prompt làm lẫn prompt sửa (`build_team_step_messages`,
+  `build_rework_messages`, tham số `delegation_brief`); runner dựng nó từ `step.acceptance` +
+  `task.steps`. Đây là "objective + output format + boundaries" của brief uỷ quyền
+  Anthropic, và là cách chữa lỗi MAST "bước làm lấn việc bước khác" mà live 260902 đã đo.
+- *Nguồn đi theo artifact* (`ArtifactContract.upstream_sources`): runner đếm số URL phân
+  biệt trong artifact của các dep (`_read_deps_handoff`, an toàn checkpoint) và đưa vào hợp
+  đồng; bước `draft`/`final` nhận ≥1 nguồn mà thân bài không còn link `http` nào ⇒ gap bằng
+  code, rework trước khi LLM chấm. Chỉ đếm dep, không đếm link CEO dán trong đề (bài học
+  precision > recall của v93).
+- *Hợp đồng kết cục thất bại* (`runtime/task_failure_mode.py`): bảng cố định
+  `event_kind → failure_mode` (`cost_cap_exceeded→cost_cap`, `plan_hash_mismatch→plan_mismatch`,
+  `review_rounds_exhausted→verification_exhausted`, `task_stalled_dead_step→dead_step`,
+  `gave_up→step_exhausted`) và mode → nhóm MAST. `_escalate` đóng dấu một lần cạnh quyết
+  định định tuyến; `route_stats` đếm theo mode và nhóm để retro trả lời "lỗi ở đề, ở soát,
+  hay ở máy". Mode lạ (ghi bởi bản mới hơn) vẫn đếm dưới tên thô, nhóm "khác".
+- *H4 — hiệu chuẩn bộ chấm* (`verdict_calibration`, `H4_MAX_FALSE_FAIL = 0.25`,
+  `H4_MIN_CATCH_RATE = 0.5`): bộ chấm chỉ "keep" khi đồng thời ít báo động giả trên artifact
+  ĐÚNG và bắt được lỗi cài; mỗi vế có sàn mẫu riêng (12) nên bộ chấm "luôn đạt" hay "luôn
+  trượt" đều không qua. Đo trên Haiku (260903): self-check và review cùng 3/12 báo động giả,
+  10/12 bắt được — keep sát vạch; cả 6 báo động giả là một dòng rubric mập mờ (cọc có tính
+  vào tổng 24 tháng không), và cả hai bộ chấm đều không cộng cột ngân sách (lỗi tổng 95≠90
+  lọt 0/3). Bench cũng lộ lỗi thật ở gate code: `_MIN_ITEMS_RE` đọc "cộng đúng 90 triệu"
+  thành "≥90 mục" — đã sửa (đơn vị/thập phân ngay sau số không phải yêu cầu số lượng).
 
 ### 3.6 Action Gateway (`my_crew/actions/`, v30–v31, v67–v68 learned rules)
 `action_gateway.py` = cửa duy nhất. `hard_block.py` = Lớp A (chặn cứng, không duyệt được).
