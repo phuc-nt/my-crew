@@ -515,6 +515,8 @@ def default_team_task_deps(
                 return False, code_gaps, 1.0
             code_facts = checked_facts_line(criteria, result_text)
         try:
+            from my_crew.llm.review_failure_refutation import split_refuted_failures
+
             result = _llm().complete(
                 build_self_check_messages(
                     result_text=result_text, acceptance=criteria, persona=context.persona,
@@ -524,7 +526,19 @@ def default_team_task_deps(
                 role="review",
             )
             verdict = parse_check_verdict(result.content)
-            return verdict.passed, list(verdict.failures), verdict.confidence
+            # A failure that says a quoted phrase is missing while the draft holds it
+            # verbatim is the reviewer misreading its input (measured 2/…: "thiếu 'áp
+            # dụng từ tháng sau'" on a draft that had it). Rework on that finding can
+            # only damage the draft, so it is dropped here; the verdict passes when
+            # nothing else stood against it.
+            failures, refuted = split_refuted_failures(verdict.failures, result_text)
+            if refuted:
+                logger.warning(
+                    "team-step self_check: %d finding(s) quote text the draft contains, "
+                    "dropped: %s", len(refuted), refuted,
+                )
+            passed = verdict.passed or (bool(refuted) and not failures)
+            return passed, failures, verdict.confidence
         except Exception as exc:  # noqa: BLE001 — a broken self-check must never block
             # delivery (self-check is a QUALITY gate, not a safety gate) — fail OPEN.
             logger.warning("team-step self_check failed, treating as passed: %s", exc)
