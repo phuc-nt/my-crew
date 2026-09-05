@@ -50,6 +50,9 @@ gate can say which of the seven model roles that model is good at.
   failed" — is retried like a timeout instead of failing the call.
 - A self-check verdict that graded every criterion but omitted the top-level `passed`
   (pinned-upstream run, 1/4) is derived from `failures` + `criteria` instead of failing open.
+- The clean `sales_trend` calibration fixture claimed a flat 15tr/month marketing spend while
+  its own input divides 60tr three ways in T5/T6; a self-check caught it and was scored as a
+  false fail. The fixture now states the real per-month split — the judge was right.
 - A decomposition step without a `step_id` (measured 1/3 on a one-step plan) is numbered by
   position instead of failing validation and costing a re-prompt.
 - `LengthFinishReasonError` from the openai 2.x stream assembler escaped `_stream_completion`

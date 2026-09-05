@@ -132,7 +132,8 @@ CLEAN = {
         "- Sản phẩm C: tăng nhanh (30 → 42 → 58, gần gấp đôi), tổng quý 130tr.\n\n"
         "## Đáng lo\nSản phẩm B giảm 20% từ T4 sang T6 — cần xem lại giá và kênh.\n\n"
         "## Đề xuất quý tới\nDồn ngân sách marketing vào sản phẩm C vì đây là dòng duy nhất "
-        "đang tăng đều qua cả 3 tháng; với cùng mức chi 15tr/tháng chia đều, C tăng 28tr "
+        "đang tăng đều qua cả 3 tháng; với mức chi marketing chia đều (15tr T4, 20tr T5 và "
+        "T6 mỗi sản phẩm), C tăng 28tr "
         "trong khi A đi ngang và B giảm, nên đồng chi thêm ở C có xác suất sinh doanh thu "
         "cao nhất."),
     "office_choice": (
