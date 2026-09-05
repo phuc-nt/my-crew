@@ -48,6 +48,8 @@ gate can say which of the seven model roles that model is good at.
   string become one item; `TeamStepPlan.acceptance` written as a list is joined; and an
   `APIError` without an HTTP status — OpenRouter's mid-stream "Upstream error from X: stream
   failed" — is retried like a timeout instead of failing the call.
+- A self-check verdict that graded every criterion but omitted the top-level `passed`
+  (pinned-upstream run, 1/4) is derived from `failures` + `criteria` instead of failing open.
 - A decomposition step without a `step_id` (measured 1/3 on a one-step plan) is numbered by
   position instead of failing validation and costing a re-prompt.
 - `LengthFinishReasonError` from the openai 2.x stream assembler escaped `_stream_completion`

@@ -23,7 +23,7 @@ from my_crew.agent.review_graph import (
     parse_review_verdict,
     run_review_step,
 )
-from my_crew.llm.team_task_check_prompt import parse_check_verdict
+from my_crew.llm.team_task_check_prompt import CheckVerdictError, parse_check_verdict
 
 
 def test_check_verdict_parses_optional_criteria_checklist():
@@ -341,6 +341,23 @@ def test_a_confidence_outside_the_unit_range_is_clamped_not_rejected():
     assert parse_check_verdict('{"passed": true, "confidence": "0.7"}').confidence == 0.7
     assert parse_check_verdict('{"passed": true, "confidence": "high"}').confidence == 0.5
     assert parse_check_verdict('{"passed": true, "confidence": null}').confidence == 0.5
+
+
+def test_a_verdict_that_graded_every_criterion_but_forgot_passed_is_derived():
+    # Measured on a pinned upstream (1/4 self-checks): `passed` missing, the judgment
+    # fully present in `failures` + `criteria`. Derive it instead of failing open.
+    graded = (
+        '{"failures": [], "confidence": 0.9, "criteria": ['
+        '{"criterion": "có tổng", "passed": true, "note": ""},'
+        '{"criterion": "có nguồn", "passed": true, "note": ""}]}'
+    )
+    assert parse_check_verdict(graded).passed is True
+    one_failed = graded.replace('"có nguồn", "passed": true', '"có nguồn", "passed": false')
+    assert parse_check_verdict(one_failed).passed is False
+    listed = '{"failures": ["thiếu tổng"], "criteria": [{"criterion": "x", "passed": true}]}'
+    assert parse_check_verdict(listed).passed is False
+    with pytest.raises(CheckVerdictError):
+        parse_check_verdict('{"failures": [], "confidence": 0.9}')
 
 
 def test_review_notes_written_as_a_string_become_one_note_or_none():

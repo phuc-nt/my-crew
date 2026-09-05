@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from my_crew.llm.grading_rules import EVIDENCE_RULES, INHERITED_GAP_RULE
 from my_crew.llm.team_task_prompt import grader_today_line
@@ -127,6 +127,11 @@ class CheckVerdict(BaseModel):
     # v34 P5: optional per-criterion checklist — [] from any pre-P5 model output.
     criteria: list[CriterionGrade] = Field(default_factory=list)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _passed_from_the_parts(cls, data):
+        return derive_passed(data)
+
     @field_validator("criteria", mode="before")
     @classmethod
     def _tolerant_criteria(cls, v):
@@ -136,6 +141,25 @@ class CheckVerdict(BaseModel):
     @classmethod
     def _clamp_confidence(cls, v):
         return clamp_confidence(v)
+
+
+def derive_passed(data):
+    """A verdict that graded every criterion but forgot the top-level `passed` is
+    derived, not rejected.
+
+    One upstream answered `{"failures": [], "confidence": 0.9, "criteria": [...]}` with
+    no `passed` (pinned run, 1/4 self-checks) — the judgment is fully present in the parts.
+    Any listed failure means failed; otherwise every graded criterion must pass. A verdict
+    with neither failures nor criteria stays a schema error (fail-open upstream)."""
+    if not isinstance(data, dict) or "passed" in data:
+        return data
+    failures = data.get("failures")
+    if isinstance(failures, list) and any(str(f).strip() for f in failures):
+        return {**data, "passed": False}
+    criteria = _coerce_criteria(data.get("criteria"))
+    if criteria:
+        return {**data, "passed": all(c.get("passed", True) is True for c in criteria)}
+    return data
 
 
 def clamp_confidence(v):
