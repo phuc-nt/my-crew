@@ -199,18 +199,37 @@ def _stream_completion(client, *, progress: _Progress, **request):
     stream = client.chat.completions.create(
         stream=True, stream_options={"include_usage": True}, **request
     )
+    provider = ""
     for chunk in stream:
         progress.touch()
         state.handle_chunk(chunk)
+        # OpenRouter stamps the upstream that served the call on every chunk. The
+        # SDK's assembler drops unknown fields, so it is carried over by hand: one
+        # alias (`deepseek-v4-flash-latest`) was measured routing to several
+        # upstreams within an hour, one of which answered with degenerate text.
+        provider = str(getattr(chunk, "provider", None) or provider or "")
     try:
-        return state.get_final_completion()
+        completion = state.get_final_completion()
     except LengthFinishReasonError as exc:
         # The SDK's stream assembler assumes structured parsing and refuses a body
         # cut at `max_tokens` (finish_reason "length") — but the callers here want
         # that body: `LlmResult.truncated` reads the finish reason and the
         # "answer shorter" retries in decompose/intake rebuild from the partial text.
         # The exception carries the assembled snapshot, usage included.
-        return exc.completion
+        completion = exc.completion
+    if provider:
+        try:
+            completion.provider = provider
+        except (AttributeError, TypeError, ValueError):
+            pass
+    return completion
+
+
+def _serving_provider(response) -> str:
+    """The upstream OpenRouter routed the call to (`provider` on the body), or ""."""
+    if isinstance(response, dict):
+        return str(response.get("provider") or "")
+    return str(getattr(response, "provider", None) or "")
 
 Message = dict[str, str]
 
@@ -316,6 +335,10 @@ class LlmResult:
     #: not fix. Defaults to "" so every existing construction site (tests, doubles)
     #: keeps working and simply reports "not truncated".
     finish_reason: str = ""
+    #: Which upstream served the call when the model id is an OpenRouter alias routed
+    #: across providers (`DeepSeek`, `OpenInference`, …). "" when the provider does
+    #: not report it. Read it before blaming the model for a bad answer.
+    provider: str = ""
     #: Thinking tokens the provider counted inside `completion_tokens` (0 when unknown).
     #: Surfaced so a transcript can show WHY a 227-character answer cost 10k tokens and
     #: six minutes — see `settings.DEFAULT_ROLE_REASONING`.
@@ -472,6 +495,7 @@ class LlmClient:
             choice = response.choices[0]
             content = choice.message.content or ""
             finish_reason = str(getattr(choice, "finish_reason", "") or "")
+            provider = _serving_provider(response)
             if not content.strip() and has_next:
                 logger.warning(
                     "FALLBACK: model %r returned empty content; trying %r",
@@ -486,7 +510,7 @@ class LlmClient:
                 )
             record_event({
                 "t": "llm_response", "model": model_name, "content": content,
-                "finish_reason": finish_reason,
+                "finish_reason": finish_reason, "provider": provider,
                 "prompt_tokens": usage.prompt_tokens,
                 "completion_tokens": usage.completion_tokens,
                 "reasoning_tokens": usage.reasoning_tokens,
@@ -501,6 +525,7 @@ class LlmClient:
                 cost_usd=usage.cost_usd,
                 fallback_from=tuple(fallback_from),
                 finish_reason=finish_reason,
+                provider=provider,
             )
 
         # Unreachable: the chain is never empty and its LAST entry either returns a
@@ -576,6 +601,7 @@ class LlmClient:
                     model_name, fallback_from,
                 )
             finish_reason = str(getattr(choice, "finish_reason", "") or "")
+            provider = _serving_provider(response)
             record_event({
                 "t": "llm_response", "model": model_name, "content": content,
                 "tool_calls": [
@@ -583,7 +609,7 @@ class LlmClient:
                      "arguments": (tc.get("function") or {}).get("arguments")}
                     for tc in tool_calls
                 ],
-                "finish_reason": finish_reason,
+                "finish_reason": finish_reason, "provider": provider,
                 "prompt_tokens": usage.prompt_tokens,
                 "completion_tokens": usage.completion_tokens,
                 "reasoning_tokens": usage.reasoning_tokens,
@@ -597,10 +623,11 @@ class LlmClient:
                     model=model_name,
                     prompt_tokens=usage.prompt_tokens,
                     completion_tokens=usage.completion_tokens,
-                reasoning_tokens=usage.reasoning_tokens,
+                    reasoning_tokens=usage.reasoning_tokens,
                     cost_usd=usage.cost_usd,
                     fallback_from=tuple(fallback_from),
                     finish_reason=finish_reason,
+                    provider=provider,
                 ),
             )
 
@@ -685,16 +712,18 @@ class LlmClient:
                     self._budget.record_cost(wasted.cost_usd)
                     if _hit_the_answer_cap(response):
                         logger.warning(
-                            "model %r spent its whole answer cap thinking (%d reasoning "
-                            "tokens, no content, finish_reason=length); not retried — "
-                            "a repeat was measured to hit the cap again 5/6",
-                            model_id, wasted.reasoning_tokens,
+                            "model %r (via %s) spent its whole answer cap thinking (%d "
+                            "reasoning tokens, no content, finish_reason=length); not "
+                            "retried — a repeat was measured to hit the cap again 5/6",
+                            model_id, _serving_provider(response) or "?",
+                            wasted.reasoning_tokens,
                         )
                         return response
                     logger.warning(
-                        "model %r answered nothing (%d reasoning tokens, no content); "
-                        "retrying once with the same request",
-                        model_id, wasted.reasoning_tokens,
+                        "model %r (via %s) answered nothing (%d reasoning tokens, no "
+                        "content); retrying once with the same request",
+                        model_id, _serving_provider(response) or "?",
+                        wasted.reasoning_tokens,
                     )
                     progress = _Progress()
                     response = _run_until_idle(

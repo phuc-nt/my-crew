@@ -363,3 +363,95 @@ def test_a_length_cut_stream_returns_the_partial_body_instead_of_raising(monkeyp
     got = c._stream_completion(fake_client, progress=c._Progress(), model="m", messages=[])
     assert got is cut
     assert got.choices[0].finish_reason == "length"
+
+
+def test_the_serving_provider_is_carried_from_stream_chunks_to_the_result(monkeypatch):
+    # OpenRouter routes one alias across several upstreams and stamps `provider` on
+    # every chunk; the SDK's assembler drops it. A degraded episode was measured
+    # per-upstream, so the result and transcript must say who served the call.
+    final = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="ok", tool_calls=None),
+                                 finish_reason="stop")],
+        usage=SimpleNamespace(prompt_tokens=1, completion_tokens=2, total_tokens=3,
+                              completion_tokens_details=None),
+    )
+
+    class _State:
+        def handle_chunk(self, chunk):
+            pass
+
+        def get_final_completion(self):
+            return final
+
+    monkeypatch.setattr(c, "ChatCompletionStreamState", _State)
+    chunks = [SimpleNamespace(provider="OpenInference"), SimpleNamespace(provider=None),
+              SimpleNamespace(model_extra={})]
+    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+        create=lambda **_kw: iter(chunks),
+    )))
+    got = c._stream_completion(fake_client, progress=c._Progress(), model="m", messages=[])
+    assert got is final
+    assert c._serving_provider(got) == "OpenInference"
+
+
+def test_a_length_cut_stream_still_records_the_provider(monkeypatch):
+    from openai import LengthFinishReasonError
+
+    cut = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="p", tool_calls=None),
+                                 finish_reason="length")],
+        usage=SimpleNamespace(prompt_tokens=1, completion_tokens=2, total_tokens=3,
+                              completion_tokens_details=None),
+    )
+
+    class _State:
+        def handle_chunk(self, chunk):
+            pass
+
+        def get_final_completion(self):
+            raise LengthFinishReasonError(completion=cut)
+
+    monkeypatch.setattr(c, "ChatCompletionStreamState", _State)
+    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+        create=lambda **_kw: iter([SimpleNamespace(provider="DeepSeek")]),
+    )))
+    got = c._stream_completion(fake_client, progress=c._Progress(), model="m", messages=[])
+    assert c._serving_provider(got) == "DeepSeek"
+
+
+def test_serving_provider_predicate_shapes():
+    assert c._serving_provider(SimpleNamespace(provider="DeepSeek")) == "DeepSeek"
+    assert c._serving_provider(SimpleNamespace(provider=None)) == ""
+    assert c._serving_provider(SimpleNamespace()) == ""
+    assert c._serving_provider({"provider": "Fireworks"}) == "Fireworks"
+    assert c._serving_provider({}) == ""
+
+
+def test_the_result_and_the_transcript_event_name_the_provider(monkeypatch, tmp_path):
+    cl = c.LlmClient(_settings(tmp_path))
+    served = _response()
+    served.provider = "OpenInference"
+    _capture_requests(monkeypatch, cl, responses=[served])
+    events: list[dict] = []
+    monkeypatch.setattr(c, "record_event", events.append)
+    result = cl.complete([{"role": "user", "content": "x"}], role="content")
+    assert result.provider == "OpenInference"
+    responses = [e for e in events if e.get("t") == "llm_response"]
+    assert responses and responses[-1]["provider"] == "OpenInference"
+
+
+def test_a_result_without_a_provider_field_reports_an_empty_provider(monkeypatch, tmp_path):
+    cl = c.LlmClient(_settings(tmp_path))
+    _capture_requests(monkeypatch, cl)
+    result = cl.complete([{"role": "user", "content": "x"}], role="content")
+    assert result.provider == ""
+
+
+def test_the_empty_answer_warning_names_the_provider(monkeypatch, tmp_path, caplog):
+    cl = c.LlmClient(_settings(tmp_path, role_reasoning="sprint_low=off"))
+    empty = _response(content="")
+    empty.provider = "OpenInference"
+    _capture_requests(monkeypatch, cl, responses=[empty, _response()])
+    with caplog.at_level("WARNING", logger=c.logger.name):
+        cl.complete([{"role": "user", "content": "x"}], role="sprint_low")
+    assert any("(via OpenInference)" in r.getMessage() for r in caplog.records)

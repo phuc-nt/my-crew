@@ -25,6 +25,12 @@ gate can say which of the seven model roles that model is good at.
 - `llm/vietnamese_text.foreign_letters`: character-level language-drift check; an advisor
   note carrying letters outside the Vietnamese/ASCII set is quarantined like malformed JSON
   (measured 1/8 with thinking off: a note that drifted into Romanian mid-sentence).
+- `LlmResult.provider` + `provider` on every `llm_response` transcript event: which upstream
+  OpenRouter routed the call to (`DeepSeek`, `OpenInference`, …), carried over from the
+  stream chunks the SDK assembler drops. The `roles` bench stamps it on every replay
+  (`… @DeepSeek`) and reports `providers` / `fails_by_provider` per role, because one k=3
+  run lost review 0.88 → 0.67 and sprint_low 1.00 → 0.33 to degenerate answers while the
+  same prompts answered cleanly minutes later — a routing episode, not the model.
 
 ### Changed
 - Every LLM request carries `max_tokens` = 16,384 (`_MAX_COMPLETION_TOKENS`): caps a

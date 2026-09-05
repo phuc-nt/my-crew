@@ -20,6 +20,10 @@
   lại; suy nghĩ đốt trần 16k → KHÔNG gọi lại; `DecomposedTask` đánh số `step_id` thiếu;
   `vietnamese_text.foreign_letters` cách ly note advisor trượt ngôn ngữ; fixture
   office_choice sửa tiền đề (khuyến nghị B mâu thuẫn số liệu).
+- Ghi upstream phục vụ lời gọi: OpenRouter xoay alias qua nhiều provider theo từng call →
+  `_stream_completion` mang `provider` từ chunk sang body, `LlmResult.provider`, sự kiện
+  `llm_response`, cảnh báo guard nêu tên; bench `roles` đóng dấu ` @<provider>` lên từng
+  lượt, báo `providers`/`fails_by_provider` theo role.
 - Cổng: offline 4720 passed; reliability k=5 8/8; journey j1+j2 4 passed 185 s; live full
   65/74 → 9 ca chạy lại 5/9 → 4 ca chạy lại sau fix s1/a1/a2 xanh, b4 đỏ (lỗi #9: đề "cho họ như lần trước" vẫn tạo hàng planning) → vá cổng `brief_context_gap` → b4 chạy lại xanh (1/1, 323 s).
 
@@ -32,6 +36,7 @@
 | Parser lấy object JSON CUỐI khi object đầu hỏng | Dump thô 2/12: object đầu bỏ dở, lan man, rồi "Use the final." + object hoàn chỉnh cuối — đó là câu trả lời thật | Không có object trọn vẹn nào → vẫn lỗi parse như cũ |
 | Sửa slip decompose bằng code (PIC, id, boundary, needs_web) thay vì thêm prompt | Prompt đã in đậm quy tắc mà model vẫn phạm 3/9; mỗi lần phạm = một re-prompt 60–300 s | Bench phải chấm qua cùng repair để đo đúng plan CEO thấy |
 | Chữ CEO là đặc tả: slot `brief` mất cấu trúc thì lấy nguyên văn | Bản chép của model rơi "(1)(2)(3)" → đổi lane; chỉ thay khi ĐO được mất mát | Tiền tố `team:` đi theo nguyên văn — đã có `_restore_mode_prefix` |
+| Ghi provider trước, ghim provider sau | Lượt bench #2 hỏng (review 0,67, sprint_low 0,33, "ư ư ư", tiếng Ba Lan) trong khi cùng prompt 30 phút sau 6/6 sạch; không có dấu provider thì không tách được model/code/định tuyến | Thêm một trường trên mọi kết quả; chưa sửa được gì cho tới khi số đo chỉ đích danh upstream |
 | Cổng hỏi-lại bằng code trong preview, không giao cho prompt | Cả prompt phân loại lẫn intake đã dặn "bỏ trống slot chưa rõ", model vẫn điền và viết lại đề trôi chảy (b4 3/3) | Chỉ bắt hình dạng hẹp (≤25 từ, có cụm quy chiếu, không mỏ neo); đề dài "như lần trước" vẫn đi tiếp |
 
 ## Vấp & học được
@@ -44,6 +49,10 @@
 - Review "sai" trên artifact sạch hoá ra hai chuyện: fixture có tiền đề mâu thuẫn (khuyến nghị
   B trong khi số liệu C rẻ hơn) và model bịa về input (bảo thiếu khoảng cách B/C dù prompt in
   ra có) — phải dump thô từng lượt mới tách được, điểm bench không nói.
+- Bench chạy lại trên code đã vá lại TỤT (review 0,88 → 0,67, sprint_low 1,00 → 0,33) dù
+  diff chỉ chạm parser + fixture; probe thô 6/6 sạch 30 phút sau → thủ phạm là định tuyến
+  OpenRouter (response `.provider` đổi giữa DeepSeek/OpenInference). Điểm bench một model
+  qua alias không tái lập được nếu không ghi upstream.
 
 ## Mở / sang sau
 - `sprint_intake` fail-open vẫn tạo việc từ JSON rác thật sự (đã bớt ca "Extra data") — cân nhắc
@@ -51,3 +60,5 @@
 - review/clean vẫn báo lỗi giả do model bịa về input (không phải parse): cân nhắc `role_models`
   riêng cho review; effort/budget OpenRouter không chặn được suy nghĩ của model này.
 - Kiểm tra ngôn ngữ advisor mới ở mức ký tự; trượt sang tiếng Anh thuần ASCII chưa bắt.
+- Khi `fails_by_provider` chỉ đích danh một upstream qua vài lượt bench: ghim
+  `provider.order`/`allow_fallbacks` trên request OpenRouter — chưa làm vì mới có một lượt.

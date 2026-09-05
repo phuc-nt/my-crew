@@ -284,3 +284,53 @@ def test_decompose_probe_scores_the_plan_the_product_would_accept():
     probe = next(p for p in plan_probes() if p.name.startswith("decompose/"))
     outcome = probe.run(_Scripted({"plan": plan}))
     assert outcome.ok, outcome
+
+
+# --- ai phục vụ lời gọi ----------------------------------------------------------------
+
+
+def test_each_replay_names_the_upstream_that_served_it():
+    # OpenRouter xoay một alias qua nhiều upstream; một lượt hỏng phải quy được cho
+    # upstream nào, không đổ oan cho model.
+    served = iter(["DeepSeek", "OpenInference", "DeepSeek"])
+
+    def _probe_fn(client):
+        res = client.complete([{"role": "user", "content": "x"}], role="content")
+        return ProbeOutcome.passed() if res.content == "good" else ProbeOutcome.failed(
+            "wrong", res.content)
+
+    class _Routed:
+        def complete(self, messages, role="content", **_):
+            provider = next(served)
+            r = _Result("good" if provider == "DeepSeek" else "ư ư ư")
+            r.provider = provider
+            return r
+
+    report = role_bench.run_suite(_Routed(), k=3, probes=[Probe("content", "p", _probe_fn)],
+                                  model="fake")
+    content = report["roles"]["content"]
+    assert content["providers"] == {"DeepSeek": 2, "OpenInference": 1}
+    assert content["fails_by_provider"] == {"OpenInference": 1}
+    details = content["probes"][0]["details"]
+    assert details[0].endswith("@DeepSeek")
+    assert details[1].startswith("wrong: ư ư ư") and details[1].endswith("@OpenInference")
+
+
+def test_a_client_without_a_provider_field_is_counted_as_unknown():
+    def _probe_fn(client):
+        client.complete([{"role": "user", "content": "x"}], role="content")
+        return ProbeOutcome.passed()
+
+    report = role_bench.run_suite(_Scripted({"content": "ok"}), k=1,
+                                  probes=[Probe("content", "p", _probe_fn)], model="fake")
+    content = report["roles"]["content"]
+    assert content["providers"] == {"?": 1}
+    assert content["probes"][0]["details"] == ["ok @?"]
+
+
+def test_a_probe_that_never_calls_the_model_has_no_provider_suffix():
+    report = role_bench.run_suite(None, k=1, probes=[_probe("content", "a", ProbeOutcome.passed())],
+                                  model="fake")
+    content = report["roles"]["content"]
+    assert content["providers"] == {}
+    assert content["probes"][0]["details"] == ["ok"]

@@ -59,6 +59,31 @@ def uncovered_roles(probes: list[Probe]) -> list[str]:
     return [r for r in MODEL_ROLES if r not in covered]
 
 
+class _ProviderRecorder:
+    """Pass-through client that remembers which upstream served each call, so a bad
+    replay can be attributed to OpenRouter's routing rather than to the model: one
+    alias was measured routing to several upstreams within an hour, and one k=3 run
+    lost review 0.88 → 0.67 to degenerate answers (repeated syllables, another
+    language, claims about input that was not there) while the same prompts answered
+    cleanly minutes later."""
+
+    def __init__(self, client: Any):
+        self._client = client
+        self.providers: list[str] = []
+
+    def complete(self, *args: Any, **kwargs: Any) -> Any:
+        result = self._client.complete(*args, **kwargs)
+        self.providers.append(str(getattr(result, "provider", "") or "") or "?")
+        return result
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._client, name)
+
+    def drain(self) -> list[str]:
+        served, self.providers = self.providers, []
+        return served
+
+
 def run_probe(probe: Probe, client: Any) -> tuple[ProbeOutcome, float]:
     """One replay → (outcome, wall seconds). A raise is the `error` kind, not a crash:
     the scorecard must finish so the other roles still get measured."""
@@ -102,16 +127,20 @@ def run_suite(client: Any, *, k: int = DEFAULT_K, roles: list[str] | None = None
             raise ValueError(f"unknown roles {unknown}; choose from {list(MODEL_ROLES)}")
         selected = [p for p in selected if p.role in roles]
 
+    recorder = _ProviderRecorder(client)
     per_role: dict[str, dict[str, Any]] = {}
     for probe in selected:
         role = per_role.setdefault(probe.role, {
             "n": 0, "ok": 0, "fails": Counter(), "latencies": [], "costs": [],
-            "tallies": Counter(), "probes": [],
+            "tallies": Counter(), "probes": [], "providers": Counter(),
+            "fails_by_provider": Counter(),
         })
         fails: Counter = Counter()
         oks, latencies, costs, details = 0, [], [], []
         for _ in range(k):
-            outcome, wall = run_probe(probe, client)
+            outcome, wall = run_probe(probe, recorder)
+            served = recorder.drain()
+            role["providers"].update(served)
             latencies.append(wall)
             if outcome.cost_usd is not None:
                 costs.append(outcome.cost_usd)
@@ -119,8 +148,11 @@ def run_suite(client: Any, *, k: int = DEFAULT_K, roles: list[str] | None = None
                 oks += 1
             else:
                 fails[outcome.kind] += 1
-            details.append(f"{outcome.kind}: {outcome.detail}" if outcome.detail
-                           else outcome.kind)
+                role["fails_by_provider"].update(set(served))
+            detail = f"{outcome.kind}: {outcome.detail}" if outcome.detail else outcome.kind
+            if served:
+                detail += " @" + ",".join(served)
+            details.append(detail)
             if outcome.tallies:
                 role["tallies"].update(outcome.tallies)
         role["n"] += k
@@ -150,6 +182,8 @@ def run_suite(client: Any, *, k: int = DEFAULT_K, roles: list[str] | None = None
             "mean_latency_s": _mean(r["latencies"]), "mean_cost_usd": _mean(r["costs"]),
             "verdict": role_verdict(r["ok"], r["n"]),
             "fails": {kind: r["fails"][kind] for kind in FAIL_KINDS if r["fails"][kind]},
+            "providers": dict(r["providers"]),
+            "fails_by_provider": dict(r["fails_by_provider"]),
             "probes": r["probes"],
         }
         t = r["tallies"]

@@ -229,6 +229,13 @@ call never delivered. The `review` row also carries the H4 calibration tallies
 (false-fail rate on clean artifacts, catch rate on planted defects), computed by the same
 function the calibration report uses.
 
+Every replay's detail line ends with ` @<provider>` — the upstream OpenRouter routed the
+call to (`LlmResult.provider`) — and each role reports `providers` and
+`fails_by_provider`. One model alias is served by several upstreams and the routing
+changes per call; one k=3 run lost review 0.88 → 0.67 to degenerate answers that the same
+prompts did not produce minutes later. Before reading a drop as a model or code
+regression, check whether the failures cluster on one upstream.
+
 The `plan` intake probes go through `sprint_intake`, which builds its own client from the
 environment, so they measure the fleet's real fail-open path rather than an injected
 client. Both sides of a `--compare` must share `k`; the mode refuses otherwise.

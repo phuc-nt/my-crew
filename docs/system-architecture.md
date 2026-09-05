@@ -377,6 +377,18 @@ chuỗi `"role=level,..."`), env fallback `OPENROUTER_ROLE_REASONING`; validate 
 không suy luận bỏ qua tham số. `LlmResult.reasoning_tokens` và sự kiện `llm_response`
 trong transcript ghi số token suy nghĩ để đọc ra vì sao một câu trả lời ngắn lại đắt.
 
+**Ai phục vụ lời gọi** (`LlmResult.provider`, 2026-09-05): một alias OpenRouter
+(`deepseek-v4-flash-latest`) được định tuyến qua nhiều upstream (`DeepSeek`,
+`OpenInference`, …) và đổi theo từng call; OpenRouter đóng dấu `provider` lên từng chunk
+stream nhưng assembler của SDK bỏ trường lạ, nên `_stream_completion` tự mang nó sang body
+cuối (cả nhánh cắt `length`), `_serving_provider` đọc ra, `LlmResult.provider` và sự kiện
+`llm_response` ghi lại, hai cảnh báo của guard trả-rỗng nêu tên. Lý do: một lượt bench k=3
+mất review 0,88 → 0,67 và sprint_low 1,00 → 0,33 vì câu trả lời thoái hoá (lặp âm tiết,
+trượt sang tiếng Ba Lan, bịa "input chỉ có tiêu đề") trong khi cùng prompt 30 phút sau
+6/6 sạch — không quy được cho model hay cho code nếu không biết upstream nào trả lời. Bench
+`roles` đóng dấu ` @<provider>` lên từng lượt và báo `providers`/`fails_by_provider` theo
+role; ghim provider (`provider.order`) chỉ làm khi số đo chỉ đích danh upstream hỏng.
+
 **Trần token trả lời** (`llm/client.py::_MAX_COMPLETION_TOKENS`, 2026-09-05): mọi request
 gửi `max_tokens` = 16.384. Trước đó stream chỉ có guard im lặng (`_STREAM_IDLE_S`), nên một
 stream thoái hoá (decompose tắt suy nghĩ trên deepseek-v4-flash lặp `"needs_web":false,`
