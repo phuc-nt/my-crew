@@ -388,6 +388,12 @@ trượt sang tiếng Ba Lan, bịa "input chỉ có tiêu đề") trong khi cù
 6/6 sạch — không quy được cho model hay cho code nếu không biết upstream nào trả lời. Bench
 `roles` đóng dấu ` @<provider>` lên từng lượt và báo `providers`/`fails_by_provider` theo
 role; ghim provider (`provider.order`) chỉ làm khi số đo chỉ đích danh upstream hỏng.
+Lượt bench có dấu (9 lỗi/168 call, 5 ở một upstream) lộ thêm bốn slip mà code phải chịu
+được thay vì loại cả câu trả lời: `CheckVerdict.confidence` ngoài 0..1 → clamp (trường chỉ
+để quan sát); `ReviewVerdict.notes`/`failures` viết thành chuỗi → một mục; `acceptance` viết
+thành list → nối chuỗi; và OpenRouter báo lỗi GIỮA stream ("Upstream error from X: stream
+failed") thành `APIError` không status → `_is_transient` coi là tạm thời và retry như
+timeout, còn `APIStatusError` khác 429 vẫn ném ngay.
 
 **Trần token trả lời** (`llm/client.py::_MAX_COMPLETION_TOKENS`, 2026-09-05): mọi request
 gửi `max_tokens` = 16.384. Trước đó stream chỉ có guard im lặng (`_STREAM_IDLE_S`), nên một

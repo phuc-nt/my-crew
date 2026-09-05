@@ -1,4 +1,4 @@
-# Một model cho cả fleet — scorecard theo role, policy suy luận, 15 lỗi vá
+# Một model cho cả fleet — scorecard theo role, policy suy luận, 19 lỗi vá
 2026-09-05 · ✅ Done
 
 ## Làm gì
@@ -23,7 +23,10 @@
 - Ghi upstream phục vụ lời gọi: OpenRouter xoay alias qua nhiều provider theo từng call →
   `_stream_completion` mang `provider` từ chunk sang body, `LlmResult.provider`, sự kiện
   `llm_response`, cảnh báo guard nêu tên; bench `roles` đóng dấu ` @<provider>` lên từng
-  lượt, báo `providers`/`fails_by_provider` theo role.
+  lượt, báo `providers`/`fails_by_provider` theo role. Lượt #3 (9 lỗi/168 call, 5 ở
+  OpenInference/17) lộ 4 slip vá bằng code: `confidence` ngoài 0..1 clamp, `notes` chuỗi →
+  list, `acceptance` list → chuỗi, `APIError` giữa stream ("Upstream error … stream
+  failed") retry như timeout.
 - Cổng: offline 4720 passed; reliability k=5 8/8; journey j1+j2 4 passed 185 s; live full
   65/74 → 9 ca chạy lại 5/9 → 4 ca chạy lại sau fix s1/a1/a2 xanh, b4 đỏ (lỗi #9: đề "cho họ như lần trước" vẫn tạo hàng planning) → vá cổng `brief_context_gap` → b4 chạy lại xanh (1/1, 323 s).
 

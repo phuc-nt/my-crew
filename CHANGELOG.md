@@ -42,6 +42,12 @@ gate can say which of the seven model roles that model is good at.
   lost numbered asks or listed entities (`_keep_ceo_structure`).
 
 ### Fixed
+- Four slips the provider-stamped role bench exposed (9 failed replays / 168 calls, five of
+  them on one upstream): `CheckVerdict.confidence` outside 0..1 is clamped (an answer said
+  `5`; the field is observability-only); `ReviewVerdict.notes`/`failures` written as a bare
+  string become one item; `TeamStepPlan.acceptance` written as a list is joined; and an
+  `APIError` without an HTTP status — OpenRouter's mid-stream "Upstream error from X: stream
+  failed" — is retried like a timeout instead of failing the call.
 - A decomposition step without a `step_id` (measured 1/3 on a one-step plan) is numbered by
   position instead of failing validation and costing a re-prompt.
 - `LengthFinishReasonError` from the openai 2.x stream assembler escaped `_stream_completion`
