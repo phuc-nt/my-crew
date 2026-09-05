@@ -22,7 +22,13 @@ import time
 from dataclasses import dataclass
 from functools import partial
 
-from openai import APIConnectionError, APITimeoutError, OpenAI, RateLimitError
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    LengthFinishReasonError,
+    OpenAI,
+    RateLimitError,
+)
 from openai.lib.streaming.chat import ChatCompletionStreamState
 
 from my_crew.config.settings import OPENROUTER_BASE_URL, Settings
@@ -56,6 +62,13 @@ _STREAM_IDLE_S = 120.0
 # retries like a timeout; a second is the provider, and the chain (or the caller's own
 # retry) is a better next move than a third `_STREAM_IDLE_S` of silence.
 _MAX_STALLED_ATTEMPTS = 2
+# Hard ceiling on completion tokens, sent as `max_tokens` on every request. Without it
+# a degenerate stream is bounded only by the provider: with thinking off, one decompose
+# on deepseek-v4-flash repeated `"needs_web":false,` for 903 s and 107 KB before the
+# idle guard could fire (every chunk is progress). Sized well above the longest honest
+# answer seen (a plan-role completion of 12.7k tokens, 11.9k of them reasoning), so a
+# capped stream is a runaway, never a long answer.
+_MAX_COMPLETION_TOKENS = 16384
 # v91 multi-provider: a chain entry may be prefixed `provider::model` to route it at a
 # non-OpenRouter OpenAI-compatible endpoint. `::` because OpenRouter ids already spend
 # `/` (org/model) and `:` (`:free`-style suffixes); no known model id contains `::`.
@@ -136,6 +149,38 @@ def _run_until_idle(fn, idle_s: float, *, what: str, progress: _Progress):
     return outcome["value"]
 
 
+_REASONING_OFF: dict = {"enabled": False}
+
+
+def _thought_but_said_nothing(response) -> bool:
+    """True when the provider counted reasoning tokens but the message carries neither
+    content nor tool calls — the answer was spent entirely on thinking."""
+    try:
+        msg = response.choices[0].message
+    except (AttributeError, IndexError, TypeError):
+        return False
+    if isinstance(msg, dict):
+        content, tool_calls = msg.get("content"), msg.get("tool_calls")
+    else:
+        content, tool_calls = getattr(msg, "content", None), getattr(msg, "tool_calls", None)
+    if (content or "").strip() or tool_calls:
+        return False
+    return extract_usage(response).reasoning_tokens > 0
+
+
+def _reasoning_body(level: str) -> dict | None:
+    """The `reasoning` request object for a policy level, or None to send nothing.
+
+    "model" leaves the provider's default alone; "off" disables thinking outright; any
+    other level is an effort name (`settings.REASONING_EFFORTS`, validated at config
+    load) and is sent as `reasoning.effort`."""
+    if level == "model":
+        return None
+    if level == "off":
+        return _REASONING_OFF
+    return {"effort": level}
+
+
 def _stream_completion(client, *, progress: _Progress, **request):
     """One chat completion over SSE, reassembled into the SDK's `ChatCompletion` shape.
 
@@ -149,7 +194,15 @@ def _stream_completion(client, *, progress: _Progress, **request):
     for chunk in stream:
         progress.touch()
         state.handle_chunk(chunk)
-    return state.get_final_completion()
+    try:
+        return state.get_final_completion()
+    except LengthFinishReasonError as exc:
+        # The SDK's stream assembler assumes structured parsing and refuses a body
+        # cut at `max_tokens` (finish_reason "length") — but the callers here want
+        # that body: `LlmResult.truncated` reads the finish reason and the
+        # "answer shorter" retries in decompose/intake rebuild from the partial text.
+        # The exception carries the assembled snapshot, usage included.
+        return exc.completion
 
 Message = dict[str, str]
 
@@ -255,6 +308,10 @@ class LlmResult:
     #: not fix. Defaults to "" so every existing construction site (tests, doubles)
     #: keeps working and simply reports "not truncated".
     finish_reason: str = ""
+    #: Thinking tokens the provider counted inside `completion_tokens` (0 when unknown).
+    #: Surfaced so a transcript can show WHY a 227-character answer cost 10k tokens and
+    #: six minutes — see `settings.DEFAULT_ROLE_REASONING`.
+    reasoning_tokens: int = 0
 
     @property
     def truncated(self) -> bool:
@@ -391,7 +448,7 @@ class LlmClient:
             self._budget.check_allowed()  # supreme: re-checked before every attempt
             has_next = i < len(chain) - 1
             try:
-                response = self._call_with_retry(messages, model_name)
+                response = self._call_with_retry(messages, model_name, role=role)
             except Exception as exc:
                 if has_next and should_try_next_model(exc):
                     logger.warning(
@@ -424,6 +481,7 @@ class LlmClient:
                 "finish_reason": finish_reason,
                 "prompt_tokens": usage.prompt_tokens,
                 "completion_tokens": usage.completion_tokens,
+                "reasoning_tokens": usage.reasoning_tokens,
                 "cost_usd": usage.cost_usd, "fallback_from": list(fallback_from),
             })
             return LlmResult(
@@ -431,6 +489,7 @@ class LlmClient:
                 model=model_name,
                 prompt_tokens=usage.prompt_tokens,
                 completion_tokens=usage.completion_tokens,
+                reasoning_tokens=usage.reasoning_tokens,
                 cost_usd=usage.cost_usd,
                 fallback_from=tuple(fallback_from),
                 finish_reason=finish_reason,
@@ -474,7 +533,9 @@ class LlmClient:
             self._budget.check_allowed()
             has_next = i < len(chain) - 1
             try:
-                response = self._call_with_retry(messages, model_name, tools=tools)
+                response = self._call_with_retry(
+                    messages, model_name, tools=tools, role=role,
+                )
             except Exception as exc:
                 if has_next and should_try_next_model(exc):
                     logger.warning(
@@ -517,6 +578,7 @@ class LlmClient:
                 "finish_reason": finish_reason,
                 "prompt_tokens": usage.prompt_tokens,
                 "completion_tokens": usage.completion_tokens,
+                "reasoning_tokens": usage.reasoning_tokens,
                 "cost_usd": usage.cost_usd, "fallback_from": list(fallback_from),
             })
             return ToolExchange(
@@ -527,6 +589,7 @@ class LlmClient:
                     model=model_name,
                     prompt_tokens=usage.prompt_tokens,
                     completion_tokens=usage.completion_tokens,
+                reasoning_tokens=usage.reasoning_tokens,
                     cost_usd=usage.cost_usd,
                     fallback_from=tuple(fallback_from),
                     finish_reason=finish_reason,
@@ -536,7 +599,12 @@ class LlmClient:
         raise AssertionError("unreachable: model chain loop always returns or raises")
 
     def _call_with_retry(
-        self, messages: list[Message], model_name: str, *, tools: list[dict] | None = None,
+        self,
+        messages: list[Message],
+        model_name: str,
+        *,
+        tools: list[dict] | None = None,
+        role: str | None = None,
     ):
         """Call the API, retrying bounded times on transient errors only.
 
@@ -558,13 +626,23 @@ class LlmClient:
         )
         last_exc: Exception | None = None
         total_slept = 0.0
-        extra_kwargs: dict = {"tools": tools} if tools is not None else {}
+        extra_kwargs: dict = {"max_tokens": _MAX_COMPLETION_TOKENS}
+        if tools is not None:
+            extra_kwargs["tools"] = tools
+        # Per-role reasoning level (`settings.DEFAULT_ROLE_REASONING`), as OpenRouter's
+        # unified `reasoning` body key. OpenRouter-only for the same reason as the
+        # headers: another vendor's endpoint may reject a body key it does not know.
+        # `getattr` keeps duck-typed settings doubles on unrelated paths working.
+        resolve_level = getattr(self._settings, "reasoning_for_role", None)
+        reasoning = _reasoning_body(resolve_level(role) if resolve_level else "model")
+        if reasoning is not None and provider == _OPENROUTER:
+            extra_kwargs["extra_body"] = {"reasoning": reasoning}
         client = self._client_for(provider)
         stalled = 0
         for attempt in range(_MAX_RETRIES + 1):
             progress = _Progress()
             try:
-                return _run_until_idle(
+                response = _run_until_idle(
                     partial(
                         _stream_completion, client, progress=progress, model=model_id,
                         messages=messages, extra_headers=headers, **extra_kwargs,
@@ -573,6 +651,39 @@ class LlmClient:
                     what=f"chat.completions({model_id})",
                     progress=progress,
                 )
+                if (
+                    provider == _OPENROUTER
+                    and extra_kwargs.get("extra_body", {}).get("reasoning") != _REASONING_OFF
+                    and _thought_but_said_nothing(response)
+                ):
+                    # A thinking model can burn its whole completion on reasoning and
+                    # emit no answer (deepseek-v4-flash: 2/51 at the model's default,
+                    # 2/5 at effort=low — 118 and 1,972 reasoning tokens, zero content,
+                    # finish_reason=stop). That is a billed non-answer, not a transient
+                    # error. It is also stochastic: the SAME request re-asked once
+                    # answers. Re-asking with thinking OFF was tried first and measured
+                    # worse on structured prompts — the intake classifier answered
+                    # "Tôi là một trợ lý…" prose instead of JSON (fail-open created a
+                    # task from garbage) and one decompose ran 903 s — so the retry
+                    # keeps the request exactly as sent.
+                    wasted = extract_usage(response)
+                    self._budget.record_cost(wasted.cost_usd)
+                    logger.warning(
+                        "model %r spent its whole answer thinking (%d reasoning tokens, "
+                        "no content); retrying once with the same request",
+                        model_id, wasted.reasoning_tokens,
+                    )
+                    progress = _Progress()
+                    response = _run_until_idle(
+                        partial(
+                            _stream_completion, client, progress=progress, model=model_id,
+                            messages=messages, extra_headers=headers, **extra_kwargs,
+                        ),
+                        _STREAM_IDLE_S,
+                        what=f"chat.completions({model_id})",
+                        progress=progress,
+                    )
+                return response
             except _RETRYABLE as exc:
                 last_exc = exc
                 if isinstance(exc, RequestDeadlineExceeded):

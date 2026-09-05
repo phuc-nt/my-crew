@@ -132,7 +132,7 @@ class TestClientHonorsTheRole:
                 type("C", (), {"message": type("M", (), {"content": "ok"})()})()
             ]
 
-        def _fake_call(messages, model_name):
+        def _fake_call(messages, model_name, **_kw):
             seen.append(model_name)
             return _Resp()
 

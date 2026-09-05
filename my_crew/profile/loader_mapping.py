@@ -84,6 +84,12 @@ def build_settings_dict(yaml_doc: dict[str, Any], data_dir: Any) -> dict[str, An
     # v79 tier 3: per-role model overrides — yaml mapping wins; else env "role=model,..."
     # string; else omit (⇒ every role on the fleet model). Validated in _d_role_models.
     _put(out, "role_models", _fallback(yaml_doc.get("role_models"), "OPENROUTER_ROLE_MODELS"))
+    # Per-role reasoning level — same two shapes as role_models; absent ⇒ the built-in
+    # `DEFAULT_ROLE_REASONING`. Validated in _d_role_reasoning.
+    _put(
+        out, "role_reasoning",
+        _fallback(yaml_doc.get("role_reasoning"), "OPENROUTER_ROLE_REASONING"),
+    )
     # v91: extra OpenAI-compatible endpoints a chain entry can name with
     # `provider::model` — yaml mapping wins; else env "name=base_url|API_KEY_ENV,..."
     # string; else omit (⇒ everything through OpenRouter). Validated in _d_providers,

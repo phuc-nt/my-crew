@@ -125,11 +125,11 @@ class TestLlmClientHook:
         llm = client_mod.LlmClient(settings)
         response = SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content="hello"))])
-        monkeypatch.setattr(llm, "_call_with_retry", lambda messages, model: response)
+        monkeypatch.setattr(llm, "_call_with_retry", lambda messages, model, **_kw: response)
         monkeypatch.setattr(
             client_mod, "extract_usage",
             lambda _r: SimpleNamespace(prompt_tokens=10, completion_tokens=5,
-                                       cost_usd=0.01),
+                                       reasoning_tokens=2, cost_usd=0.01),
         )
         with open_step_recorder(settings, agent_id="a1", task_id="task1",
                                 step_id="step1", attempt_id="att1"):
@@ -141,6 +141,8 @@ class TestLlmClientHook:
         resp = next(e for e in events if e["t"] == "llm_response")
         assert resp["model"] == "m1" and resp["content"] == "hello"
         assert resp["prompt_tokens"] == 10 and resp["cost_usd"] == 0.01
+        # Thinking tokens ride on the event so a transcript explains an expensive short reply.
+        assert resp["reasoning_tokens"] == 2
 
 
 class _FakeToolMessage:

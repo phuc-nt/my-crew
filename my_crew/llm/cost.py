@@ -20,6 +20,11 @@ class UsageInfo:
     completion_tokens: int
     total_tokens: int
     cost_usd: float | None
+    #: Thinking tokens inside `completion_tokens` (OpenRouter's
+    #: `completion_tokens_details.reasoning_tokens`); 0 when the provider does not say.
+    #: Billed as output, so a step whose visible answer is short but whose
+    #: `completion_tokens` is huge is explained here, not in the prompt.
+    reasoning_tokens: int = 0
 
 
 def _get(obj: Any, key: str) -> Any:
@@ -78,9 +83,13 @@ def extract_usage(response: Any) -> UsageInfo:
     if cost is None:
         cost = _coerce_cost(_extra(response).get("cost"))
 
+    details = _get(usage, "completion_tokens_details")
+    reasoning_tokens = _coerce_int(_get(details, "reasoning_tokens"))
+
     return UsageInfo(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_tokens=total_tokens,
         cost_usd=cost,
+        reasoning_tokens=reasoning_tokens,
     )

@@ -65,7 +65,7 @@ def _client(monkeypatch, tmp_path, *, chain, script):
     budget = _FakeBudget()
     client = LlmClient(settings, budget=budget)
 
-    def _fake_call(messages, model_name):
+    def _fake_call(messages, model_name, **_kw):
         outcome = script[model_name]
         if isinstance(outcome, Exception):
             raise outcome

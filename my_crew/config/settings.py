@@ -83,6 +83,42 @@ DEFAULT_MODEL = "~deepseek/deepseek-v4-flash-latest"
 #               the normal content model — the resolver degrades to the fleet chain.
 MODEL_ROLES = ("content", "review", "aggregate", "plan", "util", "advisor", "sprint_low")
 
+# Reasoning effort per role, for models that "think" by default. The fleet default
+# `~deepseek/deepseek-v4-flash-latest` is one (OpenRouter registry: `default_enabled:
+# true, default_effort: high`), and thinking is billed as output tokens AND paid in
+# latency. Measured 2026-09-05 on a real journey: the sprint step for a four-sentence
+# company intro spent 10,929 completion tokens on 227 visible characters and took 6m16s;
+# a clarify note spent 8,345 tokens and 3m34s; the outside-caller journey timed out at
+# 300s on a brief the same fleet had finished in 66s. Thinking earns its cost where the
+# call is a judgement (decompose, intake, review verdict); on a short deliverable or a
+# mechanical call it is money and minutes for nothing.
+#   "model"  — send nothing; the provider's own default applies.
+#   "off"    — `reasoning.enabled = false`.
+#   effort   — one of `REASONING_EFFORTS`, sent as `reasoning.effort`.
+# Why "off" and not a low effort for the deliverable roles: probed the same 4-sentence
+# brief 5× at `effort=low` on this model — 2 of 5 answers came back EMPTY, the whole
+# completion (118 and 1,972 tokens) spent on degenerate reasoning text; `off` was 3/3
+# clean at 1.4–9.7s. A bounded effort is therefore not a safe default here; the client
+# also guards the residual case (`_thought_but_said_nothing`) with one retry at "off".
+# Why util/aggregate keep the model default: the role scorecard (k=3, same day) had
+# util at 0.89 with thinking and 0.61 without (slot/new-intent 0/3), aggregate at 1.00
+# and 0.67 — small JSON extractions and the CEO summary are judgements too, and their
+# calls are short enough (1–40s) that thinking is affordable. content/advisor/sprint_low
+# scored 1.00 without it, 2–3× faster.
+# The parameter rides only on OpenRouter calls (`LlmClient._call_with_retry`); a
+# non-reasoning model there ignores it, so the policy is safe to leave on for any chain.
+REASONING_EFFORTS = ("minimal", "low", "medium", "high", "xhigh", "max")
+REASONING_LEVELS = ("model", "off") + REASONING_EFFORTS
+DEFAULT_ROLE_REASONING: dict[str, str] = {
+    "plan": "model",
+    "review": "model",
+    "content": "off",
+    "aggregate": "model",
+    "advisor": "off",
+    "sprint_low": "off",
+    "util": "model",
+}
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -144,6 +180,11 @@ class Settings:
     # cost. See `model_for_role` for how an override resolves.
     role_models: tuple[tuple[str, str], ...] = ()
 
+    # Per-role reasoning level overrides, as (role, level) pairs — same frozen/hashable
+    # shape as `role_models`. Empty (default) ⇒ `DEFAULT_ROLE_REASONING` applies; a pair
+    # replaces the built-in level for that role only. See `reasoning_for_role`.
+    role_reasoning: tuple[tuple[str, str], ...] = ()
+
     # Extra OpenAI-compatible endpoints a chain entry can name with `provider::model`
     # (v91). Tuple of `(name, base_url, api_key_env)` for the same frozen/hashable
     # reason as `role_models`. Empty (default) ⇒ every entry resolves through
@@ -199,6 +240,18 @@ class Settings:
     def effective_model_chain(self) -> tuple[str, ...]:
         """The chain `LlmClient.complete` walks: declared chain, or just the model."""
         return self.model_chain or (self.openrouter_model,)
+
+    def reasoning_for_role(self, role: str | None) -> str:
+        """The reasoning level `role` runs at: its override, else the built-in default.
+
+        An absent or unknown role gets "model" — nothing is sent and the provider's own
+        default applies — for the same reason `model_for_role` degrades to the fleet
+        chain: a call site may name a role before anyone has decided its policy.
+        """
+        for name, level in self.role_reasoning:
+            if name == role:
+                return level
+        return DEFAULT_ROLE_REASONING.get(role or "", "model")
 
     def model_for_role(self, role: str) -> tuple[str, ...]:
         """The chain to run `role` on: its override first, then the fleet chain.

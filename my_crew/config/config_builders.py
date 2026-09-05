@@ -35,7 +35,7 @@ from my_crew.config.config_builders_reporting import (
     build_reporting_config_from_dict,
     build_reporting_config_from_env,
 )
-from my_crew.config.settings import DATA_DIR, DEFAULT_MODEL, MODEL_ROLES, Settings
+from my_crew.config.settings import DATA_DIR, DEFAULT_MODEL, MODEL_ROLES, REASONING_LEVELS, Settings
 
 __all__ = [
     "build_settings_from_dict",
@@ -114,6 +114,55 @@ def _d_role_models(value: Any) -> tuple[tuple[str, str], ...]:
             )
         if role in seen:
             raise ValueError(f"role_models declares {role!r} twice")
+        seen.add(role)
+    return tuple(pairs)
+
+
+def _d_role_reasoning(value: Any) -> tuple[tuple[str, str], ...]:
+    """Coerce `role_reasoning` (yaml mapping or "role=level,..." string) to pairs.
+
+    Same shape and the same loud failures as `_d_role_models`: an unknown role or an
+    unknown level raises, because a typo here silently means "the built-in default", and
+    the operator would see a six-minute step and no error. Levels are `REASONING_LEVELS`.
+    """
+    if value is None or value == "" or value == {} or value == []:
+        return ()
+    if isinstance(value, str):
+        pairs = []
+        for entry in (p.strip() for p in value.split(",") if p.strip()):
+            role, sep, level = entry.partition("=")
+            if not sep or not role.strip() or not level.strip():
+                raise ValueError(
+                    f"role_reasoning entry must be 'role=level', got {entry!r} "
+                    "(OPENROUTER_ROLE_REASONING in .env)"
+                )
+            pairs.append((role.strip(), level.strip()))
+    elif isinstance(value, dict):
+        pairs = []
+        for role, level in value.items():
+            if not isinstance(level, str) or not level.strip():
+                raise ValueError(
+                    f"role_reasoning[{role!r}] must be a level string, got {level!r} "
+                    "— quote values in yaml"
+                )
+            pairs.append((str(role).strip(), level.strip()))
+    else:
+        raise ValueError("role_reasoning must be a mapping or a 'role=level,...' string")
+
+    seen: set[str] = set()
+    for role, level in pairs:
+        if role not in MODEL_ROLES:
+            raise ValueError(
+                f"unknown role_reasoning key {role!r} — valid roles are "
+                f"{', '.join(sorted(MODEL_ROLES))}"
+            )
+        if level not in REASONING_LEVELS:
+            raise ValueError(
+                f"role_reasoning[{role!r}] = {level!r} — valid levels are "
+                f"{', '.join(REASONING_LEVELS)}"
+            )
+        if role in seen:
+            raise ValueError(f"role_reasoning declares {role!r} twice")
         seen.add(role)
     return tuple(pairs)
 
@@ -241,6 +290,7 @@ def build_settings_from_dict(d: dict[str, Any]) -> Settings:
         openrouter_title=d.get("openrouter_title") or "my-crew",
         model_chain=_d_model_chain(d.get("model_chain")),
         role_models=_d_role_models(d.get("role_models")),
+        role_reasoning=_d_role_reasoning(d.get("role_reasoning")),
         providers=_d_providers(d.get("providers")),
         dry_run=_d_bool(d, "dry_run", True),
         write_disabled=_d_bool(d, "write_disabled", False),
@@ -287,6 +337,7 @@ def build_settings_from_env() -> Settings:
             "openrouter_title": os.getenv("OPENROUTER_TITLE"),
             "model_chain": os.getenv("OPENROUTER_MODEL_CHAIN"),
             "role_models": os.getenv("OPENROUTER_ROLE_MODELS"),
+            "role_reasoning": os.getenv("OPENROUTER_ROLE_REASONING"),
             "providers": os.getenv("MY_CREW_PROVIDERS"),
             "dry_run": os.getenv("DRY_RUN"),
             "write_disabled": os.getenv("AGENT_WRITE_DISABLED"),

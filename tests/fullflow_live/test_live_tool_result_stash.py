@@ -30,6 +30,7 @@ from my_crew.runtime.tool_result_stash import (
 )
 from my_crew.runtime_backends.thin_tool_loop import run_thin_loop
 from my_crew.runtime_backends.tool_call_context import tool_call_context
+from tests.fullflow.cast import LIVE_MODEL
 
 TASK_ID = "live-stash-task"
 STEP_ID = "live-stash-step"
@@ -109,7 +110,7 @@ def test_l4_an_oversized_tool_result_is_stashed_and_the_model_reads_the_preview(
 
     settings = build_settings_from_dict({
         "openrouter_api_key": live_api_key,
-        "openrouter_model": "anthropic/claude-haiku-4.5",
+        "openrouter_model": LIVE_MODEL,
         "data_dir": stash_root,
     })
 

@@ -13,6 +13,7 @@ from pathlib import Path
 
 from my_crew.config.config_builders import build_settings_from_dict
 from my_crew.config.config_builders_reporting import build_reporting_config_from_dict
+from my_crew.config.settings import DEFAULT_MODEL
 from my_crew.profile.loader import LoadedProfile
 from my_crew.runtime.company import Company
 from my_crew.runtime.registry import RegistryEntry
@@ -46,21 +47,21 @@ def make_registry() -> tuple[RegistryEntry, ...]:
     return tuple(RegistryEntry(id=i, enabled=True) for i in ids)
 
 
-#: Model tier for the LIVE cast. Fixed and cheap on purpose: the suite exists to catch
-#: prompt/behaviour regressions, and it has to be affordable enough to run repeatedly.
-#: The user's real production models are a release-acceptance concern, not a suite one —
-#: pinning here also keeps run-to-run cost comparable across releases.
-#: `sprint_low` stays a separate (cheaper) entry because the low-effort tier picking a
-#: cheaper model is itself part of what the C-group cases assert — collapsing every role
-#: onto one model would make that assertion vacuous.
-LIVE_MODEL = "anthropic/claude-haiku-4.5"
+#: Model tier for the LIVE cast. Pinned to the SAME model the production fleet runs
+#: (`DEFAULT_MODEL`), every role included, so a suite pass is evidence about the model the
+#: CEO actually pays for — a suite that passes on a different tier says nothing about
+#: production. Pinning also keeps run-to-run cost comparable across releases. Every role
+#: maps to the one fleet model on purpose: the C-group cases assert the low-effort tier
+#: through `route.effort`, never through the model name, so collapsing `sprint_low` onto
+#: the fleet model leaves those assertions exactly as sharp.
+LIVE_MODEL = DEFAULT_MODEL
 LIVE_ROLE_MODELS = {
     "content": LIVE_MODEL,
     "review": LIVE_MODEL,
     "aggregate": LIVE_MODEL,
     "plan": LIVE_MODEL,
     "util": LIVE_MODEL,
-    "sprint_low": "anthropic/claude-haiku-4.5",
+    "sprint_low": LIVE_MODEL,
 }
 
 
