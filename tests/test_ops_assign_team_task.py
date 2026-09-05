@@ -524,3 +524,40 @@ def test_a_mail_step_is_persisted_with_its_flag_so_the_confirmed_hash_still_veri
     assert by_id["summarize"].needs_mail is False
     # The exact check the ticker runs on every tick — over the rows, not the plan.
     assert decomposition_content_hash(task) == task.plan_hash == slots["plan_hash"]
+
+
+# --- context gate: a brief leaning on history the system does not have -----------------
+
+
+def test_preview_asks_back_before_any_plan_or_row_when_the_brief_leans_on_unknown_context(
+    monkeypatch,
+):
+    """Đo thật (live b4, 3/3 lần): "Gửi báo cáo cho họ như lần trước nhé." đi trọn intake
+    và ghi một hàng planning. Cổng phải chặn TRƯỚC `_plan_for_brief` — không lượt model,
+    không hàng nào — và lời chặn là một câu hỏi."""
+    monkeypatch.setattr(mod, "_escalation_routable", lambda: True)
+    monkeypatch.setattr(mod, "_staff_roster", lambda: [("agent-a", "office")])
+    calls: list[str] = []
+    monkeypatch.setattr(
+        mod, "_plan_for_brief",
+        lambda *a, **k: calls.append("plan") or (_ for _ in ()).throw(AssertionError("planned")),
+    )
+    with pytest.raises(ValueError, match=r"\?") as info:
+        mod.preview_assign_team_task({"brief": "Gửi báo cáo cho họ như lần trước nhé."})
+    assert "như lần trước" in str(info.value)
+    assert calls == []
+
+
+def test_preview_still_plans_a_brief_that_names_its_target(monkeypatch):
+    monkeypatch.setattr(mod, "_escalation_routable", lambda: True)
+    monkeypatch.setattr(mod, "_staff_roster", lambda: [("agent-a", "office")])
+    seen: list[str] = []
+
+    def _plan(brief, *a, **k):
+        seen.append(brief)
+        raise ValueError("stop here")
+
+    monkeypatch.setattr(mod, "_plan_for_brief", _plan)
+    with pytest.raises(ValueError, match="stop here"):
+        mod.preview_assign_team_task({"brief": "Gửi báo cáo tuần 36 cho anh Minh như lần trước"})
+    assert seen == ["Gửi báo cáo tuần 36 cho anh Minh như lần trước"]

@@ -35,15 +35,18 @@ from __future__ import annotations
 import logging
 import re
 
+from my_crew.agent.brief_context_gap import unresolved_reference_gap
 from my_crew.agent.sprint_intake import strip_mode_prefix
 from my_crew.agent.task_decomposition import (
     DecompositionError,
     UnmeasurablePlanError,
     fanout_gap,
     fanout_split,
-    find_terminals,
     fold_unjustified_steps,
+    mark_research_steps,
     parse_decomposed_task,
+    repair_terminal_assignee,
+    research_gap,
     unmeasurable_gap,
     validate_decomposition,
 )
@@ -157,34 +160,6 @@ def parse_pic_prefix(brief: str) -> tuple[str, str]:
     return handle, rest
 
 
-def _repair_terminal_assignee(task, staff_ids: set[str], pic_requested: str):
-    """Hand the final synthesis step back to the PIC when the model gave it away.
-
-    The prompt already states the rule in bold and the model still breaks it, so
-    every violation used to cost a full re-prompt. Reassigning is the whole fix: the
-    DAG shape, the step list and every other assignment stay put, and the PIC owning
-    the terminal step is exactly what the invariant demands. Only the unambiguous
-    case is repaired — with several terminals, *which* one is final is a judgement
-    about the work, so that still goes back to the model. Best-effort: the validator
-    downstream stays the only gate.
-    """
-    pic = pic_requested or task.pic_id
-    if not pic or pic not in staff_ids:
-        return task
-    terminals = find_terminals(task.steps)
-    if len(terminals) != 1 or terminals[0].assigned_to == pic:
-        return task
-    terminal = terminals[0]
-    logger.info(
-        "assign_team_task: code-side repair — terminal step [%s] reassigned %s → PIC %s",
-        terminal.step_id, terminal.assigned_to, pic,
-    )
-    return task.model_copy(update={"steps": tuple(
-        s.model_copy(update={"assigned_to": pic}) if s.step_id == terminal.step_id else s
-        for s in task.steps
-    )})
-
-
 def _decompose_with_retries(
     brief: str, staff: list[tuple[str, str]], pic_requested: str = "",
 ) -> tuple:
@@ -230,7 +205,7 @@ def _decompose_with_retries(
             continue
         try:
             task = parse_decomposed_task(result.content)
-            task = _repair_terminal_assignee(
+            task = repair_terminal_assignee(
                 task, {a for a, _ in staff}, pic_requested)
             task = validate_decomposition(
                 task, staff_ids={a for a, _ in staff},
@@ -266,14 +241,32 @@ def _decompose_with_retries(
             # parallel entity-named steps deterministically. Only if the plan's shape
             # defeats the splitter does the old fail-open (accept the packed plan)
             # remain — a valid-but-slow plan always beats a failed assign.
-            gap = fanout_gap(brief, task)
+            # A lookup brief planned with NO web step is a plan that cites nothing.
+            # `fanout_gap` cannot see it (no web step reads as pure writing), so it is
+            # checked first and, if it fires, the fan-out verdict waits for the plan
+            # that has web steps.
+            research = research_gap(brief, task)
+            gap = "" if research else fanout_gap(brief, task)
             # Context-crew: every hand-off must be checkable without a conversation.
             # A step nobody could grade goes back to the model with the exact gap
             # (in the SAME retry as the fan-out bias, so neither starves the other);
             # the final verdict is taken on the finished plan below.
             measure_gap = unmeasurable_gap(task)
-            if (gap or measure_gap) and _attempt < _MAX_DECOMPOSE_ATTEMPTS - 1:
-                raise DecompositionError("; ".join(g for g in (gap, measure_gap) if g))
+            if (research or gap or measure_gap) and _attempt < _MAX_DECOMPOSE_ATTEMPTS - 1:
+                raise DecompositionError(
+                    "; ".join(g for g in (research, gap, measure_gap) if g)
+                )
+            if research:
+                # Last attempt, still no web step: the root steps get the tool
+                # code-side, then the fan-out check runs on the repaired plan.
+                task = mark_research_steps(task)
+                logger.warning(
+                    "assign_team_task: lookup brief planned without web steps after "
+                    "%d attempts — marked %d root step(s) needs_web (%s)",
+                    _MAX_DECOMPOSE_ATTEMPTS,
+                    sum(1 for s in task.steps if not s.deps), research,
+                )
+                gap = fanout_gap(brief, task)
             if gap:
                 split = fanout_split(brief, task)
                 if split is not None:
@@ -660,6 +653,14 @@ def preview_assign_team_task(slots: dict[str, str]) -> str:
             f"@{pic_requested} không có trong danh sách nhân sự có thể giao việc — "
             "kiểm tra lại mã nhân sự (hoặc dùng @all để đội tự chọn người chịu trách nhiệm)"
         )
+
+    # Đề tựa vào chuyện bộ máy không có ("cho họ như lần trước") thì hỏi lại NGAY ĐÂY,
+    # trước lượt intake/decompose: cổng này không tốn model, và ValueError của preview
+    # là lời đáp cho CEO — không hàng task nào được ghi. Đo thật: model điền nguyên câu
+    # vào brief rồi intake viết lại thành mục tiêu nghe rất trôi (xem docstring module).
+    context_gap = unresolved_reference_gap(clean_brief)
+    if context_gap:
+        raise ValueError(context_gap)
 
     task, decompose_cost, is_sprint, route = _plan_for_brief(
         clean_brief, staff, pic_requested, forced_mode,

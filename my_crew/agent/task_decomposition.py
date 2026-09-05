@@ -20,11 +20,14 @@ dispatch-time re-check marks the step `failed` + escalates instead of spawning i
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections.abc import Callable, Iterable
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+logger = logging.getLogger(__name__)
 
 #: Hard ceiling on a single team task's DAG — keeps a decomposition reviewable in one
 #: CEO preview and bounds worst-case fan-out cost.
@@ -126,12 +129,30 @@ class TeamStepPlan(BaseModel):
     # alone, so a model inventing labels to keep a step gains nothing. Unknown labels
     # are kept as written (observational field; rejecting them would only add retry
     # noise from light models) and bucketed by the routing-signal counter.
-    boundary: str = Field(default="", max_length=40)
+    boundary: str = Field(default="")
 
     @field_validator("boundary")
     @classmethod
     def _normalize_boundary(cls, v: str) -> str:
-        return v.strip().lower()
+        # Clipped, not rejected: a light model sometimes writes a sentence here instead
+        # of a label ("Chỉ dừng ở tra cứu..."), and a length error would cost a whole
+        # re-prompt for a field no decision reads. Clipped text is just another
+        # unknown label to the routing-signal counter.
+        return v.strip().lower()[:40]
+
+    @field_validator("step_id", "deps", mode="before")
+    @classmethod
+    def _step_ids_as_text(cls, v):
+        # Ids are text in the schema, but a model sometimes numbers its steps (`1`, `2`)
+        # and references them the same way in `deps`. The plan is unambiguous either
+        # way, so both are coerced; a bare int rejection only bought a re-prompt.
+        if isinstance(v, int) and not isinstance(v, bool):
+            return str(v)
+        if isinstance(v, (list, tuple)):
+            return tuple(
+                str(d) if isinstance(d, int) and not isinstance(d, bool) else d for d in v
+            )
+        return v
 
     @field_validator("step_id", "assigned_to")
     @classmethod
@@ -325,6 +346,39 @@ def find_terminals(steps: tuple[TeamStepPlan, ...]) -> list[TeamStepPlan]:
     satisfies it read the plan's shape the same way."""
     dep_targets = {d for s in steps for d in s.deps}
     return [s for s in steps if s.step_id not in dep_targets]
+
+
+def repair_terminal_assignee(
+    task: DecomposedTask, staff_ids: set[str], pic_requested: str = "",
+) -> DecomposedTask:
+    """Hand the final synthesis step back to the PIC when the model gave it away.
+
+    The prompt already states the rule in bold and the model still breaks it (3 of 9
+    decompose answers on deepseek-v4-flash named one PIC and gave the summary step to
+    another agent), so every violation used to cost a full re-prompt. Reassigning is
+    the whole fix: the DAG shape, the step list and every other assignment stay put,
+    and the PIC owning the terminal step is exactly what the invariant demands. Only
+    the unambiguous case is repaired — with several terminals, *which* one is final is
+    a judgement about the work, so that still goes back to the model. Best-effort:
+    `validate_pic_terminal` downstream stays the only gate. Runs before validation
+    on the assign path and in the role bench, so the bench scores the plan the CEO
+    would actually see.
+    """
+    pic = pic_requested or task.pic_id
+    if not pic or pic not in staff_ids:
+        return task
+    terminals = find_terminals(task.steps)
+    if len(terminals) != 1 or terminals[0].assigned_to == pic:
+        return task
+    terminal = terminals[0]
+    logger.info(
+        "decompose: code-side repair — terminal step [%s] reassigned %s → PIC %s",
+        terminal.step_id, terminal.assigned_to, pic,
+    )
+    return task.model_copy(update={"steps": tuple(
+        s.model_copy(update={"assigned_to": pic}) if s.step_id == terminal.step_id else s
+        for s in task.steps
+    )})
 
 
 def validate_pic_terminal(steps: tuple[TeamStepPlan, ...], pic_id: str) -> None:
@@ -535,6 +589,67 @@ def fanout_gap(brief: str, task: DecomposedTask) -> str:
         "thực thể trong title + acceptance từng bước, và giao cho các nhân sự khác nhau "
         "nếu đội có nhiều người tra cứu được"
     )
+
+
+#: Phrases that say the facts must be LOOKED UP, not written from memory: prices, fees,
+#: current policy, sources to cite. Without one of these a plan with no web step can
+#: still be right ("viết 5 bài giới thiệu cho 5 sàn" is writing, not research). Phrases,
+#: not bare words: "giá" alone matches "5 giá trị" (values), "nguồn" alone matches
+#: "nguồn lực" (resources) — both writing briefs.
+_LOOKUP_HINTS = (
+    "giá bán", "giá cả", "báo giá", "mức giá", "bảng giá", "giá thị trường",
+    "giá hiện tại", "giá bao nhiêu", "giá niêm yết", "phí sàn", "mức phí", "biểu phí",
+    "phí dịch vụ", "lệ phí", "ghi nguồn", "kèm nguồn", "dẫn nguồn", "có nguồn",
+    "link nguồn", "nguồn tham khảo", "nguồn số liệu", "chính sách", "hiện tại",
+    "mới nhất", "so sánh", "khảo sát", "tra cứu", "nghiên cứu", "tìm hiểu",
+    "price", "fee", "compare", "survey", "research", "cite", "source",
+)
+
+
+def research_gap(brief: str, task: DecomposedTask) -> str:
+    """"" when a lookup brief has at least one web step; else the retry message.
+
+    Fires only when ALL hold: the brief enumerates ≥4 entities, it asks for looked-up
+    facts (`_LOOKUP_HINTS`), it does not hand the material over itself
+    (`sprint_intake._MATERIAL_HINTS`), and NO step has `needs_web`. Measured live on
+    deepseek-v4-flash: "So sánh phí sàn và chính sách vận chuyển của 5 sàn … ghi nguồn
+    từng con số" came back as three writing steps with `needs_web` false everywhere —
+    a crew that would type fee tables from memory and cite nothing. `fanout_gap` cannot
+    see that plan: a plan with no web step reads to it as pure writing over given data,
+    so the fan-out bias never fired either.
+    """
+    from my_crew.agent.sprint_intake import _MATERIAL_HINTS  # tránh vòng import
+
+    n = count_enumerated_entities(brief)
+    if n < 4:
+        return ""
+    text = " " + (brief or "").strip().lower() + " "
+    if not any(h in text for h in _LOOKUP_HINTS):
+        return ""
+    if any(h in text for h in _MATERIAL_HINTS):
+        return ""
+    if any(s.needs_web for s in task.steps):
+        return ""
+    return (
+        f"đề đòi tra cứu số liệu thật của {n} thực thể bên ngoài (giá/phí/chính sách, có "
+        "ghi nguồn) nhưng KHÔNG bước nào có needs_web = true — bước thu thập PHẢI đặt "
+        "needs_web = true và acceptance nêu tiêu chí độ tươi dữ liệu; không được viết "
+        "số liệu từ trí nhớ"
+    )
+
+
+def mark_research_steps(task: DecomposedTask) -> DecomposedTask:
+    """Code-side repair for a lookup plan the retry loop could not get a web step into:
+    every root step (no deps — the collection layer of any plan) becomes `needs_web`.
+
+    The same code-paced-beats-model-paced stance as `fanout_split`: after the retries a
+    plan that still cites nothing is accepted, but with the tool that lets it cite. Only
+    roots are touched — a summary step after them stays a writing step.
+    """
+    steps = tuple(
+        s.model_copy(update={"needs_web": True}) if not s.deps else s for s in task.steps
+    )
+    return task.model_copy(update={"steps": steps})
 
 
 def fanout_split(brief: str, task: DecomposedTask) -> DecomposedTask | None:

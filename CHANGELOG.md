@@ -3,6 +3,51 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [Unreleased]
+
+The whole fleet now runs one model (`~deepseek/deepseek-v4-flash-latest`) and the release
+gate can say which of the seven model roles that model is good at.
+
+### Added
+- `scripts/run-sprint-benchmark.py roles`: per-role scorecard (real prompt builders + real
+  parsers, deterministic scoring, Wilson interval, `--compare`); baseline
+  `bench/role_baseline_0.17.0.json`. See `docs/releasing.md` §7.
+- Per-role reasoning policy `role_reasoning` (`DEFAULT_ROLE_REASONING`, profile.yaml or
+  `OPENROUTER_ROLE_REASONING`): thinking stays on for `plan`/`review`/`util`/`aggregate`,
+  off for `content`/`advisor`/`sprint_low`. `LlmResult.reasoning_tokens` on every call.
+- `task_decomposition.research_gap` / `mark_research_steps`: a lookup brief (≥4 entities,
+  prices/fees/sources) planned with no `needs_web` step is sent back to the decomposer, and
+  on the last attempt its root steps get `needs_web` code-side.
+- `brief_context_gap.unresolved_reference_gap`: a short brief that leans on history the
+  system does not have ("gửi cho họ như lần trước") with no anchor (name, `@id`, number,
+  link, listed entities) is answered with a question from `preview_assign_team_task`
+  before intake or decompose run — no task row, no model call.
+
+### Changed
+- Every LLM request carries `max_tokens` = 16,384 (`_MAX_COMPLETION_TOKENS`): caps a
+  runaway stream that the idle guard could not see (measured 903 s / 107 KB).
+- Coordinator advisor no longer pins Haiku; all roles follow the fleet default.
+- Ops intent classifier re-asks once on a dead-end verdict (`unsupported` or an unknown
+  command id), the same bound the unparseable-JSON retry has.
+- Ops slot extraction keeps the CEO's message verbatim as `brief` when the model's copy
+  lost numbered asks or listed entities (`_keep_ceo_structure`).
+
+### Fixed
+- `LengthFinishReasonError` from the openai 2.x stream assembler escaped `_stream_completion`
+  on a length-cut answer; the partial body (with usage) is returned so `truncated` works.
+- The empty-answer guard (`_thought_but_said_nothing`) re-asks the same request instead of
+  re-asking with reasoning off, which produced prose for structured prompts (intake
+  fail-open created a task from it) and one 903 s decompose.
+- Decomposer slips that only bought a re-prompt are repaired instead: a `boundary`
+  sentence is clipped to the 40-char label, numeric `step_id`/`deps` are coerced to text,
+  and a final step the model handed to someone other than the PIC goes back to the PIC
+  (`repair_terminal_assignee`; 3 of 9 measured answers).
+- `strip_json_fences` takes the first complete JSON object instead of slicing to the last
+  `}`: a model note after the object (measured 1 of 9 sprint intakes) no longer fails the
+  parse with "Extra data" and drops the intake to fail-open.
+- Team-summary prompt moved to `my_crew/llm/team_summary_prompt.py`; util/aggregate prompts
+  tightened after the scorecard showed 0/3 slot extraction without reasoning.
+
 ## [0.17.0] — 2026-09-03
 
 What was measured before this cut, and what could not be: [docs/release-evidence-0.17.0.md](docs/release-evidence-0.17.0.md).

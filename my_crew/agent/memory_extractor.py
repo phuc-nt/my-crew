@@ -37,6 +37,9 @@ CostedMemoryExtractor = Callable[[str], "tuple[list[str], float | None]"]
 _SYSTEM = (
     "Bạn trích các SỰ KIỆN dự án đáng nhớ xuyên các báo cáo (sprint trượt, quyết định, "
     "rủi ro lặp lại). Trả về TỐI ĐA 5 gạch đầu dòng NGẮN, mỗi dòng một sự kiện, tiếng Việt. "
+    "Mỗi dòng phải TỰ ĐỨNG ĐƯỢC khi đọc lại ngoài báo cáo: nêu tên dự án/đối tác/thực thể "
+    "liên quan và giữ NGUYÊN con số, mốc thời gian có trong báo cáo (ngân sách, số ngày, "
+    "số lần) — một sự kiện mất tên dự án hay mất con số thì không còn là fact. "
     "TUYỆT ĐỐI không kèm token/khóa/bí mật, không số liệu nhạy cảm. KHÔNG ghi diễn biến "
     "quy trình nội bộ (trễ tiến độ, tắc nghẽn thẩm định, đề xuất xin quyền/phê duyệt, "
     "kiến nghị can thiệp) — chúng không phải fact về dự án và đọc lại sẽ làm agent tưởng "

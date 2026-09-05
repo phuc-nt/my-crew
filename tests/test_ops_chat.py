@@ -354,12 +354,63 @@ def test_unsupported_lists_catalog(tmp_path):
     try:
         reply, _ = handle_ops_message(
             message="xoá hết agent đi", conversation_key="ceo", store=store,
-            llm=_FakeLlm('{"intent":"unsupported"}'), now=1.0,
+            # A dead-end verdict is re-asked once; two in a row stand.
+            llm=_FakeLlm('{"intent":"unsupported"}', '{"intent":"unsupported"}'), now=1.0,
         )
         assert "create_agent" in reply and "xoá" not in reply.split("lệnh:")[0].lower()
         assert store.load("ceo", now=1.0) is None
     finally:
         store.close()
+
+
+def test_a_dead_end_verdict_is_re_asked_once_and_the_second_answer_stands():
+    # Live: the classifier once answered a price lookup with the help text; replaying
+    # the same message gave 6/6 assign_team_task. One slip must not drop the request.
+    from my_crew.agent.ops_chat import classify_ops_intent
+
+    llm = _FakeLlm(
+        '{"intent":"unsupported"}',
+        '{"intent":"command","command_id":"assign_team_task","slots":{"brief":"giá iPhone"}}',
+    )
+    out = classify_ops_intent(llm, "Giá iPhone 17 Pro ở VN?", OPS_COMMANDS)
+    assert out["command_id"] == "assign_team_task"
+    assert out["_cost_usd"] == pytest.approx(0.0002)  # both attempts billed
+    assert llm._q == []
+
+
+def test_an_unknown_command_id_is_a_dead_end_too():
+    from my_crew.agent.ops_chat import classify_ops_intent
+
+    llm = _FakeLlm(
+        '{"intent":"command","command_id":"do_research","slots":{}}',
+        '{"intent":"command","command_id":"do_research","slots":{}}',
+    )
+    out = classify_ops_intent(llm, "nghiên cứu giúp anh", OPS_COMMANDS)
+    assert out["command_id"] == "do_research"  # second answer stands, no third ask
+    assert llm._q == []
+
+
+def test_keep_ceo_structure_restores_the_message_when_the_brief_lost_its_numbering():
+    from my_crew.agent.ops_chat import _keep_ceo_structure
+
+    message = (
+        "Khảo sát thị trường xe máy điện: (1) ba hãng dẫn đầu thị phần, (2) giá bán lẻ "
+        "từng dòng chủ lực, (3) chính sách trợ giá năm nay. Ghi nguồn."
+    )
+    paraphrased = ("Khảo sát thị trường xe máy điện gồm ba hãng dẫn đầu, giá bán lẻ và "
+                   "chính sách trợ giá, có ghi nguồn.")
+    slots = _keep_ceo_structure(message, {"brief": paraphrased, "pic": "an"})
+    assert slots["brief"] == message
+    assert slots["pic"] == "an"  # other slots untouched
+
+
+def test_keep_ceo_structure_leaves_a_faithful_brief_and_other_commands_alone():
+    from my_crew.agent.ops_chat import _keep_ceo_structure
+
+    message = "team: so sánh phí sàn của Shopee, Lazada, Tiki, Sendo, TikTok Shop kèm nguồn"
+    faithful = "team: so sánh phí sàn của Shopee, Lazada, Tiki, Sendo, TikTok Shop kèm nguồn"
+    assert _keep_ceo_structure(message, {"brief": faithful}) == {"brief": faithful}
+    assert _keep_ceo_structure("liệt kê việc", {}) == {}
 
 
 def test_question_returns_empty_for_fallthrough(tmp_path):
@@ -540,6 +591,26 @@ def test_new_intent_mid_collection_starts_the_new_command(tmp_path):
         assert "Mã định danh" in reply  # create_agent's first slot prompt
         draft = store.load("ceo", now=2.0)
         assert draft is not None and draft.command_id == "create_agent"
+    finally:
+        store.close()
+
+
+def test_an_explicit_empty_extraction_asks_again_instead_of_stuffing_the_reply(tmp_path):
+    """The extractor parsed the reply and found NO value (a refusal, or a new request it
+    forgot to flag). The slot must stay empty and be asked again — the raw sentence is
+    never stored as the value. Measured live: the fleet model answered "thôi, huỷ việc
+    #99 đi" with `{"value":""}` 1 time in 3, and the old raw-text fallback made that
+    sentence the agent id."""
+    store = _store(tmp_path)
+    store.save("ceo", OpsDraft("create_agent", {}, "collecting", 1.0))
+    try:
+        reply, _ = handle_ops_message(
+            message="thôi, huỷ việc #99 đi", conversation_key="ceo", store=store,
+            llm=_FakeLlm('{"value":""}'), now=2.0,
+        )
+        draft = store.load("ceo", now=2.0)
+        assert draft is not None and "id" not in draft.slots
+        assert "Mã định danh" in reply  # the same slot, asked again
     finally:
         store.close()
 

@@ -351,6 +351,37 @@ raise rõ). Fleet default: `deepseek/deepseek-v4-flash-latest`
 `role_models` ở TOP LEVEL của profile.yaml, còn `advisor_enabled` nằm dưới `runtime:`
 (`profile/loader_mapping.py`).
 
+**Mức suy luận theo role** (`role_reasoning`, 2026-09-05): model fleet mặc định là model
+"suy nghĩ" (OpenRouter registry: `default_enabled: true`, effort `high`), và token suy nghĩ
+tính tiền như output lẫn tốn thời gian. Đo trên journey thật: bước sprint viết đoạn giới
+thiệu 4 câu tốn 10.929 completion token cho 227 ký tự hiện ra, mất 6 phút 16 giây; journey
+outside-caller vì thế quá hạn 300s trên brief mà fleet trước đó xong trong 66s. Chính sách
+mặc định `DEFAULT_ROLE_REASONING` (`config/settings.py`): `plan`/`review` giữ mặc định của
+model (`"model"`), `util`/`aggregate` cũng giữ mặc định (scorecard k=3: util 0,89 có suy
+luận / 0,61 không — slot extraction 0/3; aggregate 1,00 / 0,67), `content`/`advisor`/
+`sprint_low` tắt hẳn (`"off"`: cùng điểm 1,00, nhanh gấp 2–3). Không dùng effort thấp làm mặc định
+vì đo 5 lần `effort=low` trên cùng brief: 2/5 trả lời RỖNG (toàn bộ completion là reasoning
+lỗi), `off` 3/3 sạch; client còn chốt chặn `_thought_but_said_nothing` — model tiêu hết
+answer vào suy nghĩ mà không có content thì gọi lại đúng một lần CÙNG request (câu trả
+lời rỗng là ngẫu nhiên: 2/51 ở mặc định model; đo thử gọi lại với reasoning tắt thì
+prompt có cấu trúc trả văn xuôi thay JSON — intake fail-open tạo việc từ rác — và một
+decompose chạy 903 s, nên không đổi request khi gọi lại). Ghi đè per-agent bằng `role_reasoning:` (top level profile.yaml, mapping hoặc
+chuỗi `"role=level,..."`), env fallback `OPENROUTER_ROLE_REASONING`; validate ở
+`config_builders._d_role_reasoning` (role lạ, level lạ, trùng → raise). Client gửi
+`reasoning` (`{"effort": ...}` hoặc `{"enabled": false}`) CHỈ trên call OpenRouter; model
+không suy luận bỏ qua tham số. `LlmResult.reasoning_tokens` và sự kiện `llm_response`
+trong transcript ghi số token suy nghĩ để đọc ra vì sao một câu trả lời ngắn lại đắt.
+
+**Trần token trả lời** (`llm/client.py::_MAX_COMPLETION_TOKENS`, 2026-09-05): mọi request
+gửi `max_tokens` = 16.384. Trước đó stream chỉ có guard im lặng (`_STREAM_IDLE_S`), nên một
+stream thoái hoá (decompose tắt suy nghĩ trên deepseek-v4-flash lặp `"needs_web":false,`
+suốt 903 s / 107 KB) không bao giờ bị cắt vì mỗi chunk đều là "tiến triển". Trần đặt trên
+câu trả lời thật dài nhất đo được (12,7k token, 11,9k là suy nghĩ) nên chỉ cắt runaway.
+Khi bị cắt, bộ ráp stream của openai SDK 2.x ném `LengthFinishReasonError` thay vì trả
+body (nó mặc định parse có cấu trúc); `_stream_completion` bắt lỗi này và trả snapshot
+kèm usage để `LlmResult.truncated` và vòng "trả lời ngắn hơn" của decompose/intake
+làm việc trên phần thân đã nhận.
+
 **Role `advisor`** (v91): bucket cost cho ghi chú ride-along của cố vấn — mặc định TẮT
 (`Settings.advisor_enabled = False`), bật per-agent bằng `runtime.advisor_enabled: true`
 hoặc env `ADVISOR_ENABLED`; bool ghi rõ trong yaml thắng env (kể cả `false` tường minh).
@@ -675,6 +706,19 @@ tier, không từ việc ghi đè vai lúc dispatch.
 - **Fan-out ép bằng code** (`task_decomposition.fanout_gap`): đề liệt kê ≥4 thực thể (heuristic
   danh sách sau dấu hai chấm) mà plan không có ≥2 collect `needs_web` deps rỗng → trả lỗi vào vòng
   retry decompose; FAIL-OPEN lượt cuối (plan chậm vẫn hơn giao việc hỏng); plan thuần viết không bị ép.
+- **Đề tra cứu không có bước web** (`task_decomposition.research_gap`, 2026-09-05): đề ≥4 thực thể có
+  cụm tra cứu (`_LOOKUP_HINTS`: giá bán/phí sàn/ghi nguồn/so sánh…), không tự cấp tư liệu
+  (`_MATERIAL_HINTS`) mà plan KHÔNG bước nào `needs_web` → trả lỗi vào vòng retry (đo deepseek-v4-flash:
+  so sánh phí 5 sàn "ghi nguồn" được lên plan 3 bước viết, số liệu từ trí nhớ; `fanout_gap` coi đó là
+  plan thuần viết nên im). Lượt cuối `mark_research_steps` ép `needs_web` lên mọi bước gốc rồi mới xét
+  fan-out.
+- **Đề tựa vào ngữ cảnh bộ máy không có** (`brief_context_gap.unresolved_reference_gap`, 2026-09-05):
+  chạy trong `preview_assign_team_task` TRƯỚC intake/decompose, không tốn model. Đề ngắn (≤25 từ) có
+  cụm quy chiếu ngược (`_BACK_REFERENCES`: "cho họ", "như lần trước", "cái đó"…) mà không có mỏ neo
+  nào (tên riêng, @mã, số, link/mail, danh sách thực thể) → ValueError là một CÂU HỎI cho CEO, không
+  hàng task nào được ghi. Đo deepseek-v4-flash 3/3: "Gửi báo cáo cho họ như lần trước nhé." đi trọn
+  intake, được viết lại thành mục tiêu nghe trôi và ghi hàng planning — prompt "bỏ trống slot chưa rõ"
+  không đủ.
 - **Cạn loop không còn trả rỗng** (`community_loop_core.invoke_capped`): chạy qua stream giữ state
   cuối; overflow → 1 lượt tổng hợp bounded từ transcript dở ("dừng tool, thiếu ghi THIẾU"), hỏng nữa
   mới degrade rỗng.

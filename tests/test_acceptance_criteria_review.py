@@ -247,6 +247,23 @@ def test_parsers_tolerate_markdown_fences_and_leading_prose():
         parse_decomposed_task("không JSON")
 
 
+def test_fence_stripper_takes_only_the_first_complete_object():
+    """Đo thật (intake sprint, deepseek-v4-flash 1/9 lượt): model in object rồi nối thêm
+    ghi chú có dấu "}" → lát cắt tới "}" cuối ôm cả phần thừa → `json.loads` chết
+    "Extra data" → intake fail-open dù object đầu hoàn toàn hợp lệ."""
+    import json
+
+    from my_crew.llm.team_task_check_prompt import strip_json_fences
+
+    trailing = '{"goal": "so sánh 5 công cụ", "needs_web": true}\nGhi chú: {"x": 1} thêm.'
+    assert json.loads(strip_json_fences(trailing)) == {"goal": "so sánh 5 công cụ",
+                                                       "needs_web": True}
+    second_object = '{"a": 1}\n{"b": 2}'
+    assert json.loads(strip_json_fences(second_object)) == {"a": 1}
+    # Object hỏng thì giữ lát cắt cũ để parser phía sau báo đúng lỗi của nó.
+    assert strip_json_fences('nói trước {"a": } nói sau }') == '{"a": } nói sau }'
+
+
 def test_decompose_prompt_forbids_named_entity_lists_from_model_memory():
     """Measured live (lanes6, both music cases): decompose listed 'Zing MP3, NCT,
     NhacCuaTui' from memory and demanded 'ít nhất 3 nền tảng nội địa' — but NCT IS

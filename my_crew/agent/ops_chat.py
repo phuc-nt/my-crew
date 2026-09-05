@@ -88,13 +88,15 @@ _INTENT_SYSTEM = (
 _EXTRACT_SYSTEM = (
     "Người dùng vừa được hỏi MỘT câu để lấy giá trị cho MỘT trường cấu hình. Trả về "
     "DUY NHẤT một JSON (không markdown, không giải thích).\n"
+    "LUÔN trả đủ CẢ HAI khóa: {\"value\":\"...\",\"new_intent\":true|false}.\n"
     "BƯỚC 1 — xét trước: câu trả lời có ĐANG TRẢ LỜI câu hỏi đó không?\n"
     "- KHÔNG (nó là một yêu cầu/mệnh lệnh MỚI khác hẳn — người dùng đổi ý sang việc "
-    'khác, ví dụ đang được hỏi mã agent mà lại nhắn "nhắc tôi 7h gọi điện"): trả '
-    '{"value":"","new_intent":true}.\n'
+    'khác, ví dụ đang được hỏi mã agent mà lại nhắn "nhắc tôi 7h gọi điện" hay '
+    '"thôi, huỷ việc #99 đi"): trả {"value":"","new_intent":true}. Một con số hay '
+    "cái tên nằm trong mệnh lệnh khác đó KHÔNG phải giá trị của trường đang hỏi.\n"
     "- CÓ: sang bước 2.\n"
-    'BƯỚC 2 — trích giá trị: trả {"value":"<giá trị, chuỗi gọn>"}; họ từ chối/không '
-    'cung cấp thì trả {"value":""}.'
+    'BƯỚC 2 — trích giá trị: trả {"value":"<giá trị, chuỗi gọn>","new_intent":false}; '
+    'họ từ chối/không cung cấp thì trả {"value":"","new_intent":false}.'
 )
 
 
@@ -123,6 +125,18 @@ def _confirm_decision(message: str) -> str:
     if tokens & _CONFIRM_WORD_TOKENS or _norm(message) in _CONFIRM_WORDS:
         return "confirm"
     return "unclear"
+
+
+def _is_dead_end(parsed: dict, commands: dict[str, dict]) -> bool:
+    """True when this verdict would end in the help text: `unsupported`, or a command
+    id the catalog does not know (nothing downstream can act on either)."""
+    if not isinstance(parsed, dict):
+        return False
+    if parsed.get("intent") == "unsupported":
+        return True
+    return parsed.get("intent") == "command" and (
+        str(parsed.get("command_id") or "") not in commands
+    )
 
 
 def _normalize_intent_shape(parsed: dict, commands: dict[str, dict]) -> dict:
@@ -183,6 +197,19 @@ def classify_ops_intent(
             )
             cost = _add_costs(cost, result.cost_usd)
             parsed = _normalize_intent_shape(_parse_json_object(result.content), commands)
+            if _is_dead_end(parsed, commands) and attempt + 1 < _MAX_CLASSIFY_ATTEMPTS:
+                # `unsupported` and an id outside the catalog both end in the help
+                # text: the CEO's message is dropped on the floor, silently. The prompt
+                # marks unsupported as rare, and replaying the one live miss (a price
+                # lookup, the very example `_INTENT_SYSTEM` spells out as a command)
+                # gave 6/6 assign_team_task — a dead end from this classifier is a
+                # slip far more often than a verdict, so it gets the same single
+                # re-ask malformed JSON gets. The second answer stands either way.
+                logger.warning(
+                    "ops intent classifier hit a dead end (%s), re-asking once",
+                    parsed.get("command_id") or parsed.get("intent"),
+                )
+                continue
             parsed["_cost_usd"] = cost
             return parsed
         except INFRA_ERRORS:
@@ -220,7 +247,14 @@ def extract_slot_value(
     reclassifies the message instead of stuffing the whole sentence into the slot —
     that stuffing is what produced ghost previews like "HUỶ việc #99 của agent
     'nhắc anh lúc 6h chiều…'". Only honored when no value was extracted, so a reply
-    that both answers and asks stays a slot answer."""
+    that both answers and asks stays a slot answer.
+
+    An EXPLICIT empty value (the model parsed the reply and found nothing to extract —
+    a refusal, or a new request it forgot to flag) is returned as "" so the caller asks
+    again; only a reply the model could not parse at all falls back to the raw text.
+    Measured on deepseek-v4-flash: 1 in 3 "thôi, huỷ việc #99 đi" replies came back as
+    `{"value":""}` without the flag, and the raw-text fallback turned that into an
+    agent id — the very ghost preview above."""
     user = f"TRƯỜNG: {field}\nCÂU HỎI: {prompt}\nTRẢ LỜI: {answer}"
     if hint:
         user += f"\nĐỊNH DẠNG MONG MUỐN: {hint}"
@@ -233,7 +267,7 @@ def extract_slot_value(
         value = str(parsed.get("value") or "").strip()
         if not value and bool(parsed.get("new_intent")):
             return "", result.cost_usd, True
-        return (value or answer.strip()), result.cost_usd, False
+        return value, result.cost_usd, False
     except INFRA_ERRORS:
         raise
     except Exception:  # noqa: BLE001 — fall back to the raw answer, don't drop it
@@ -357,6 +391,33 @@ def _restore_mode_prefix(message: str, slots: dict[str, str]) -> dict[str, str]:
     return {**slots, "brief": f"{forced}: {brief}"}
 
 
+def _keep_ceo_structure(message: str, slots: dict[str, str]) -> dict[str, str]:
+    """Đưa lại NGUYÊN VĂN tin nhắn của CEO vào slot `brief` khi bộ tách slot làm rơi
+    cấu trúc của đề.
+
+    Bộ định tuyến lane đọc cấu trúc HÌNH THỨC của đề — số đầu việc đánh số "(1) (2)
+    (3)", số thực thể liệt kê — và bộ phân rã nhận đúng chuỗi đó làm đề. Đo thật trên
+    deepseek-v4-flash: thỉnh thoảng model trích slot "chép lại cho gọn", đề ba đầu việc
+    đánh số 204 ký tự thành một câu văn xuôi 171 ký tự, `distinct_asks` rơi từ 3 xuống 1
+    và đề đi lane khác hẳn (sprint theo heuristic thay vì qua decompose). Chữ của CEO là
+    đặc tả; chữ model chép lại không được thay nó. Chỉ thay khi ĐO được mất mát — đầu
+    việc hoặc thực thể ít đi — nên một bản chép trung thực (6/6 lần đo) giữ nguyên, và
+    tiền tố `team:`/`@pic` ở đầu tin nhắn đi theo nguyên văn.
+    """
+    from my_crew.agent.sprint_intake import _distinct_asks
+    from my_crew.runtime.sprint_runner import listed_entities
+
+    brief = slots.get("brief", "")
+    if not brief:
+        return slots
+    lost_asks = _distinct_asks(message) > _distinct_asks(brief)
+    lost_entities = len(listed_entities(message)) > len(listed_entities(brief))
+    if not (lost_asks or lost_entities):
+        return slots
+    logger.info("ops intent: slot `brief` dropped the CEO's structure — using the message verbatim")
+    return {**slots, "brief": message.strip()}
+
+
 def _start_new(
     *, message: str, conversation_key: str, store: OpsConversationStore, llm: LlmClient,
     now: float, commands: dict[str, dict], unsupported_fallthrough: bool = False,
@@ -384,6 +445,8 @@ def _start_new(
 
     # Tiền tố ép chế độ là LỆNH của CEO — khôi phục sau khi tách slot, xem hàm dưới.
     slots = _restore_mode_prefix(message, slots)
+    # Chữ của CEO là đặc tả — bản chép lại của model không được làm rơi cấu trúc.
+    slots = _keep_ceo_structure(message, slots)
 
     if spec.get("readonly"):
         # Status/cost query: run now, no draft, no confirm (it writes nothing).

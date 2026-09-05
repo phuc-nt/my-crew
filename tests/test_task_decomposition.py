@@ -1117,3 +1117,94 @@ def test_decompose_prompt_renders_the_capability_hint_and_the_tool_rule():
     assert "QUY TẮC CÔNG CỤ" in messages[0]["content"]
     assert "- analyst (research — có công cụ tra lịch sử làm việc nội bộ)" in messages[1]["content"]
     assert "- writer (pm — không có công cụ)" in messages[1]["content"]
+
+
+def test_numbered_step_ids_are_accepted_as_text():
+    """A model sometimes numbers its steps and references them the same way in deps;
+    the plan is unambiguous, so both are coerced instead of costing a re-prompt."""
+    raw = json.dumps({"title": "T", "pic_id": "b", "steps": [
+        {"step_id": 1, "title": "a", "assigned_to": "a", "deps": []},
+        {"step_id": 2, "title": "b", "assigned_to": "b", "deps": [1]},
+    ]})
+    task = parse_decomposed_task(raw)
+    assert [s.step_id for s in task.steps] == ["1", "2"]
+    assert task.steps[1].deps == ("1",)
+    validate_decomposition(task, staff_ids=["a", "b"])
+
+
+def test_a_sentence_in_boundary_is_clipped_not_rejected():
+    raw = json.dumps({"title": "T", "pic_id": "a", "steps": [
+        {"step_id": "s", "title": "a", "assigned_to": "a", "deps": [],
+         "boundary": "Chỉ dừng ở tra cứu, không phân tích hay viết gì thêm trong bước này"},
+    ]})
+    task = parse_decomposed_task(raw)
+    assert len(task.steps[0].boundary) == 40
+    assert task.steps[0].boundary.startswith("chỉ dừng ở tra cứu")
+
+
+def test_repair_hands_the_lone_terminal_back_to_the_models_own_pic():
+    from my_crew.agent.task_decomposition import repair_terminal_assignee
+
+    raw = json.dumps({"title": "T", "pic_id": "analyst", "steps": [
+        {"step_id": "research", "title": "r", "assigned_to": "researcher", "deps": []},
+        {"step_id": "summary", "title": "s", "assigned_to": "writer", "deps": ["research"]},
+    ]})
+    task = parse_decomposed_task(raw)
+    with pytest.raises(DecompositionError, match="phải do PIC"):
+        validate_decomposition(task, staff_ids=["researcher", "analyst", "writer"])
+    repaired = repair_terminal_assignee(task, {"researcher", "analyst", "writer"})
+    assert repaired.steps[1].assigned_to == "analyst"
+    assert repaired.steps[0].assigned_to == "researcher"
+    validate_decomposition(repaired, staff_ids=["researcher", "analyst", "writer"])
+
+
+def test_research_gap_flags_a_lookup_brief_planned_without_any_web_step():
+    from my_crew.agent.task_decomposition import research_gap
+
+    # Live shape on deepseek-v4-flash: a five-exchange fee comparison planned as three
+    # writing steps, needs_web false everywhere — fee tables typed from memory.
+    brief = ("So sánh phí sàn và chính sách vận chuyển của 5 sàn: Shopee, Lazada, "
+             "TikTok Shop, Tiki, Sendo. Ghi nguồn từng con số.")
+    from_memory = _task_from([
+        _step("collect"), _step("table", deps=["collect"]), _step("final", deps=["table"]),
+    ])
+    gap = research_gap(brief, from_memory)
+    assert "needs_web" in gap and "5" in gap
+
+    with_web = _task_from([
+        {**_step("collect"), "needs_web": True}, _step("final", deps=["collect"]),
+    ])
+    assert research_gap(brief, with_web) == ""
+
+
+def test_research_gap_stays_quiet_for_writing_briefs_and_supplied_material():
+    from my_crew.agent.task_decomposition import research_gap
+
+    no_web = _task_from([_step("draft"), _step("final", deps=["draft"])])
+    # Writing over five listed values: nothing to look up.
+    assert research_gap(
+        "Soạn slide về 5 giá trị: Tốc độ, Trung thực, Kỷ luật, Tò mò, Bền bỉ.", no_web,
+    ) == ""
+    # A lookup verb, but the CEO supplied the numbers: still nothing to look up.
+    assert research_gap(
+        "So sánh phí của 5 sàn theo bảng dưới đây: Shopee 3%, Lazada 4%, Tiki 5%, "
+        "Sendo 2%, TikTok Shop 6%.", no_web,
+    ) == ""
+    # Lookup but too few entities for the enumerated-entities gate.
+    assert research_gap("So sánh phí Shopee với Lazada, ghi nguồn.", no_web) == ""
+
+
+def test_mark_research_steps_flags_the_root_steps_only():
+    from my_crew.agent.task_decomposition import mark_research_steps, research_gap
+
+    task = _task_from([
+        _step("a"), _step("b"), _step("table", deps=["a", "b"]),
+        _step("final", deps=["table"]),
+    ])
+    marked = mark_research_steps(task)
+    assert [s.needs_web for s in marked.steps] == [True, True, False, False]
+    assert marked.pic_id == task.pic_id
+    assert [s.step_id for s in marked.steps] == ["a", "b", "table", "final"]
+    brief = ("So sánh phí sàn của 5 sàn: Shopee, Lazada, TikTok Shop, Tiki, Sendo. "
+             "Ghi nguồn.")
+    assert research_gap(brief, task) and research_gap(brief, marked) == ""

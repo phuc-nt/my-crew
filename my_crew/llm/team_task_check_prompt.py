@@ -58,9 +58,18 @@ def strip_json_fences(raw: str) -> str:
     the input unchanged (genuine garbage still fails loud in the parser)."""
     text = (raw or "").strip()
     start, end = text.find("{"), text.rfind("}")
-    if start != -1 and end > start:
+    if start == -1 or end <= start:
+        return text
+    # Model nối thêm chữ SAU object (giải thích, một object thứ hai, "```" rồi ghi
+    # chú có dấu "}") thì lát cắt tới dấu "}" cuối cùng ôm luôn phần thừa và
+    # `json.loads` chết "Extra data" (đo thật: intake sprint fail-open 1/9 lượt trên
+    # deepseek-v4-flash). Lấy đúng object ĐẦU TIÊN trọn vẹn; không đọc được thì giữ
+    # lát cắt cũ để parser phía sau vẫn báo đúng lỗi của nó.
+    try:
+        _, consumed = json.JSONDecoder().raw_decode(text, start)
+    except ValueError:
         return text[start:end + 1]
-    return text
+    return text[start:consumed]
 
 
 def _coerce_criteria(value):
