@@ -1,4 +1,4 @@
-# Một model cho cả fleet — scorecard theo role, policy suy luận, 20 lỗi vá
+# Một model cho cả fleet — scorecard theo role, policy suy luận, 21 lỗi vá
 2026-09-05 · ✅ Done
 
 ## Làm gì
@@ -54,6 +54,12 @@
 - Review "sai" trên artifact sạch hoá ra hai chuyện: fixture có tiền đề mâu thuẫn (khuyến nghị
   B trong khi số liệu C rẻ hơn) và model bịa về input (bảo thiếu khoảng cách B/C dù prompt in
   ra có) — phải dump thô từng lượt mới tách được, điểm bench không nói.
+- Lần thứ hai fixture "sạch" sai tiền đề: `CLEAN` sales_trend nói "15tr/tháng chia đều" khi
+  đầu vào T5/T6 là 60tr chia 3 — self-check bắt đúng, bench chấm là false fail. Mỗi
+  "review sai trên artifact sạch" phải đối chiếu lại fixture trước khi đổ cho model.
+- Dấu provider chỉ nói nơi lỗi tụ, không nói tại sao: bench #4 dồn 6/7 lỗi vào Sail
+  Research nhưng ghim riêng nó 8/8 đúng, chỉ chậm (soát chéo tới 210 s). `empty` sau guard
+  phần nhiều là đốt hết trần suy nghĩ, không phải upstream trả rỗng.
 - Bench chạy lại trên code đã vá lại TỤT (review 0,88 → 0,67, sprint_low 1,00 → 0,33) dù
   diff chỉ chạm parser + fixture; probe thô 6/6 sạch 30 phút sau → thủ phạm là định tuyến
   OpenRouter (response `.provider` đổi giữa DeepSeek/OpenInference). Điểm bench một model
