@@ -725,25 +725,45 @@ class LlmClient:
                     # review self-check thinking-off drifted into garbled multilingual
                     # text — so the retry keeps the request exactly as sent.
                     #
-                    # The one shape NOT retried: thinking that ran into `max_tokens`
-                    # itself (finish_reason "length", ~16k reasoning tokens, 5–11 min).
-                    # The same request re-asked burned to the cap again 5/6 times
-                    # (effort levels and `reasoning.max_tokens` were measured not to
-                    # bound this model's thinking: effort=low spent 10,833 and 15,746;
-                    # budget 2048 spent 10,210 and 16,030). A second cap burn is another
-                    # 10 minutes and ~$0.004 for a 1/6 chance, so the empty answer goes
-                    # back as-is and the caller's own empty/truncated handling applies.
+                    # The other shape: thinking that ran into `max_tokens` itself
+                    # (finish_reason "length", ~16k reasoning tokens, 5–11 min). The
+                    # same request re-asked burned to the cap again 5/6 times, and
+                    # effort levels and `reasoning.max_tokens` were measured not to
+                    # bound this model's thinking (effort=low spent 10,833 and 15,746;
+                    # budget 2048 spent 10,210 and 16,030) — so the ONE knob that
+                    # provably ends the burn is thinking OFF. Re-asked that way the
+                    # review self-check answered 24/24 parseable and 23/24 correct in
+                    # 1–23 s (2026-09-06, four fixtures × clean/seeded × 3), and a
+                    # thinking-off reply can never be worse for the caller than the
+                    # empty body it replaces: every structured caller re-validates and
+                    # falls open on prose exactly as it does on nothing. A request that
+                    # already ran with thinking off has no such knob left and goes
+                    # back as-is.
                     wasted = extract_usage(response)
                     self._budget.record_cost(wasted.cost_usd)
                     if _hit_the_answer_cap(response):
+                        if body.get("reasoning") == _REASONING_OFF:
+                            return response
                         logger.warning(
                             "model %r (via %s) spent its whole answer cap thinking (%d "
-                            "reasoning tokens, no content, finish_reason=length); not "
-                            "retried — a repeat was measured to hit the cap again 5/6",
+                            "reasoning tokens, no content, finish_reason=length); "
+                            "retrying once with thinking off — a repeat of the same "
+                            "request was measured to hit the cap again 5/6",
                             model_id, _serving_provider(response) or "?",
                             wasted.reasoning_tokens,
                         )
-                        return response
+                        progress = _Progress()
+                        return _run_until_idle(
+                            partial(
+                                _stream_completion, client, progress=progress,
+                                model=model_id, messages=messages, extra_headers=headers,
+                                **{**extra_kwargs,
+                                   "extra_body": {**body, "reasoning": _REASONING_OFF}},
+                            ),
+                            _STREAM_IDLE_S,
+                            what=f"chat.completions({model_id})",
+                            progress=progress,
+                        )
                     logger.warning(
                         "model %r (via %s) answered nothing (%d reasoning tokens, no "
                         "content); retrying once with the same request",

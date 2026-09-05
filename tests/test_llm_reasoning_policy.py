@@ -265,19 +265,55 @@ def test_an_empty_answer_without_reasoning_is_retried_once(monkeypatch, tmp_path
     assert seen[0] == seen[1]
 
 
-def test_thinking_that_hit_the_answer_cap_is_not_retried(monkeypatch, tmp_path):
+def test_thinking_that_hit_the_answer_cap_is_retried_once_with_thinking_off(
+    monkeypatch, tmp_path,
+):
     # Measured: ~16k reasoning tokens, no content, finish_reason=length, 5–11 min. The
-    # same request re-asked hit the cap again 5/6 times, so a repeat is ten more
-    # minutes for a 1/6 chance — the empty, truncated answer goes back to the caller.
+    # same request re-asked hit the cap again 5/6 times and no effort/budget knob
+    # bounds this model's thinking — only switching it off does. The one retry keeps
+    # everything else about the request (here: the provider preference) intact.
+    cl = c.LlmClient(_settings(tmp_path, openrouter_provider_ignore="Sail Research"))
+    seen = _capture_requests(
+        monkeypatch, cl,
+        responses=[_response(reasoning_tokens=16145, content="", finish_reason="length"),
+                   _response(content='{"passed": true}')],
+    )
+    result = cl.complete([{"role": "user", "content": "x"}], role="review")
+    assert result.content == '{"passed": true}'
+    assert len(seen) == 2
+    assert seen[0]["extra_body"] == {"provider": {"ignore": ["Sail Research"]}}
+    assert seen[1]["extra_body"] == {"provider": {"ignore": ["Sail Research"]},
+                                     "reasoning": {"enabled": False}}
+    assert {k: v for k, v in seen[1].items() if k != "extra_body"} == {
+        k: v for k, v in seen[0].items() if k != "extra_body"}
+
+
+def test_a_cap_burn_is_retried_with_thinking_off_at_most_once(monkeypatch, tmp_path):
+    # Nothing again with thinking off: the empty, truncated answer goes back to the
+    # caller — no third ask, the caller's own empty/truncated handling applies.
     cl = c.LlmClient(_settings(tmp_path))
     seen = _capture_requests(
         monkeypatch, cl,
         responses=[_response(reasoning_tokens=16145, content="", finish_reason="length"),
-                   _response(content="never asked")],
+                   _response(content="", finish_reason="length")],
     )
     result = cl.complete([{"role": "user", "content": "x"}], role="review")
     assert result.content == ""
     assert result.finish_reason == "length"
+    assert len(seen) == 2
+
+
+def test_a_cap_burn_with_thinking_already_off_is_returned_as_is(monkeypatch, tmp_path):
+    # No knob left to turn: a thinking-off request that still hit the cap empty is
+    # handed back, not re-asked identically (that repeat was measured to fail 5/6).
+    cl = c.LlmClient(_settings(tmp_path))
+    seen = _capture_requests(
+        monkeypatch, cl,
+        responses=[_response(content="", finish_reason="length"),
+                   _response(content="never asked")],
+    )
+    result = cl.complete([{"role": "user", "content": "x"}], role="sprint_low")
+    assert result.content == ""
     assert len(seen) == 1
 
 

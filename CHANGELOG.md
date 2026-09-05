@@ -69,10 +69,12 @@ gate can say which of the seven model roles that model is good at.
 - The empty-answer guard (`_said_nothing`) re-asks the same request instead of re-asking
   with reasoning off, which produced prose for structured prompts (intake fail-open created
   a task from it) and one 903 s decompose. It now also fires on an answer that is empty
-  with zero reasoning tokens (measured 1/12 review calls: 1.5 s, finish_reason=stop), and
-  does NOT fire when thinking itself ran into `max_tokens` (finish_reason=length, ~16k
-  reasoning tokens, 5–11 min): an identical re-ask hit the cap again 5/6 times, and
-  neither effort levels nor `reasoning.max_tokens` bound this model's thinking.
+  with zero reasoning tokens (measured 1/12 review calls: 1.5 s, finish_reason=stop).
+  Thinking that ran into `max_tokens` itself (finish_reason=length, ~16k reasoning tokens,
+  5–11 min) is re-asked once with thinking OFF instead: an identical re-ask hit the cap
+  again 5/6 times and neither effort levels nor `reasoning.max_tokens` bound this model's
+  thinking, while the thinking-off review self-check measured 24/24 parseable, 23/24
+  correct, 1–23 s. A request that already ran with thinking off is returned as-is.
 - `strip_json_fences` falls back to the LAST complete JSON object when the first one is
   broken: the review/self-check graders (2/12 on a clean artifact) leaked the model's
   deliberation into the content — an unclosed first object, prose, then "Use the final."
