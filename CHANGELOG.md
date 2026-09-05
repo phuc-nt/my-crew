@@ -45,6 +45,12 @@ gate can say which of the seven model roles that model is good at.
   lost numbered asks or listed entities (`_keep_ceo_structure`).
 
 ### Fixed
+- `ops_chat.extract_slot_value`: when the expected format lists allowed codes, the
+  prompt now demands exactly one of them ("quản lý dự án" → `pm`); measured 2/6 misses
+  across two bench runs, 6/6 after.
+- `ops_chat.extract_slot_value`: an empty model body (one upstream returned nothing
+  3/6 on a two-second prompt) no longer falls back to the raw reply — "à để tôi dùng
+  SCRUM nhé" was being stored as the framework; the slot is asked again instead.
 - Four slips the provider-stamped role bench exposed (9 failed replays / 168 calls, five of
   them on one upstream): `CheckVerdict.confidence` outside 0..1 is clamped (an answer said
   `5`; the field is observability-only); `ReviewVerdict.notes`/`failures` written as a bare

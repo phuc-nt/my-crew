@@ -1,4 +1,4 @@
-# Một model cho cả fleet — scorecard theo role, policy suy luận, 21 lỗi vá
+# Một model cho cả fleet — scorecard theo role, policy suy luận, 23 lỗi vá
 2026-09-05 · ✅ Done
 
 ## Làm gì
@@ -13,7 +13,8 @@
   lại cùng request; classifier re-ask khi dead-end; `_keep_ceo_structure` giữ nguyên văn đề;
   `research_gap`/`mark_research_steps`; `repair_terminal_assignee` + coercion id/boundary;
   `brief_context_gap` hỏi lại đề tựa ngữ cảnh không có ("cho họ như lần trước") trước intake;
-  `strip_json_fences` lấy object JSON đầu tiên trọn vẹn.
+  `strip_json_fences` lấy object JSON đầu tiên trọn vẹn; extractor slot ép value là một
+  mã cho phép khi có gợi ý, và model trả rỗng thì hỏi lại thay vì lưu nguyên câu.
 - Vòng đo review sâu (12 lượt self-check/soát chéo trên artifact sạch, dump thô): model để lộ
   phần cân nhắc vào content rồi mới in JSON cuối → `strip_json_fences` lấy object trọn vẹn
   CUỐI khi object đầu hỏng; provider trả rỗng hẳn (0 reasoning) → guard `_said_nothing` gọi
@@ -59,7 +60,9 @@
   "review sai trên artifact sạch" phải đối chiếu lại fixture trước khi đổ cho model.
 - Dấu provider chỉ nói nơi lỗi tụ, không nói tại sao: bench #4 dồn 6/7 lỗi vào Sail
   Research nhưng ghim riêng nó 8/8 đúng, chỉ chậm (soát chéo tới 210 s). `empty` sau guard
-  phần nhiều là đốt hết trần suy nghĩ, không phải upstream trả rỗng.
+  phần nhiều là đốt hết trần suy nghĩ, không phải upstream trả rỗng. Ngoại lệ: prompt slot
+  2 giây của util, Sail Research trả thân rỗng 3/6 thật — và fallback nguyên câu biến
+  "à để tôi dùng SCRUM nhé" thành framework; đo riêng k=6 mới thấy.
 - Bench chạy lại trên code đã vá lại TỤT (review 0,88 → 0,67, sprint_low 1,00 → 0,33) dù
   diff chỉ chạm parser + fixture; probe thô 6/6 sạch 30 phút sau → thủ phạm là định tuyến
   OpenRouter (response `.provider` đổi giữa DeepSeek/OpenInference). Điểm bench một model
