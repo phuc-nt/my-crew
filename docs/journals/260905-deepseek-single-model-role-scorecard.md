@@ -1,4 +1,4 @@
-# Một model cho cả fleet — scorecard theo role, policy suy luận, 19 lỗi vá
+# Một model cho cả fleet — scorecard theo role, policy suy luận, 20 lỗi vá
 2026-09-05 · ✅ Done
 
 ## Làm gì
@@ -26,7 +26,9 @@
   lượt, báo `providers`/`fails_by_provider` theo role. Lượt #3 (9 lỗi/168 call, 5 ở
   OpenInference/17) lộ 4 slip vá bằng code: `confidence` ngoài 0..1 clamp, `notes` chuỗi →
   list, `acceptance` list → chuỗi, `APIError` giữa stream ("Upstream error … stream
-  failed") retry như timeout.
+  failed") retry như timeout. Ghim từng upstream chạy thử (self-check ×4 + soát chéo ×4
+  mỗi provider) lộ slip thứ 5: verdict chấm đủ tiêu chí nhưng quên `passed` → suy ra từ
+  `failures`/`criteria`.
 - Cổng: offline 4720 passed; reliability k=5 8/8; journey j1+j2 4 passed 185 s; live full
   65/74 → 9 ca chạy lại 5/9 → 4 ca chạy lại sau fix s1/a1/a2 xanh, b4 đỏ (lỗi #9: đề "cho họ như lần trước" vẫn tạo hàng planning) → vá cổng `brief_context_gap` → b4 chạy lại xanh (1/1, 323 s).
 

@@ -393,7 +393,9 @@ Lượt bench có dấu (9 lỗi/168 call, 5 ở một upstream) lộ thêm bố
 để quan sát); `ReviewVerdict.notes`/`failures` viết thành chuỗi → một mục; `acceptance` viết
 thành list → nối chuỗi; và OpenRouter báo lỗi GIỮA stream ("Upstream error from X: stream
 failed") thành `APIError` không status → `_is_transient` coi là tạm thời và retry như
-timeout, còn `APIStatusError` khác 429 vẫn ném ngay.
+timeout, còn `APIStatusError` khác 429 vẫn ném ngay. Ghim từng upstream chạy thử lộ slip
+thứ năm: `CheckVerdict` chấm đủ `criteria` nhưng thiếu `passed` → `derive_passed` suy ra
+(có `failures` → false, mọi tiêu chí đạt → true); thiếu cả hai vẫn là lỗi schema.
 
 **Trần token trả lời** (`llm/client.py::_MAX_COMPLETION_TOKENS`, 2026-09-05): mọi request
 gửi `max_tokens` = 16.384. Trước đó stream chỉ có guard im lặng (`_STREAM_IDLE_S`), nên một
