@@ -175,6 +175,19 @@ class TeamStepPlan(BaseModel):
             raise ValueError("title must not be blank")
         return v
 
+    @field_validator("acceptance", mode="before")
+    @classmethod
+    def _acceptance_as_text(cls, v):
+        # The prompt asks for one string; a model sometimes writes the criteria as a
+        # list (bench k=3: one decompose lost to `acceptance: [...]` on every step).
+        # The rubric reads the same either way, so the list is joined instead of
+        # costing a whole re-prompt. Free text: the self-check prompt only prints it.
+        if v is None:
+            return ""
+        if isinstance(v, (list, tuple)):
+            return "; ".join(str(item).strip() for item in v if str(item).strip())
+        return v
+
     @field_validator("acceptance")
     @classmethod
     def _strip_acceptance(cls, v: str) -> str:

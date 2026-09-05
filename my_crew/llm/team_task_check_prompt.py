@@ -132,6 +132,28 @@ class CheckVerdict(BaseModel):
     def _tolerant_criteria(cls, v):
         return _coerce_criteria(v)
 
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _clamp_confidence(cls, v):
+        return clamp_confidence(v)
+
+
+def clamp_confidence(v):
+    """A number outside 0..1 is clamped, anything unparseable falls back to the default.
+
+    The prompt says `0.0-1.0`; one upstream answered `5` on an otherwise valid verdict
+    (bench k=3, 1/18 self-checks). `confidence` is observability-only, so a malformed
+    number must never turn a real `passed`/`failures` judgment into a parse failure."""
+    if isinstance(v, bool) or v is None:
+        return 0.5
+    try:
+        number = float(v)
+    except (TypeError, ValueError):
+        return 0.5
+    if number != number:  # NaN
+        return 0.5
+    return min(1.0, max(0.0, number))
+
 
 class CheckVerdictError(ValueError):
     """Raised by `parse_check_verdict` on malformed JSON/schema — the caller

@@ -1229,3 +1229,16 @@ def test_mark_research_steps_flags_the_root_steps_only():
     brief = ("So sánh phí sàn của 5 sàn: Shopee, Lazada, TikTok Shop, Tiki, Sendo. "
              "Ghi nguồn.")
     assert research_gap(brief, task) and research_gap(brief, marked) == ""
+
+
+def test_acceptance_written_as_a_list_is_joined_into_the_rubric_text():
+    # Measured: one decompose answered `acceptance: ["...", "..."]` on every step and
+    # lost the whole plan to a parse error. The rubric reads the same joined.
+    from my_crew.agent.task_decomposition import TeamStepPlan
+
+    step = TeamStepPlan(step_id="s1", title="Tra cứu", assigned_to="researcher",
+                       acceptance=["Liệt kê 3 hãng", " Ghi nguồn ", ""])
+    assert step.acceptance == "Liệt kê 3 hãng; Ghi nguồn"
+    assert TeamStepPlan(step_id="s2", title="x", assigned_to="a", acceptance=None).acceptance == ""
+    padded = TeamStepPlan(step_id="s3", title="x", assigned_to="a", acceptance=" ok ")
+    assert padded.acceptance == "ok"

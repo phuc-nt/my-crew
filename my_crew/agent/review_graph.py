@@ -102,6 +102,18 @@ class ReviewVerdict(BaseModel):
 
         return _coerce_criteria(v)
 
+    @field_validator("notes", "failures", mode="before")
+    @classmethod
+    def _string_list(cls, v):
+        # One upstream answered `"notes": ""` on an otherwise valid verdict (bench k=3,
+        # 1/18 reviews): a bare string is one note (or none when blank), never a parse
+        # failure that costs a re-ask. Display-only fields, so lenient is safe.
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [v.strip()] if v.strip() else []
+        return v
+
 
 class ReviewVerdictError(ValueError):
     """Raised by `parse_review_verdict` on malformed JSON/schema — mirrors

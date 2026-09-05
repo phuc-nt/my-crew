@@ -24,6 +24,8 @@ from functools import partial
 
 from openai import (
     APIConnectionError,
+    APIError,
+    APIStatusError,
     APITimeoutError,
     LengthFinishReasonError,
     OpenAI,
@@ -97,8 +99,22 @@ class RequestDeadlineExceeded(Exception):
 
 _RETRYABLE = (
     APITimeoutError, APIConnectionError, RateLimitError, json.JSONDecodeError,
-    RequestDeadlineExceeded,
+    RequestDeadlineExceeded, APIError,
 )
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """Which of `_RETRYABLE` is actually worth a retry.
+
+    `APIError` is the SDK's base class, so it is in the tuple to catch the one shape
+    that has no HTTP status: an error OpenRouter sends MID-STREAM after the request was
+    accepted ("Upstream error from DigitalOcean: stream failed", measured 1/56 bench
+    calls). The alias is routed per call, so the retry most likely lands on another
+    upstream. Every other `APIStatusError` (400 bad request, 401, 5xx) keeps
+    propagating as before — only a 429 (`RateLimitError`) was ever retried."""
+    if isinstance(exc, APIStatusError):
+        return isinstance(exc, RateLimitError)
+    return True
 
 
 class _Progress:
@@ -737,6 +753,8 @@ class LlmClient:
                     )
                 return response
             except _RETRYABLE as exc:
+                if not _is_transient(exc):
+                    raise
                 last_exc = exc
                 if isinstance(exc, RequestDeadlineExceeded):
                     stalled += 1

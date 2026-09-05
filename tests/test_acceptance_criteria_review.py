@@ -329,3 +329,24 @@ def test_worker_prompt_caps_qa_steps_at_the_original_request():
 
     assert "QUY TẮC TRẦN YÊU CẦU" in _SYSTEM
     assert "KHÔNG tự đặt chuẩn mới" in _SYSTEM
+
+
+def test_a_confidence_outside_the_unit_range_is_clamped_not_rejected():
+    # Measured: one upstream answered `"confidence": 5` on an otherwise valid verdict.
+    # Confidence is observability-only, so the judgment must survive.
+    v = parse_check_verdict('{"passed": false, "failures": ["thiếu tổng"], "confidence": 5}')
+    assert v.passed is False and v.failures == ["thiếu tổng"]
+    assert v.confidence == 1.0
+    assert parse_check_verdict('{"passed": true, "confidence": -2}').confidence == 0.0
+    assert parse_check_verdict('{"passed": true, "confidence": "0.7"}').confidence == 0.7
+    assert parse_check_verdict('{"passed": true, "confidence": "high"}').confidence == 0.5
+    assert parse_check_verdict('{"passed": true, "confidence": null}').confidence == 0.5
+
+
+def test_review_notes_written_as_a_string_become_one_note_or_none():
+    v = parse_review_verdict('{"passed": true, "failures": [], "notes": ""}')
+    assert v.passed is True and v.notes == []
+    v = parse_review_verdict('{"passed": true, "failures": "", "notes": "nên ngắn hơn"}')
+    assert v.failures == [] and v.notes == ["nên ngắn hơn"]
+    v = parse_review_verdict('{"passed": false, "failures": "thiếu số liệu", "notes": null}')
+    assert v.failures == ["thiếu số liệu"] and v.notes == []

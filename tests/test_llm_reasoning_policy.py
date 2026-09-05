@@ -455,3 +455,75 @@ def test_the_empty_answer_warning_names_the_provider(monkeypatch, tmp_path, capl
     with caplog.at_level("WARNING", logger=c.logger.name):
         cl.complete([{"role": "user", "content": "x"}], role="sprint_low")
     assert any("(via OpenInference)" in r.getMessage() for r in caplog.records)
+
+
+def _midstream_error(message: str):
+    import httpx
+    from openai import APIError
+
+    req = httpx.Request("POST", "https://openrouter.test/v1/chat/completions")
+    return APIError(message, req, body=None)
+
+
+def _status_error(code: int):
+    import httpx
+    from openai import APIStatusError
+
+    req = httpx.Request("POST", "https://openrouter.test/v1/chat/completions")
+    return APIStatusError(f"http {code}", response=httpx.Response(code, request=req),
+                          body=None)
+
+
+def _capture_with_failures(monkeypatch, cl, script):
+    """`script` is consumed per call: an exception instance is raised, anything else
+    is returned as the response."""
+    seen: list[dict] = []
+    queue = list(script)
+
+    def _fake(client, *, progress, **request):
+        seen.append(request)
+        item = queue.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        return item
+
+    monkeypatch.setattr(c, "_stream_completion", _fake)
+    monkeypatch.setattr(cl, "_client_for", lambda _p: None)
+    monkeypatch.setattr(c.time, "sleep", lambda _s: None)
+    return seen
+
+
+def test_an_upstream_error_sent_mid_stream_is_retried(monkeypatch, tmp_path):
+    # OpenRouter accepted the request, then one upstream failed while streaming
+    # ("Upstream error from DigitalOcean: stream failed"): no HTTP status, plain
+    # APIError. The alias is routed per call, so the retry is worth one more try.
+    cl = c.LlmClient(_settings(tmp_path))
+    seen = _capture_with_failures(
+        monkeypatch, cl,
+        [_midstream_error("Upstream error from DigitalOcean: stream failed"), _response()],
+    )
+    result = cl.complete([{"role": "user", "content": "x"}], role="content")
+    assert result.content == "ok"
+    assert len(seen) == 2
+
+
+def test_a_bad_request_status_still_propagates_without_a_retry(monkeypatch, tmp_path):
+    from openai import APIStatusError
+
+    cl = c.LlmClient(_settings(tmp_path))
+    seen = _capture_with_failures(monkeypatch, cl, [_status_error(400), _response()])
+    with pytest.raises(APIStatusError):
+        cl.complete([{"role": "user", "content": "x"}], role="content")
+    assert len(seen) == 1
+
+
+def test_transient_predicate_shapes():
+    import httpx
+    from openai import RateLimitError
+
+    req = httpx.Request("POST", "https://openrouter.test/v1/chat/completions")
+    assert c._is_transient(_midstream_error("stream failed"))
+    assert c._is_transient(RateLimitError("429", response=httpx.Response(429, request=req),
+                                          body=None))
+    assert not c._is_transient(_status_error(400))
+    assert not c._is_transient(_status_error(500))
