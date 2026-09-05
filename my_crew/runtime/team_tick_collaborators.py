@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from my_crew.llm.team_summary_prompt import build_team_summary_prompt
 from my_crew.runtime.team_task_paths import team_tasks_root
 from my_crew.runtime.team_task_store import TeamStep, TeamTask
 
@@ -491,30 +492,11 @@ def make_aggregate(loaded: Any, settings: Any):
                 for i, p in enumerate(parts)
             ]
             client = LlmClient(settings)
-            # "Bắt đầu NGAY bằng bản tóm tắt": some models (observed: qwen3.7-plus)
-            # write an English chain-of-thought preamble into content; Telegram then
-            # truncates at 4096 chars and the CEO receives ONLY the preamble — the
-            # actual Vietnamese summary is cut off entirely.
-            prompt = (
-                f"Tóm tắt ngắn gọn (tiếng Việt) kết quả của việc '{task.title}' cho "
-                "CEO, dựa trên các bước sau. QUY TẮC TRUNG THỰC: bước nào ghi 'KHÔNG "
-                "CÓ KẾT QUẢ'/bị bỏ qua thì phải nêu rõ là thiếu dữ liệu — tuyệt đối "
-                "không suy diễn hay bịa số liệu thay cho bước đó. ĐỊNH DẠNG: bắt đầu "
-                "câu trả lời NGAY bằng bản tóm tắt tiếng Việt hoàn chỉnh, dưới 3000 "
-                "ký tự; KHÔNG viết quá trình suy nghĩ, không lời dẫn, không phân tích "
-                "meta, không tiếng Anh.\n\n"
-                + "\n\n".join(wrapped_parts)
+            # Prompt text lives in `team_summary_prompt` so the role bench sends the
+            # ticker's exact words; the rules it carries are explained there.
+            prompt = build_team_summary_prompt(
+                task.title, wrapped_parts, unresolved_by_step.values()
             )
-            # The "Soát chéo chưa đạt" header above the summary is code-built; without
-            # this note the summarizer — which never sees failed review rows — could
-            # write an unqualified "hoàn thành tốt đẹp" right beneath it.
-            if unresolved_by_step:
-                prompt += (
-                    "\n\nLƯU Ý: soát chéo KHÔNG đạt và đã hết lượt sửa — "
-                    + "; ".join(unresolved_by_step.values())
-                    + ". Bản tóm tắt phải thừa nhận các điểm này, không được "
-                    "khẳng định mọi thứ đều ổn."
-                )
             result = client.complete(
                 [{"role": "user", "content": prompt}], role="aggregate"
             )

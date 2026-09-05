@@ -70,7 +70,7 @@ Two lanes carry every task — `sprint` (one process) and `team` (a process per 
 so "is this release better" is really six questions, and each fails differently. Run
 them in the order below: the cheap ones can reject a release before the paid ones run.
 
-`scripts/run-sprint-benchmark.py` has seven modes. The comparable ones (`routing`,
+`scripts/run-sprint-benchmark.py` has eight modes. The comparable ones (`routing`,
 `release`, `reliability`, `journey`) all diff two saved reports via `--compare`, and all
 refuse to compare reports that declare different `format_version`, because a
 silently-mismatched comparison is worse than none. The first three cut their own JSON
@@ -199,6 +199,46 @@ Journeys run through the real model, so no two runs match. Discrete axes
 a release that made a journey half again as expensive or that now dies in a different
 state — not micro-variance. A table that is always red gets ignored, which is worse than
 no table.
+
+### 7. Role scorecard — spends money, measures each model role
+
+```bash
+OPENROUTER_API_KEY=... uv run python scripts/run-sprint-benchmark.py roles \
+    --k 3 --out /tmp/cand-roles.json
+uv run python scripts/run-sprint-benchmark.py roles \
+    --compare bench/role_baseline_X.Y.Z.json /tmp/cand-roles.json
+uv run python scripts/run-sprint-benchmark.py roles --role review --k 5   # one role only
+```
+
+Every LLM call in the fleet resolves to one of the seven roles in `MODEL_ROLES`
+(`plan`, `content`, `review`, `aggregate`, `util`, `advisor`, `sprint_low`). When one
+model serves all of them, the question a release has to answer is not "is the model
+good" but "which roles is it good AT" — that is where a `role_models` override earns its
+cost. This mode drives fixed inputs through each role's real prompt builder and real
+parser (intent classifier, decomposer, intake, self-check, peer review, stuck judge, a
+work step, the CEO summary, memory extraction, slot extraction, reflection, the advisor
+sweep) and scores each call deterministically: did production code get what it needs.
+No second model judges anything, so a weak score is the role's, not the judge's.
+
+Each probe is replayed `k` times and the role's rate is pooled with a Wilson interval.
+Verdicts are coarse on purpose: `good` at ≥ 0.9, `weak` at ≤ 0.7, `watch` between. Read
+the failure kinds before acting on a verdict — `parse` means the model cannot hold the
+role's JSON shape (a prompt problem or a model problem), `wrong` means it can and still
+answers badly on an unambiguous input (a model problem), `empty`/`truncated` mean the
+call never delivered. The `review` row also carries the H4 calibration tallies
+(false-fail rate on clean artifacts, catch rate on planted defects), computed by the same
+function the calibration report uses.
+
+The `plan` intake probes go through `sprint_intake`, which builds its own client from the
+environment, so they measure the fleet's real fail-open path rather than an injected
+client. Both sides of a `--compare` must share `k`; the mode refuses otherwise.
+
+The scorecard runs under the per-role reasoning policy (`role_reasoning`, see
+`docs/system-architecture.md`), because that is what production runs under. On a
+thinking model the policy is the larger part of a role's latency and cost, so a compare
+between two runs is only a model comparison when both used the same policy; note the
+`OPENROUTER_ROLE_REASONING` in force next to each baseline you cut. The web profile form
+does not expose `role_reasoning` yet — set it in `profile.yaml` or the env.
 
 ### Live full-flow suite
 

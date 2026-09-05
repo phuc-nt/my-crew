@@ -20,6 +20,8 @@ Seven modes, because the seven things worth measuring fail differently:
     # whether the router decides the SAME thing twice — live, k repeats per case
     .venv/bin/python scripts/run-sprint-benchmark.py reliability --out cand-rel.json --k 5
     .venv/bin/python scripts/run-sprint-benchmark.py reliability --compare base.json cand.json
+    .venv/bin/python scripts/run-sprint-benchmark.py roles --out cand-roles.json --k 3
+    .venv/bin/python scripts/run-sprint-benchmark.py roles --compare base.json cand.json
 
     # what SHAPE the work took — hops, humans, where it parked. Compare-only.
     .venv/bin/python scripts/run-sprint-benchmark.py journey --compare base.json cand.json
@@ -204,6 +206,62 @@ def _reliability(args: argparse.Namespace) -> int:
         # Raised runs are NOT fail-open and must not be read as one — surface them
         # separately or a provider outage looks like a quality regression.
         print(f"runs that raised: {errors}")
+    if args.out:
+        Path(args.out).write_text(json.dumps(report, ensure_ascii=False, indent=2))
+        print(f"written: {args.out}")
+    return 0
+
+
+def _roles(args: argparse.Namespace) -> int:
+    """Which model ROLES hold up on the fleet model — or the delta between two runs.
+
+    Every other live mode measures a pipeline; this one measures the seven roles the
+    fleet routes calls through, each on its own real prompt + parser with fixed
+    inputs. It answers the release question "where would a better model pay for
+    itself" role by role, with the failure kind that explains each weak role.
+
+    Spends money (k replays per probe), so it is not part of the offline sweep.
+    """
+    from my_crew.bench.role_bench import compare_roles, run_suite
+
+    if args.compare:
+        return _print_delta(compare_roles(*_load_pair(args.compare)))
+
+    from my_crew.config.config_builders import build_settings_from_env
+    from my_crew.llm.client import LlmClient
+
+    settings = build_settings_from_env()
+    if not getattr(settings, "openrouter_api_key", ""):
+        print("roles mode needs OPENROUTER_API_KEY", file=sys.stderr)
+        return 2
+
+    report = run_suite(LlmClient(settings), k=args.k, roles=args.role,
+                       model=settings.openrouter_model)
+    report["revision"] = _git_revision()
+    print(f"model={report['model']} k={report['k']}\n")
+    print(f"{'role':<11} {'probe':<40} {'ok/n':<6} {'fails':<28} {'mean_s':>7} {'mean_$':>9}")
+    print("-" * 106)
+    for role, d in report["roles"].items():
+        for pr in d["probes"]:
+            fails = ",".join(f"{k}:{v}" for k, v in pr["fails"].items()) or "-"
+            lat = "-" if pr["mean_latency_s"] is None else f"{pr['mean_latency_s']:.1f}"
+            cost = "-" if pr["mean_cost_usd"] is None else f"{pr['mean_cost_usd']:.5f}"
+            print(f"{role:<11} {pr['name']:<40} {pr['ok']}/{pr['n']:<4} {fails:<28} "
+                  f"{lat:>7} {cost:>9}")
+    print(f"\n{'role':<11} {'rate':<6} {'wilson':<14} {'verdict':<11} fails")
+    print("-" * 60)
+    for role, d in report["roles"].items():
+        if d["verdict"] == "unmeasured":
+            print(f"{role:<11} {'-':<6} {'-':<14} unmeasured")
+            continue
+        fails = ",".join(f"{k}:{v}" for k, v in d["fails"].items()) or "-"
+        print(f"{role:<11} {d['rate']:<6.2f} [{d['wilson_low']:.2f},{d['wilson_high']:.2f}]"
+              f"{'':<2} {d['verdict']:<11} {fails}")
+        if "h4" in d:
+            h4 = d["h4"]
+            print(f"{'':<11} H4 false-fail {h4['false_fail_rate']:.2f} "
+                  f"catch {h4['catch_rate']:.2f} keep={h4['keep']} "
+                  f"{'; '.join(h4['reasons']) or ''}")
     if args.out:
         Path(args.out).write_text(json.dumps(report, ensure_ascii=False, indent=2))
         print(f"written: {args.out}")
@@ -464,6 +522,25 @@ def main() -> int:
         help="print the per-axis delta between two saved reports instead of running",
     )
 
+    roles = sub.add_parser(
+        "roles", help="live model: which model roles hold up on the fleet model"
+    )
+    roles.add_argument("--out", help="write the report JSON here as well as printing it")
+    # Literal for the same reason as `reliability --k`: bench modules import inside
+    # their handlers. Pinned by a test.
+    roles.add_argument(
+        "--k", type=int, default=3,
+        help="replays per probe (default 3); both sides of a compare must match",
+    )
+    roles.add_argument(
+        "--role", action="append", default=None, metavar="ROLE",
+        help="measure only this role (repeatable); default: every role",
+    )
+    roles.add_argument(
+        "--compare", nargs=2, metavar=("BASELINE_JSON", "CANDIDATE_JSON"),
+        help="print the per-role delta between two saved reports instead of running",
+    )
+
     journey = sub.add_parser(
         "journey", help="compare two journey baselines cut from the live suite"
     )
@@ -501,7 +578,7 @@ def main() -> int:
     handlers = {
         "pipeline": _pipeline, "routing": _routing, "release": _release,
         "tasks": _tasks, "judge": _judge, "reliability": _reliability,
-        "journey": _journey,
+        "journey": _journey, "roles": _roles,
     }
     return handlers[args.cmd](args)
 
