@@ -174,6 +174,30 @@ _PROVIDER_NAME_RE = re.compile(r"[a-z0-9-]+")
 _ENV_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]*")
 
 
+def _d_provider_ignore(value: Any) -> tuple[str, ...]:
+    """Coerce `openrouter_provider_ignore` (yaml list or "A,B" string) to names.
+
+    Names are OpenRouter display names, kept as written (they carry spaces and case:
+    "Sail Research"). Blank entries are dropped; any other shape raises, like the
+    sibling coercers — a wrong type here would otherwise be sent to OpenRouter as-is.
+    """
+    if value is None or value == "" or value == [] or value == ():
+        return ()
+    if isinstance(value, str):
+        items = value.split(",")
+    elif isinstance(value, (list, tuple)):
+        items = list(value)
+    else:
+        raise ValueError("openrouter_provider_ignore must be a list or an 'A,B' string")
+    names: list[str] = []
+    for item in items:
+        if not isinstance(item, str):
+            raise ValueError(f"openrouter_provider_ignore entry must be a string, got {item!r}")
+        if item.strip():
+            names.append(item.strip())
+    return tuple(names)
+
+
 def _d_providers(value: Any) -> tuple[tuple[str, str, str], ...]:
     """Coerce `providers` to `(name, base_url, api_key_env)` triples.
 
@@ -292,6 +316,7 @@ def build_settings_from_dict(d: dict[str, Any]) -> Settings:
         role_models=_d_role_models(d.get("role_models")),
         role_reasoning=_d_role_reasoning(d.get("role_reasoning")),
         providers=_d_providers(d.get("providers")),
+        openrouter_provider_ignore=_d_provider_ignore(d.get("openrouter_provider_ignore")),
         dry_run=_d_bool(d, "dry_run", True),
         write_disabled=_d_bool(d, "write_disabled", False),
         trust_mode=_d_trust_mode(d.get("trust_mode")),
@@ -339,6 +364,7 @@ def build_settings_from_env() -> Settings:
             "role_models": os.getenv("OPENROUTER_ROLE_MODELS"),
             "role_reasoning": os.getenv("OPENROUTER_ROLE_REASONING"),
             "providers": os.getenv("MY_CREW_PROVIDERS"),
+            "openrouter_provider_ignore": os.getenv("OPENROUTER_PROVIDER_IGNORE"),
             "dry_run": os.getenv("DRY_RUN"),
             "write_disabled": os.getenv("AGENT_WRITE_DISABLED"),
             "trust_mode": os.getenv("TRUST_MODE"),

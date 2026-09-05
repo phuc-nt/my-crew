@@ -686,8 +686,17 @@ class LlmClient:
         # `getattr` keeps duck-typed settings doubles on unrelated paths working.
         resolve_level = getattr(self._settings, "reasoning_for_role", None)
         reasoning = _reasoning_body(resolve_level(role) if resolve_level else "model")
-        if reasoning is not None and provider == _OPENROUTER:
-            extra_kwargs["extra_body"] = {"reasoning": reasoning}
+        body: dict = {}
+        if provider == _OPENROUTER:
+            if reasoning is not None:
+                body["reasoning"] = reasoning
+            # Upstreams the operator ruled out (`Settings.openrouter_provider_ignore`),
+            # OpenRouter's own `provider.ignore` preference — display names as given.
+            ignore = tuple(getattr(self._settings, "openrouter_provider_ignore", ()) or ())
+            if ignore:
+                body["provider"] = {"ignore": list(ignore)}
+        if body:
+            extra_kwargs["extra_body"] = body
         client = self._client_for(provider)
         stalled = 0
         for attempt in range(_MAX_RETRIES + 1):

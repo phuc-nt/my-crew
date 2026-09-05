@@ -95,6 +95,12 @@ def build_settings_dict(yaml_doc: dict[str, Any], data_dir: Any) -> dict[str, An
     # string; else omit (⇒ everything through OpenRouter). Validated in _d_providers,
     # which also enforces that only env var NAMES land here, never key material.
     _put(out, "providers", _fallback(yaml_doc.get("providers"), "MY_CREW_PROVIDERS"))
+    # OpenRouter upstreams to skip — yaml list `provider_ignore:` wins; else env "A,B"
+    # string; else omit (⇒ OpenRouter routes freely). Validated in _d_provider_ignore.
+    _put(
+        out, "openrouter_provider_ignore",
+        _fallback(yaml_doc.get("provider_ignore"), "OPENROUTER_PROVIDER_IGNORE"),
+    )
 
     # Booleans: a present YAML key wins (incl. an explicit `false`); else env; else omit.
     _put(out, "dry_run", _explicit_bool(safety, "dry_run", "DRY_RUN"))

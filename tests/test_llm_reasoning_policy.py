@@ -156,6 +156,18 @@ def test_a_bounded_role_sends_the_reasoning_body(monkeypatch, tmp_path):
     assert seen[1]["extra_body"] == {"reasoning": {"enabled": False}}
 
 
+def test_ignored_upstreams_ride_in_the_provider_body_key(monkeypatch, tmp_path):
+    """OpenRouter's `provider.ignore` preference, sent next to (or without) `reasoning`."""
+    cl = c.LlmClient(_settings(tmp_path, role_reasoning="content=minimal",
+                               openrouter_provider_ignore="Sail Research"))
+    seen = _capture_requests(monkeypatch, cl)
+    cl.complete([{"role": "user", "content": "x"}], role="content")
+    cl.complete([{"role": "user", "content": "x"}], role="plan")  # plan: model default
+    assert seen[0]["extra_body"] == {"reasoning": {"effort": "minimal"},
+                                     "provider": {"ignore": ["Sail Research"]}}
+    assert seen[1]["extra_body"] == {"provider": {"ignore": ["Sail Research"]}}
+
+
 def test_a_model_default_role_sends_no_reasoning_key(monkeypatch, tmp_path):
     cl = c.LlmClient(_settings(tmp_path))
     seen = _capture_requests(monkeypatch, cl)

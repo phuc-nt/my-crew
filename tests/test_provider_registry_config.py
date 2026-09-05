@@ -28,6 +28,34 @@ def _write_profile(tmp_path, body: str):
     return load_profile("tester", profiles_dir=tmp_path).settings
 
 
+class TestProviderIgnore:
+    """`openrouter_provider_ignore`: upstreams OpenRouter must skip, by display name."""
+
+    def test_absent_means_openrouter_routes_freely(self):
+        assert build_settings_from_dict({}).openrouter_provider_ignore == ()
+
+    def test_a_yaml_list_and_the_env_string_parse_the_same(self):
+        as_list = build_settings_from_dict(
+            {"openrouter_provider_ignore": ["Sail Research", " DeepInfra "]}
+        )
+        as_env = build_settings_from_dict(
+            {"openrouter_provider_ignore": "Sail Research, DeepInfra,"}
+        )
+        assert as_list.openrouter_provider_ignore == ("Sail Research", "DeepInfra")
+        assert as_env.openrouter_provider_ignore == as_list.openrouter_provider_ignore
+
+    def test_a_non_string_entry_is_rejected(self):
+        with pytest.raises(ValueError, match="must be a string"):
+            build_settings_from_dict({"openrouter_provider_ignore": ["Sail Research", 3]})
+
+    def test_the_profile_key_is_provider_ignore(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+        settings = _write_profile(
+            tmp_path, "model: deepseek/x\nprovider_ignore:\n  - Sail Research\n"
+        )
+        assert settings.openrouter_provider_ignore == ("Sail Research",)
+
+
 class TestProvidersValidation:
     def test_absent_means_no_registry_and_pre_v91_behavior(self):
         assert build_settings_from_dict({}).providers == ()

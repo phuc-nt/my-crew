@@ -185,6 +185,14 @@ class Settings:
     # replaces the built-in level for that role only. See `reasoning_for_role`.
     role_reasoning: tuple[tuple[str, str], ...] = ()
 
+    # OpenRouter upstreams the fleet must never be routed to (`provider.ignore` in the
+    # request body), by the display name OpenRouter reports ("Sail Research"). Empty
+    # (default) ⇒ OpenRouter routes freely. Measured 2026-09-06: one upstream answered
+    # NOTHING 3/6 on a two-second slot prompt while the other eight answered every
+    # time — `LlmResult.provider` on the transcript is how such an upstream is found.
+    # Opt-in on purpose: the fleet model decision stays the operator's.
+    openrouter_provider_ignore: tuple[str, ...] = ()
+
     # Extra OpenAI-compatible endpoints a chain entry can name with `provider::model`
     # (v91). Tuple of `(name, base_url, api_key_env)` for the same frozen/hashable
     # reason as `role_models`. Empty (default) ⇒ every entry resolves through
