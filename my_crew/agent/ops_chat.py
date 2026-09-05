@@ -96,7 +96,10 @@ _EXTRACT_SYSTEM = (
     "cái tên nằm trong mệnh lệnh khác đó KHÔNG phải giá trị của trường đang hỏi.\n"
     "- CÓ: sang bước 2.\n"
     'BƯỚC 2 — trích giá trị: trả {"value":"<giá trị, chuỗi gọn>","new_intent":false}; '
-    'họ từ chối/không cung cấp thì trả {"value":"","new_intent":false}.'
+    'họ từ chối/không cung cấp thì trả {"value":"","new_intent":false}.\n'
+    "Nếu có ĐỊNH DẠNG MONG MUỐN liệt kê các mã cho phép thì value PHẢI là đúng MỘT mã "
+    'trong đó: dịch mô tả sang mã gần nghĩa nhất (hỏi vai trò, đáp "quản lý dự án", mã cho '
+    'phép có pm → "pm"), KHÔNG giữ nguyên câu chữ người dùng.'
 )
 
 
