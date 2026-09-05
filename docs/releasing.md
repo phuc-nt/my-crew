@@ -245,7 +245,10 @@ The scorecard runs under the per-role reasoning policy (`role_reasoning`, see
 thinking model the policy is the larger part of a role's latency and cost, so a compare
 between two runs is only a model comparison when both used the same policy; note the
 `OPENROUTER_ROLE_REASONING` in force next to each baseline you cut. The web profile form
-does not expose `role_reasoning` yet — set it in `profile.yaml` or the env.
+does not expose `role_reasoning` yet — set it in `profile.yaml` or the env. The same goes
+for `provider_ignore` / `OPENROUTER_PROVIDER_IGNORE`: a run with an upstream ruled out is
+not comparable to one without, since the bench's `fails_by_provider` is exactly what the
+knob removes — note it next to the baseline too, and leave it unset for a baseline cut.
 
 ### Live full-flow suite
 
