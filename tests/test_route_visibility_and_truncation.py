@@ -144,6 +144,52 @@ def test_intake_still_reports_real_json_garbage_as_json_garbage(monkeypatch, cap
     assert "JSON hỏng" in caplog.text
 
 
+def test_one_garbage_intake_reply_is_retried_and_the_second_reply_is_used(monkeypatch):
+    """A garbage body is one bad sample, not a verdict on the brief: measured on the role
+    bench it never repeated on the same brief. Ask once more before falling open."""
+    replies = iter([_result("xin lỗi tôi không hiểu", "stop"),
+                    _result('{"goal": "so sánh giá 3 dịch vụ", "acceptance": "bảng giá", '
+                            '"assigned_to": "agent-a", "needs_web": false}', "stop")])
+    monkeypatch.setattr(mod, "_build_llm",
+                        lambda: (SimpleNamespace(complete=lambda *a, **k: next(replies)), None))
+
+    plan, _cost = intake_mod.sprint_intake("so sánh giá", [("agent-a", "content")])
+
+    assert plan.acceptance == "bảng giá"
+    assert plan.needs_web is False  # the parsed plan, not the fail-open one
+
+
+def test_two_garbage_intake_replies_still_fail_open_after_exactly_two_calls(monkeypatch,
+                                                                            caplog):
+    calls = {"n": 0}
+
+    def _complete(*a, **k):
+        calls["n"] += 1
+        return _result("xin lỗi tôi không hiểu", "stop")
+
+    monkeypatch.setattr(mod, "_build_llm", lambda: (SimpleNamespace(complete=_complete), None))
+
+    with caplog.at_level("WARNING"):
+        plan, _cost = intake_mod.sprint_intake("so sánh giá", [("agent-a", "content")])
+
+    assert calls["n"] == 2
+    assert plan.goal == "so sánh giá" and plan.needs_web is True
+    assert "gọi lại lượt 2" in caplog.text and "fail-open" in caplog.text
+
+
+def test_a_truncated_intake_is_not_retried(monkeypatch):
+    """Truncation is the brief's length, not a bad sample — a second call truncates too."""
+    calls = {"n": 0}
+
+    def _complete(*a, **k):
+        calls["n"] += 1
+        return _result('{"goal": "so sá', "length")
+
+    monkeypatch.setattr(mod, "_build_llm", lambda: (SimpleNamespace(complete=_complete), None))
+    intake_mod.sprint_intake("so sánh giá", [("agent-a", "content")])
+    assert calls["n"] == 1
+
+
 # --- render_route_reason -------------------------------------------------------------
 
 

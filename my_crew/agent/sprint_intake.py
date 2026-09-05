@@ -439,6 +439,10 @@ def _first_staff_for(staff: list[tuple[str, str]], brief: str) -> str:
     return staff[0][0]
 
 
+#: Số lượt gọi intake tối đa khi thân trả về là JSON rác (xem vòng lặp bên trong).
+_INTAKE_ATTEMPTS = 2
+
+
 def sprint_intake(
     brief: str, staff: list[tuple[str, str]], pic_requested: str = "",
 ) -> tuple[SprintPlan, float]:
@@ -473,32 +477,48 @@ def sprint_intake(
         from my_crew.agent.ops_assign_team_task import _build_llm
 
         llm, _settings = _build_llm()
-        result = llm.complete(
-            build_sprint_intake_messages(brief=brief, staff=staff, pic_requested=pic_requested),
-            role="plan",
-        )
     except Exception as exc:  # noqa: BLE001 — mọi lỗi hạ tầng model đều fail-open
-        return _fallback(f"gọi model lỗi: {exc}")
+        return _fallback(f"dựng client lỗi: {exc}")
 
     from my_crew.llm.team_task_check_prompt import strip_json_fences
 
-    cost = float(result.cost_usd or 0.0)
-    # Cắt cụt vì hết token đầu ra thì phần thân là một MẨU, không phải câu trả lời —
-    # nó hỏng JSON y hệt model viết bậy, nhưng lý do khác hẳn. Fail-open ngay với đúng
-    # nguyên nhân để log không đổ lỗi nhầm cho model.
-    # getattr: đường này fail-open trước MỌI bất ngờ từ tầng model, kể cả một client
-    # không báo lý do dừng. Không có tín hiệu nghĩa là "không cụt", không phải là nổ.
-    if getattr(result, "truncated", False):
-        plan, _ = _fallback("bị cắt cụt vì quá dài")
-        return plan, cost
-    raw = strip_json_fences(result.content or "")
-    try:
-        data = json.loads(raw)
-        if not isinstance(data, dict):
-            raise ValueError("không phải object")
-    except Exception as exc:  # noqa: BLE001
-        plan, _ = _fallback(f"JSON hỏng: {exc} (raw head: {raw[:120]!r})")
-        return plan, cost
+    messages = build_sprint_intake_messages(brief=brief, staff=staff, pic_requested=pic_requested)
+    cost = 0.0
+    data: dict = {}
+    # Thân trả về là JSON rác thì gọi lại MỘT lần trước khi fail-open: một lượt rác là
+    # mẫu xấu của model (đo trên bench role: lẻ tẻ, không lặp cùng đề), lượt thứ hai
+    # thường sạch — còn hai lượt rác liên tiếp mới đáng để rơi về nguyên văn đề. Lỗi hạ
+    # tầng và cắt cụt KHÔNG gọi lại: client đã tự retry lỗi tạm thời, còn cụt là do đề
+    # dài, gọi lại cũng cụt.
+    for attempt in range(_INTAKE_ATTEMPTS):
+        try:
+            result = llm.complete(messages, role="plan")
+        except Exception as exc:  # noqa: BLE001 — mọi lỗi hạ tầng model đều fail-open
+            plan, _ = _fallback(f"gọi model lỗi: {exc}")
+            return plan, cost
+        cost += float(result.cost_usd or 0.0)
+        # Cắt cụt vì hết token đầu ra thì phần thân là một MẨU, không phải câu trả lời —
+        # nó hỏng JSON y hệt model viết bậy, nhưng lý do khác hẳn. Fail-open ngay với đúng
+        # nguyên nhân để log không đổ lỗi nhầm cho model.
+        # getattr: đường này fail-open trước MỌI bất ngờ từ tầng model, kể cả một client
+        # không báo lý do dừng. Không có tín hiệu nghĩa là "không cụt", không phải là nổ.
+        if getattr(result, "truncated", False):
+            plan, _ = _fallback("bị cắt cụt vì quá dài")
+            return plan, cost
+        raw = strip_json_fences(result.content or "")
+        try:
+            parsed = json.loads(raw)
+            if not isinstance(parsed, dict):
+                raise ValueError("không phải object")
+        except Exception as exc:  # noqa: BLE001
+            why = f"JSON hỏng: {exc} (raw head: {raw[:120]!r})"
+            if attempt + 1 < _INTAKE_ATTEMPTS:
+                logger.warning("sprint_intake: %s — gọi lại lượt %d", why, attempt + 2)
+                continue
+            plan, _ = _fallback(why)
+            return plan, cost
+        data = parsed
+        break
 
     goal = str(data.get("goal") or "").strip() or brief.strip()
     acceptance = str(data.get("acceptance") or "").strip()[:2000]
