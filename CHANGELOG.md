@@ -25,6 +25,9 @@ gate can say which of the seven model roles that model is good at.
 - `llm/vietnamese_text.foreign_letters`: character-level language-drift check; an advisor
   note carrying letters outside the Vietnamese/ASCII set is quarantined like malformed JSON
   (measured 1/8 with thinking off: a note that drifted into Romanian mid-sentence).
+- `bench/role_baseline_0.17.0.json`: the first role baseline, cut from a k=3 run on
+  `deepseek-v4-flash` at HEAD `c93c4bc` (every role "good"; 6/168 calls failed, 4 of
+  them empty answers after the guard, 1 reviewer hallucination, 1 slot mapping miss).
 - `LlmResult.provider` + `provider` on every `llm_response` transcript event: which upstream
   OpenRouter routed the call to (`DeepSeek`, `OpenInference`, …), carried over from the
   stream chunks the SDK assembler drops. The `roles` bench stamps it on every replay
