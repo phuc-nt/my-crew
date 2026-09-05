@@ -615,6 +615,25 @@ def test_an_explicit_empty_extraction_asks_again_instead_of_stuffing_the_reply(t
         store.close()
 
 
+def test_a_model_that_answered_nothing_asks_again_instead_of_storing_the_raw_reply(tmp_path):
+    """An EMPTY body is not a parse failure: the old raw-text fallback stored the CEO's
+    whole sentence "à để tôi dùng SCRUM nhé" as the value. Measured on the role bench:
+    one OpenRouter upstream returned nothing 3 times in 6 on this two-second prompt. The
+    slot must stay empty and be asked again, exactly like an explicit `{"value":""}`."""
+    store = _store(tmp_path)
+    store.save("ceo", OpsDraft("create_agent", {}, "collecting", 1.0))
+    try:
+        reply, _ = handle_ops_message(
+            message="à để tôi dùng SCRUM nhé", conversation_key="ceo", store=store,
+            llm=_FakeLlm(""), now=2.0,
+        )
+        draft = store.load("ceo", now=2.0)
+        assert draft is not None and "id" not in draft.slots
+        assert "Mã định danh" in reply  # the same slot, asked again
+    finally:
+        store.close()
+
+
 def test_new_intent_flag_with_a_value_stays_a_slot_answer(tmp_path):
     """`new_intent` is honored ONLY with an empty value — a reply that still yields a
     usable value fills the slot as before (never lose what the CEO typed)."""

@@ -255,6 +255,9 @@ def extract_slot_value(
     An EXPLICIT empty value (the model parsed the reply and found nothing to extract —
     a refusal, or a new request it forgot to flag) is returned as "" so the caller asks
     again; only a reply the model could not parse at all falls back to the raw text.
+    A model that answered NOTHING (empty body twice, one upstream measured 3/6 on a
+    two-second prompt) is not a parse failure either — falling back there stored the
+    CEO's whole sentence "à để tôi dùng SCRUM nhé" as the framework, so it also asks again.
     Measured on deepseek-v4-flash: 1 in 3 "thôi, huỷ việc #99 đi" replies came back as
     `{"value":""}` without the flag, and the raw-text fallback turned that into an
     agent id — the very ghost preview above."""
@@ -266,6 +269,8 @@ def extract_slot_value(
             [{"role": "system", "content": _EXTRACT_SYSTEM}, {"role": "user", "content": user}],
             role="util",
         )
+        if not (result.content or "").strip():
+            return "", result.cost_usd, False
         parsed = _parse_json_object(result.content)
         value = str(parsed.get("value") or "").strip()
         if not value and bool(parsed.get("new_intent")):
