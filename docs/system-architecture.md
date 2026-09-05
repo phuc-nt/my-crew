@@ -260,7 +260,12 @@ model; đo sạch ⇒ vào prompt checker thành dòng dữ kiện "CODE ĐÃ KI
 ⇒ fail-open, prompt byte-identical thời trước. Bước sprint TẮT tầng này
 (`deterministic_precheck=False`): pipeline sprint đã có `coverage_gaps` riêng, tầng đó
 biết "nguồn từ chối cung cấp" không phải gap đóng được — để tầng code chung fail bước
-đó là sai.
+đó là sai. Sau khi model chấm, `review_failure_refutation.split_refuted_failures` bỏ
+finding nói "thiếu/không có '<cụm>'" khi draft chứa nguyên văn cụm đó (so khớp gộp
+khoảng trắng, không phân biệt hoa thường): đó là reviewer đọc sai input (đo bench role:
+"thiếu 'áp dụng từ tháng sau'" trên draft có câu ấy), rework theo finding này chỉ làm
+hỏng draft. Cần đủ hai dấu — từ vắng mặt VÀ cụm trích dẫn có trong draft — nên finding
+"thiếu" thật hay lời chê chỉ trích lại draft vẫn giữ nguyên; bỏ hết finding ⇒ bước đạt.
 
 **Effort tier** — `sprint_intake` chấm độ khó BẢN CHẤT của việc, ngay trong lượt gọi intake
 đã có sẵn nên KHÔNG tốn thêm lượt gọi model nào: "low" (rõ ràng, ít bước suy luận, dữ liệu
@@ -392,6 +397,10 @@ trượt sang tiếng Ba Lan, bịa "input chỉ có tiêu đề") trong khi cù
 6/6 sạch — không quy được cho model hay cho code nếu không biết upstream nào trả lời. Bench
 `roles` đóng dấu ` @<provider>` lên từng lượt và báo `providers`/`fails_by_provider` theo
 role; ghim provider (`provider.order`) chỉ làm khi số đo chỉ đích danh upstream hỏng.
+Knob opt-in `provider_ignore:` (top level profile.yaml, list hoặc chuỗi `"A,B"`; env
+`OPENROUTER_PROVIDER_IGNORE`; `Settings.openrouter_provider_ignore`) gửi `provider.ignore`
+cạnh `reasoning` — mặc định rỗng, profile mẫu không đặt; đo util k=6 một upstream
+(`Sail Research`) trả rỗng 3/6 nhưng một lượt chưa đủ để ghim cho mọi người.
 Lượt bench có dấu (9 lỗi/168 call, 5 ở một upstream) lộ thêm bốn slip mà code phải chịu
 được thay vì loại cả câu trả lời: `CheckVerdict.confidence` ngoài 0..1 → clamp (trường chỉ
 để quan sát); `ReviewVerdict.notes`/`failures` viết thành chuỗi → một mục; `acceptance` viết

@@ -34,6 +34,10 @@ gate can say which of the seven model roles that model is good at.
   (`… @DeepSeek`) and reports `providers` / `fails_by_provider` per role, because one k=3
   run lost review 0.88 → 0.67 and sprint_low 1.00 → 0.33 to degenerate answers while the
   same prompts answered cleanly minutes later — a routing episode, not the model.
+- `provider_ignore` (profile.yaml top level, env `OPENROUTER_PROVIDER_IGNORE`; list or
+  `"A,B"`): OpenRouter upstream display names to skip, sent as the `provider.ignore` body
+  key. Opt-in and empty by default — measured 3/6 empty answers from one upstream
+  (`Sail Research`) on a util k=6 run, not enough to pin routing for everyone.
 
 ### Changed
 - Every LLM request carries `max_tokens` = 16,384 (`_MAX_COMPLETION_TOKENS`): caps a
@@ -45,6 +49,14 @@ gate can say which of the seven model roles that model is good at.
   lost numbered asks or listed entities (`_keep_ceo_structure`).
 
 ### Fixed
+- `sprint_intake` re-asks the model once when the body is JSON garbage before it falls
+  open to the verbatim brief; two garbage replies in a row still fall open (the assign
+  command must not die on intake), and a truncated body or an infrastructure error is not
+  re-asked.
+- `_run_self_check` drops a finding that says a quoted phrase is missing while the draft
+  contains it verbatim (`review_failure_refutation`; measured: "thiếu 'áp dụng từ tháng
+  sau'" on a draft that had it), and passes when nothing else stood against the draft. A
+  real missing claim or a critique that merely quotes the draft is kept.
 - `ops_chat.extract_slot_value`: when the expected format lists allowed codes, the
   prompt now demands exactly one of them ("quản lý dự án" → `pm`); measured 2/6 misses
   across two bench runs, 6/6 after.

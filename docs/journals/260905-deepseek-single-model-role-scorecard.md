@@ -69,10 +69,9 @@
   qua alias không tái lập được nếu không ghi upstream.
 
 ## Mở / sang sau
-- `sprint_intake` fail-open vẫn tạo việc từ JSON rác thật sự (đã bớt ca "Extra data") — cân nhắc
-  hỏi lại CEO sau 2 lượt hỏng.
-- review/clean vẫn báo lỗi giả do model bịa về input (không phải parse): cân nhắc `role_models`
-  riêng cho review; effort/budget OpenRouter không chặn được suy nghĩ của model này.
-- Kiểm tra ngôn ngữ advisor mới ở mức ký tự; trượt sang tiếng Anh thuần ASCII chưa bắt.
-- Khi `fails_by_provider` chỉ đích danh một upstream qua vài lượt bench: ghim
-  `provider.order`/`allow_fallbacks` trên request OpenRouter — chưa làm vì mới có một lượt.
+- Đã chốt 2026-09-06 (4 vá thêm, xem CHANGELOG): intake gọi lại 1 lần khi JSON rác rồi mới
+  fail-open; self-check bỏ finding "thiếu '…'" khi draft chứa nguyên văn cụm đó; đốt trần
+  16k → gọi lại 1 lần tắt suy nghĩ (đo review tắt suy nghĩ 23/24 đúng, 1–23 s); knob opt-in
+  `provider_ignore` (`OPENROUTER_PROVIDER_IGNORE`) cho upstream trả rỗng — không đặt sẵn.
+- Effort/budget OpenRouter không chặn được suy nghĩ của model này: ghi nhận, không vá.
+- Kiểm tra ngôn ngữ advisor mới ở mức ký tự; chưa thấy lọt ca nào nên để nguyên.
