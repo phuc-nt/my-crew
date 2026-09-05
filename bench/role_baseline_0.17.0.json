@@ -1,0 +1,755 @@
+{
+  "format_version": 1,
+  "model": "~deepseek/deepseek-v4-flash-latest",
+  "k": 3,
+  "roles": {
+    "content": {
+      "n": 6,
+      "ok": 6,
+      "rate": 1.0,
+      "wilson_low": 0.61,
+      "wilson_high": 1.0,
+      "mean_latency_s": 14.7046,
+      "mean_cost_usd": 0.0002,
+      "verdict": "good",
+      "fails": {},
+      "providers": {
+        "DeepInfra": 1,
+        "StreamLake": 1,
+        "Makora": 1,
+        "Relace": 1,
+        "OpenInference": 2
+      },
+      "fails_by_provider": {},
+      "probes": [
+        {
+          "name": "step/sales_trend",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 6.3373,
+          "mean_cost_usd": 0.0002,
+          "details": [
+            "ok: 1117 chars @DeepInfra",
+            "ok: 969 chars @StreamLake",
+            "ok: 1248 chars @Makora"
+          ]
+        },
+        {
+          "name": "step/price_increase_email",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 23.072,
+          "mean_cost_usd": 0.0002,
+          "details": [
+            "ok: 1543 chars @Relace",
+            "ok: 1866 chars @OpenInference",
+            "ok: 1815 chars @OpenInference"
+          ]
+        }
+      ]
+    },
+    "review": {
+      "n": 51,
+      "ok": 47,
+      "rate": 0.922,
+      "wilson_low": 0.815,
+      "wilson_high": 0.969,
+      "mean_latency_s": 57.9358,
+      "mean_cost_usd": 0.0007,
+      "verdict": "good",
+      "fails": {
+        "empty": 3,
+        "wrong": 1
+      },
+      "providers": {
+        "Morph": 1,
+        "Relace": 2,
+        "Mancer 2": 2,
+        "DeepInfra": 5,
+        "Baidu": 9,
+        "Parasail": 2,
+        "Sail Research": 13,
+        "DigitalOcean": 4,
+        "OpenInference": 4,
+        "Inceptron": 2,
+        "Reka": 1,
+        "Together": 2,
+        "CoreWeave": 1,
+        "NextBit": 1,
+        "StreamLake": 1,
+        "Wafer": 1
+      },
+      "fails_by_provider": {
+        "DigitalOcean": 1,
+        "Baidu": 1,
+        "Sail Research": 2
+      },
+      "probes": [
+        {
+          "name": "self_check/clean/sales_trend",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 22.4268,
+          "mean_cost_usd": 0.0007,
+          "details": [
+            "ok: passed clean @Morph",
+            "ok: passed clean @Relace",
+            "ok: passed clean @Mancer 2"
+          ]
+        },
+        {
+          "name": "self_check/clean/office_choice",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 60.8467,
+          "mean_cost_usd": 0.0007,
+          "details": [
+            "ok: passed clean @DeepInfra",
+            "ok: passed clean @Baidu",
+            "ok: passed clean @Parasail"
+          ]
+        },
+        {
+          "name": "self_check/clean/event_plan",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 6.4057,
+          "mean_cost_usd": 0.0002,
+          "details": [
+            "ok: passed clean @Sail Research",
+            "ok: passed clean @Sail Research",
+            "ok: passed clean @Sail Research"
+          ]
+        },
+        {
+          "name": "self_check/clean/price_increase_email",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 42.1323,
+          "mean_cost_usd": 0.0005,
+          "details": [
+            "ok: passed clean @DigitalOcean",
+            "ok: passed clean @DigitalOcean",
+            "ok: passed clean @DigitalOcean"
+          ]
+        },
+        {
+          "name": "self_check/seeded/sales_trend",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 51.0679,
+          "mean_cost_usd": 0.0005,
+          "details": [
+            "ok: caught=3/3 b_total_wrong,c_called_flat,budget_to_declining @DeepInfra",
+            "ok: caught=3/3 b_total_wrong,c_called_flat,budget_to_declining @OpenInference",
+            "ok: caught=3/3 b_total_wrong,c_called_flat,budget_to_declining @DeepInfra"
+          ]
+        },
+        {
+          "name": "self_check/seeded/office_choice",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 24.9502,
+          "mean_cost_usd": 0.0004,
+          "details": [
+            "ok: caught=3/3 a_free_month_ignored,c_distance_wrong,a_called_closest @Baidu",
+            "ok: caught=3/3 a_free_month_ignored,c_distance_wrong,a_called_closest @Baidu",
+            "ok: caught=3/3 a_free_month_ignored,c_distance_wrong,a_called_closest @Baidu"
+          ]
+        },
+        {
+          "name": "self_check/seeded/event_plan",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 28.3077,
+          "mean_cost_usd": 0.0004,
+          "details": [
+            "ok: caught=3/3 budget_sums_to_95,week5_missing,only_three_assigned @DeepInfra",
+            "ok: caught=3/3 budget_sums_to_95,week5_missing,only_three_assigned @Sail Research",
+            "ok: caught=3/3 budget_sums_to_95,week5_missing,only_three_assigned @Sail Research"
+          ]
+        },
+        {
+          "name": "self_check/seeded/price_increase_email",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 11.6586,
+          "mean_cost_usd": 0.0008,
+          "details": [
+            "ok: caught=3/3 only_two_weaknesses,rate_changed_to_20,timing_changed_to_quarter @Inceptron",
+            "ok: caught=3/3 only_two_weaknesses,rate_changed_to_20,timing_changed_to_quarter @DeepInfra",
+            "ok: caught=3/3 only_two_weaknesses,rate_changed_to_20,timing_changed_to_quarter @Reka"
+          ]
+        },
+        {
+          "name": "review/clean/sales_trend",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 19.522,
+          "mean_cost_usd": 0.0006,
+          "details": [
+            "ok: passed clean @Together",
+            "ok: passed clean @Sail Research",
+            "ok: passed clean @Sail Research"
+          ]
+        },
+        {
+          "name": "review/clean/office_choice",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 45.8916,
+          "mean_cost_usd": 0.0011,
+          "details": [
+            "ok: passed clean @OpenInference",
+            "ok: passed clean @Together",
+            "ok: passed clean @Mancer 2"
+          ]
+        },
+        {
+          "name": "review/clean/event_plan",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 8.874,
+          "mean_cost_usd": 0.0005,
+          "details": [
+            "ok: passed clean @CoreWeave",
+            "ok: passed clean @Inceptron",
+            "ok: passed clean @Baidu"
+          ]
+        },
+        {
+          "name": "review/clean/price_increase_email",
+          "n": 3,
+          "ok": 2,
+          "fails": {
+            "wrong": 1
+          },
+          "mean_latency_s": 23.9864,
+          "mean_cost_usd": 0.0005,
+          "details": [
+            "ok: passed clean @Parasail",
+            "ok: passed clean @OpenInference",
+            "wrong: false fail: Bản viết lại không nêu rõ mốc thời gian 'từ tháng sau' — chỉ nói 'điều chỉnh giá dịch vụ tăng 15%' thiếu cụm 'áp dụng từ tháng sau'. @DigitalOcean"
+          ]
+        },
+        {
+          "name": "review/seeded/sales_trend",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 21.7,
+          "mean_cost_usd": 0.0014,
+          "details": [
+            "ok: caught=3/3 b_total_wrong,c_called_flat,budget_to_declining @NextBit",
+            "ok: caught=2/3 b_total_wrong,budget_to_declining @Relace",
+            "ok: caught=3/3 b_total_wrong,c_called_flat,budget_to_declining @OpenInference"
+          ]
+        },
+        {
+          "name": "review/seeded/office_choice",
+          "n": 3,
+          "ok": 2,
+          "fails": {
+            "empty": 1
+          },
+          "mean_latency_s": 67.6516,
+          "mean_cost_usd": 0.0011,
+          "details": [
+            "ok: caught=3/3 a_free_month_ignored,c_distance_wrong,a_called_closest @Baidu",
+            "ok: caught=3/3 a_free_month_ignored,c_distance_wrong,a_called_closest @Baidu",
+            "empty @Baidu"
+          ]
+        },
+        {
+          "name": "review/seeded/event_plan",
+          "n": 3,
+          "ok": 2,
+          "fails": {
+            "empty": 1
+          },
+          "mean_latency_s": 410.3794,
+          "mean_cost_usd": 0.0018,
+          "details": [
+            "ok: caught=3/3 budget_sums_to_95,week5_missing,only_three_assigned @Sail Research",
+            "empty @Sail Research",
+            "ok: caught=2/3 week5_missing,only_three_assigned @Sail Research"
+          ]
+        },
+        {
+          "name": "review/seeded/price_increase_email",
+          "n": 3,
+          "ok": 2,
+          "fails": {
+            "empty": 1
+          },
+          "mean_latency_s": 130.3043,
+          "mean_cost_usd": 0.0012,
+          "details": [
+            "ok: caught=3/3 only_two_weaknesses,rate_changed_to_20,timing_changed_to_quarter @Sail Research",
+            "empty @Sail Research",
+            "ok: caught=3/3 only_two_weaknesses,rate_changed_to_20,timing_changed_to_quarter @Sail Research"
+          ]
+        },
+        {
+          "name": "stuck_judge/no-web-tool",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 8.804,
+          "mean_cost_usd": 0.0004,
+          "details": [
+            "ok: reassign to=researcher @StreamLake",
+            "ok: reassign to=researcher @Wafer",
+            "ok: reassign to=researcher @Baidu"
+          ]
+        }
+      ],
+      "h4": {
+        "keep": true,
+        "reasons": [],
+        "false_fails": 1,
+        "clean_graded": 24,
+        "false_fail_rate": 0.042,
+        "false_fail_wilson_low": 0.007,
+        "false_fail_wilson_high": 0.202,
+        "caught": 61,
+        "seeded": 63,
+        "catch_rate": 0.968,
+        "catch_wilson_low": 0.891,
+        "catch_wilson_high": 0.991
+      }
+    },
+    "aggregate": {
+      "n": 6,
+      "ok": 6,
+      "rate": 1.0,
+      "wilson_low": 0.61,
+      "wilson_high": 1.0,
+      "mean_latency_s": 30.3471,
+      "mean_cost_usd": 0.0004,
+      "verdict": "good",
+      "fails": {},
+      "providers": {
+        "Sail Research": 3,
+        "DeepInfra": 2,
+        "Venice": 1
+      },
+      "fails_by_provider": {},
+      "probes": [
+        {
+          "name": "summary/missing-step",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 18.4179,
+          "mean_cost_usd": 0.0002,
+          "details": [
+            "ok: 416 chars @Sail Research",
+            "ok: 411 chars @Sail Research",
+            "ok: 393 chars @Sail Research"
+          ]
+        },
+        {
+          "name": "summary/unresolved-review",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 42.2764,
+          "mean_cost_usd": 0.0006,
+          "details": [
+            "ok: 1281 chars @DeepInfra",
+            "ok: 900 chars @Venice",
+            "ok: 988 chars @DeepInfra"
+          ]
+        }
+      ]
+    },
+    "plan": {
+      "n": 36,
+      "ok": 35,
+      "rate": 0.972,
+      "wilson_low": 0.858,
+      "wilson_high": 0.995,
+      "mean_latency_s": 22.5352,
+      "mean_cost_usd": 0.0013,
+      "verdict": "good",
+      "fails": {
+        "empty": 1
+      },
+      "providers": {
+        "Makora": 2,
+        "Wafer": 1,
+        "Baidu": 21,
+        "OpenInference": 2,
+        "Venice": 1,
+        "Together": 1,
+        "Mancer 2": 1,
+        "Relace": 1,
+        "Morph": 1
+      },
+      "fails_by_provider": {
+        "Together": 1
+      },
+      "probes": [
+        {
+          "name": "intent/outage-verbatim",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 2.9043,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=assign_team_task expected=assign_team_task @Makora",
+            "ok: got=assign_team_task expected=assign_team_task @Wafer",
+            "ok: got=assign_team_task expected=assign_team_task @Baidu"
+          ]
+        },
+        {
+          "name": "intent/khao-sat-cong-cu",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 22.7251,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=assign_team_task expected=assign_team_task @OpenInference,OpenInference",
+            "ok: got=assign_team_task expected=assign_team_task @Venice",
+            "ok: got=assign_team_task expected=assign_team_task @Baidu"
+          ]
+        },
+        {
+          "name": "intent/ngan-menh-lenh",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 3.4374,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=assign_team_task expected=assign_team_task @Baidu",
+            "ok: got=assign_team_task expected=assign_team_task @Baidu",
+            "ok: got=assign_team_task expected=assign_team_task @Baidu"
+          ]
+        },
+        {
+          "name": "intent/hoi-nhung-la-viec",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 3.7148,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=assign_team_task expected=assign_team_task @Baidu",
+            "ok: got=assign_team_task expected=assign_team_task @Baidu",
+            "ok: got=assign_team_task expected=assign_team_task @Baidu"
+          ]
+        },
+        {
+          "name": "intent/gia-thi-truong",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 2.5016,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=assign_team_task expected=assign_team_task @Baidu",
+            "ok: got=assign_team_task expected=assign_team_task @Baidu",
+            "ok: got=assign_team_task expected=assign_team_task @Baidu"
+          ]
+        },
+        {
+          "name": "intent/chuyen-vat",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 1.7147,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=question expected=not assign_team_task @Baidu",
+            "ok: got=question expected=not assign_team_task @Baidu",
+            "ok: got=question expected=not assign_team_task @Baidu"
+          ]
+        },
+        {
+          "name": "intent/liet-ke-viec-nhom",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 1.9591,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=list_team_tasks expected=list_team_tasks @Baidu",
+            "ok: got=list_team_tasks expected=list_team_tasks @Baidu",
+            "ok: got=list_team_tasks expected=list_team_tasks @Baidu"
+          ]
+        },
+        {
+          "name": "intent/thong-ke-dinh-tuyen",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 2.0175,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=route_stats expected=route_stats @Baidu",
+            "ok: got=route_stats expected=route_stats @Baidu",
+            "ok: got=route_stats expected=route_stats @Baidu"
+          ]
+        },
+        {
+          "name": "decompose/ba-phan",
+          "n": 3,
+          "ok": 2,
+          "fails": {
+            "empty": 1
+          },
+          "mean_latency_s": 127.9135,
+          "mean_cost_usd": 0.0033,
+          "details": [
+            "empty @Together",
+            "ok: steps=3 to=researcher,analyst,writer @Mancer 2",
+            "ok: steps=3 to=researcher,analyst,writer @Baidu"
+          ]
+        },
+        {
+          "name": "decompose/mot-viec",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 40.9486,
+          "mean_cost_usd": 0.0011,
+          "details": [
+            "ok: steps=1 to=writer @Makora",
+            "ok: steps=1 to=writer @Relace",
+            "ok: steps=1 to=writer @Morph"
+          ]
+        },
+        {
+          "name": "intake/streaming_services",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 27.6973,
+          "mean_cost_usd": 0.0004,
+          "details": [
+            "ok: to=analyst web=True",
+            "ok: to=analyst web=True",
+            "ok: to=analyst web=True"
+          ]
+        },
+        {
+          "name": "intake/note_taking",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 32.8887,
+          "mean_cost_usd": 0.0002,
+          "details": [
+            "ok: to=writer web=False",
+            "ok: to=analyst web=True",
+            "ok: to=analyst web=True"
+          ]
+        }
+      ]
+    },
+    "util": {
+      "n": 18,
+      "ok": 17,
+      "rate": 0.944,
+      "wilson_low": 0.742,
+      "wilson_high": 0.99,
+      "mean_latency_s": 9.014,
+      "mean_cost_usd": 0.0001,
+      "verdict": "good",
+      "fails": {
+        "wrong": 1
+      },
+      "providers": {
+        "Baidu": 4,
+        "Makora": 1,
+        "Relace": 2,
+        "DigitalOcean": 7,
+        "OpenInference": 1,
+        "Sail Research": 1,
+        "StreamLake": 1,
+        "Reka": 1
+      },
+      "fails_by_provider": {
+        "Sail Research": 1
+      },
+      "probes": [
+        {
+          "name": "memory/weekly-report",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 8.7764,
+          "mean_cost_usd": 0.0003,
+          "details": [
+            "ok: 3 facts @Baidu",
+            "ok: 2 facts @Makora",
+            "ok: 2 facts @Relace"
+          ]
+        },
+        {
+          "name": "slot/verbatim",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 4.0542,
+          "mean_cost_usd": 0.0,
+          "details": [
+            "ok: value='SCRUM' new_intent=False @DigitalOcean",
+            "ok: value='SCRUM' new_intent=False @DigitalOcean",
+            "ok: value='SCRUM' new_intent=False @DigitalOcean"
+          ]
+        },
+        {
+          "name": "slot/code-hint",
+          "n": 3,
+          "ok": 2,
+          "fails": {
+            "wrong": 1
+          },
+          "mean_latency_s": 30.915,
+          "mean_cost_usd": 0.0001,
+          "details": [
+            "ok: value='pm' new_intent=False @OpenInference",
+            "wrong: got 'quản lý dự án' new_intent=False @Sail Research",
+            "ok: value='pm' new_intent=False @StreamLake"
+          ]
+        },
+        {
+          "name": "slot/new-intent",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 2.4854,
+          "mean_cost_usd": 0.0,
+          "details": [
+            "ok: value='' new_intent=True @Relace",
+            "ok: value='' new_intent=True @DigitalOcean",
+            "ok: value='' new_intent=True @DigitalOcean"
+          ]
+        },
+        {
+          "name": "reflection/vague-acceptance",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 6.6742,
+          "mean_cost_usd": 0.0001,
+          "details": [
+            "ok: Khi giao việc lập bảng giá, cần nêu rõ các cột bắt buộc (nguồn, ngày truy cập, p @Baidu",
+            "ok: Bài học: khi giao việc “bảng giá đầy đủ”, cần nêu rõ các cột bắt buộc: nguồn, ng @DigitalOcean",
+            "ok: Cần nêu rõ tiêu chí nghiệm thu: bảng giá phải có cột nguồn, ngày truy cập, phiên @DigitalOcean"
+          ]
+        },
+        {
+          "name": "reflection/tool-503",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 1.1786,
+          "mean_cost_usd": 0.0001,
+          "details": [
+            "ok: KHONG_CO_GI @Reka",
+            "ok: KHONG_CO_GI @Baidu",
+            "ok: KHONG_CO_GI @Baidu"
+          ]
+        }
+      ]
+    },
+    "advisor": {
+      "n": 6,
+      "ok": 6,
+      "rate": 1.0,
+      "wilson_low": 0.61,
+      "wilson_high": 1.0,
+      "mean_latency_s": 2.1441,
+      "mean_cost_usd": null,
+      "verdict": "good",
+      "fails": {},
+      "providers": {
+        "DigitalOcean": 3,
+        "Sail Research": 1,
+        "Baidu": 1,
+        "DeepSeek": 1
+      },
+      "fails_by_provider": {},
+      "probes": [
+        {
+          "name": "sweep/clean-work",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 1.9259,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: silent @DigitalOcean",
+            "ok: silent @DigitalOcean",
+            "ok: silent @DigitalOcean"
+          ]
+        },
+        {
+          "name": "sweep/repeated-403",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 2.3624,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: concern: Trang vinfastauto.com/evo200 trả lỗi 403 Forbidden 9 lần liên tiếp — đây là lỗi  @Sail Research",
+            "ok: concern: Lặp lại 9 lần truy cập cùng URL vinfastauto.com/evo200, toàn bộ đều 403 Forbidde @Baidu",
+            "ok: concern: Đã thử cùng URL 9 lần liên tiếp đều lỗi 403 nhưng mỗi lần chỉ ghi chú 'thử lại'  @DeepSeek"
+          ]
+        }
+      ]
+    },
+    "sprint_low": {
+      "n": 3,
+      "ok": 3,
+      "rate": 1.0,
+      "wilson_low": 0.438,
+      "wilson_high": 1.0,
+      "mean_latency_s": 3.9277,
+      "mean_cost_usd": 0.0003,
+      "verdict": "good",
+      "fails": {},
+      "providers": {
+        "DeepSeek": 1,
+        "Relace": 1,
+        "Makora": 1
+      },
+      "fails_by_provider": {},
+      "probes": [
+        {
+          "name": "step/sales_trend",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 3.9277,
+          "mean_cost_usd": 0.0003,
+          "details": [
+            "ok: 937 chars @DeepSeek",
+            "ok: 990 chars @Relace",
+            "ok: 977 chars @Makora"
+          ]
+        }
+      ]
+    }
+  },
+  "revision": "c93c4bc"
+}
