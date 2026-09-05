@@ -152,9 +152,11 @@ def _run_until_idle(fn, idle_s: float, *, what: str, progress: _Progress):
 _REASONING_OFF: dict = {"enabled": False}
 
 
-def _thought_but_said_nothing(response) -> bool:
-    """True when the provider counted reasoning tokens but the message carries neither
-    content nor tool calls — the answer was spent entirely on thinking."""
+def _said_nothing(response) -> bool:
+    """True when the message carries neither content nor tool calls — whether the
+    answer was spent entirely on thinking or the provider simply returned nothing
+    (measured: 0 reasoning tokens, 0 content, finish_reason=stop, 1.5 s — 1/12 review
+    calls on deepseek-v4-flash)."""
     try:
         msg = response.choices[0].message
     except (AttributeError, IndexError, TypeError):
@@ -163,9 +165,15 @@ def _thought_but_said_nothing(response) -> bool:
         content, tool_calls = msg.get("content"), msg.get("tool_calls")
     else:
         content, tool_calls = getattr(msg, "content", None), getattr(msg, "tool_calls", None)
-    if (content or "").strip() or tool_calls:
+    return not ((content or "").strip() or tool_calls)
+
+
+def _hit_the_answer_cap(response) -> bool:
+    """True when the provider cut the answer at `max_tokens` (finish_reason "length")."""
+    try:
+        return str(response.choices[0].finish_reason or "") == "length"
+    except (AttributeError, IndexError, TypeError):
         return False
-    return extract_usage(response).reasoning_tokens > 0
 
 
 def _reasoning_body(level: str) -> dict | None:
@@ -651,26 +659,41 @@ class LlmClient:
                     what=f"chat.completions({model_id})",
                     progress=progress,
                 )
-                if (
-                    provider == _OPENROUTER
-                    and extra_kwargs.get("extra_body", {}).get("reasoning") != _REASONING_OFF
-                    and _thought_but_said_nothing(response)
-                ):
-                    # A thinking model can burn its whole completion on reasoning and
-                    # emit no answer (deepseek-v4-flash: 2/51 at the model's default,
-                    # 2/5 at effort=low — 118 and 1,972 reasoning tokens, zero content,
-                    # finish_reason=stop). That is a billed non-answer, not a transient
-                    # error. It is also stochastic: the SAME request re-asked once
-                    # answers. Re-asking with thinking OFF was tried first and measured
-                    # worse on structured prompts — the intake classifier answered
-                    # "Tôi là một trợ lý…" prose instead of JSON (fail-open created a
-                    # task from garbage) and one decompose ran 903 s — so the retry
-                    # keeps the request exactly as sent.
+                if provider == _OPENROUTER and _said_nothing(response):
+                    # A billed non-answer, not a transient error. Two measured shapes on
+                    # deepseek-v4-flash: the model burns its completion on reasoning and
+                    # emits nothing (2/51 at the model's default, 2/5 at effort=low —
+                    # 118 and 1,972 reasoning tokens, finish_reason=stop), or the
+                    # provider returns an empty message outright (0 reasoning tokens,
+                    # 1.5 s, 1/12 review calls). Both are stochastic: the SAME request
+                    # re-asked once answers. Re-asking with thinking OFF was tried first
+                    # and measured worse on structured prompts — the intake classifier
+                    # answered "Tôi là một trợ lý…" prose instead of JSON (fail-open
+                    # created a task from garbage), one decompose ran 903 s, and on the
+                    # review self-check thinking-off drifted into garbled multilingual
+                    # text — so the retry keeps the request exactly as sent.
+                    #
+                    # The one shape NOT retried: thinking that ran into `max_tokens`
+                    # itself (finish_reason "length", ~16k reasoning tokens, 5–11 min).
+                    # The same request re-asked burned to the cap again 5/6 times
+                    # (effort levels and `reasoning.max_tokens` were measured not to
+                    # bound this model's thinking: effort=low spent 10,833 and 15,746;
+                    # budget 2048 spent 10,210 and 16,030). A second cap burn is another
+                    # 10 minutes and ~$0.004 for a 1/6 chance, so the empty answer goes
+                    # back as-is and the caller's own empty/truncated handling applies.
                     wasted = extract_usage(response)
                     self._budget.record_cost(wasted.cost_usd)
+                    if _hit_the_answer_cap(response):
+                        logger.warning(
+                            "model %r spent its whole answer cap thinking (%d reasoning "
+                            "tokens, no content, finish_reason=length); not retried — "
+                            "a repeat was measured to hit the cap again 5/6",
+                            model_id, wasted.reasoning_tokens,
+                        )
+                        return response
                     logger.warning(
-                        "model %r spent its whole answer thinking (%d reasoning tokens, "
-                        "no content); retrying once with the same request",
+                        "model %r answered nothing (%d reasoning tokens, no content); "
+                        "retrying once with the same request",
                         model_id, wasted.reasoning_tokens,
                     )
                     progress = _Progress()

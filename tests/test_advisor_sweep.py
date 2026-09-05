@@ -289,3 +289,19 @@ def _clear_cooldown(tmp_path, key):
     state = json.loads(path.read_text())
     state[key]["cooldown"] = 0
     path.write_text(json.dumps(state))
+
+
+def test_a_note_that_drifts_out_of_vietnamese_is_quarantined():
+    """Measured 1/8 with thinking off: the note starts in Vietnamese and finishes in
+    another language. A working agent must not read that, so it counts as silence."""
+    from my_crew.runtime.advisor_sweep import _parse_verdict
+
+    drifted = ('{"severity": "concern", "note": "URL đã được truy lại 9 lần și de fiecare '
+               'dată ERROR 403 Forbidden. Este clar că página nu va mai răspunde."}')
+    assert _parse_verdict(drifted) is None
+    clean = ('{"severity": "concern", "note": "Cùng URL https://vinfastauto.com/evo200 bị '
+             '403 lặp 9 lần — đổi nguồn thay vì thử lại."}')
+    assert _parse_verdict(clean) == (
+        "concern", "Cùng URL https://vinfastauto.com/evo200 bị 403 lặp 9 lần — đổi nguồn "
+        "thay vì thử lại.",
+    )

@@ -204,6 +204,23 @@ class DecomposedTask(BaseModel):
     def _strip_pic(cls, v: str) -> str:
         return v.strip()
 
+    @model_validator(mode="before")
+    @classmethod
+    def _number_unnamed_steps(cls, doc):
+        # A single-step plan sometimes comes back without any `step_id` at all (the
+        # model saw nothing to reference, so it named nothing — measured 1/3 on the
+        # one-step decompose probe). The id is only a handle for `deps`, so a missing
+        # one is filled positionally; a dep that names a step the model never
+        # identified still fails below, as it should.
+        if isinstance(doc, dict) and isinstance(doc.get("steps"), list):
+            steps = []
+            for i, step in enumerate(doc["steps"]):
+                if isinstance(step, dict) and not str(step.get("step_id") or "").strip():
+                    step = {**step, "step_id": f"s{i + 1}"}
+                steps.append(step)
+            doc = {**doc, "steps": steps}
+        return doc
+
     @field_validator("steps")
     @classmethod
     def _unique_step_ids(cls, steps: tuple[TeamStepPlan, ...]) -> tuple[TeamStepPlan, ...]:

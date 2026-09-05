@@ -99,7 +99,7 @@ MODEL_ROLES = ("content", "review", "aggregate", "plan", "util", "advisor", "spr
 # brief 5× at `effort=low` on this model — 2 of 5 answers came back EMPTY, the whole
 # completion (118 and 1,972 tokens) spent on degenerate reasoning text; `off` was 3/3
 # clean at 1.4–9.7s. A bounded effort is therefore not a safe default here; the client
-# also guards the residual case (`_thought_but_said_nothing`) with one retry at "off".
+# also guards the residual case (`_said_nothing`) with one retry of the same request.
 # Why util/aggregate keep the model default: the role scorecard (k=3, same day) had
 # util at 0.89 with thinking and 0.61 without (slot/new-intent 0/3), aggregate at 1.00
 # and 0.67 — small JSON extractions and the CEO summary are judgements too, and their

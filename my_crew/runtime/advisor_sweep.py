@@ -40,6 +40,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from my_crew.llm.vietnamese_text import foreign_letters
+
 logger = logging.getLogger(__name__)
 
 #: Most transcript bytes handed to one advisor call. A step under load writes tens of
@@ -298,6 +300,11 @@ def _parse_verdict(raw: str) -> tuple[str, str] | None:
         return None
     note = str(data.get("note", "")).strip()
     if not note or len(note) > MAX_NOTE_CHARS:
+        return None
+    if foreign_letters(note):
+        # Measured 1/8 with thinking off: a note that starts in Vietnamese and drifts
+        # into another language mid-sentence. It is quarantined like malformed JSON —
+        # the working agent must not read a half-foreign instruction.
         return None
     return severity, note
 

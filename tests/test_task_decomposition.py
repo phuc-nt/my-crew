@@ -1132,6 +1132,27 @@ def test_numbered_step_ids_are_accepted_as_text():
     validate_decomposition(task, staff_ids=["a", "b"])
 
 
+def test_a_step_without_an_id_is_numbered_by_position():
+    """A one-step plan can come back with no `step_id` at all; the id only serves
+    `deps`, so it is filled positionally instead of costing a re-prompt."""
+    raw = json.dumps({"title": "T", "pic_id": "writer", "steps": [
+        {"title": "Soạn email mời họp", "assigned_to": "writer", "deps": []},
+        {"step_id": "", "title": "Gửi", "assigned_to": "writer", "deps": ["s1"]},
+    ]})
+    task = parse_decomposed_task(raw)
+    assert [s.step_id for s in task.steps] == ["s1", "s2"]
+    assert task.steps[1].deps == ("s1",)
+
+
+def test_a_missing_id_does_not_rescue_a_dep_on_a_step_the_model_never_named():
+    raw = json.dumps({"title": "T", "pic_id": "a", "steps": [
+        {"title": "a", "assigned_to": "a", "deps": []},
+        {"title": "b", "assigned_to": "a", "deps": ["research"]},
+    ]})
+    with pytest.raises(DecompositionError, match="unknown step"):
+        parse_decomposed_task(raw)
+
+
 def test_a_sentence_in_boundary_is_clipped_not_rejected():
     raw = json.dumps({"title": "T", "pic_id": "a", "steps": [
         {"step_id": "s", "title": "a", "assigned_to": "a", "deps": [],

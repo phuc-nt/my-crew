@@ -22,6 +22,9 @@ gate can say which of the seven model roles that model is good at.
   system does not have ("gửi cho họ như lần trước") with no anchor (name, `@id`, number,
   link, listed entities) is answered with a question from `preview_assign_team_task`
   before intake or decompose run — no task row, no model call.
+- `llm/vietnamese_text.foreign_letters`: character-level language-drift check; an advisor
+  note carrying letters outside the Vietnamese/ASCII set is quarantined like malformed JSON
+  (measured 1/8 with thinking off: a note that drifted into Romanian mid-sentence).
 
 ### Changed
 - Every LLM request carries `max_tokens` = 16,384 (`_MAX_COMPLETION_TOKENS`): caps a
@@ -33,11 +36,21 @@ gate can say which of the seven model roles that model is good at.
   lost numbered asks or listed entities (`_keep_ceo_structure`).
 
 ### Fixed
+- A decomposition step without a `step_id` (measured 1/3 on a one-step plan) is numbered by
+  position instead of failing validation and costing a re-prompt.
 - `LengthFinishReasonError` from the openai 2.x stream assembler escaped `_stream_completion`
   on a length-cut answer; the partial body (with usage) is returned so `truncated` works.
-- The empty-answer guard (`_thought_but_said_nothing`) re-asks the same request instead of
-  re-asking with reasoning off, which produced prose for structured prompts (intake
-  fail-open created a task from it) and one 903 s decompose.
+- The empty-answer guard (`_said_nothing`) re-asks the same request instead of re-asking
+  with reasoning off, which produced prose for structured prompts (intake fail-open created
+  a task from it) and one 903 s decompose. It now also fires on an answer that is empty
+  with zero reasoning tokens (measured 1/12 review calls: 1.5 s, finish_reason=stop), and
+  does NOT fire when thinking itself ran into `max_tokens` (finish_reason=length, ~16k
+  reasoning tokens, 5–11 min): an identical re-ask hit the cap again 5/6 times, and
+  neither effort levels nor `reasoning.max_tokens` bound this model's thinking.
+- `strip_json_fences` falls back to the LAST complete JSON object when the first one is
+  broken: the review/self-check graders (2/12 on a clean artifact) leaked the model's
+  deliberation into the content — an unclosed first object, prose, then "Use the final."
+  and the real verdict at the end — and the old slice failed the parse.
 - Decomposer slips that only bought a re-prompt are repaired instead: a `boundary`
   sentence is clipped to the 40-char label, numeric `step_id`/`deps` are coerced to text,
   and a final step the model handed to someone other than the PIC goes back to the PIC

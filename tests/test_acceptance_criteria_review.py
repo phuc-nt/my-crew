@@ -264,6 +264,34 @@ def test_fence_stripper_takes_only_the_first_complete_object():
     assert strip_json_fences('nói trước {"a": } nói sau }') == '{"a": } nói sau }'
 
 
+def test_fence_stripper_takes_the_last_complete_object_when_the_first_is_broken():
+    from my_crew.llm.team_task_check_prompt import strip_json_fences
+
+    # Measured on deepseek-v4-flash (self-check + review, 2/12 answers on a clean
+    # artifact): the model leaks its deliberation into the content — an unclosed first
+    # object, prose, then "Use the final." and one complete object at the very end.
+    leaked = (
+        '{"passed": false, "failures": ["thiếu khoảng cách B"], "criteria": [{"c": 1}]\n'
+        'Tuy nhiên, nếu tôi đọc lại thì mục B có ghi 4 km. Vậy passed nên là true.\n'
+        'Use the final.\n'
+        '{"passed": true, "failures": [], "confidence": 0.9}'
+    )
+    assert json.loads(strip_json_fences(leaked)) == {
+        "passed": True, "failures": [], "confidence": 0.9,
+    }
+    # Deliberation INSIDE a string that never closes, with several partial retries.
+    fragments = (
+        '{"passed": false, "failures": ["bảng thiếu cột (chờ đã, ta xem lại: '
+        '{"passed": false, "failures": ["x"]\n'
+        '{"passed": true, "failures": []}'
+    )
+    assert json.loads(strip_json_fences(fragments)) == {"passed": True, "failures": []}
+    # Nothing complete anywhere: the old slice comes back so the parser reports its error.
+    assert strip_json_fences('nói trước {"a": } nói sau }') == '{"a": } nói sau }'
+    # The first-object rule still wins when the first object IS complete.
+    assert strip_json_fences('{"a": 1}\n{"b": 2}') == '{"a": 1}'
+
+
 def test_decompose_prompt_forbids_named_entity_lists_from_model_memory():
     """Measured live (lanes6, both music cases): decompose listed 'Zing MP3, NCT,
     NhacCuaTui' from memory and demanded 'ít nhất 3 nền tảng nội địa' — but NCT IS

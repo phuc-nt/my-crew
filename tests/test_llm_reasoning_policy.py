@@ -113,7 +113,7 @@ class _Message:
         return {"role": "assistant", "content": self.content}
 
 
-def _response(reasoning_tokens=None, content="ok"):
+def _response(reasoning_tokens=None, content="ok", finish_reason="stop"):
     details = (
         SimpleNamespace(reasoning_tokens=reasoning_tokens)
         if reasoning_tokens is not None
@@ -122,7 +122,7 @@ def _response(reasoning_tokens=None, content="ok"):
     msg = _Message()
     msg.content = content
     return SimpleNamespace(
-        choices=[SimpleNamespace(message=msg, finish_reason="stop")],
+        choices=[SimpleNamespace(message=msg, finish_reason=finish_reason)],
         usage=SimpleNamespace(
             prompt_tokens=10, completion_tokens=20, total_tokens=30,
             completion_tokens_details=details,
@@ -224,35 +224,80 @@ def test_a_second_empty_answer_is_returned_not_retried_again(monkeypatch, tmp_pa
     assert len(seen) == 2
 
 
-def test_the_retry_happens_at_most_once(monkeypatch, tmp_path):
-    # Reasoning already off and still nothing: that is the model's answer, not a policy
-    # problem — the caller's own empty-content handling applies, no second retry.
+def test_the_retry_happens_at_most_once_even_with_thinking_off(monkeypatch, tmp_path):
+    # Thinking off and still nothing: an empty answer is the same stochastic non-answer
+    # whatever the reasoning policy, so it gets the one identical retry — and when that
+    # one is empty too, the caller's own empty-content handling applies, no third ask.
     cl = c.LlmClient(_settings(tmp_path))
     seen = _capture_requests(
-        monkeypatch, cl, responses=[_response(reasoning_tokens=5, content="")],
+        monkeypatch, cl,
+        responses=[_response(reasoning_tokens=5, content=""), _response(content="")],
     )
     result = cl.complete([{"role": "user", "content": "x"}], role="sprint_low")
     assert result.content == ""
-    assert len(seen) == 1
+    assert len(seen) == 2
+    assert seen[0] == seen[1]
 
 
-def test_an_empty_answer_without_reasoning_is_not_retried(monkeypatch, tmp_path):
-    # No reasoning tokens ⇒ nothing was "spent on thinking"; an empty reply is a reply.
+def test_an_empty_answer_without_reasoning_is_retried_once(monkeypatch, tmp_path):
+    # Measured on the review self-check (deepseek-v4-flash, 1/12 calls): 0 reasoning
+    # tokens, 0 content, finish_reason=stop, 1.5 s — the provider returned nothing at
+    # all. A billed non-answer with the same remedy as the thinking-only one.
     cl = c.LlmClient(_settings(tmp_path))
-    seen = _capture_requests(monkeypatch, cl, responses=[_response(content="")])
-    cl.complete([{"role": "user", "content": "x"}], role="plan")
+    seen = _capture_requests(
+        monkeypatch, cl, responses=[_response(content=""), _response(content="ok")],
+    )
+    result = cl.complete([{"role": "user", "content": "x"}], role="plan")
+    assert result.content == "ok"
+    assert len(seen) == 2
+    assert seen[0] == seen[1]
+
+
+def test_thinking_that_hit_the_answer_cap_is_not_retried(monkeypatch, tmp_path):
+    # Measured: ~16k reasoning tokens, no content, finish_reason=length, 5–11 min. The
+    # same request re-asked hit the cap again 5/6 times, so a repeat is ten more
+    # minutes for a 1/6 chance — the empty, truncated answer goes back to the caller.
+    cl = c.LlmClient(_settings(tmp_path))
+    seen = _capture_requests(
+        monkeypatch, cl,
+        responses=[_response(reasoning_tokens=16145, content="", finish_reason="length"),
+                   _response(content="never asked")],
+    )
+    result = cl.complete([{"role": "user", "content": "x"}], role="review")
+    assert result.content == ""
+    assert result.finish_reason == "length"
     assert len(seen) == 1
 
 
-def test_thought_but_said_nothing_predicate_shapes():
-    assert c._thought_but_said_nothing(_response(reasoning_tokens=3, content=""))
-    assert not c._thought_but_said_nothing(_response(reasoning_tokens=3, content="hi"))
-    assert not c._thought_but_said_nothing(_response(content=""))
+def test_a_cap_hit_with_content_is_a_normal_truncated_answer(monkeypatch, tmp_path):
+    # Content that ran into the cap is a long answer, not an empty one: no retry.
+    cl = c.LlmClient(_settings(tmp_path))
+    seen = _capture_requests(
+        monkeypatch, cl,
+        responses=[_response(reasoning_tokens=702, content="x" * 50, finish_reason="length")],
+    )
+    result = cl.complete([{"role": "user", "content": "x"}], role="review")
+    assert result.content == "x" * 50
+    assert len(seen) == 1
+
+
+def test_said_nothing_predicate_shapes():
+    assert c._said_nothing(_response(reasoning_tokens=3, content=""))
+    assert c._said_nothing(_response(content=""))
+    assert c._said_nothing(_response(content="   "))
+    assert not c._said_nothing(_response(reasoning_tokens=3, content="hi"))
     tool_msg = {"role": "assistant", "content": None,
                 "tool_calls": [{"id": "1", "type": "function"}]}
     as_dict = {"choices": [SimpleNamespace(message=tool_msg)],
                "usage": {"completion_tokens_details": {"reasoning_tokens": 9}}}
-    assert not c._thought_but_said_nothing(SimpleNamespace(**as_dict))
+    assert not c._said_nothing(SimpleNamespace(**as_dict))
+    assert not c._said_nothing(SimpleNamespace(choices=[]))
+
+
+def test_answer_cap_predicate_shapes():
+    assert c._hit_the_answer_cap(_response(content="", finish_reason="length"))
+    assert not c._hit_the_answer_cap(_response(content=""))
+    assert not c._hit_the_answer_cap(SimpleNamespace(choices=[]))
 
 
 # --------------------------------------------------------------------------- accounting

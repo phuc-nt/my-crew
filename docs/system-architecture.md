@@ -361,11 +361,16 @@ model (`"model"`), `util`/`aggregate` cũng giữ mặc định (scorecard k=3: 
 luận / 0,61 không — slot extraction 0/3; aggregate 1,00 / 0,67), `content`/`advisor`/
 `sprint_low` tắt hẳn (`"off"`: cùng điểm 1,00, nhanh gấp 2–3). Không dùng effort thấp làm mặc định
 vì đo 5 lần `effort=low` trên cùng brief: 2/5 trả lời RỖNG (toàn bộ completion là reasoning
-lỗi), `off` 3/3 sạch; client còn chốt chặn `_thought_but_said_nothing` — model tiêu hết
-answer vào suy nghĩ mà không có content thì gọi lại đúng một lần CÙNG request (câu trả
-lời rỗng là ngẫu nhiên: 2/51 ở mặc định model; đo thử gọi lại với reasoning tắt thì
-prompt có cấu trúc trả văn xuôi thay JSON — intake fail-open tạo việc từ rác — và một
-decompose chạy 903 s, nên không đổi request khi gọi lại). Ghi đè per-agent bằng `role_reasoning:` (top level profile.yaml, mapping hoặc
+lỗi), `off` 3/3 sạch; client còn chốt chặn `_said_nothing` — câu trả lời không có content lẫn
+tool call (model tiêu hết answer vào suy nghĩ, HOẶC provider trả rỗng hẳn: 0 reasoning,
+1,5 s, 1/12 lượt review) thì gọi lại đúng một lần CÙNG request (rỗng là ngẫu nhiên: 2/51
+ở mặc định model; đo thử gọi lại với reasoning tắt thì prompt có cấu trúc trả văn xuôi
+thay JSON — intake fail-open tạo việc từ rác — và một decompose chạy 903 s, nên không đổi
+request khi gọi lại). Ngoại lệ KHÔNG gọi lại: suy nghĩ đốt tới trần `max_tokens`
+(`finish_reason` "length", ~16k reasoning token, 5–11 phút) — gọi lại y hệt đốt trần tiếp
+5/6, còn effort `low`/`medium` lẫn `reasoning.max_tokens` đo trên model này đều KHÔNG
+chặn được lượng suy nghĩ (low: 10.833/15.746; budget 2048: 10.210/16.030) — nên trả về
+rỗng ngay, caller tự xử lý (self_check fail-open, review re-ask rồi lỗi). Ghi đè per-agent bằng `role_reasoning:` (top level profile.yaml, mapping hoặc
 chuỗi `"role=level,..."`), env fallback `OPENROUTER_ROLE_REASONING`; validate ở
 `config_builders._d_role_reasoning` (role lạ, level lạ, trùng → raise). Client gửi
 `reasoning` (`{"effort": ...}` hoặc `{"enabled": false}`) CHỈ trên call OpenRouter; model

@@ -144,8 +144,9 @@ CLEAN = {
         "sự, ngược ưu tiên đi lại.\n- B: tiền thuê cao nhất; ràng buộc 24 tháng không có "
         "điều khoản hủy.\n- C: đầu tư nội thất 80tr khó thu hồi nếu hủy sau 12 tháng.\n\n"
         "## Khuyến nghị\nChọn phương án B: gần trung tâm nhất (4km) nên đúng ưu tiên đi "
-        "lại; không cần đầu tư ban đầu nên nằm trong ngân sách 150tr; chênh lệch thuê so "
-        "với C (40tr/24 tháng) nhỏ hơn khoản nội thất 80tr mà C phải bỏ ra."),
+        "lại; không cần đầu tư ban đầu nên nằm trong ngân sách 150tr; tổng chi phí 24 "
+        "tháng (840tr) chỉ cao hơn C (800tr) 40tr, đổi lại không phải bỏ 80tr nội thất "
+        "khó thu hồi và gần trung tâm hơn."),
     "event_plan": (
         "## 1. Timeline\n- Tuần 1: chốt địa điểm, danh sách khách.\n- Tuần 2: thiết kế "
         "ấn phẩm, gửi thư mời.\n- Tuần 3: chốt nhà cung cấp tiệc, âm thanh.\n- Tuần 4: "

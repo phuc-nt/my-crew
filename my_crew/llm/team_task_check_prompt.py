@@ -68,8 +68,31 @@ def strip_json_fences(raw: str) -> str:
     try:
         _, consumed = json.JSONDecoder().raw_decode(text, start)
     except ValueError:
-        return text[start:end + 1]
+        # Object ĐẦU hỏng. Đo thật (self-check + soát chéo, deepseek-v4-flash 2/12 lượt
+        # trên artifact sạch): model để lộ phần cân nhắc vào nội dung — object đầu bỏ
+        # dở giữa chừng, lan man vài đoạn "Tuy nhiên, nếu tôi…", rồi "Use the final."
+        # và một object HOÀN CHỈNH ở cuối. Câu trả lời của model là object trọn vẹn
+        # cuối cùng; không có thì giữ lát cắt cũ để parser phía sau báo đúng lỗi của nó.
+        final = _last_complete_object(text, start)
+        return final if final is not None else text[start:end + 1]
     return text[start:consumed]
+
+
+def _last_complete_object(text: str, start: int) -> str | None:
+    """The last substring after `start` that decodes as one complete JSON object."""
+    decoder = json.JSONDecoder()
+    found = None
+    pos = text.find("{", start + 1)
+    while pos != -1:
+        try:
+            _, consumed = decoder.raw_decode(text, pos)
+        except ValueError:
+            pass
+        else:
+            found = text[pos:consumed]
+            pos = consumed - 1
+        pos = text.find("{", pos + 1)
+    return found
 
 
 def _coerce_criteria(value):
