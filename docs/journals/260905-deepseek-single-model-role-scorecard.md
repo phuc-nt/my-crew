@@ -71,7 +71,11 @@
 ## Mở / sang sau
 - Đã chốt 2026-09-06 (4 vá thêm, xem CHANGELOG): intake gọi lại 1 lần khi JSON rác rồi mới
   fail-open; self-check bỏ finding "thiếu '…'" khi draft chứa nguyên văn cụm đó; đốt trần
-  16k → gọi lại 1 lần tắt suy nghĩ (đo review tắt suy nghĩ 23/24 đúng, 1–23 s); knob opt-in
-  `provider_ignore` (`OPENROUTER_PROVIDER_IGNORE`) cho upstream trả rỗng — không đặt sẵn.
+  16k → gọi lại 1 lần tắt suy nghĩ VÀ né upstream vừa đốt (đo review tắt suy nghĩ 23/24 đúng,
+  1–23 s; nhưng bench k=3 ở HEAD đốt trần 4/4 qua DigitalOcean và gọi lại trên đó 0/4); knob
+  opt-in `provider_ignore` (`OPENROUTER_PROVIDER_IGNORE`) cho upstream trả rỗng — không đặt sẵn.
+- Bench k=3 chạy lại ở HEAD: util 1,00, review 0,82 "watch" — 9 lỗi gom ở DigitalOcean/
+  OpenInference, 0 lỗi ở 8 upstream khác → giữ baseline #5; review tắt suy nghĩ k=6 = 0,89
+  "watch" → giữ suy nghĩ mặc định cho review.
 - Effort/budget OpenRouter không chặn được suy nghĩ của model này: ghi nhận, không vá.
 - Kiểm tra ngôn ngữ advisor mới ở mức ký tự; chưa thấy lọt ca nào nên để nguyên.
