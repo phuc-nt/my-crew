@@ -1045,3 +1045,48 @@ def test_sprint_intake_prompt_tells_the_model_to_route_tool_work_by_the_hint():
 
     assert "QUY TẮC CÔNG CỤ" in messages[0]["content"]
     assert "- analyst (research — có công cụ tra lịch sử)" in messages[1]["content"]
+
+
+def test_shape_path_keeps_the_team_plans_lookup_need_when_the_intake_drops_it(monkeypatch):
+    """The shape path re-plans through the intake, which reads only the brief and can
+    say "no lookup" for a brief the decompose loop just forced web steps onto (measured
+    live: "So sánh 12 sàn TMĐT …" — decompose with web steps, intake with needs_web
+    false, sprint step persisted without the tool). The team plan's web need survives
+    the re-plan, the same rule `downgrade_to_sprint` already applies."""
+    calls = _wire(monkeypatch, plan=SprintPlan(goal="So sánh 12 sàn", acceptance="- Đủ 12",
+                                               assigned_to="agent-b", needs_web=False))
+
+    def _lookup_chain(brief, staff, pic=""):
+        calls["decompose"] += 1
+        return _plan(_step("s1", "agent-a", needs_web=True),
+                     _step("s2", "agent-b", deps=("s1",))), 0.01
+
+    monkeypatch.setattr(mod, "_decompose_with_retries", _lookup_chain)
+    slots = {"brief": _TEAM_SHAPED_BRIEF}
+
+    mod.preview_assign_team_task(slots)
+
+    assert calls == {"decompose": 1, "intake": 1}
+    route = _route_of(slots["task_id"])
+    assert (route["mode"], route["source"]) == ("sprint", "shape")
+    (step,) = _steps_of(slots["task_id"])
+    assert step.needs_web is True
+
+
+def test_shape_path_does_not_invent_a_lookup_the_team_plan_never_had(monkeypatch):
+    """One-directional: a team plan with no web step leaves the intake's verdict alone —
+    the carry-over exists to stop a lost lookup, not to add one."""
+    calls = _wire(monkeypatch, plan=SprintPlan(goal="Soạn kịch bản", acceptance="- 3 cảnh",
+                                               assigned_to="agent-b", needs_web=False))
+
+    def _writing_chain(brief, staff, pic=""):
+        calls["decompose"] += 1
+        return _plan(_step("s1", "agent-a"), _step("s2", "agent-b", deps=("s1",))), 0.01
+
+    monkeypatch.setattr(mod, "_decompose_with_retries", _writing_chain)
+    slots = {"brief": _TEAM_SHAPED_BRIEF}
+
+    mod.preview_assign_team_task(slots)
+
+    (step,) = _steps_of(slots["task_id"])
+    assert step.needs_web is False

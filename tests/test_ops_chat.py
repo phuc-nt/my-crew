@@ -838,3 +838,88 @@ def test_a_brief_with_no_prefix_is_not_given_one(tmp_path, monkeypatch):
         store.close()
 
     assert seen.get("brief") == "khảo sát 5 công cụ quản lý dự án", seen
+
+
+def test_keep_ceo_structure_fills_an_empty_brief_from_a_structured_message():
+    """Measured live: a 12-entity "So sánh giúp anh 12 sàn TMĐT: Shopee, …" classified as
+    assign_team_task with NO brief, so the CEO was asked to describe the task they had
+    just typed. A message that carries structure is the brief."""
+    from my_crew.agent.ops_chat import _keep_ceo_structure
+
+    message = ("So sánh giúp anh 12 sàn TMĐT: Shopee, Lazada, Tiki, Sendo, TikTok Shop, "
+               "Amazon, eBay, Alibaba, Taobao, Coupang, Rakuten, Mercado Libre.")
+    assert _keep_ceo_structure(message, {}, expects_brief=True) == {"brief": message}
+    numbered = "làm giúp: (1) dựng slide cho buổi họp, (2) soạn kịch bản demo"
+    assert _keep_ceo_structure(numbered, {"pic": "an"}, expects_brief=True) == {
+        "pic": "an", "brief": numbered}
+
+
+def test_keep_ceo_structure_still_asks_when_a_contentless_delegation_has_no_brief():
+    """The ask-back is right when the CEO only said they want to delegate; and a command
+    without a brief slot never gains one."""
+    from my_crew.agent.ops_chat import _keep_ceo_structure
+
+    contentless = "Giao việc cho đội giúp anh, việc gì anh sẽ nói sau nhé"
+    assert _keep_ceo_structure(contentless, {}, expects_brief=True) == {}
+    structured = "so sánh Shopee, Lazada, Tiki"
+    assert _keep_ceo_structure(structured, {}) == {}
+
+
+def test_brief_slot_question_carries_no_model_instruction():
+    """The slot prompt is what the CEO reads when the brief is missing; the prefix rule
+    for the extractor lives in `hint`, which only the extractor sees (measured live: the
+    rule was printed to the CEO verbatim)."""
+    from my_crew.agent.ops_catalog import OPS_COMMANDS
+
+    rule = OPS_COMMANDS["assign_team_task"]["slots"]["brief"]
+    assert "sprint:" not in rule["prompt"] and "CEO" not in rule["prompt"]
+    assert "sprint:" in rule["hint"] and "team:" in rule["hint"]
+
+
+def test_keep_ceo_structure_restores_a_brief_that_kept_under_sixty_percent_of_the_text():
+    """Measured live: a 364-character brief naming sources that contradict each other came
+    back as a 104-character summary — no ask or entity lost, just the substance the
+    effort scorer needed. Length is structure too."""
+    from my_crew.agent.ops_chat import _keep_ceo_structure
+
+    message = (
+        "sprint: Đội mình đang cãi nhau về việc bỏ REST sang GraphQL. Tài liệu chính chủ "
+        "của GraphQL, các bài hậu-kiểm của những công ty đã chuyển, và mấy bài phản biện "
+        "gần đây nói ngược nhau về chi phí bảo trì và về N+1. Đọc kỹ các nguồn trái chiều "
+        "đó rồi cho anh một khuyến nghị dứt khoát cho đội 3 người, nêu rõ chỗ nào các "
+        "nguồn mâu thuẫn và anh tin bên nào hơn vì sao."
+    )
+    short = "sprint: Đánh giá việc chuyển từ REST sang GraphQL và đưa ra khuyến nghị cho đội."
+    assert _keep_ceo_structure(message, {"brief": short}) == {"brief": message}
+    # A tidy copy that keeps most of the text is left alone.
+    tidy = message[len("sprint: "):]
+    assert _keep_ceo_structure(message, {"brief": tidy}) == {"brief": tidy}
+
+
+def test_keep_ceo_structure_restores_a_brief_that_dropped_the_safety_guard_words():
+    """Rào `sprint_refusal` đọc chữ: bản chép rơi "gửi email" là rơi rào, dù còn 71% chữ."""
+    from my_crew.agent.ops_chat import _keep_ceo_structure
+
+    message = "Tổng hợp báo giá rồi gửi email cho khách hàng Anh Minh."
+    paraphrased = {"brief": "Tổng hợp báo giá cho khách hàng Anh Minh"}
+    assert _keep_ceo_structure(message, paraphrased) == {"brief": message}
+    faithful = {"brief": "Tổng hợp báo giá rồi gửi email cho khách hàng Anh Minh"}
+    assert _keep_ceo_structure(message, faithful) == faithful
+    # Đề không có rào thì phép đo này im lặng — bản chép gọn vẫn được giữ.
+    plain = "Tóm tắt biên bản họp sáng nay cho anh, ba gạch đầu dòng là đủ nhé."
+    tidy = {"brief": "Tóm tắt biên bản họp sáng nay, ba gạch đầu dòng"}
+    assert _keep_ceo_structure(plain, tidy) == tidy
+
+
+def test_keep_ceo_structure_rejects_a_brief_made_of_words_the_ceo_never_typed():
+    """Đo thật 1/4: slot `brief` trả về ví dụ trong prompt phân loại thay vì đề của CEO."""
+    from my_crew.agent.ops_chat import _keep_ceo_structure, _shared_word_share
+
+    message = "Tổng hợp báo giá rồi gửi email cho khách hàng Anh Minh."
+    echoed = "Tổng hợp giá bán lẻ iPhone 17 Pro tại VN"
+    assert _shared_word_share(echoed, message) < 0.5
+    assert _keep_ceo_structure(message, {"brief": echoed}) == {"brief": message}
+    # Một bản chép gọn giữ chữ của CEO thì tỷ lệ cao và được giữ nguyên.
+    tidy = {"brief": "Tổng hợp báo giá, gửi email cho khách hàng Anh Minh"}
+    assert _shared_word_share(tidy["brief"], message) == 1.0
+    assert _keep_ceo_structure(message, tidy) == tidy

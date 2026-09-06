@@ -438,6 +438,27 @@ def _build_sprint_task(plan, pic_requested: str):
     )
 
 
+def _carry_web_need(plan, task):
+    """Keep the team plan's lookup need when the shape path re-plans through the intake.
+
+    The discarded team plan is the one the decompose loop already checked for lookups
+    (`research_gap` re-prompts, `mark_research_steps` on the last attempt); the intake
+    writes from the brief alone and can answer "no lookup" for a brief that loop just
+    proved needs one. Measured live on deepseek-v4-flash: "So sánh 12 sàn TMĐT …" left
+    decompose with web steps and left the intake with `needs_web` false, so the sprint
+    would have typed twelve fee tables from memory. Same rule as `downgrade_to_sprint`
+    (any web step → web sprint); nothing else from the DAG carries over — its
+    acceptance lines were written for steps that no longer exist. One-directional on
+    purpose: a plan without web steps does not switch the intake's lookup off, because
+    an extra lookup costs seconds and a missing one costs the data.
+    """
+    if plan.needs_web or not any(s.needs_web for s in task.steps):
+        return plan
+    logger.info("assign_team_task: kế hoạch đội có bước tra cứu — sprint giữ needs_web")
+    plan.needs_web = True
+    return plan
+
+
 def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str,
                     forced_mode: str) -> tuple:
     """Pick the mode and produce `(DecomposedTask, cost_usd, is_sprint, route)`.
@@ -561,6 +582,7 @@ def _plan_for_brief(brief: str, staff: list[tuple[str, str]], pic_requested: str
                          "(làm + soát, chuỗi quyền)")
             logger.info("assign_team_task: sprint mode (%s, nhưng %s)", why_team, why_shape)
             plan, sprint_cost = sprint_intake(brief, staff, pic_requested)
+            plan = _carry_web_need(plan, task)
             return (_build_sprint_task(plan, pic_requested), cost + sprint_cost, True,
                     _route("sprint", "shape", f"{why_team}; {why_shape}"))
         return task, cost, False, _team_route(source, why_team, task, shape)

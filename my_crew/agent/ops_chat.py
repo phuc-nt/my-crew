@@ -399,9 +399,31 @@ def _restore_mode_prefix(message: str, slots: dict[str, str]) -> dict[str, str]:
     return {**slots, "brief": f"{forced}: {brief}"}
 
 
-def _keep_ceo_structure(message: str, slots: dict[str, str]) -> dict[str, str]:
+_WORD_RE = re.compile(r"\w+", re.UNICODE)
+
+
+def _shared_word_share(brief: str, message: str) -> float:
+    """Tỷ lệ chữ trong `brief` có mặt trong `message` (0..1; brief rỗng tính là 1)."""
+    words = _WORD_RE.findall(brief.lower())
+    if not words:
+        return 1.0
+    typed = set(_WORD_RE.findall(message.lower()))
+    return sum(1 for w in words if w in typed) / len(words)
+
+
+def _keep_ceo_structure(
+    message: str, slots: dict[str, str], *, expects_brief: bool = False,
+) -> dict[str, str]:
     """Đưa lại NGUYÊN VĂN tin nhắn của CEO vào slot `brief` khi bộ tách slot làm rơi
-    cấu trúc của đề.
+    cấu trúc của đề — hoặc làm rơi CẢ đề.
+
+    `expects_brief` (lệnh có slot `brief`): bộ phân loại trả đúng lệnh mà slot rỗng thì
+    máy hỏi lại "Mô tả việc cần giao?" — đúng khi CEO chỉ nhắn "giao việc cho đội giúp
+    anh", sai khi chính tin nhắn ĐÃ là đề. Đo thật trên deepseek-v4-flash: "So sánh giúp
+    anh 12 sàn TMĐT: Shopee, Lazada, …" (12 thực thể liệt kê) trả về assign_team_task
+    không kèm brief, và CEO bị hỏi lại chính đề mình vừa gõ. Chỉ điền khi tin nhắn mang
+    cấu trúc đo được (≥2 thực thể liệt kê hoặc ≥2 đầu việc) — một câu nhờ vả không có
+    nội dung vẫn được hỏi lại như cũ.
 
     Bộ định tuyến lane đọc cấu trúc HÌNH THỨC của đề — số đầu việc đánh số "(1) (2)
     (3)", số thực thể liệt kê — và bộ phân rã nhận đúng chuỗi đó làm đề. Đo thật trên
@@ -412,15 +434,36 @@ def _keep_ceo_structure(message: str, slots: dict[str, str]) -> dict[str, str]:
     việc hoặc thực thể ít đi — nên một bản chép trung thực (6/6 lần đo) giữ nguyên, và
     tiền tố `team:`/`@pic` ở đầu tin nhắn đi theo nguyên văn.
     """
-    from my_crew.agent.sprint_intake import _distinct_asks
+    from my_crew.agent.sprint_intake import _distinct_asks, sprint_refusal
     from my_crew.runtime.sprint_runner import listed_entities
 
     brief = slots.get("brief", "")
     if not brief:
+        if expects_brief and (
+            len(listed_entities(message)) >= 2 or _distinct_asks(message) >= 2
+        ):
+            logger.info("ops intent: slot `brief` came back empty on a structured message "
+                        "— using the message verbatim")
+            return {**slots, "brief": message.strip()}
         return slots
     lost_asks = _distinct_asks(message) > _distinct_asks(brief)
     lost_entities = len(listed_entities(message)) > len(listed_entities(brief))
-    if not (lost_asks or lost_entities):
+    # Độ dài cũng là cấu trúc: bản chép còn dưới 60% chữ của CEO là đã bỏ nội dung, không
+    # phải "chép cho gọn". Đo thật: đề 364 ký tự nêu các nguồn nói ngược nhau về GraphQL
+    # thành 104 ký tự, mất đúng phần "trái chiều" mà bộ chấm effort cần đọc — không có
+    # đầu việc hay thực thể nào rơi nên hai phép đo trên không thấy gì.
+    lost_text = len(brief.strip()) < 0.6 * len(message.strip())
+    # Rào an toàn cũng là cấu trúc: `sprint_refusal` đọc CHỮ ("gửi email", "clone repo")
+    # để giữ đề ghi-ra-ngoài / chạy shell ở lane đội. Đo thật: "Tổng hợp báo giá rồi gửi
+    # email cho khách hàng Anh Minh." (56 ký tự) thành 40 ký tự không còn chữ "email" —
+    # trên 60% chữ nên phép đo độ dài không thấy, và đề đi sprint, mất đúng vòng review
+    # bắt buộc cho bước gửi ra ngoài.
+    lost_guard = bool(sprint_refusal(message)) and not sprint_refusal(brief)
+    # Chữ lạ cũng là mất cấu trúc: một bản chép mà quá nửa số chữ CEO chưa từng gõ không
+    # phải bản chép — đo thật 1/4: slot `brief` trả về đúng VÍ DỤ trong prompt phân loại
+    # ("Tổng hợp giá bán lẻ iPhone 17 Pro tại VN", 40 ký tự) cho đề gửi báo giá qua email.
+    made_up = _shared_word_share(brief, message) < 0.5
+    if not (lost_asks or lost_entities or lost_text or lost_guard or made_up):
         return slots
     logger.info("ops intent: slot `brief` dropped the CEO's structure — using the message verbatim")
     return {**slots, "brief": message.strip()}
@@ -454,7 +497,7 @@ def _start_new(
     # Tiền tố ép chế độ là LỆNH của CEO — khôi phục sau khi tách slot, xem hàm dưới.
     slots = _restore_mode_prefix(message, slots)
     # Chữ của CEO là đặc tả — bản chép lại của model không được làm rơi cấu trúc.
-    slots = _keep_ceo_structure(message, slots)
+    slots = _keep_ceo_structure(message, slots, expects_brief="brief" in spec["slots"])
 
     if spec.get("readonly"):
         # Status/cost query: run now, no draft, no confirm (it writes nothing).
