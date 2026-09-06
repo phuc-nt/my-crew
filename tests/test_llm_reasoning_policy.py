@@ -288,6 +288,32 @@ def test_thinking_that_hit_the_answer_cap_is_retried_once_with_thinking_off(
         k: v for k, v in seen[0].items() if k != "extra_body"}
 
 
+def test_the_cap_burn_retry_skips_the_upstream_that_burned(monkeypatch, tmp_path):
+    # Cap burns cluster by upstream (4/4 via one upstream on a k=3 role run, whose
+    # thinking-off re-asks then rambled or misjudged), so the one retry names it in
+    # `provider.ignore` — appended after the operator's own list, no duplicates.
+    cl = c.LlmClient(_settings(tmp_path, openrouter_provider_ignore="Sail Research"))
+    burned = _response(reasoning_tokens=16145, content="", finish_reason="length")
+    burned.provider = "DigitalOcean"
+    seen = _capture_requests(monkeypatch, cl, responses=[burned, _response(content="ok")])
+    cl.complete([{"role": "user", "content": "x"}], role="review")
+    assert seen[1]["extra_body"] == {"provider": {"ignore": ["Sail Research", "DigitalOcean"]},
+                                     "reasoning": {"enabled": False}}
+
+
+def test_the_cap_burn_retry_without_a_known_upstream_adds_no_provider_key(
+    monkeypatch, tmp_path,
+):
+    cl = c.LlmClient(_settings(tmp_path))
+    seen = _capture_requests(
+        monkeypatch, cl,
+        responses=[_response(reasoning_tokens=16145, content="", finish_reason="length"),
+                   _response(content="ok")],
+    )
+    cl.complete([{"role": "user", "content": "x"}], role="review")
+    assert seen[1]["extra_body"] == {"reasoning": {"enabled": False}}
+
+
 def test_a_cap_burn_is_retried_with_thinking_off_at_most_once(monkeypatch, tmp_path):
     # Nothing again with thinking off: the empty, truncated answer goes back to the
     # caller — no third ask, the caller's own empty/truncated handling applies.

@@ -738,27 +738,35 @@ class LlmClient:
                     # empty body it replaces: every structured caller re-validates and
                     # falls open on prose exactly as it does on nothing. A request that
                     # already ran with thinking off has no such knob left and goes
-                    # back as-is.
+                    # back as-is. The retry also steers away from the upstream that
+                    # burned: cap burns cluster by upstream (a k=3 role run: 4/4 via
+                    # DigitalOcean, whose thinking-off re-asks then rambled 16k tokens
+                    # of content or misjudged 3/3 — the same fixtures other upstreams
+                    # graded 23/24), so `provider.ignore` names it for this one call.
                     wasted = extract_usage(response)
                     self._budget.record_cost(wasted.cost_usd)
                     if _hit_the_answer_cap(response):
                         if body.get("reasoning") == _REASONING_OFF:
                             return response
+                        burned = _serving_provider(response) or ""
                         logger.warning(
                             "model %r (via %s) spent its whole answer cap thinking (%d "
                             "reasoning tokens, no content, finish_reason=length); "
-                            "retrying once with thinking off — a repeat of the same "
-                            "request was measured to hit the cap again 5/6",
-                            model_id, _serving_provider(response) or "?",
-                            wasted.reasoning_tokens,
+                            "retrying once with thinking off and that upstream skipped "
+                            "— a repeat of the same request was measured to hit the "
+                            "cap again 5/6",
+                            model_id, burned or "?", wasted.reasoning_tokens,
                         )
+                        retry_body = {**body, "reasoning": _REASONING_OFF}
+                        skip = list(dict.fromkeys([*ignore, *([burned] if burned else [])]))
+                        if skip:
+                            retry_body["provider"] = {"ignore": skip}
                         progress = _Progress()
                         return _run_until_idle(
                             partial(
                                 _stream_completion, client, progress=progress,
                                 model=model_id, messages=messages, extra_headers=headers,
-                                **{**extra_kwargs,
-                                   "extra_body": {**body, "reasoning": _REASONING_OFF}},
+                                **{**extra_kwargs, "extra_body": retry_body},
                             ),
                             _STREAM_IDLE_S,
                             what=f"chat.completions({model_id})",

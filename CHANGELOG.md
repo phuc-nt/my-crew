@@ -86,7 +86,10 @@ gate can say which of the seven model roles that model is good at.
   5–11 min) is re-asked once with thinking OFF instead: an identical re-ask hit the cap
   again 5/6 times and neither effort levels nor `reasoning.max_tokens` bound this model's
   thinking, while the thinking-off review self-check measured 24/24 parseable, 23/24
-  correct, 1–23 s. A request that already ran with thinking off is returned as-is.
+  correct, 1–23 s. The re-ask also skips the upstream that burned (`provider.ignore`, on
+  top of `provider_ignore`): cap burns cluster by upstream (4/4 via DigitalOcean on a k=3
+  role run, whose thinking-off re-asks then rambled to the cap or misjudged). A request
+  that already ran with thinking off is returned as-is.
 - `strip_json_fences` falls back to the LAST complete JSON object when the first one is
   broken: the review/self-check graders (2/12 on a clean artifact) leaked the model's
   deliberation into the content — an unclosed first object, prose, then "Use the final."

@@ -378,8 +378,11 @@ KHÔNG chặn được lượng suy nghĩ (low: 10.833/15.746; budget 2048: 10.2
 suy nghĩ là nút duy nhất chắc chắn hết đốt — đo self-check review tắt suy nghĩ 24/24 parse
 được, 23/24 đúng, 1–23 s (4 fixture × sạch/gieo lỗi × 3). Trả lời tắt-suy-nghĩ không thể
 tệ hơn thân rỗng nó thay thế: caller có cấu trúc đều validate lại và fail-open trên văn
-xuôi y như trên rỗng. Request vốn đã tắt suy nghĩ mà vẫn đốt trần thì trả về nguyên (không
-còn nút nào để vặn). Ghi đè per-agent bằng `role_reasoning:` (top level profile.yaml, mapping hoặc
+xuôi y như trên rỗng. Lượt gọi lại còn né upstream vừa đốt (`provider.ignore`, nối sau
+`provider_ignore` của operator): đốt trần gom theo upstream — một lượt bench k=3 4/4 qua
+DigitalOcean, và gọi lại tắt suy nghĩ trên chính upstream đó lại lan man 16k token content
+hoặc chấm sai 3/3 trong khi upstream khác chấm đúng 23/24. Request vốn đã tắt suy nghĩ mà
+vẫn đốt trần thì trả về nguyên (không còn nút nào để vặn). Ghi đè per-agent bằng `role_reasoning:` (top level profile.yaml, mapping hoặc
 chuỗi `"role=level,..."`), env fallback `OPENROUTER_ROLE_REASONING`; validate ở
 `config_builders._d_role_reasoning` (role lạ, level lạ, trùng → raise). Client gửi
 `reasoning` (`{"effort": ...}` hoặc `{"enabled": false}`) CHỈ trên call OpenRouter; model
