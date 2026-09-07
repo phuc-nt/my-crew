@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 #: remedy for these, so the escalation gets a suggested `adjust_team_task` command.
 _STALL_EVENT_KINDS = frozenset({
     "task_stalled_dead_step", "plan_hash_mismatch", "review_rounds_exhausted",
-    "cost_cap_exceeded",
+    "cost_cap_exceeded", "cost_cap_exhausted",
 })
 
 #: CONSTANT template, `{task_id}` interpolation ONLY — deliberately never composed

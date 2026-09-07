@@ -21,6 +21,11 @@ from __future__ import annotations
 #: failure of the task yet, and stamping it would count tasks that later finished.
 _MODE_FOR_EVENT: dict[str, str] = {
     "cost_cap_exceeded": "cost_cap",
+    # Same budget wall from the CEO's side, reached from the other direction: spend
+    # never passed the cap, but what was left could not pay for one more step. The
+    # code path differs; the thing that ended the task does not, so the retro counts
+    # both as `cost_cap` rather than splitting one budget story across two modes.
+    "cost_cap_exhausted": "cost_cap",
     "plan_hash_mismatch": "plan_mismatch",
     "review_rounds_exhausted": "verification_exhausted",
     "task_stalled_dead_step": "dead_step",
@@ -43,7 +48,7 @@ FAILURE_MODES: tuple[str, ...] = tuple(FAILURE_MODE_GROUP)
 
 #: Reader-facing labels (Vietnamese is the user-facing layer; ids stay English).
 FAILURE_MODE_LABELS: dict[str, str] = {
-    "cost_cap": "vượt trần chi phí",
+    "cost_cap": "hết trần chi phí",
     "plan_mismatch": "kế hoạch bị đổi giữa chừng",
     "verification_exhausted": "soát mãi không đạt",
     "dead_step": "một bước chết kéo cả việc",

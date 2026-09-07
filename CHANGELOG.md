@@ -3,7 +3,7 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
-## [0.18.0] — 2026-09-06
+## [0.18.0] — 2026-09-07
 
 The whole fleet now runs one model (`~deepseek/deepseek-v4-flash-latest`) and the release
 gate can say which of the seven model roles that model is good at.
@@ -57,6 +57,17 @@ gate can say which of the seven model roles that model is good at.
   skipping the mandatory review of an external write).
 
 ### Fixed
+- A team task that ran out of budget without overshooting it no longer hangs forever.
+  The cost cap only ever hard-stopped a task whose spend EXCEEDED it, while the
+  pre-spawn gate refused a step it could not afford and deferred it, assuming a running
+  step would finish and release headroom. With nothing running, that assumption never
+  came true: the task sat `open` tick after tick, never spending, never stalling, and
+  the CEO saw only silence. Found live on the cheapest model — decompose spent
+  $0.00094916 against a $0.001 cap, leaving too little for one step and too much to
+  trip the ceiling. Such a task now ends the way a breached cap does (a delivered
+  verdict with whatever finished work exists, an escalation and a lesson), stamped
+  `cost_cap_exhausted` and counted with `cost_cap` in the retro, with a message that
+  says the budget ran out rather than claiming an overshoot that never happened.
 - The "shape" sprint route (a team plan with no crew shape, re-planned through the
   intake) keeps the team plan's lookup need: when any decomposed step had `needs_web`
   the sprint step gets it too, the rule `downgrade_to_sprint` already applied. Measured

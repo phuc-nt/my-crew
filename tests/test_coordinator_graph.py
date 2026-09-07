@@ -679,3 +679,71 @@ def test_a_reflection_that_raises_never_loses_the_tick(tmp_path):
 
     assert result.action == "stalled"
     assert store.get("t1").status == "stalled"
+
+
+# --- cost dead zone: under the cap, but too poor to take one more step ---------------
+
+
+def test_a_task_too_poor_for_one_more_step_concludes_instead_of_hanging(tmp_path):
+    """The two cost guards used to leave a gap between them, and a task could fall in.
+
+    The hard stop only fires once spend EXCEEDS the cap. The pre-spawn gate refuses a
+    step whose estimate does not fit the headroom left, and defers it, assuming a
+    running step will finish and give its estimate back. With nothing running that
+    assumption is false: the refusal repeats every tick forever. Measured live — a
+    decompose that spent $0.00094916 against a $0.001 cap left a task `open` with one
+    `pending` step and a ticker logging "no actionable step" until the test timed out.
+    """
+    store = _store(tmp_path)
+    _plan(store, steps=[{"step_id": "s1", "title": "draft", "assigned_to": "agent-a",
+                         "deps": []}])
+    # Under the cap, so the hard stop stays silent, yet what is left ($0.00005084) is
+    # far below one step's share of the cap ($0.001 / MAX_STEPS).
+    store.record_task_cost("t1", decompose=0.00094916)
+    assert store.sum_cost("t1") < 0.001
+
+    seen: list[tuple[str, str]] = []
+    result = run_one_tick(_deps(
+        store, cost_cap_usd=0.001,
+        escalate=lambda task, step, kind, msg: seen.append((kind, msg)),
+        spawn_step=lambda task, step, attempt_id: pytest.fail(
+            "spawned a step there was no money for"),
+    ))
+
+    assert result.action == "cap_exhausted"
+    task = store.get("t1")
+    assert task.status == "stalled"          # never `open` again next tick
+    assert "KHÔNG LÀM ĐƯỢC" in (task.final_summary or "")   # a verdict, not silence
+    assert [kind for kind, _ in seen] == ["cost_cap_exhausted"]
+    # The CEO is told the real reason: money ran short, not that the cap was breached.
+    assert "vượt trần" not in (task.final_summary or "")
+
+
+def test_headroom_for_one_step_still_dispatches_it(tmp_path):
+    """The other side of the same boundary: the new terminal branch must not fire
+    while the task can still afford to move. A cap with room for one step spawns it."""
+    store = _store(tmp_path)
+    _plan(store, steps=[{"step_id": "s1", "title": "draft", "assigned_to": "agent-a",
+                         "deps": []}])
+    store.record_task_cost("t1", decompose=0.00094916)
+
+    result = run_one_tick(_deps(store, cost_cap_usd=2.0))
+
+    assert result.action == "spawned"
+    assert store.get("t1").status != "stalled"
+
+
+def test_a_task_with_no_ready_step_is_not_mistaken_for_a_broke_one(tmp_path):
+    """Starvation is only meaningful for a step that is otherwise dispatchable. A step
+    blocked on an unfinished dep is waiting, not broke — concluding it here would kill
+    tasks that merely have nothing to do THIS tick, whatever their budget."""
+    store = _store(tmp_path)
+    _plan(store)                              # s2 depends on s1
+    store.reserve_step("t1", "s1")
+    store.mark_awaiting_approval("t1", "s1", approval_id=None)
+    store.record_task_cost("t1", decompose=0.00094916)
+
+    result = run_one_tick(_deps(store, cost_cap_usd=0.001))
+
+    assert result.action != "cap_exhausted"
+    assert store.get("t1").status != "stalled"

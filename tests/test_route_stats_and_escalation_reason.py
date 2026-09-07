@@ -301,7 +301,7 @@ def test_route_stats_counts_failure_modes_by_mode_and_by_mast_group():
 
     assert "Kết cục thất bại (3 việc dừng không có kết quả):" in text
     assert "soát mãi không đạt: 1" in text
-    assert "vượt trần chi phí: 1" in text
+    assert "hết trần chi phí: 1" in text
     assert "hết lượt thử ở một bước: 1" in text
     assert "Theo nhóm: hệ thống 2 · kiểm chứng 1" in text
 

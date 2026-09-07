@@ -1,10 +1,19 @@
 """X2 — a breached spending ceiling stops the company, structurally.
 
 `team_task_cap_usd` is the only hard stop between a looping pipeline and the CEO's
-credit card. Everything else in the cost path is advisory: `spawn_headroom_usd` merely
-defers a spawn to a later tick, and `_maybe_warn_cost_cap` only warns. The single place
-that actually halts is `check_cost_cap` in `_act_on_task`, and when it trips it does
-four separate things (`coordinator_graph._act_on_task`):
+credit card. `_maybe_warn_cost_cap` only warns. Two branches actually halt, and which
+one fires is arithmetic, not intent: `check_cost_cap` stops a task whose spend
+OVERSHOT the cap, and `_cost_starved_result` stops one that EXHAUSTED it — still under
+the cap, but with too little left to pay for another step and nothing running that
+could ever hand headroom back. The second exists because the pair used to leave a gap
+between them: `spawn_headroom_usd` defers a spawn it cannot afford, on the assumption
+that a running step will finish and release its estimate, and with nothing running that
+assumption never comes true. A task could then sit `open` forever, never spending,
+never stalling. The cheaper the models get, the likelier the exhausted path is.
+
+This case asserts the OVERSHOOT branch's four steps when spend crosses the cap, and
+accepts the exhausted ending as the same budget stop otherwise
+(`coordinator_graph._act_on_task`):
 
 1. flips the task to `stalled` FIRST — the safety transition must not depend on the
    brake succeeding,
@@ -34,6 +43,7 @@ import sqlite3
 
 import pytest
 
+from my_crew.agent.task_decomposition import MAX_STEPS
 from tests.fullflow_live.topology import boot, poll_until, seed_home, task_status
 
 #: Low enough that real spend exceeds it, high enough to be a genuine ceiling rather
@@ -102,6 +112,33 @@ def _recorded_spend(home, task_id: str) -> float:
     if not row:
         return 0.0
     return float(row[0] or 0.0) + float(row[1] or 0.0) + float((steps or [0])[0] or 0.0)
+
+
+def _failure_mode(home, task_id: str) -> str:
+    """The failure mode the ticker stamped on this task's route record, or "".
+
+    Read from the store for the same reason `_recorded_spend` is: this is the field
+    `route_stats` counts, and it is the one durable statement of WHY the task ended.
+    Stamped by `_mark_route_failure` BEFORE the operator notify runs, so it survives
+    this sandbox's deliberately-failing Telegram send — which is what makes it a
+    safe thing to assert on here.
+    """
+    import json
+
+    db = home / ".data" / "team_tasks.sqlite3"
+    con = sqlite3.connect(db)
+    try:
+        row = con.execute(
+            "SELECT route_json FROM team_tasks WHERE id = ?", (task_id,),
+        ).fetchone()
+    finally:
+        con.close()
+    if not row or not row[0]:
+        return ""
+    try:
+        return str((json.loads(row[0]) or {}).get("failure_mode") or "")
+    except (ValueError, TypeError):
+        return ""
 
 
 @pytest.fixture
@@ -177,9 +214,26 @@ def test_x2_breaching_the_cost_cap_stalls_the_task_and_halts_its_steps(capped_fl
         f"task stalled having spent {spent} — a stall with no recorded spend is not a "
         "cap breach, so this case would be green against a fleet that simply cannot work"
     )
-    assert spent > TINY_CAP_USD, (
-        f"task stalled at ${spent}, which is UNDER the ${TINY_CAP_USD} cap — something "
+    #    A budget can stop the work two ways, and which one happens depends only on how
+    #    expensive the models are that day. Spend can OVERSHOOT the cap (`check_cost_cap`
+    #    hard-stops, `cap_exceeded`), or it can EXHAUST it — land under the cap with too
+    #    little left to pay for even one more step, which stalls via `cap_exhausted`.
+    #    Measured on deepseek-v4-flash: decompose costs ~$0.00095 against this $0.001
+    #    cap, so the cheaper the fleet gets the more often it exhausts rather than
+    #    overshoots. Requiring an overshoot would make this case fail on a fleet that got
+    #    CHEAPER, which is not a regression. What must stay true is that the cost path is
+    #    what stopped it — so the stall has to be one of the two budget endings, and the
+    #    spend has to be a real, cap-relevant number rather than a rounding artefact.
+    mode = _failure_mode(capped_fleet.home, task_id)
+    assert mode == "cost_cap", (
+        f"task stalled with failure mode {mode!r} after spending ${spent} — something "
         "other than the cost cap stopped it, and this case is measuring the wrong thing"
+    )
+    estimate = TINY_CAP_USD / MAX_STEPS
+    assert spent > TINY_CAP_USD or (TINY_CAP_USD - spent) < estimate, (
+        f"task stalled at ${spent}: under the ${TINY_CAP_USD} cap with ${TINY_CAP_USD - spent} "
+        f"left, which still covers a ${estimate} step — the budget neither overshot nor ran "
+        "out, so the cost cap is not what stopped this task"
     )
 
     # 2. Nothing is left burning. This is the half that a `stalled` status alone does not
@@ -210,7 +264,8 @@ def test_x2_breaching_the_cost_cap_stalls_the_task_and_halts_its_steps(capped_fl
     log = capped_fleet.log()
     notified = (
         "cost_cap_exceeded" in log
-        or "vượt trần chi phí" in log
+        or "cost_cap_exhausted" in log
+        or "trần chi phí" in log
         or "operator notice" in log
         or "telegram" in log.lower()
     )

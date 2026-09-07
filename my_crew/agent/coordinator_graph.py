@@ -79,9 +79,16 @@ from my_crew.agent.coordinator_nodes.tick_actions import (
     poll_waiting_clarify_step,
     ready_pending_steps,
 )
+from my_crew.agent.task_decomposition import MAX_STEPS
 from my_crew.runtime.company import DEFAULT_TEAM_TASK_CONCURRENCY
 from my_crew.runtime.office_room_append import append_office_event, room_for_task
-from my_crew.runtime.team_task_cost import CostCapResult, check_cost_cap, cost_warn_ratio
+from my_crew.runtime.team_task_cost import (
+    CostCapResult,
+    check_cost_cap,
+    cost_warn_ratio,
+    spawn_headroom_usd,
+    step_cost_estimate_usd,
+)
 from my_crew.runtime.team_task_halt import halt_running_steps
 from my_crew.runtime.team_task_store import TeamStep, TeamTask, TeamTaskStore
 
@@ -446,6 +453,10 @@ def _act_on_task(deps: CoordinatorDeps, task: TeamTask) -> TickResult:
     if dead_end is not None:
         return dead_end
 
+    starved = _cost_starved_result(deps, task, cap, ready)
+    if starved is not None:
+        return starved
+
     return TickResult(task_id=task.id, action="none", detail="nothing actionable")
 
 
@@ -465,6 +476,52 @@ def _combine_spawn_results(task: TeamTask, spawned: list[TickResult]) -> TickRes
     if len(spawned) == 1:
         return TickResult(task_id=task.id, action=action, detail=spawned[0].detail)
     return TickResult(task_id=task.id, action=action, detail="; ".join(r.detail for r in spawned))
+
+
+def _cost_starved_result(
+    deps: CoordinatorDeps, task: TeamTask, cap: CostCapResult, ready: list[TeamStep],
+) -> TickResult | None:
+    """Cost dead-end: spend is still UNDER the hard cap, yet what is left cannot pay
+    for even one more step, and nothing in flight will ever release more.
+
+    The two cost guards were each individually correct and together left a gap. The
+    hard stop (`check_cost_cap`, top of this function's caller) only fires once spend
+    EXCEEDS the cap. The soft pre-spawn gate (`dispatch_ready_steps`) refuses to spawn
+    a step whose estimate does not fit the remaining headroom and defers it, on the
+    documented assumption that a running step will finish and hand its estimate back.
+    When NOTHING is running that assumption is false: no step can complete, no headroom
+    is ever released, the same refusal repeats every tick, and the task sits `open`
+    forever — never spending, never stalling, never concluding, invisible to the CEO as
+    anything but silence. Measured: a task whose decompose alone spent $0.00094916
+    against a $0.001 cap stayed `open` with one `pending` step and a ticker logging "no
+    actionable step" indefinitely.
+
+    Reached only once every other branch declined the tick, so "nothing is in flight"
+    is already established by the polls above: `running`, `awaiting_approval`,
+    `waiting_clarify` and `needs_decision` all return their own results before this.
+    A task with no ready step is NOT starved — it is waiting on deps or already done,
+    which the branches above own. The conclusion mirrors the breached-cap path exactly
+    (delivered verdict with salvage, escalation, reflection), because to the CEO this
+    IS the cap stopping the work; only the arithmetic differs, so the message states
+    the real reason rather than claiming an overshoot that never happened.
+    """
+    if not ready:
+        return None
+    estimate = step_cost_estimate_usd(deps.cost_cap_usd, max_steps=MAX_STEPS)
+    headroom = spawn_headroom_usd(
+        deps.store, task, cap_usd=deps.cost_cap_usd, step_estimate_usd=estimate,
+    )
+    if headroom >= estimate:
+        return None
+    return conclude_task_failed(
+        deps, task,
+        f"Việc '{task.title}' KHÔNG LÀM ĐƯỢC: còn ${headroom:.4f} trong trần "
+        f"${cap.cap_usd:.2f} (đã dùng ${cap.spent_usd:.4f}), không đủ cho một bước "
+        f"(cần ${estimate:.4f}) — dừng thay vì treo vô hạn.",
+        step=None, event_kind="cost_cap_exhausted", reflect_outcome="cap_exhausted",
+        reflect_detail=f"headroom ${headroom:.4f} < step ${estimate:.4f}",
+        action="cap_exhausted", detail=f"headroom ${headroom:.4f} < ${estimate:.4f}",
+    )
 
 
 #: Cost-cap warning threshold (M32) — a room `milestone` fires ONCE per task the first
