@@ -154,6 +154,10 @@ gate can say which of the seven model roles that model is good at.
   without charging the task total, which the terminal write still does exactly once. An
   approval gate pauses a step the same way and had the same blind spot, so
   `mark_awaiting_approval` records the spend on the same terms.
+- A `sprint:`/`team:` prefix the classifier wrote by itself, on a brief the CEO typed with
+  no prefix at all, was read downstream as an order to force that mode: the router skipped
+  its own classification and logged the choice as the CEO's. Such a prefix is now dropped,
+  so the router decides. A prefix the CEO did type still wins over any the model wrote.
 
 ## [0.17.0] — 2026-09-03
 

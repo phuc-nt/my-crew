@@ -79,3 +79,17 @@ def test_a_prefix_still_cannot_lift_a_safety_rail():
     )["brief"]
     mode, source, _reason, _signals = decide(brief)
     assert (mode, source) == ("team", "refusal")
+
+
+@pytest.mark.parametrize("mode", ["sprint", "team"])
+def test_a_prefix_the_model_invented_is_dropped_so_the_router_still_decides(mode):
+    """Bộ định tuyến đọc tiền tố trong `brief` là LỆNH: gặp nó thì nó bỏ qua
+    `classify_brief` và ghi lý do "CEO ép bằng tiền tố". Nên một tiền tố model tự viết
+    trên đề CEO gõ trần không được phép sống sót — nó sẽ ép chế độ nhân danh CEO."""
+    from my_crew.agent.sprint_intake import strip_mode_prefix
+
+    message = "khảo sát 5 đối thủ"
+    slots = _restore_mode_prefix(message, {"brief": f"{mode}: khảo sát 5 đối thủ"})
+    assert slots["brief"] == message
+    # Điều thật sự cần giữ: không còn chế độ ép nào tới được bộ định tuyến.
+    assert strip_mode_prefix(slots["brief"])[0] == ""

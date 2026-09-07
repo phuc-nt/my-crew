@@ -443,15 +443,25 @@ def _restore_mode_prefix(message: str, slots: dict[str, str]) -> dict[str, str]:
     trên deepseek-v4-flash, "team: viết giúp anh bản mô tả phạm vi…" quay về dưới một
     tiền tố `sprint:`, và bộ định tuyến chạy chế độ nhanh với lý do "CEO ép bằng tiền
     tố" — đúng câu CEO không hề gõ. Tiền tố của CEO thắng: chép lại tiền tố đúng lên
-    phần đề model trả về.
+    phần đề model trả về. Và khi CEO KHÔNG gõ tiền tố nào, tiền tố model tự thêm bị gỡ:
+    giữ lại thì bộ định tuyến bỏ qua phép phân loại của chính nó và quy quyết định đó cho
+    CEO.
     """
     from my_crew.agent.sprint_intake import strip_mode_prefix
 
     forced, _ = strip_mode_prefix(message)
     brief = slots.get("brief", "")
-    if not forced or not brief:
+    if not brief:
         return slots
     written, clean = strip_mode_prefix(brief)
+    if not forced:
+        # CEO không gõ tiền tố nào mà slot lại có: đó là chữ model tự viết. Để nguyên thì
+        # bộ định tuyến đọc nó thành LỆNH ép chế độ, bỏ qua chính phép phân loại của mình
+        # và ghi log "CEO ép bằng tiền tố" cho một quyết định CEO chưa từng ra.
+        if written:
+            logger.info("ops intent: dropping mode prefix %r the CEO never typed", written)
+            return {**slots, "brief": clean}
+        return slots
     if not written:
         return {**slots, "brief": f"{forced}: {brief}"}
     if written.lower() == forced.lower():

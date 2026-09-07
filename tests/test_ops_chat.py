@@ -990,10 +990,12 @@ def test_the_ceo_mode_prefix_wins_over_a_prefix_the_model_wrote_itself():
     # Mất tiền tố thì chép lại như cũ.
     dropped = {"brief": "viết bản mô tả phạm vi"}
     assert _restore_mode_prefix(message, dropped) == {"brief": "team: viết bản mô tả phạm vi"}
-    # CEO không ép chế độ thì không bao giờ gắn thêm.
+    # CEO không ép chế độ thì tiền tố model tự thêm bị gỡ: giữ lại thì bộ định tuyến đọc
+    # nó thành lệnh ép chế độ, bỏ qua `classify_brief` và ghi lý do "CEO ép bằng tiền tố"
+    # cho một quyết định CEO chưa từng ra.
     plain = "viết bản mô tả phạm vi"
     assert _restore_mode_prefix(plain, {"brief": "sprint: viết bản mô tả phạm vi"}) == {
-        "brief": "sprint: viết bản mô tả phạm vi"}
+        "brief": "viết bản mô tả phạm vi"}
 
 
 def test_the_classifier_is_told_that_a_question_about_this_company_is_answered_here():
