@@ -1,12 +1,12 @@
 # Project Roadmap — my-crew
 
-> Lộ trình + trạng thái (as-built 0.17.0 — arc v86–v95 + các vòng 08-31→09-03). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
-> Cập nhật: 2026-09-03.
+> Lộ trình + trạng thái (as-built 0.18.0 — arc v86–v95 + các vòng 08-31→09-06). Cập nhật khi mốc đổi. Chi tiết mỗi vòng: `docs/journals/`.
+> Cập nhật: 2026-09-07.
 
 ## Trạng thái tổng
 
-**Production-usable, single-user autonomy-first. Đã ship tới v0.17.0 (PyPI, 2026-09-03;
-0.16.0 ngày 09-01, 0.15.0 ngày 08-30).** 4660 BE + 417 FE + 44 e2e test + 66 live fullflow +
+**Production-usable, single-user autonomy-first. Đã ship tới v0.18.0 (PyPI, 2026-09-07;
+0.17.0 ngày 09-03, 0.16.0 ngày 09-01).** 4821 BE + 417 FE + 44 e2e test + 66 live fullflow +
 8 live đơn lẻ (opt-in), ruff/tsc sạch.
 Mọi vòng E2E trên browser + LLM + ticker thật (live daemon, kill-9 resume, fan-out,
 UAT đối kháng, benchmark sprint-vs-team chấm mù, live e2e opt-in, release gate delta).
@@ -98,6 +98,49 @@ lượt đầu, 3 ca đỏ chạy lại xanh — biến thiên model) + S2 lộ 
 bench **0 delta** so v0.16.0 (routing chỉ thêm 3 khoá signal mới).
 Việc vòng sau: planner Haiku hay gộp 3 việc vào 1 bước; trục chất lượng deliverable vẫn chưa đo
 đủ mẫu (blind judge n≥3); reliability baseline vẫn ở 0.15.0.
+
+**0.17.0 → 0.18.0 (09-04→09-06, ship 09-06): một model cho cả đội + scorecard theo vai.**
+(1) Cả fleet về `~deepseek/deepseek-v4-flash-latest` (advisor coordinator bỏ ghim Haiku);
+**chính sách suy nghĩ theo vai** `role_reasoning` (bật cho plan/review/util/aggregate, tắt cho
+content/advisor/sprint_low; đo review tắt suy nghĩ k=6: 0,89 "watch", bắt lỗi cài 98/144 so
+61/63 khi bật → giữ bật). (2) Bench **`roles`** (`scripts/run-sprint-benchmark.py roles`): 7 vai
+× prompt builder + parser THẬT, chấm tất định, Wilson, `--compare`; baseline
+`bench/role_baseline_0.17.0.json`; mỗi lời gọi ghi `LlmResult.provider` (upstream OpenRouter
+đã phục vụ) — phát hiện lỗi gom theo upstream (một lượt review 0,88→0,67, một lượt khác đốt
+trần 4/4 qua DigitalOcean), là "routing episode", không phải model/code. (3) 23 + 6 vá từ bench
++ live full: `max_tokens` 16k mọi lời gọi (stream 903 s/107 KB); guard câu trả lời rỗng gọi lại
+cùng request; đốt trần suy nghĩ → gọi lại 1 lần TẮT suy nghĩ + né upstream vừa đốt; intake gọi
+lại 1 lần khi JSON rác rồi mới fail-open; self-check bỏ finding mà draft tự bác
+(`review_failure_refutation`); slot extraction ép mã cho phép + không nhận thân rỗng; brief tra
+cứu thiếu `needs_web` được trả về decomposer (`research_gap`); brief dựa lịch sử không có neo
+được hỏi lại trước khi tốn model (`unresolved_reference_gap`); advisor lệch ngôn ngữ theo ký tự
+bị cách ly (`foreign_letters`); `strip_json_fences` lấy object JSON hoàn chỉnh cuối khi object
+đầu vỡ; decomposer tự sửa boundary/step_id/PIC bước cuối. (4) Knob opt-in **`provider_ignore`**
+(`OPENROUTER_PROVIDER_IGNORE`) né upstream — mặc định rỗng, CEO tự bật trong profile local.
+(5) Cổng live quick 38/41 lượt đầu lộ thêm 4 lỗi ở lớp ops → sprint: tuyến "shape" (đội không
+ra hình dạng, lập lại qua intake) làm rơi `needs_web` → `_carry_web_need`; classifier trả
+`assign_team_task` với `brief` rỗng trên đề 12 thực thể rồi hỏi CEO "Mô tả việc cần giao?" →
+dùng nguyên văn khi tin nhắn có cấu trúc; câu hỏi slot `brief` in cả chỉ dẫn "giữ tiền tố
+sprint:/team:" của bộ trích → tách sang `hint`; bộ trích chép đề 364→104 ký tự (mất phần trái
+chiều mà rubric effort đọc), chép rơi chữ "gửi email" (mất rào `sprint_refusal`), hoặc trả về
+đúng VÍ DỤ trong prompt phân loại ("iPhone 17 Pro") → `_keep_ceo_structure` thêm ba phép đo:
+dưới 60% chữ, mất chữ rào, quá nửa chữ CEO chưa gõ.
+(6) Chạy `-m live` ĐỦ BỘ (09-07) lộ 11 ca đỏ, gom về 7 lỗi thật: classifier tự đặt tên ô nên
+`brief` CEO đã gõ bị coi là thiếu và `team:` bị hạ xuống `sprint:` (a1/a6/a7/a8, 6/6 ở a6) →
+`_adopt_aliased_slots` + tiền tố CEO thắng tiền tố model; hỏi quân số/chi tiêu CÔNG TY MÌNH bị
+giao đi tra ngoài (d1, 3/6) → luật tra ngoài chỉ áp cho *công ty khác*, ranh giới là **dữ liệu
+nằm đâu**; decompose trả `test\_suite` (escape JSON cấm) giết cả 4 lượt → thử lại sau khi bỏ
+dấu chéo; `pic_id` rỗng dù chỉ một bước cuối đốt cả 4 lượt → suy từ assignee bước đó;
+`research_gap` nổ nhầm trên đề nội bộ liệt kê chính các pha của việc → đòi ít nhất một tên
+riêng; tiền tiêu trước lúc dừng hỏi CEO vô hình với trần chi phí (trần đọc dòng bước, không đọc
+`cost_usd_total`) → ghi lên dòng bước mà chưa cộng tổng.
+Cổng: 4821 BE / 417 FE / cold-start 6/6 steps on wheel `my_crew-0.18.0-py3-none-any.whl` + Playwright 2/2, routing + release bench **0 delta** so v0.17.0;
+chi tiết `docs/release-evidence-0.18.0.md`.
+Hạn chế đã biết ship kèm: worker bậc công cụ có thể tách việc cho peer bậc native khiến việc
+tra cứu thành trả lời theo trí nhớ (live l3/l5 đỏ) — rào chặn đã bị bỏ theo quyết định CEO.
+Việc vòng sau: OpenInference trả văn xuôi cho prompt review 4/18 — ghim hay đợi thêm mẫu;
+effort/`reasoning.max_tokens` upstream không tôn trọng trên model này (đo low 10,8k/15,7k,
+budget 2048 → 10,2k/16k) — chỉ ghi nhận; blind judge n≥3 và reliability baseline vẫn chưa.
 
 **v95 (zalo business fleet P2/P3/P4/P6 — 08-30, ship 0.15.0):** 4 phase của plan
 `260830-1311-zalo-business-fleet` (P1 kênh Zalo + P5 digital-assistant khách **hoãn**, chờ OA

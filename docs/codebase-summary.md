@@ -1,7 +1,12 @@
 # Codebase Summary — my-crew
 
 > Bản đồ codebase, cập nhật khi code hình thành. Đọc để biết "cái gì ở đâu" nhanh.
-> Status: **2026-09-03 — as-built 0.17.0** (PyPI; cổng 4660 BE passed / 1 skipped · 417 vitest · 44 e2e · tsc/ruff sạch).
+> Status: **2026-09-07 — as-built 0.18.0** (PyPI; cổng 4821 BE passed / 1 skipped · 417 vitest · 44 e2e · tsc/ruff sạch).
+> 0.17.0→0.18.0: cả fleet một model `deepseek-v4-flash` + `role_reasoning` theo vai; bench `roles` (7 vai, prompt/parser thật,
+> Wilson, `LlmResult.provider` ghi upstream); `max_tokens` 16k; đốt trần → gọi lại tắt suy nghĩ + né upstream; intake retry;
+> `review_failure_refutation`; `research_gap`/`unresolved_reference_gap`/`foreign_letters`; knob opt-in `provider_ignore`;
+> vòng live full: `_adopt_aliased_slots` + `build_command_catalog` (ops_chat), `repair_invalid_escapes` (team_task_check_prompt),
+> `repair_missing_pic` (task_decomposition), `set_step_status(charge_task_total=)` cho tiền tiêu trước lúc dừng hỏi CEO.
 > 0.16.0→0.17.0: context-crew (vai = bộ `Capability(tier, web, mail, model)`, đội chỉ còn hai dạng `do_review`/`permission_chain`,
 > hand-off = artifact có hợp đồng + nguồn), coordinator tự làm/bỏ qua/accept bước chết và mọi đường stall đều kết luận,
 > `cost_cap_usd` MẶC ĐỊNH BẬT ở tier tools (1.0 USD), stream idle timeout 120s, tick lock fleet-wide, gỡ `academic_search`.
