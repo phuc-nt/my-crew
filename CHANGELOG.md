@@ -3,7 +3,7 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
-## [Unreleased]
+## [0.18.0] — 2026-09-06
 
 The whole fleet now runs one model (`~deepseek/deepseek-v4-flash-latest`) and the release
 gate can say which of the seven model roles that model is good at.
@@ -26,8 +26,10 @@ gate can say which of the seven model roles that model is good at.
   note carrying letters outside the Vietnamese/ASCII set is quarantined like malformed JSON
   (measured 1/8 with thinking off: a note that drifted into Romanian mid-sentence).
 - `bench/role_baseline_0.17.0.json`: the first role baseline, cut from a k=3 run on
-  `deepseek-v4-flash` at HEAD `c93c4bc` (every role "good"; 6/168 calls failed, 4 of
-  them empty answers after the guard, 1 reviewer hallucination, 1 slot mapping miss).
+  `deepseek-v4-flash` at `c93c4bc` (11 commits after the 0.17.0 tag, hence the name the
+  installed version stamped; it is the baseline this release ships against). Every role
+  "good"; 6/168 calls failed, 4 of them empty answers after the guard, 1 reviewer
+  hallucination, 1 slot mapping miss. Evidence: `docs/release-evidence-0.18.0.md`.
 - `LlmResult.provider` + `provider` on every `llm_response` transcript event: which upstream
   OpenRouter routed the call to (`DeepSeek`, `OpenInference`, …), carried over from the
   stream chunks the SDK assembler drops. The `roles` bench stamps it on every replay
@@ -46,9 +48,31 @@ gate can say which of the seven model roles that model is good at.
 - Ops intent classifier re-asks once on a dead-end verdict (`unsupported` or an unknown
   command id), the same bound the unparseable-JSON retry has.
 - Ops slot extraction keeps the CEO's message verbatim as `brief` when the model's copy
-  lost numbered asks or listed entities (`_keep_ceo_structure`).
+  lost numbered asks or listed entities, kept under 60% of the CEO's text, dropped the
+  words `sprint_refusal` keys on, or is mostly words the CEO never typed
+  (`_keep_ceo_structure`; measured: a 364-character brief naming contradictory GraphQL
+  sources came back as 104 characters without the contradiction, and "Tổng hợp báo giá
+  rồi gửi email cho khách hàng Anh Minh." came back as the classifier prompt's own
+  example "Tổng hợp giá bán lẻ iPhone 17 Pro tại VN" — 1/4 — and routed to a sprint,
+  skipping the mandatory review of an external write).
 
 ### Fixed
+- The "shape" sprint route (a team plan with no crew shape, re-planned through the
+  intake) keeps the team plan's lookup need: when any decomposed step had `needs_web`
+  the sprint step gets it too, the rule `downgrade_to_sprint` already applied. Measured
+  live on deepseek-v4-flash: "So sánh 12 sàn TMĐT …" left decompose with web steps and
+  left the intake with `needs_web` false, so the sprint would have typed twelve fee
+  tables from memory. One-directional — a plan without web steps does not switch the
+  intake's lookup off.
+- The ops classifier returning `assign_team_task` with an empty `brief` on a message
+  that carries structure (≥2 listed entities or ≥2 numbered asks) uses the message
+  verbatim instead of asking the CEO to describe the task they just typed (measured
+  live: the 12-entity "So sánh giúp anh 12 sàn TMĐT: …" was answered with "Mô tả việc
+  cần giao cho đội?"). A contentless delegation ("giao việc cho đội giúp anh") is still
+  asked back.
+- The `brief` slot question no longer carries the extractor's instruction about keeping
+  a `sprint:`/`team:` prefix — that rule moved to the slot `hint`, which only the
+  extractor sees; the CEO used to get it printed verbatim in the ask-back.
 - `sprint_intake` re-asks the model once when the body is JSON garbage before it falls
   open to the verbatim brief; two garbage replies in a row still fall open (the assign
   command must not die on intake), and a truncated body or an infrastructure error is not
@@ -103,6 +127,33 @@ gate can say which of the seven model roles that model is good at.
   parse with "Extra data" and drops the intake to fail-open.
 - Team-summary prompt moved to `my_crew/llm/team_summary_prompt.py`; util/aggregate prompts
   tightened after the scorecard showed 0/3 slot extraction without reasoning.
+- The intent classifier invents its own slot names (`description`, `task`, `request`,
+  `task_description`, `query`, `summary` — 6/6 on one live case), so a brief the CEO had
+  already typed came back as "missing" and was asked for again, and a `team:` brief was
+  downgraded to a sprint. When exactly one known slot is missing and exactly one stray
+  string key arrived, the value is adopted onto the real slot.
+- A mode prefix the CEO typed (`team:`, `sprint:`) now wins over one the extractor wrote
+  itself, instead of the model's choice silently replacing the CEO's.
+- Questions about this company's own headcount, spend, or running work were routed out as
+  delegated lookups (3/6 live). The classifier's external-lookup rule now says "another
+  company", with an explicit rule that in-house questions are answered here — the line is
+  where the data lives, not whether the answer changes over time.
+- A decompose answer containing an escape JSON forbids (`test\_suite`) killed all four
+  attempts. The parse is retried once with those backslashes dropped; an escape the spec
+  does allow is consumed whole, so a legitimately escaped backslash (a Windows path, a
+  regex) survives the repair. A genuinely broken answer still reports the original error.
+- A plan with one terminal step but a blank `pic_id` burned all four attempts on "thiếu
+  pic_id". The PIC is filled from the sole terminal's assignee when that assignee is on
+  staff; a plan with two terminals or an unknown assignee is left for the retry to catch.
+- `research_gap` no longer demands a web step for a brief whose listed "entities" are the
+  phases of an internal job ("tiếp nhận, phân loại, xử lý…"). At least one listed item must
+  contain a named thing out in the world before a lookup is required.
+- Spend before a clarify pause was invisible to the cost cap, which reads the step rows and
+  not `cost_usd_total`: a step paused on a CEO question had spent real money and the cap saw
+  zero for the entire wait. `mark_waiting_clarify` now writes the spend on the step row
+  without charging the task total, which the terminal write still does exactly once. An
+  approval gate pauses a step the same way and had the same blind spot, so
+  `mark_awaiting_approval` records the spend on the same terms.
 
 ## [0.17.0] — 2026-09-03
 

@@ -1307,3 +1307,18 @@ def test_research_gap_stays_quiet_when_the_listed_items_are_internal_phases():
     named = ("So sánh phí sàn của 5 sàn: Shopee, Lazada, TikTok Shop, Tiki, Sendo. "
              "Ghi nguồn từng con số.")
     assert research_gap(named, no_web)
+
+
+def test_the_escape_repair_leaves_a_legitimately_escaped_backslash_alone():
+    """A Windows path or a regex in a title carries `\\\\` — two characters that JSON reads
+    as one backslash. The repair has to consume that pair whole; scanning one character at
+    a time would eat the first half and turn the survivor into the very bad escape the
+    repair exists to remove."""
+    from my_crew.llm.team_task_check_prompt import repair_invalid_escapes
+
+    kept = r'{"p": "C:\\path\\_x", "u": "\u00e9", "n": "a\nb", "q": "s\"t"}'
+    assert repair_invalid_escapes(kept) == kept
+    assert json.loads(repair_invalid_escapes(kept))["p"] == r"C:\path\_x"
+
+    # ...while the bare bad escape is still dropped.
+    assert repair_invalid_escapes(r'{"t": "test\_suite"}') == '{"t": "test_suite"}'

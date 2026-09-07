@@ -79,8 +79,8 @@ def strip_json_fences(raw: str) -> str:
     return text[start:consumed]
 
 
-#: A backslash that JSON does not allow to start an escape (`\_`, `\-`, `\.`, `\*`…).
-_INVALID_ESCAPE_RE = re.compile(r'\\(?!["\\/bfnrtu])')
+#: One escape sequence: a valid one (captured) or a backslash JSON rejects (`\_`, `\-`, `\*`…).
+_ESCAPE_RE = re.compile(r'\\(["\\/bfnrtu])|\\')
 
 
 def repair_invalid_escapes(text: str) -> str:
@@ -91,10 +91,12 @@ def repair_invalid_escapes(text: str) -> str:
     JSON string, and every one of the four attempts died in `json.loads` with the same
     error. The intended text is the string WITHOUT the backslash, so removing exactly
     the backslashes JSON rejects recovers the model's answer instead of re-prompting
-    for it. Valid escapes (`\\n`, `\\"`, `\\\\`, `\\uXXXX`…) are untouched, and a completion
-    that is still not JSON afterwards fails loud in the parser exactly as before.
+    for it. Valid escapes (`\\n`, `\\"`, `\\\\`, `\\uXXXX`…) are untouched: the scan consumes a
+    valid pair whole, so the second backslash of an escaped backslash is never mistaken
+    for the start of a bad escape (`"C:\\\\_x"` survives). A completion that is still not
+    JSON afterwards fails loud in the parser exactly as before.
     """
-    return _INVALID_ESCAPE_RE.sub("", text)
+    return _ESCAPE_RE.sub(lambda m: m.group(0) if m.group(1) else "", text)
 
 
 def _last_complete_object(text: str, start: int) -> str | None:

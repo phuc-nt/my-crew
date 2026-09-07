@@ -139,7 +139,12 @@ def run_team_step(
                     "cost_usd": result.get("cost_usd"),
                     "delivered": False, "room_message": ""}
         if result.get("status") == "awaiting_approval":
-            store.mark_awaiting_approval(task_id, step_id, attempt_id=attempt_id)
+            store.mark_awaiting_approval(
+                task_id, step_id, attempt_id=attempt_id,
+                # Same contract as the clarify pause above: spend up to the gate goes on
+                # the step row so the cost cap sees it while a human decides.
+                cost_usd=result.get("cost_usd"),
+            )
             _record_capture(
                 attempt_id=attempt_id, task_id=task_id, step=step, engine=engine,
                 status="awaiting_approval", telemetry=telemetry, cost_usd=result.get("cost_usd"),

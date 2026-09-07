@@ -266,3 +266,33 @@ def test_pending_resume_carries_clarify_id_and_keeps_thread(tmp_path, monkeypatc
     assert finished is None
     _run(graph, stream_input, config)
     assert delivered and "THEO CEO" in delivered[0][1]
+
+
+def test_spend_before_an_approval_pause_is_visible_to_the_cost_cap_too(
+        tmp_path, monkeypatch):
+    """An approval gate pauses a step exactly like a clarify question does, so it has the
+    same hazard: money already spent, a human deciding for as long as they like, and a cap
+    that reads the step rows. The gate's own `approval_id` must survive the cost write."""
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    store = TeamTaskStore(team_tasks_db_path())
+    store.create_task(task_id="t1", title="T", pic_id="")
+    store.set_plan("t1", [{"step_id": "s1", "title": "x", "assigned_to": "a",
+                           "deps": []}], "h")
+    attempt = store.reserve_step("t1", "s1")
+    assert store.mark_awaiting_approval("t1", "s1", attempt_id=attempt, approval_id=7,
+                                        cost_usd=0.03)
+
+    step = store.get_step("t1", "s1")
+    assert step.cost_usd == pytest.approx(0.03)
+    assert step.approval_id == 7          # still pollable by the ticker
+    assert store.sum_cost("t1") == pytest.approx(0.03)
+    assert store.get("t1").cost_usd_total == pytest.approx(0.0)
+
+    attempt2 = store.reserve_step("t1", "s1")
+    assert store.mark_done("t1", "s1", attempt_id=attempt2, cost_usd=0.08)
+    assert store.sum_cost("t1") == pytest.approx(0.08)
+    assert store.get("t1").cost_usd_total == pytest.approx(0.08)
+    store.close()

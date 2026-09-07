@@ -687,7 +687,8 @@ class TeamTaskStore:
 
     def mark_awaiting_approval(self, task_id: str, step_id: str, *,
                                 attempt_id: str | None = None,
-                                approval_id: int | None = None) -> bool:
+                                approval_id: int | None = None,
+                                cost_usd: float | None = None) -> bool:
         """Mark a step paused on an approval gate. Same `attempt_id` no-op guard as
         `mark_done` — the worker that hit the gate passes its own attempt_id; the
         ticker's later resume-path call (re-spawn) passes none (it holds no lease).
@@ -699,10 +700,16 @@ class TeamTaskStore:
         gates on a plain bool, or any future gate not backed by `ApprovalStore`) is
         simply never auto-resumed by the ticker; it stays exactly as un-pollable as
         before this field existed.
+
+        `cost_usd` is the spend up to the gate, written on the STEP row only
+        (`charge_task_total=False`) for the same reason as `mark_waiting_clarify`: the
+        cost cap reads `sum_cost` over step rows, so a step that spent money and then
+        waited on a human would otherwise report zero for the whole wait, while the
+        graph's cumulative cost is charged to the task once at the terminal write.
         """
         updated = _steps.set_step_status(
             self._conn, task_id, step_id, "awaiting_approval", attempt_id=attempt_id,
-            approval_id=approval_id,
+            approval_id=approval_id, cost_usd=cost_usd, charge_task_total=False,
         )
         self._conn.commit()
         return updated
