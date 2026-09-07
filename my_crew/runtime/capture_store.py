@@ -196,5 +196,36 @@ class CaptureStore:
         )
         return [dict(zip(_LIST_COLUMNS, row, strict=True)) for row in cur.fetchall()]
 
+    def aggregate_by_engine(self, *, since: str | None = None) -> list[dict[str, Any]]:
+        """Spend and volume per engine, costliest first — the web tab's "which engine
+        eats the budget" read. One GROUP BY instead of paging `list_recent`, so the
+        answer covers every row in the window rather than the newest 500.
+
+        A `failed` attempt is one whose `status` says so; every other terminal or
+        waiting status counts as a call that returned. `since` matches `list_recent`
+        (ISO prefix against the write time `ts`)."""
+        where = " WHERE ts >= ?" if since else ""
+        params: tuple[Any, ...] = (since,) if since else ()
+        cur = self._conn.execute(
+            "SELECT engine, COUNT(*), "
+            "SUM(CASE WHEN status IN ('failed', 'error') THEN 1 ELSE 0 END), "
+            "COALESCE(SUM(cost_usd), 0), COALESCE(SUM(input_tokens), 0), "
+            "COALESCE(SUM(output_tokens), 0), AVG(duration_ms) "
+            f"FROM captures{where} GROUP BY engine ORDER BY SUM(cost_usd) DESC, COUNT(*) DESC",
+            params,
+        )
+        out: list[dict[str, Any]] = []
+        for engine, calls, failed, cost, tin, tout, avg_ms in cur.fetchall():
+            out.append({
+                "engine": engine or "?",
+                "calls": int(calls),
+                "failed": int(failed or 0),
+                "cost_usd": round(float(cost or 0.0), 6),
+                "input_tokens": int(tin or 0),
+                "output_tokens": int(tout or 0),
+                "avg_duration_ms": round(float(avg_ms), 1) if avg_ms is not None else None,
+            })
+        return out
+
     def close(self) -> None:
         self._conn.close()

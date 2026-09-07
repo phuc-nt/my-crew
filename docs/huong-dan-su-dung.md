@@ -567,6 +567,26 @@ Trên bảng kanban (tab **Duyệt** hoặc xem chi tiết việc):
 - **Mức độ sandbox cần thiết**: mỗi thẻ việc dán badge **"🔒 N sandbox"** (N = số bước cần chạy trong Docker sandbox) — giúp bạn nhìn nhanh việc nào phức tạp/tốn tài nguyên.
 - **Chi phí từng việc**: bấm nút **"Chi phí"** (v50) trên thẻ kanban → mở panel chi tiết: **mỗi bước** (engine + tokens) + **tổng việc**. Thuận tiện để theo dõi ngân sách và tránh việc chạy quá đắt.
 
+## B.5h. Chuông "Cần chú ý", tab Số liệu mới, phím tắt (v93)
+
+- **Chuông 🔔 trên thanh đầu** gom mọi thứ đang cần bạn vào một danh sách, xếp theo mức
+  nặng: điều phối viên không chạy, việc bị kẹt, agent vượt/sắp chạm trần chi phí, cảnh báo
+  đội, việc chờ duyệt, agent đang hỏi, agent có bản mẫu mới. Số trên chuông chỉ đếm mục
+  đỏ/vàng; mục "để biết" không đếm. Bấm một dòng là nhảy thẳng đến đúng chỗ (tab cài đặt,
+  chi tiết việc, tab ngân sách của agent…). Nút **✕** bỏ qua một mục, **Đã xem tất cả** bỏ
+  qua hết — nhưng nếu cùng cảnh báo đó đổi nội dung (ví dụ chi phí vượt thêm một nấc) thì nó
+  quay lại. Huy hiệu số trên hub **Công việc** vẫn đếm riêng số việc chờ duyệt như trước.
+- **Tab Số liệu** (hub Hệ thống) mở đầu bằng ba con số lớn: đã tiêu / trần / phần trăm, kèm
+  thanh tiến độ và nhãn *ổn / sắp chạm / vượt*. Bên dưới là chi phí theo engine, công cụ hay
+  bị từ chối, và phễu điều phối (chạy nhanh hay cả đội, vì sao). Dòng "Cập nhật Ns trước" +
+  nút **Làm mới** tải lại tất cả; chọn cửa sổ 7/30/90 ngày thì đường dẫn đổi theo, copy gửi
+  người khác vẫn ra đúng khung.
+- **Chi tiết việc** ghi rõ tuyến đã chọn bằng tiếng người: chế độ (chạy nhanh / cả đội), ai
+  quyết (CEO ép, rào an toàn, bộ đoán…), dạng đội, độ khó và nếu hỏng thì hỏng kiểu gì.
+- **Phím tắt**: gõ `?` để xem bảng phím; `g` rồi `c`/`o`/`w`/`t`/`s` nhảy sang Trò chuyện /
+  Văn phòng / Công việc / Đội ngũ / Hệ thống; `⌘K` mở bảng lệnh. Nút ⌨ trên thanh đầu mở
+  cùng bảng đó.
+
 ## B.6. Tạo agent với tính năng in-sandbox (deep_team — v50)
 
 Khi tạo agent ở hub **Đội ngũ** hoặc wizard, nếu bạn chọn **runtime = "Deep Agent"** (chạy trong Docker sandbox), wizard hiện thêm **tùy chọn "Điều phối trợ lý con"** — bật lên cho phép agent giao việc con TRONG hộp cát (chia ngữ cảnh lớn cho ≤3 trợ lý nhỏ chuyên môn, không cần tạo agent thật).

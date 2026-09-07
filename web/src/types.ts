@@ -843,6 +843,70 @@ export interface TeamTaskRoutePayload {
   mode: string
   source: string
   reason: string
+  /** Team-mode shape (author_review / …); empty for sprint or unknown. */
+  shape: string
+  /** Sprint effort tier the intake scored (low / medium / high); empty for team. */
+  effort: string
+  /** Terminal failure mode recorded on a task that stopped without a result. */
+  failure_mode: string
+  /** A sprint that ran out and had to be re-dispatched as a team. */
+  dead_end: boolean
+}
+
+// --- /api/insights/* : fleet aggregates for the system hub's Số liệu tab ---
+
+export interface RankedCount {
+  id: string
+  label: string
+  count: number
+}
+
+export interface RouteStatsPayload {
+  total: number
+  by_mode: RankedCount[]
+  by_source: RankedCount[]
+  by_shape: RankedCount[]
+  by_effort: (RankedCount & { dead_ends: number })[]
+  by_failure: (RankedCount & { group: string; group_label: string })[]
+  failure_groups: RankedCount[]
+  failed: number
+  dead_ends: number
+  downgrades: number
+}
+
+export interface ToolStatsRow {
+  tool: string
+  total_calls: number
+  successes: number
+  failures: number
+  denied: number
+  avg_duration_ms: number
+  failure_rate: number
+  common_errors: { reason: string; count: number }[]
+}
+
+export interface ToolStatsPayload {
+  days: number
+  tools: ToolStatsRow[]
+  agents: string[]
+  skipped: string[]
+}
+
+export interface EngineCostRow {
+  engine: string
+  calls: number
+  failed: number
+  cost_usd: number
+  input_tokens: number
+  output_tokens: number
+  avg_duration_ms: number | null
+}
+
+export interface EngineCostsPayload {
+  days: number
+  engines: EngineCostRow[]
+  total_cost_usd: number
+  total_calls: number
 }
 
 // v82: store-side task metrics (wall-clock includes queue wait — the CEO's experienced

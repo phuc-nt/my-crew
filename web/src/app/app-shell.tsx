@@ -12,7 +12,9 @@ import { ChromeOverflowMenu } from './chrome-overflow-menu'
 import { usePendingApprovals } from '../api/queries/use-approvals-queries'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { Button } from '../components/ui/button'
+import { AttentionCenter } from '../features/attention/attention-center'
 import { CommandPalette } from '../features/palette/command-palette'
+import { SHORTCUTS_OPEN_EVENT, ShortcutsHelp } from '../features/palette/shortcuts-help'
 import type { UiKey } from '../i18n/dictionary'
 import { useLanguage } from '../i18n/language-context'
 import { useUiMode } from '../ui-mode-context'
@@ -59,10 +61,20 @@ export function AppShell() {
             {lang === 'vi' ? 'VN' : 'EN'}
           </Button>
           <ThemeToggle />
+          <Button
+            variant="chip"
+            title={t('shortcuts.button')}
+            aria-label={t('shortcuts.button')}
+            onClick={() => window.dispatchEvent(new Event(SHORTCUTS_OPEN_EVENT))}
+          >
+            ⌨
+          </Button>
           <button type="button" className="logout-btn" onClick={() => void logout()}>
             {t('chrome.logout')}
           </button>
         </div>
+        {/* Outside the collapsible group: the bell must stay visible on a phone. */}
+        <AttentionCenter />
         <ChromeOverflowMenu onLogout={() => void logout()} />
       </header>
       <nav className="app-nav app-nav-primary">
@@ -81,6 +93,7 @@ export function AppShell() {
       {/* Shell-level, not per-hub: Cmd+K has to reach the same three sources from
           wherever the CEO happens to be. Renders null until opened. */}
       <CommandPalette />
+      <ShortcutsHelp />
     </div>
   )
 }

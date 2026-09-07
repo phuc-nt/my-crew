@@ -41,6 +41,22 @@ class ToolStats:
     avg_duration_ms: float = 0.0
     common_errors: list[tuple[str, int]] = field(default_factory=list)
 
+    def as_dict(self) -> dict[str, Any]:
+        """JSON shape for the web tab — the dataclass fields plus the derived rate, and
+        `common_errors` as objects rather than tuples (a tuple is a list on the wire)."""
+        return {
+            "tool": self.tool,
+            "total_calls": self.total_calls,
+            "successes": self.successes,
+            "failures": self.failures,
+            "denied": self.denied,
+            "avg_duration_ms": self.avg_duration_ms,
+            "failure_rate": round(self.failure_rate, 4),
+            "common_errors": [
+                {"reason": reason, "count": count} for reason, count in self.common_errors
+            ],
+        }
+
     @property
     def failure_rate(self) -> float:
         """Share of attempts that did not return data (body failures AND denials).
@@ -69,11 +85,33 @@ def collect_tool_stats(
     often failing, then the busiest among equals. A missing or empty trail is not an error
     — it means nothing has been recorded yet.
     """
+    return _stats_from_rows(_rows(path, since, actor))
+
+
+def collect_tool_stats_from_paths(
+    paths: list[Path], *, since: str | None = None
+) -> list[ToolStats]:
+    """One fleet-wide tally over several trails (each agent writes its own).
+
+    Rows are pooled BEFORE counting, so a tool used by three agents is one line with a
+    true average, not three lines whose averages cannot be combined after the fact. A
+    trail that cannot be read is skipped: the fleet number must survive one broken agent.
+    """
+    rows: list[dict[str, Any]] = []
+    for path in paths:
+        try:
+            rows.extend(_rows(path, since, None))
+        except Exception:  # noqa: BLE001 — one unreadable trail must not blank the fleet
+            continue
+    return _stats_from_rows(rows)
+
+
+def _stats_from_rows(rows: list[dict[str, Any]]) -> list[ToolStats]:
     durations: dict[str, list[int]] = {}
     reasons: dict[str, Counter[str]] = {}
     stats: dict[str, ToolStats] = {}
 
-    for row in _rows(path, since, actor):
+    for row in rows:
         tool = str(row.get("tool") or "")
         if not tool:
             continue

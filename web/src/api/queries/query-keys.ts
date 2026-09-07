@@ -61,6 +61,11 @@ export const queryKeys = {
     budget: () => [...queryKeys.system.all, 'budget'] as const,
     connections: () => [...queryKeys.system.all, 'connections'] as const,
     companyDocs: () => [...queryKeys.system.all, 'company-docs'] as const,
+    /** Coordinator heartbeat — the health strip and the attention bell share one poll. */
+    coordinatorHealth: () => [...queryKeys.system.all, 'coordinator-health'] as const,
+    routeStats: () => [...queryKeys.system.all, 'route-stats'] as const,
+    toolStats: (days: number) => [...queryKeys.system.all, 'tool-stats', days] as const,
+    engineCosts: (days: number) => [...queryKeys.system.all, 'engine-costs', days] as const,
   },
   clarify: {
     all: ['clarify'] as const,

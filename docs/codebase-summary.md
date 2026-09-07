@@ -725,6 +725,44 @@ thêm `RETENTION_DAYS["agent_tmp"] = 3` + `_sweep_agent_tmp`, cùng posture per-
 thiếu module `deepagents`) · ruff sạch · cold-start smoke 6/6, `_shipped` 97 file (packs +
 templates mới lên đúng wheel).
 
+### v93: UI/UX catch-up — insights routes, dashboard hero, attention bell, shortcuts (2026-09-07, xong)
+
+Plan `plans/260907-1550-ui-ux-openhuman-emulation/` (4 phase). Mục tiêu: SPA phơi hết
+những gì backend đã đo được, mượn ba mẫu UI của openhuman (cost dashboard, notification
+center, shortcuts sheet) — ý tưởng, không chép code (GPL).
+
+**Backend read-only** (`my_crew/server/routes_insights.py`, mount `/api/insights`, sau auth):
+`GET /route-stats` (phễu sprint/team từ `ops_route_stats.aggregate_route_stats`),
+`GET /tool-stats?days=` (`audit/tool_stats.collect_tool_stats_from_paths`, agent thiếu
+profile bị bỏ qua, không 500), `GET /engine-costs?days=` (`capture_store.aggregate_by_engine`).
+`days` mặc định 7, trần 90, 0 = toàn bộ; store trống → 200 với tổng 0 / list rỗng.
+`GET /team-tasks/{id}/route` (`routes_outputs.py`) thêm `shape`/`effort`/`failure_mode`/`dead_end`
+vào allowlist `_ROUTE_FIELDS`. 9 test `tests/test_insights_routes.py`.
+
+**Web** (`web/src/`):
+- Primitives mới `components/ui/progress-bar.tsx`, `stat-tile.tsx` (xem design-guidelines 5.3).
+- `features/system/insights-shared.ts` + 4 panel (`insights-budget-panel`, `-engine-panel`,
+  `-tool-panel`, `-routing-panel`) ghép trong `insights-tab.tsx`: hero StatTile ×3 + Badge +
+  ProgressBar, "Cập nhật Ns trước" + Làm mới (refetch mọi query insights), `?days=` qua
+  `useSearchParams`. Hook `useFleetBudget`/`useRouteStats`/`useToolStats`/`useEngineCosts`
+  trong `api/queries/use-system-queries.ts`, key ở `query-keys.ts`.
+- `features/attention/attention-items.ts` (pure: `buildAttentionItems` từ 7 nguồn, xếp
+  error>warning>info, fingerprint + `readDismissed`/`writeDismissed` trong localStorage),
+  `use-attention-items.ts` (ghép hook + badge = error+warning), `attention-center.tsx` (chuông
+  + panel `role=dialog`, đóng khi click ngoài / Escape, mỗi mục là `Link` deep link).
+- `features/palette/shortcuts-help.tsx`: `?` toggle, `g`+`c/o/w/t/s` (chord 1 s), sự kiện
+  `my-crew:shortcuts-help` cho nút ⌨ trong `app/app-shell.tsx`.
+- `features/work/task-detail/route-labels.ts`: map `mode/source/shape/effort/failure_mode`
+  → key i18n `route.*`; `task-detail-page.tsx` render tuyến bằng nhãn người đọc được;
+  `features/office/desk-inspector.tsx` link sang chi tiết việc / tab ngân sách.
+- e2e mock (`web/e2e/support/mock-api.ts`) thêm `/api/team/alerts`, `/api/agents/template-status`,
+  `/api/health/coordinator`, 3 route insights; `app-shell.spec.ts` +3 (chuông, dismiss bền
+  qua reload, phím tắt).
+
+**Cổng.** BE 4830 passed / 1 skipped · ruff sạch · FE vitest 438 (63 file) · Playwright 47/47
+· `npx tsc -b` sạch · oxlint chỉ 3 warning nền sẵn có. Bundle `my_crew/server/static/app`
+dựng lại (entry `index` 483 kB, cổng ≤560).
+
 ## Deferred
 
 - **Live-key integration E2E:** Linear/SMTP/LangSmith with real credentials (skipped M3/M5; scheduled separately).

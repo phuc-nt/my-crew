@@ -8,10 +8,12 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useRoomArtifacts } from '../../../api/queries/use-artifact-queries'
 import { useTaskMetrics, useTaskRoute } from '../../../api/queries/use-work-queries'
+import { Badge } from '../../../components/ui/badge'
 import { useLanguage } from '../../../i18n/language-context'
 import { formatCost } from '../../../labels'
 import type { RoomArtifactTask } from '../../../types'
 import { StalledTaskActions } from '../stalled-task-actions'
+import { routeLabel } from './route-labels'
 import { StepProgress } from './step-progress'
 
 /** The first dead (failed/timeout) step's id — same predicate the board card and the
@@ -35,17 +37,43 @@ function TaskFunnel({ taskId }: { taskId: string }) {
   const route = useTaskRoute(taskId)
   const metrics = useTaskMetrics(taskId)
   const m = metrics.data
+  const r = route.data
+  // Shape only exists for team runs, effort only for sprints — show whichever applies.
+  const detail = r?.shape
+    ? routeLabel(t, 'shape', r.shape)
+    : r?.effort ? routeLabel(t, 'effort', r.effort) : ''
 
   return (
     <dl className="task-funnel">
       <div>
         <dt>{t('taskDetail.routeMode')}</dt>
-        <dd>{route.data?.mode || '—'}</dd>
+        <dd>
+          {routeLabel(t, 'mode', r?.mode ?? '')}
+          {detail && ` · ${detail}`}
+          {r?.dead_end && (
+            <>
+              {' '}
+              <Badge tone="warn" data-testid="route-dead-end">{t('taskDetail.deadEnd')}</Badge>
+            </>
+          )}
+        </dd>
+      </div>
+      <div>
+        <dt>{t('taskDetail.routeSource')}</dt>
+        <dd>{routeLabel(t, 'source', r?.source ?? '')}</dd>
       </div>
       <div>
         <dt>{t('taskDetail.routeReason')}</dt>
-        <dd>{route.data?.reason || '—'}</dd>
+        <dd>{r?.reason || '—'}</dd>
       </div>
+      {r?.failure_mode && (
+        <div>
+          <dt>{t('taskDetail.failureMode')}</dt>
+          <dd>
+            <Badge tone="danger" data-testid="route-failure">{routeLabel(t, 'failure', r.failure_mode)}</Badge>
+          </dd>
+        </div>
+      )}
       <div>
         <dt>{t('taskDetail.wallClock')}</dt>
         <dd>{m?.wall_clock_text || '—'}</dd>

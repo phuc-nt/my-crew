@@ -87,11 +87,11 @@ export function DeskInspector({ agentId, desk, onClose }: DeskInspectorProps) {
         </div>
       )}
       <p className="desk-inspector-links">
-        <Link to={`/agents/${agentId}`}>{t('deskInspector.agentPage')}</Link>
+        <Link to={`/team/${encodeURIComponent(agentId)}`}>{t('deskInspector.agentPage')}</Link>
         {picTask && (
           <>
             {' · '}
-            <Link to={`/captures?task_id=${encodeURIComponent(picTask)}`}>
+            <Link to={`/system?tab=audit&task_id=${encodeURIComponent(picTask)}`}>
               {t('deskInspector.taskCaptures')}
             </Link>
           </>

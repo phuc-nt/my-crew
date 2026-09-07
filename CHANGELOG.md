@@ -3,6 +3,29 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
+## [Unreleased]
+
+The web app now surfaces what the backend already measures: a cost dashboard with a
+hero number, one attention bell for everything that needs the CEO, and a shortcuts
+sheet. Patterns borrowed from openhuman's UI; no code copied.
+
+### Added
+- `GET /api/insights/route-stats`, `/tool-stats?days=`, `/engine-costs?days=` — read-only
+  aggregates behind auth (sprint/team funnel, tool denials, spend per engine). Empty
+  stores answer 200 with zeros; `days` is clamped to 90, `0` means all history.
+- Số liệu tab redesign: spend / cap / % hero tiles with an ok/warn/over badge and a
+  progress bar, "updated Ns ago" + refresh, shareable `?days=` window.
+- Attention bell in the header: severity-ordered list (coordinator down, stalled
+  tasks, budget bands, team alerts, approvals, clarify questions, template upgrades),
+  deep links, per-fingerprint dismissal that returns when the alert changes.
+- Shortcuts sheet (`?`), `g`+`c/o/w/t/s` hub jumps, ⌨ header chip.
+- UI primitives `ProgressBar` and `StatTile`.
+
+### Changed
+- `GET /api/team-tasks/{id}/route` also returns `shape`, `effort`, `failure_mode` and
+  `dead_end`; task detail shows the routing decision in plain language and the office
+  desk inspector links to the task and the agent's budget tab.
+
 ## [0.18.0] — 2026-09-07
 
 The whole fleet now runs one model (`~deepseek/deepseek-v4-flash-latest`) and the release

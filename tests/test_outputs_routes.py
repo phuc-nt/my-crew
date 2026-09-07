@@ -258,24 +258,29 @@ def test_task_route_unknown_task_returns_empty_fields(client):
     """v82: unknown task (or one predating route_json) → empty fields, never a 404/500 —
     absence is a normal state (cost-endpoint discipline)."""
     body = client.get("/api/team-tasks/nope/route").json()
-    assert body == {"task_id": "nope", "mode": "", "source": "", "reason": ""}
+    assert body == {"task_id": "nope", "mode": "", "source": "", "reason": "",
+                    "shape": "", "effort": "", "failure_mode": "", "dead_end": False}
 
 
 def test_task_route_projects_allowlisted_fields(client, tmp_path):
-    """v82: the persisted routing decision surfaces mode/source/reason only — `signals`
-    (raw keyword matches over the brief) stays internal."""
+    """The persisted routing decision surfaces the fields the task page labels (mode,
+    source, reason, shape, effort tier, failure mode, dead-end flag) — `signals` (raw
+    keyword matches over the brief) stays internal."""
     _seed_tasks(statuses=("open",))
     from my_crew.runtime.team_task_paths import team_tasks_db_path
 
     store = TeamTaskStore(team_tasks_db_path())
     store.set_route("t1", {"mode": "sprint", "source": "heuristic",
                            "reason": "việc 1 người, không cần review",
-                           "signals": ["draft-only"]})
+                           "effort": "low", "failure_mode": "cost_cap_exhausted",
+                           "dead_end": True, "signals": ["draft-only"]})
     store.close()
 
     body = client.get("/api/team-tasks/t1/route").json()
     assert body == {"task_id": "t1", "mode": "sprint", "source": "heuristic",
-                    "reason": "việc 1 người, không cần review"}
+                    "reason": "việc 1 người, không cần review", "shape": "",
+                    "effort": "low", "failure_mode": "cost_cap_exhausted",
+                    "dead_end": True}
 
 
 def test_task_metrics_unknown_task_404s(client):

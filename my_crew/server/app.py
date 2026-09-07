@@ -33,6 +33,7 @@ from my_crew.server import (
     routes_company_docs,
     routes_connections,
     routes_control_plane,
+    routes_insights,
     routes_observability,
     routes_office_artifacts,
     routes_office_assign,
@@ -111,6 +112,8 @@ def create_app() -> FastAPI:
     app.include_router(routes_team_task_actions.router)
     # Dual-lens P3: read-only observability (fleet budget, captures explorer, history search).
     app.include_router(routes_observability.router)
+    # Fleet insights (routing retro / tool health / engine spend) for the Số liệu tab.
+    app.include_router(routes_insights.router)
     # v33 P4: clarify — agent questions the CEO answers from web or Telegram buttons.
     app.include_router(routes_clarify.router)
     # v15: office composer assignment (thin wrappers over the assign command's own

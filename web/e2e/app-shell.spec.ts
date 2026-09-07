@@ -62,3 +62,87 @@ test('13. không có approval nào thì badge không hiện', async ({ page }) =
   await expect(page.locator('.app-nav-primary')).toBeVisible()
   await expect(page.locator('.nav-badge')).toHaveCount(0)
 })
+
+// The attention bell is shell chrome too: it merges signals every hub already fetches
+// into one badge, and its dismissals live in localStorage — a real browser is the only
+// place both the persistence and the deep-link navigation can be checked together.
+test('14. chuông chú ý: badge đếm lỗi+cảnh báo, hàng xếp nặng trước, bấm hàng nhảy đúng chỗ', async ({ page }) => {
+  await mockOfficeApi(page, {
+    pendingApprovals: [
+      {
+        agent_id: 'content',
+        id: 1,
+        reason: 'Đăng bài blog',
+        status: 'pending',
+        created_at: '2026-09-07T10:00:00Z',
+        action: { type: 'mcp_tool', server: 'blog', tool: 'post' },
+      },
+    ],
+    coordinatorHealth: { alive: false, last_beat_ago_s: null, reason: 'no_heartbeat', hint: 'Chạy my-crew serve' },
+    templateStatus: [{ agent_id: 'hr', role: 'hr', applied_version: 1, latest_version: 2, upgradable: true }],
+  })
+  await page.goto('/chat')
+
+  // error (coordinator) + warning (approval) = 2; the info row (template) is not counted.
+  await expect(page.getByTestId('attention-badge')).toHaveText('2')
+  await page.getByRole('button', { name: DICT.vi['attention.bellLabel'].replace('{n}', '2') }).click()
+  const panel = page.getByTestId('attention-panel')
+  await expect(panel.locator('.attention-item')).toHaveCount(3)
+  await expect(panel.locator('.attention-item').nth(0)).toHaveAttribute('data-severity', 'error')
+  await expect(panel.locator('.attention-item').nth(2)).toHaveAttribute('data-severity', 'info')
+
+  await panel.locator('.attention-item').nth(0).getByRole('link').click()
+  await expect(page).toHaveURL(/\/system\?tab=settings$/)
+  await expect(panel).toHaveCount(0)
+})
+
+test('15. bỏ qua một mục giữ qua reload; mục đổi nội dung thì hiện lại', async ({ page }) => {
+  await mockOfficeApi(page, {
+    teamAlerts: [
+      { kind: 'failing', agent_id: 'hr', message: 'lỗi 3 lần', severity: 'high' },
+      { kind: 'deny_spike', agent_id: 'content', message: 'từ chối 4 lần', severity: 'warn' },
+    ],
+  })
+  await page.goto('/chat')
+  await expect(page.getByTestId('attention-badge')).toHaveText('2')
+  await page.getByRole('button', { name: DICT.vi['attention.bellLabel'].replace('{n}', '2') }).click()
+  const panel = page.getByTestId('attention-panel')
+  await panel.locator('.attention-item').nth(0).getByRole('button', { name: DICT.vi['attention.dismiss'] }).click()
+  await expect(page.getByTestId('attention-badge')).toHaveText('1')
+  await expect(panel.getByText(DICT.vi['attention.hiddenN'].replace('{n}', '1'))).toBeVisible()
+
+  await page.reload()
+  await expect(page.getByTestId('attention-badge')).toHaveText('1')
+
+  // Same alert id, new message → new fingerprint → back in the list.
+  await mockOfficeApi(page, {
+    teamAlerts: [
+      { kind: 'failing', agent_id: 'hr', message: 'lỗi 5 lần', severity: 'high' },
+      { kind: 'deny_spike', agent_id: 'content', message: 'từ chối 4 lần', severity: 'warn' },
+    ],
+  })
+  await page.reload()
+  await expect(page.getByTestId('attention-badge')).toHaveText('2')
+})
+
+test('16. phím tắt: ? mở bảng, g w nhảy hub, gõ trong ô nhập không kích hoạt', async ({ page }) => {
+  await mockOfficeApi(page)
+  await page.goto('/chat')
+  await expect(page.locator('.app-nav-primary')).toBeVisible()
+
+  await page.keyboard.press('Shift+?')
+  const card = page.getByTestId('shortcuts-help')
+  await expect(card).toBeVisible()
+  await expect(card).toContainText(DICT.vi['shortcuts.goTo'].replace('{hub}', DICT.vi['hub.work']))
+  await page.keyboard.press('Escape')
+  await expect(card).toHaveCount(0)
+
+  await page.keyboard.press('g')
+  await page.keyboard.press('w')
+  await expect(page).toHaveURL(/\/work$/)
+
+  // The ⌨ chip is the discoverable route to the same card.
+  await page.getByRole('button', { name: DICT.vi['shortcuts.button'] }).click()
+  await expect(card).toBeVisible()
+  await page.keyboard.press('Escape')
+})

@@ -29,6 +29,11 @@ function taskPayload(over: Partial<RoomArtifactsPayload['tasks'][number]> = {}):
   }
 }
 
+function emptyRoute() {
+  return { task_id: 't1', mode: '', source: '', reason: '', shape: '', effort: '',
+    failure_mode: '', dead_end: false }
+}
+
 function setup(room = 'room-1') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -50,7 +55,7 @@ beforeEach(() => {
 
 test('a stalled task shows the stalled reason and the four unstick actions', async () => {
   vi.spyOn(api, 'getRoomArtifacts').mockResolvedValue(taskPayload())
-  vi.spyOn(api, 'getTeamTaskRoute').mockResolvedValue({ task_id: 't1', mode: '', source: '', reason: '' })
+  vi.spyOn(api, 'getTeamTaskRoute').mockResolvedValue(emptyRoute())
   vi.spyOn(api, 'getTeamTaskMetrics').mockResolvedValue({ task_id: 't1', mode: '', status: 'stalled', wall_clock_seconds: null, wall_clock_text: '', cost_usd: 0, step_count: 0, content_steps: 0, review_steps: 0, rework_steps: 0, steps: [] })
   setup()
 
@@ -70,7 +75,7 @@ test('a review-exhausted stall (no dead step) shows the fallback reason line', a
       ],
     }),
   )
-  vi.spyOn(api, 'getTeamTaskRoute').mockResolvedValue({ task_id: 't1', mode: '', source: '', reason: '' })
+  vi.spyOn(api, 'getTeamTaskRoute').mockResolvedValue(emptyRoute())
   vi.spyOn(api, 'getTeamTaskMetrics').mockResolvedValue({ task_id: 't1', mode: '', status: 'stalled', wall_clock_seconds: null, wall_clock_text: '', cost_usd: 0, step_count: 0, content_steps: 0, review_steps: 0, rework_steps: 0, steps: [] })
   setup()
 
@@ -81,7 +86,7 @@ test('a live (open) task offers Cancel but not the stalled-only reason line', as
   vi.spyOn(api, 'getRoomArtifacts').mockResolvedValue(
     taskPayload({ status: 'open', steps: [] }),
   )
-  vi.spyOn(api, 'getTeamTaskRoute').mockResolvedValue({ task_id: 't1', mode: '', source: '', reason: '' })
+  vi.spyOn(api, 'getTeamTaskRoute').mockResolvedValue(emptyRoute())
   vi.spyOn(api, 'getTeamTaskMetrics').mockResolvedValue({ task_id: 't1', mode: '', status: 'stalled', wall_clock_seconds: null, wall_clock_text: '', cost_usd: 0, step_count: 0, content_steps: 0, review_steps: 0, rework_steps: 0, steps: [] })
   setup()
 
@@ -98,10 +103,38 @@ test('a done task shows neither the panel nor the unstick actions', async () => 
   vi.spyOn(api, 'getRoomArtifacts').mockResolvedValue(
     taskPayload({ status: 'done', steps: [] }),
   )
-  vi.spyOn(api, 'getTeamTaskRoute').mockResolvedValue({ task_id: 't1', mode: '', source: '', reason: '' })
+  vi.spyOn(api, 'getTeamTaskRoute').mockResolvedValue(emptyRoute())
   vi.spyOn(api, 'getTeamTaskMetrics').mockResolvedValue({ task_id: 't1', mode: '', status: 'stalled', wall_clock_seconds: null, wall_clock_text: '', cost_usd: 0, step_count: 0, content_steps: 0, review_steps: 0, rework_steps: 0, steps: [] })
   setup()
 
   await screen.findByText('Soạn báo cáo tuần')
   expect(screen.queryByRole('button', { name: 'Hủy việc' })).toBeNull()
+})
+
+test('the funnel names the route in words and badges a dead-ended sprint and its failure', async () => {
+  vi.spyOn(api, 'getRoomArtifacts').mockResolvedValue(taskPayload({ status: 'done', steps: [] }))
+  vi.spyOn(api, 'getTeamTaskRoute').mockResolvedValue({
+    ...emptyRoute(), mode: 'sprint', source: 'heuristic', reason: 'việc 1 người',
+    effort: 'low', failure_mode: 'cost_cap', dead_end: true,
+  })
+  vi.spyOn(api, 'getTeamTaskMetrics').mockResolvedValue({ task_id: 't1', mode: '', status: 'done', wall_clock_seconds: null, wall_clock_text: '', cost_usd: 0, step_count: 0, content_steps: 0, review_steps: 0, rework_steps: 0, steps: [] })
+  setup()
+
+  // Ids never leak: the sprint mode, effort tier, source and failure all read as words.
+  await screen.findByText(/chạy nhanh \(1 người\) · dễ/)
+  expect(screen.getByText('bộ đoán tự động')).toBeTruthy()
+  expect(screen.getByTestId('route-dead-end').textContent).toBe('phải chuyển sang đội')
+  expect(screen.getByTestId('route-failure').textContent).toBe('hết trần chi phí')
+  expect(screen.queryByText('sprint')).toBeNull()
+})
+
+test('a route id this build does not know still shows, as itself', async () => {
+  vi.spyOn(api, 'getRoomArtifacts').mockResolvedValue(taskPayload({ status: 'done', steps: [] }))
+  vi.spyOn(api, 'getTeamTaskRoute').mockResolvedValue({ ...emptyRoute(), mode: 'team', shape: 'pipeline_v9' })
+  vi.spyOn(api, 'getTeamTaskMetrics').mockResolvedValue({ task_id: 't1', mode: '', status: 'done', wall_clock_seconds: null, wall_clock_text: '', cost_usd: 0, step_count: 0, content_steps: 0, review_steps: 0, rework_steps: 0, steps: [] })
+  setup()
+
+  await screen.findByText('cả đội · pipeline_v9')
+  expect(screen.queryByTestId('route-dead-end')).toBeNull()
+  expect(screen.queryByTestId('route-failure')).toBeNull()
 })

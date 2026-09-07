@@ -86,8 +86,10 @@ Agent đóng vai management → phải hành xử như một PM/SM **giỏi và 
 | **Input** | `<Input>` | `.ui-input` | Form field; one border/radius/padding app-wide. |
 | **EmptyState** | `<EmptyState>` | `.ops-chat-empty` | Muted italic line (nothing-here moment). |
 | **PageHeader** | `<PageHeader title={…} actions={…}>` | `.page-header`, `.page-header-actions` | Page title left, actions right, aligned baseline. |
+| **ProgressBar** (v93) | `<ProgressBar value tone label>` | `.progress`, `.progress-fill`, `.progress-{tone}` | Ratio 0–1 as a filled track; `role="progressbar"` + aria values. Tone follows the same ok/warn/danger scale as Badge. |
+| **StatTile** (v93) | `<StatTile label value badge footer>` | `.stat-tile`, `.stat-tile-value`, `.stat-tile-footer` | One headline number + caption for dashboard heroes. Never a Card-in-Card. |
 
-**Header rule (v53)**: New view styles MUST extend these 6 primitives. Visuals stay in `App.css` section 3 (PRIMITIVES), behaviors in React. DISALLOWED: `.my-button`, `.card-accent`, `.input-lg` — reuse existing classes or propose token addition.
+**Header rule (v53)**: New view styles MUST extend these primitives (6 from v53 + ProgressBar/StatTile from v93). Visuals stay in `App.css` section 3 (PRIMITIVES), behaviors in React. DISALLOWED: `.my-button`, `.card-accent`, `.input-lg` — reuse existing classes or propose token addition.
 
 ### 5.4 Font: Be Vietnam Pro (OFL, self-hosted)
 
@@ -204,6 +206,40 @@ duyệt giờ là một query cache mà `/work` sở hữu, `/office` giữ đú
   qua `derivePendingCounts`).
 - **×N** khi ≥2 bước chạy song song.
 - **Bóng mờ trong suốt** khi bước deep_team đang chạy (event step mang cờ `deep_team`).
+
+### 5.13 Dashboard, attention center, shortcuts (v93 — openhuman-inspired)
+
+Ideas borrowed from openhuman's UI (GPL — patterns only, no code): a cost dashboard with a
+hero number, a severity-ordered notification center, and a `?` shortcuts sheet.
+
+**Số liệu tab** (`web/src/features/system/insights-*.tsx`):
+- **Hero first**: fleet spend / cap / % as three `StatTile`s + one `Badge` (ok/warn/over at
+  80 % and 100 %) + one `ProgressBar`. Detail tables (per engine, per tool, routing funnel)
+  come after the hero, never above it.
+- **Freshness line**: "Cập nhật Ns trước" + a *Làm mới* chip that refetches every insights
+  query at once. The window selector writes `?days=` to the URL so a view is shareable.
+- Empty stores render the hero with zeros; no spinner-forever, no 5xx on a fresh install.
+
+**Attention center** (`web/src/features/attention/`, bell in the header):
+- One list, ordered `error > warning > info`, stable within a band. Sources: coordinator
+  heartbeat, stalled cards, budget ratio (≥1 error, ≥0.8 warning), team alerts, pending
+  approvals, clarify questions, template upgrades.
+- The **badge counts error + warning only**; info never nags. The `/work` nav badge keeps
+  counting approvals independently — two badges, two questions ("what needs me" vs "how
+  many approvals").
+- Every item is a `Link` deep link (`/system?tab=settings`, `/work/task/:room`,
+  `/team/:id?tab=budget`, …); clicking navigates *and* closes the panel.
+- **Dismissal is per fingerprint**, stored in `localStorage` (`my-crew.attention.dismissed`):
+  the same alert with a changed message (or a budget that crosses the next band) comes back.
+  *Đã xem tất cả* dismisses everything currently listed and prunes stale entries.
+- The bell sits **outside** `.app-header-actions`, so on mobile it stays visible while the
+  mode / language / theme chips fold into the overflow menu. The panel goes fixed-width on
+  ≤640 px.
+
+**Keyboard** (`web/src/features/palette/shortcuts-help.tsx`): `?` toggles the shortcuts
+sheet, `g` then `c/o/w/t/s` jumps to a hub (1 s chord window), `⌘K`/`Ctrl+K` opens the
+palette. Chords ignore editable targets and any modifier; Escape closes. The ⌨ header chip
+opens the same sheet for mouse users.
 
 ## 6. Code Organization — Feature-Based Modules (v88)
 

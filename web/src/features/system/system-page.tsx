@@ -32,6 +32,7 @@ export function SystemPage() {
     next.set('tab', id)
     // Switching tabs drops a filter that only made sense on the tab being left.
     if (id !== 'audit') next.delete('task_id')
+    if (id !== 'insights') next.delete('days')
     setParams(next)
   }
 

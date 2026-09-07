@@ -12,18 +12,24 @@ import type { Page } from '@playwright/test'
 import type {
   CaptureRow,
   ConnectionCard,
+  CoordinatorHealthPayload,
+  EngineCostsPayload,
   FleetApprovalItem,
   FleetBudgetPayload,
   OfficeMessage,
   OutputItem,
   RoomArtifactsPayload,
+  RouteStatsPayload,
   ScheduleItem,
   StaffTemplate,
   StepArtifactPayload,
   StepTranscriptPayload,
+  TeamAlert,
   TeamBoardLane,
   TeamTaskActionResult,
   TeamTaskMetricsPayload,
+  TemplateStatusRow,
+  ToolStatsPayload,
   Workroom,
 } from '../../src/types'
 import { agentsFixture, assignStaffFixture, workroomsFixture } from '../fixtures/office-fixtures'
@@ -42,6 +48,10 @@ export interface OfficeApiMockOptions {
   assignPreview?: Record<string, unknown>
   /** Fleet-wide spend behind the system hub's Insights tab (default: an empty fleet). */
   fleetBudget?: FleetBudgetPayload
+  /** Số liệu aggregates; default empty shapes (a fresh install). */
+  routeStats?: RouteStatsPayload
+  toolStats?: ToolStatsPayload
+  engineCosts?: EngineCostsPayload
   /** Connection cards behind the system hub's Connections tab (default: none). */
   connections?: ConnectionCard[]
   /** Attempt rows behind the system hub's Audit tab (default: none). */
@@ -54,6 +64,12 @@ export interface OfficeApiMockOptions {
   pendingApprovals?: FleetApprovalItem[]
   /** Agent questions behind the chat hub's pending column. */
   clarifyQuestions?: unknown[]
+  /** Fleet alerts (team hub banner + the shell's attention bell; default: none). */
+  teamAlerts?: TeamAlert[]
+  /** Template version rows (upgradable ones feed the attention bell; default: none). */
+  templateStatus?: TemplateStatusRow[]
+  /** Coordinator heartbeat (default: alive). */
+  coordinatorHealth?: CoordinatorHealthPayload
   /** The ops catalog the assistant pane and the palette both read. */
   opsCommands?: { id: string; description: string; readonly: boolean }[]
   /** Reply for POST /api/ops/chat. A number instead delays the reply that many ms,
@@ -247,10 +263,19 @@ export async function mockOfficeApi(
       return json(
         opts.fleetBudget ?? { agents: [], total_spent_usd: 0, total_cap_usd: 0, ratio: 0 },
       )
+    if (pathname === '/api/insights/route-stats')
+      return json(opts.routeStats ?? {
+        total: 0, by_mode: [], by_source: [], by_shape: [], by_effort: [], by_failure: [],
+        failure_groups: [], failed: 0, dead_ends: 0, downgrades: 0,
+      })
+    if (pathname === '/api/insights/tool-stats')
+      return json(opts.toolStats ?? { days: 7, tools: [], agents: [], skipped: [] })
+    if (pathname === '/api/insights/engine-costs')
+      return json(opts.engineCosts ?? { days: 7, engines: [], total_cost_usd: 0, total_calls: 0 })
     if (pathname === '/api/connections')
       return json({ cards: opts.connections ?? [], needs_restart: false })
     if (pathname === '/api/health/integrations') return json({ checks: [], checked_at: 0 })
-    if (pathname === '/api/team/alerts') return json({ alerts: [] })
+    if (pathname === '/api/team/alerts') return json({ alerts: opts.teamAlerts ?? [] })
     if (pathname === '/api/office/assign/staff') return json(assignStaffFixture)
     if (pathname === '/api/office/workrooms')
       return json({ rooms: opts.workrooms ?? workroomsFixture })
@@ -304,7 +329,8 @@ export async function mockOfficeApi(
       })
     }
     // --- team hub ---
-    if (pathname === '/api/agents/template-status') return json({ agents: [] })
+    if (pathname === '/api/agents/template-status')
+      return json({ agents: opts.templateStatus ?? [] })
     if (pathname === '/api/agents/unregistered') return json({ profiles: opts.unregistered ?? [] })
     if (pathname === '/api/staff-templates')
       return json({
@@ -367,7 +393,9 @@ export async function mockOfficeApi(
     if (pathname === '/api/company-docs') return json({ docs: [] })
     if (/^\/api\/agents\/[^/]+\/company-docs$/.test(pathname)) return json({ docs: [] })
     if (pathname === '/api/health/coordinator')
-      return json({ alive: true, last_beat_ago_s: 3, reason: '' })
+      return json(
+        opts.coordinatorHealth ?? { alive: true, last_beat_ago_s: 3, reason: '', hint: '' },
+      )
     if (/^\/api\/office\/rooms\/[^/]+\/artifacts$/.test(pathname))
       return json(
         taskActionLanded && opts.artifactsAfterAction

@@ -260,7 +260,7 @@ def team_task_cost(task_id: str) -> dict:
 
 #: v82: route-decision fields safe to surface — allowlist like `_COST_FIELDS`
 #: (`signals` stays internal: raw keyword matches over the brief, noise for the CEO).
-_ROUTE_FIELDS = ("mode", "source", "reason")
+_ROUTE_FIELDS = ("mode", "source", "reason", "shape", "effort", "failure_mode")
 
 
 @router.get("/team-tasks/{task_id}/route")
@@ -276,7 +276,9 @@ def team_task_route(task_id: str) -> dict:
     finally:
         store.close()
     return {"task_id": task_id,
-            **{k: str(route.get(k) or "") for k in _ROUTE_FIELDS}}
+            **{k: str(route.get(k) or "") for k in _ROUTE_FIELDS},
+            # The sprint→team fallback flag: a sprint that ran out and was re-dispatched.
+            "dead_end": route.get("dead_end") is True}
 
 
 @router.get("/team-tasks/{task_id}/metrics")

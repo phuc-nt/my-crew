@@ -16,6 +16,7 @@ import type {
   CaptureDetail,
   CapturesPayload,
   CoordinatorHealthPayload,
+  EngineCostsPayload,
   FleetBudgetPayload,
   HistorySearchPayload,
   UnregisteredProfilesPayload,
@@ -78,6 +79,8 @@ import type {
   StaffTemplatesPayload,
   TeamAlertsPayload,
   TriggerResult,
+  RouteStatsPayload,
+  ToolStatsPayload,
 } from '../types'
 
 class ApiError extends Error {
@@ -337,6 +340,12 @@ export const api = {
       () => request<CoordinatorHealthPayload>('/api/health/coordinator')),
   // Dual-lens P3: read-only observability (fleet budget / captures / history search).
   getFleetBudget: () => request<FleetBudgetPayload>('/api/budget'),
+  // Fleet insights: routing retro, per-tool call health, spend per engine.
+  getRouteStats: () => request<RouteStatsPayload>('/api/insights/route-stats'),
+  getToolStats: (days: number) =>
+    request<ToolStatsPayload>(`/api/insights/tool-stats?days=${encodeURIComponent(days)}`),
+  getEngineCosts: (days: number) =>
+    request<EngineCostsPayload>(`/api/insights/engine-costs?days=${encodeURIComponent(days)}`),
   getCaptures: (params?: { task_id?: string; agent?: string; since?: string; limit?: number }) => {
     const q = new URLSearchParams()
     if (params?.task_id) q.set('task_id', params.task_id)

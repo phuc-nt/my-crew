@@ -60,11 +60,25 @@ def run_route_stats(slots: dict[str, str]) -> str:
         routes = store.list_routes()
     finally:
         store.close()
+    return render_route_stats(aggregate_route_stats(routes))
 
-    if not routes:
-        return ("Chưa có bản ghi định tuyến nào. Các việc giao từ phiên bản trước v78 "
-                "không lưu lại chế độ, nên chỉ việc giao mới mới được tính.")
 
+def _ranked(counts: dict[str, int], labels: dict[str, str]) -> list[dict]:
+    """Count dict → `[{id, label, count}]`, biggest first (stable, so ties keep first-seen
+    order). Unknown ids keep their raw id as label rather than vanishing."""
+    return [
+        {"id": key, "label": labels.get(key, key), "count": count}
+        for key, count in sorted(counts.items(), key=lambda kv: -kv[1])
+    ]
+
+
+def aggregate_route_stats(routes: list[tuple[dict, str]]) -> dict:
+    """The routing retro as data — one dict the chat renderer and the web tab both read.
+
+    Ids stay English (the store's vocabulary); every entry also carries the reader label
+    from the same dicts `render_route_reason` uses, so the two surfaces can never name
+    one lane two ways. `routes` is `TeamTaskStore.list_routes()` output.
+    """
     by_mode: dict[str, int] = {}
     by_source: dict[str, int] = {}
     # `route["dead_end"] is True` chỉ được đóng vào lúc `_mark_route_dead_end` chạy,
@@ -103,39 +117,79 @@ def run_route_stats(slots: dict[str, str]) -> str:
             if is_dead_end:
                 dead_by_effort[effort] = dead_by_effort.get(effort, 0) + 1
 
-    total = len(routes)
+    from my_crew.runtime.task_failure_mode import (
+        FAILURE_MODE_LABELS,
+        GROUP_LABELS,
+        failure_group_for,
+    )
+
+    failures = []
+    by_group: dict[str, int] = {}
+    for mode, count in sorted(by_failure.items(), key=lambda kv: -kv[1]):
+        # A mode this release does not know (stamped by a newer one) keeps its raw id
+        # and falls under "khác" — a count that quietly loses rows is worse than one
+        # with an unlabelled line.
+        group = failure_group_for(mode) or "khác"
+        by_group[group] = by_group.get(group, 0) + count
+        failures.append({
+            "id": mode, "label": FAILURE_MODE_LABELS.get(mode, mode), "count": count,
+            "group": group, "group_label": GROUP_LABELS.get(group, group),
+        })
+
+    return {
+        "total": len(routes),
+        "by_mode": _ranked(by_mode, _MODE_LABELS),
+        "by_source": _ranked(by_source, _SOURCE_LABELS),
+        "by_shape": _ranked(by_shape, _SHAPE_LABELS),
+        # Tier order, not count order: "dễ / vừa / khó" is the axis the reader scans.
+        "by_effort": [
+            {"id": tier, "label": _EFFORT_LABELS[tier], "count": by_effort[tier],
+             "dead_ends": dead_by_effort.get(tier, 0)}
+            for tier in ("low", "medium", "high") if by_effort.get(tier)
+        ],
+        "by_failure": failures,
+        "failure_groups": _ranked(by_group, GROUP_LABELS),
+        "failed": sum(by_failure.values()),
+        "dead_ends": dead_ends,
+        "downgrades": by_source.get("downgrade", 0),
+    }
+
+
+def render_route_stats(stats: dict) -> str:
+    """The chat rendering of `aggregate_route_stats` — plain lines, no markdown."""
+    total = int(stats.get("total") or 0)
+    if not total:
+        return ("Chưa có bản ghi định tuyến nào. Các việc giao từ phiên bản trước v78 "
+                "không lưu lại chế độ, nên chỉ việc giao mới mới được tính.")
+
     lines = [f"Định tuyến {total} việc gần nhất:"]
-    for mode, count in sorted(by_mode.items(), key=lambda kv: -kv[1]):
-        label = _MODE_LABELS.get(mode, mode)
-        lines.append(f"  • {label}: {count} ({count * 100 // total}%)")
+    for row in stats["by_mode"]:
+        lines.append(f"  • {row['label']}: {row['count']} ({row['count'] * 100 // total}%)")
 
     lines.append("")
     lines.append("Ai quyết:")
-    for source, count in sorted(by_source.items(), key=lambda kv: -kv[1]):
-        lines.append(f"  • {_SOURCE_LABELS.get(source, source)}: {count}")
+    for row in stats["by_source"]:
+        lines.append(f"  • {row['label']}: {row['count']}")
 
-    if by_shape:
+    if stats["by_shape"]:
         lines.append("")
         lines.append("Dạng đội (việc chạy đội):")
-        for shape, count in sorted(by_shape.items(), key=lambda kv: -kv[1]):
-            lines.append(f"  • {_SHAPE_LABELS.get(shape, shape)}: {count}")
+        for row in stats["by_shape"]:
+            lines.append(f"  • {row['label']}: {row['count']}")
 
-    if by_effort:
+    if stats["by_effort"]:
         lines.append("")
         lines.append("Độ khó việc chạy nhanh (máy chấm lúc nhận việc):")
-        for effort in ("low", "medium", "high"):
-            count = by_effort.get(effort, 0)
-            if not count:
-                continue
-            stuck = dead_by_effort.get(effort, 0)
-            tail = f", {stuck} bế tắc" if stuck else ""
-            lines.append(f"  • {_EFFORT_LABELS[effort]}: {count}{tail}")
+        for row in stats["by_effort"]:
+            tail = f", {row['dead_ends']} bế tắc" if row["dead_ends"] else ""
+            lines.append(f"  • {row['label']}: {row['count']}{tail}")
 
-    if by_failure:
+    if stats["by_failure"]:
         lines.append("")
-        lines.append(_render_failure_modes(by_failure))
+        lines.append(_render_failure_modes(stats))
 
-    downgrades = by_source.get("downgrade", 0)
+    downgrades = stats["downgrades"]
+    dead_ends = stats["dead_ends"]
     if downgrades or dead_ends:
         lines.append("")
         lines.append("Bộ đoán chệch (đã được kéo về):")
@@ -147,28 +201,11 @@ def run_route_stats(slots: dict[str, str]) -> str:
     return "\n".join(lines)
 
 
-
-def _render_failure_modes(by_failure: dict[str, int]) -> str:
-    """"Kết cục thất bại" block: one line per mode, then the MAST-group split.
-
-    Modes this release does not know (stamped by a newer one) keep their raw id and
-    fall under "khác" in the group split rather than being dropped — a count that
-    quietly loses rows is worse than one with an unlabelled line.
-    """
-    from my_crew.runtime.task_failure_mode import (
-        FAILURE_MODE_LABELS,
-        GROUP_LABELS,
-        failure_group_for,
-    )
-
-    failed = sum(by_failure.values())
-    lines = [f"Kết cục thất bại ({failed} việc dừng không có kết quả):"]
-    by_group: dict[str, int] = {}
-    for mode, count in sorted(by_failure.items(), key=lambda kv: -kv[1]):
-        lines.append(f"  • {FAILURE_MODE_LABELS.get(mode, mode)}: {count}")
-        group = failure_group_for(mode) or "khác"
-        by_group[group] = by_group.get(group, 0) + count
-    parts = [f"{GROUP_LABELS.get(g, g)} {n}" for g, n in
-             sorted(by_group.items(), key=lambda kv: -kv[1])]
+def _render_failure_modes(stats: dict) -> str:
+    """"Kết cục thất bại" block: one line per mode, then the MAST-group split."""
+    lines = [f"Kết cục thất bại ({stats['failed']} việc dừng không có kết quả):"]
+    for row in stats["by_failure"]:
+        lines.append(f"  • {row['label']}: {row['count']}")
+    parts = [f"{g['label']} {g['count']}" for g in stats["failure_groups"]]
     lines.append("  Theo nhóm: " + " · ".join(parts))
     return "\n".join(lines)
