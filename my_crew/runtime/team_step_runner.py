@@ -119,6 +119,10 @@ def run_team_step(
             store.mark_waiting_clarify(
                 task_id, step_id, attempt_id=attempt_id,
                 clarify_id=result.get("clarify_id"),
+                # Spend up to the pause goes on the step row so the cost cap sees it
+                # while the CEO is being asked; the task total is charged at the
+                # terminal write (the graph's cost is cumulative across the pause).
+                cost_usd=result.get("cost_usd"),
             )
             _record_capture(
                 attempt_id=attempt_id, task_id=task_id, step=step, engine=engine,

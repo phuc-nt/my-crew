@@ -923,3 +923,98 @@ def test_keep_ceo_structure_rejects_a_brief_made_of_words_the_ceo_never_typed():
     tidy = {"brief": "Tổng hợp báo giá, gửi email cho khách hàng Anh Minh"}
     assert _shared_word_share(tidy["brief"], message) == 1.0
     assert _keep_ceo_structure(message, tidy) == tidy
+
+
+def test_a_brief_under_a_slot_name_the_model_invented_is_adopted():
+    """Đo thật 6/6 lượt trên deepseek-v4-flash: đề giao việc quay về dưới `description`,
+    `task`, `text`, `request`, `task_description`, `query`, `summary` — đúng nội dung,
+    sai tên khoá — nên lệnh chạy với `brief` rỗng và CEO bị hỏi lại chính đề vừa gõ."""
+    from my_crew.agent.ops_chat import _normalize_intent_shape
+
+    for alias in ("description", "task", "text", "request", "task_description"):
+        parsed = {"intent": "command", "command_id": "assign_team_task",
+                  "slots": {alias: "khảo sát 5 công cụ quản lý dự án"}}
+        assert _normalize_intent_shape(parsed, OPS_COMMANDS)["slots"] == {
+            "brief": "khảo sát 5 công cụ quản lý dự án"}, alias
+
+
+def test_slot_adoption_only_fires_when_exactly_one_slot_is_missing_and_one_is_stray():
+    """Hẹp có chủ ý: nhận nhầm khoá là bỏ chữ CEO vào đúng ô sai. Nhiều ô trống hoặc
+    nhiều khoá lạ thì giữ nguyên và hỏi lại như cũ."""
+    from my_crew.agent.ops_chat import _normalize_intent_shape
+
+    # Slot đúng đã có ⇒ không có ô nào để nhận, khoá lạ bị bỏ qua.
+    filled = {"intent": "command", "command_id": "assign_team_task",
+              "slots": {"brief": "đề thật", "task": "đề khác"}}
+    assert _normalize_intent_shape(filled, OPS_COMMANDS)["slots"] == {
+        "brief": "đề thật", "task": "đề khác"}
+    # Hai ô trống (lệnh nhiều slot) ⇒ không đoán ô nào.
+    ambiguous = {"intent": "command", "command_id": "cancel_task",
+                 "slots": {"what": "việc #99"}}
+    assert _normalize_intent_shape(ambiguous, OPS_COMMANDS)["slots"] == {"what": "việc #99"}
+    # Hai khoá lạ ⇒ không đoán khoá nào.
+    two_strays = {"intent": "command", "command_id": "assign_team_task",
+                  "slots": {"task": "đề A", "note": "đề B"}}
+    assert _normalize_intent_shape(two_strays, OPS_COMMANDS)["slots"] == {
+        "task": "đề A", "note": "đề B"}
+    # Giá trị rỗng không phải đề.
+    empty = {"intent": "command", "command_id": "assign_team_task", "slots": {"task": "  "}}
+    assert _normalize_intent_shape(empty, OPS_COMMANDS)["slots"] == {"task": "  "}
+
+
+def test_slot_adoption_also_runs_when_the_command_id_arrived_in_the_intent_field():
+    """Hai kiểu trượt của model xảy ra cùng lúc, nên đường sửa hình dạng cũng phải
+    chạy qua bộ nhận khoá lạ."""
+    from my_crew.agent.ops_chat import _normalize_intent_shape
+
+    parsed = {"intent": "assign_team_task", "slots": {"task": "so sánh 3 nhà cung cấp"}}
+    out = _normalize_intent_shape(parsed, OPS_COMMANDS)
+    assert out["intent"] == "command"
+    assert out["command_id"] == "assign_team_task"
+    assert out["slots"] == {"brief": "so sánh 3 nhà cung cấp"}
+
+
+def test_the_ceo_mode_prefix_wins_over_a_prefix_the_model_wrote_itself():
+    """Đo thật: "team: viết giúp anh bản mô tả phạm vi…" quay về dưới tiền tố `sprint:`,
+    và bộ định tuyến chạy chế độ nhanh với lý do "CEO ép bằng tiền tố" — chế độ CEO ép
+    bị đổi âm thầm, ngay ở chỗ tiền tố sinh ra để phục vụ."""
+    from my_crew.agent.ops_chat import _restore_mode_prefix
+
+    message = "team: viết giúp anh bản mô tả phạm vi cho tính năng đăng nhập"
+    swapped = {"brief": "sprint: viết bản mô tả phạm vi"}
+    assert _restore_mode_prefix(message, swapped) == {
+        "brief": "team: viết bản mô tả phạm vi"}
+    # Tiền tố khớp (kể cả khác hoa/thường) thì không đụng vào.
+    same = {"brief": "Team: viết bản mô tả phạm vi"}
+    assert _restore_mode_prefix(message, same) == same
+    # Mất tiền tố thì chép lại như cũ.
+    dropped = {"brief": "viết bản mô tả phạm vi"}
+    assert _restore_mode_prefix(message, dropped) == {"brief": "team: viết bản mô tả phạm vi"}
+    # CEO không ép chế độ thì không bao giờ gắn thêm.
+    plain = "viết bản mô tả phạm vi"
+    assert _restore_mode_prefix(plain, {"brief": "sprint: viết bản mô tả phạm vi"}) == {
+        "brief": "sprint: viết bản mô tả phạm vi"}
+
+
+def test_the_classifier_is_told_that_a_question_about_this_company_is_answered_here():
+    """Đo thật 3/6 lượt: "Công ty mình hiện có bao nhiêu người vậy em?" bị phán giao
+    việc — luật "ai đang giữ vị trí gì LUÔN là command" nuốt cả câu hỏi nội bộ. Ranh
+    giới phải là dữ liệu nằm ở đâu, không phải câu hỏi có nhắc tới người hay không."""
+    from my_crew.agent.ops_chat import _INTENT_SYSTEM
+
+    assert "CHÍNH CÔNG TY NÀY" in _INTENT_SYSTEM
+    assert "bao nhiêu người" in _INTENT_SYSTEM
+    # Vế ngoài vẫn phải giữ, và phải nói rõ là công ty KHÁC.
+    assert "ở công ty khác" in _INTENT_SYSTEM
+
+
+def test_the_command_catalog_lists_slots_for_commands_that_have_them():
+    """Dòng danh mục là chỗ DUY NHẤT model đọc được tên slot thật. Một lỗi ưu tiên toán
+    tử từng làm biểu thức điều kiện ôm trọn vế trái, nên nhánh "lệnh không có slot"
+    không bao giờ là thứ nó trông giống."""
+    from my_crew.agent.ops_chat import build_command_catalog
+
+    catalog = build_command_catalog(OPS_COMMANDS)
+    lines = {line.split(":")[0].lstrip("- "): line for line in catalog.splitlines()}
+    assert lines["assign_team_task"].endswith("| slots: brief")
+    assert "| slots:" not in lines["get_status"]

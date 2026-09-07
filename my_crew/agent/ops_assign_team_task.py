@@ -45,6 +45,7 @@ from my_crew.agent.task_decomposition import (
     fold_unjustified_steps,
     mark_research_steps,
     parse_decomposed_task,
+    repair_missing_pic,
     repair_terminal_assignee,
     research_gap,
     unmeasurable_gap,
@@ -205,6 +206,8 @@ def _decompose_with_retries(
             continue
         try:
             task = parse_decomposed_task(result.content)
+            if not pic_requested:
+                task = repair_missing_pic(task, {a for a, _ in staff})
             task = repair_terminal_assignee(
                 task, {a for a, _ in staff}, pic_requested)
             task = validate_decomposition(

@@ -709,16 +709,22 @@ class TeamTaskStore:
 
     def mark_waiting_clarify(self, task_id: str, step_id: str, *,
                              attempt_id: str | None = None,
-                             clarify_id: int | None = None) -> bool:
+                             clarify_id: int | None = None,
+                             cost_usd: float | None = None) -> bool:
         """v34 P2: mark a step paused mid-graph on a CEO clarify interrupt. Mirrors
         `mark_awaiting_approval` exactly: worker-only write (holds + passes its own
         attempt_id), `clarify_id` persisted so the ticker can poll the ClarifyStore
         and resume once the CEO answers (or the question expires). A row without a
         clarify_id is never auto-resumed — same un-pollable contract as an
-        awaiting_approval row without an approval_id."""
+        awaiting_approval row without an approval_id.
+
+        `cost_usd` is what the step has spent up to the pause. It is written on the
+        step row only (see `set_step_status(charge_task_total=False)`), so the cost
+        cap — which sums step rows — sees the spend while the CEO is being asked,
+        and the terminal write after resume charges the task total exactly once."""
         updated = _steps.set_step_status(
             self._conn, task_id, step_id, "waiting_clarify", attempt_id=attempt_id,
-            clarify_id=clarify_id,
+            clarify_id=clarify_id, cost_usd=cost_usd, charge_task_total=False,
         )
         self._conn.commit()
         return updated

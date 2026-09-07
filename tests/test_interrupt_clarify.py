@@ -7,7 +7,8 @@ Load-bearing:
 - empty answer (expired / safe default) → no rework, the draft ships as-is.
 - un-checkpointed graph → v33 fire-and-forget pass-through (no interrupt).
 - ticker resume input: answered→Command(answer), expired→Command(""), pending→wait.
-- store: mark_waiting_clarify persists status+clarify_id; a fresh reserve clears it.
+- store: mark_waiting_clarify persists status+clarify_id (and the spend so far,
+  so the cost cap can see it during the pause); a fresh reserve clears the gate.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from __future__ import annotations
 import sqlite3
 from types import SimpleNamespace
 
+import pytest
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.types import Command
 
@@ -148,6 +150,39 @@ def test_store_waiting_clarify_roundtrip(tmp_path, monkeypatch):
     # a fresh reserve (retry path) clears the stale gate ids
     store.reserve_step("t1", "s1")
     assert store.get_step("t1", "s1").clarify_id is None
+    store.close()
+
+
+def test_spend_before_a_clarify_pause_is_visible_to_the_cost_cap_and_charged_once(
+        tmp_path, monkeypatch):
+    """The cost cap reads `sum_cost` (step rows), not `cost_usd_total`. Measured live: a
+    step paused on a CEO question had already spent real money and the cap saw zero for
+    the whole wait. So the pause writes the spend on the STEP row, and the terminal
+    write later carries the WHOLE step's cumulative spend and charges the task total."""
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    store = TeamTaskStore(team_tasks_db_path())
+    store.create_task(task_id="t1", title="T", pic_id="")
+    store.set_plan("t1", [{"step_id": "s1", "title": "x", "assigned_to": "a",
+                           "deps": []}], "h")
+    attempt = store.reserve_step("t1", "s1")
+    assert store.mark_waiting_clarify("t1", "s1", attempt_id=attempt, clarify_id=9,
+                                      cost_usd=0.02)
+
+    # Visible to the cap during the pause...
+    assert store.get_step("t1", "s1").cost_usd == pytest.approx(0.02)
+    assert store.sum_cost("t1") == pytest.approx(0.02)
+    # ...but not yet charged to the task, because the graph's cost is cumulative and
+    # the terminal write will carry this spend again.
+    assert store.get("t1").cost_usd_total == pytest.approx(0.0)
+
+    attempt2 = store.reserve_step("t1", "s1")
+    assert store.mark_done("t1", "s1", attempt_id=attempt2, cost_usd=0.05)
+    assert store.get_step("t1", "s1").cost_usd == pytest.approx(0.05)
+    assert store.sum_cost("t1") == pytest.approx(0.05)
+    assert store.get("t1").cost_usd_total == pytest.approx(0.05)
     store.close()
 
 

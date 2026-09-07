@@ -13,6 +13,7 @@ pattern here).
 from __future__ import annotations
 
 import json
+import re
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -76,6 +77,24 @@ def strip_json_fences(raw: str) -> str:
         final = _last_complete_object(text, start)
         return final if final is not None else text[start:end + 1]
     return text[start:consumed]
+
+
+#: A backslash that JSON does not allow to start an escape (`\_`, `\-`, `\.`, `\*`…).
+_INVALID_ESCAPE_RE = re.compile(r'\\(?!["\\/bfnrtu])')
+
+
+def repair_invalid_escapes(text: str) -> str:
+    """Drop the backslashes that make a JSON completion unparseable ("Invalid \\escape").
+
+    Measured live on deepseek-v4-flash: a decompose answer for a brief with a shell step
+    wrote `test\\_suite` — the markdown habit of escaping underscores carried into a
+    JSON string, and every one of the four attempts died in `json.loads` with the same
+    error. The intended text is the string WITHOUT the backslash, so removing exactly
+    the backslashes JSON rejects recovers the model's answer instead of re-prompting
+    for it. Valid escapes (`\\n`, `\\"`, `\\\\`, `\\uXXXX`…) are untouched, and a completion
+    that is still not JSON afterwards fails loud in the parser exactly as before.
+    """
+    return _INVALID_ESCAPE_RE.sub("", text)
 
 
 def _last_complete_object(text: str, start: int) -> str | None:

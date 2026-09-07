@@ -750,10 +750,19 @@ def set_step_status(
     outcome_ref: str | None = None, cost_usd: float | None = None,
     attempt_id: str | None = None, approval_id: int | None = None,
     clarify_id: int | None = None, split_proposal_json: str | None = None,
-    only_if_status: str | None = None,
+    only_if_status: str | None = None, charge_task_total: bool = True,
 ) -> bool:
     """Write a step's status (+ optionally its outcome/cost/approval_id). Returns True
     iff a row was actually updated.
+
+    `charge_task_total=False` writes `cost_usd` on the STEP row only, without adding it
+    to `team_tasks.cost_usd_total`. That is the contract for a mid-step pause
+    (`mark_waiting_clarify`): the graph's cost is cumulative across the pause (the
+    checkpoint keeps it), so the terminal write later carries the whole step's spend
+    and charges the task total once. The step row must still show the spend during the
+    pause, because the cost cap reads `sum_cost` (step rows), not `cost_usd_total` —
+    measured live: a step paused on a CEO question had spent real money and the cap
+    saw zero for the entire wait.
 
     `attempt_id`, when given, guards the write: it only applies `WHERE ... AND
     attempt_id = ?`, so a worker whose lease was re-reserved out from under it (e.g. the
@@ -802,7 +811,7 @@ def set_step_status(
     else:
         cur = conn.execute("UPDATE team_steps SET status = ? " + where, (status, *params))
     updated = cur.rowcount > 0
-    if updated and cost_usd is not None:
+    if updated and cost_usd is not None and charge_task_total:
         conn.execute(
             "UPDATE team_tasks SET cost_usd_total = cost_usd_total + ? WHERE id = ?",
             (cost_usd, task_id),

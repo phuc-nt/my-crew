@@ -1242,3 +1242,68 @@ def test_acceptance_written_as_a_list_is_joined_into_the_rubric_text():
     assert TeamStepPlan(step_id="s2", title="x", assigned_to="a", acceptance=None).acceptance == ""
     padded = TeamStepPlan(step_id="s3", title="x", assigned_to="a", acceptance=" ok ")
     assert padded.acceptance == "ok"
+
+
+def test_a_backslash_escape_json_forbids_is_repaired_instead_of_losing_the_plan():
+    # Measured live: a decompose answer wrote `test\_suite` inside a title. Python's
+    # json module calls that "Invalid \escape" and all four attempts died on it.
+    from my_crew.agent.task_decomposition import parse_decomposed_task
+
+    raw = ('{"steps": [{"step_id": "s1", "title": "Chay test\\_suite", '
+           '"assigned_to": "agent-a", "deps": []}], "requires_approval": true}')
+    task = parse_decomposed_task(raw)
+    assert task.steps[0].title == "Chay test_suite"
+
+
+def test_a_genuinely_broken_answer_still_reports_the_original_parse_error():
+    from my_crew.agent.task_decomposition import parse_decomposed_task
+
+    with pytest.raises(DecompositionError) as err:
+        parse_decomposed_task('{"steps": [ this is not json at all')
+    assert "JSON" in str(err.value)
+
+
+def test_an_empty_pic_is_filled_from_the_only_terminal_step():
+    # Measured live: the model planned a valid single-owner task but left pic_id blank,
+    # and the retry loop burned all four attempts on "thiếu pic_id".
+    from my_crew.agent.task_decomposition import repair_missing_pic
+
+    task = _task_from([_step("a"), _step("b", deps=["a"])])
+    blank = task.model_copy(update={"pic_id": ""})
+    fixed = repair_missing_pic(blank, {"agent-a"})
+    assert fixed.pic_id == "agent-a"
+
+
+def test_the_pic_repair_keeps_its_hands_off_ambiguous_or_unknown_plans():
+    from my_crew.agent.task_decomposition import repair_missing_pic
+
+    two_owners = _task_from([
+        _step("a", assigned_to="agent-a"), _step("b", assigned_to="agent-b"),
+    ]).model_copy(update={"pic_id": ""})
+    # Two terminals means two candidate owners: guessing one would pick a PIC the CEO
+    # never asked for, so the retry loop must keep its complaint.
+    assert repair_missing_pic(two_owners, {"agent-a", "agent-b"}).pic_id == ""
+
+    stranger = _task_from([_step("a", assigned_to="ghost")]).model_copy(
+        update={"pic_id": ""})
+    assert repair_missing_pic(stranger, {"agent-a"}).pic_id == ""
+
+    already = _task_from([_step("a")]).model_copy(update={"pic_id": "agent-b"})
+    assert repair_missing_pic(already, {"agent-a", "agent-b"}).pic_id == "agent-b"
+
+
+def test_research_gap_stays_quiet_when_the_listed_items_are_internal_phases():
+    # Measured live: an internal-history brief listed its own phases and the gap fired,
+    # forcing a pointless web step onto a job whose data never leaves the company. The
+    # entities have to be NAMED things out in the world before a lookup is demanded.
+    from my_crew.agent.task_decomposition import research_gap
+
+    brief = ("Rà soát lại quy trình nội bộ gồm: tiếp nhận, phân loại, xử lý, "
+             "phản hồi, lưu trữ. Ghi nguồn từng bước.")
+    no_web = _task_from([_step("draft"), _step("final", deps=["draft"])])
+    assert research_gap(brief, no_web) == ""
+
+    # The same shape with NAMED outside things still has to fire.
+    named = ("So sánh phí sàn của 5 sàn: Shopee, Lazada, TikTok Shop, Tiki, Sendo. "
+             "Ghi nguồn từng con số.")
+    assert research_gap(named, no_web)

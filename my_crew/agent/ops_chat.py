@@ -72,12 +72,18 @@ _INTENT_SYSTEM = (
     "có tiêu chí/hạng mục cần thu thập, hoặc phải tra dữ liệu ngoài mới trả lời được. "
     "Chỉ chọn question khi bạn trả lời được ngay bằng hiểu biết sẵn có mà không phải làm "
     "gì thêm.\n"
-    "HIỂU BIẾT SẴN CÓ CỦA BẠN LÀ DỮ LIỆU CŨ. Hỏi về thứ thay đổi theo thời gian — giá "
-    "cả, tỷ giá, tin tức, tình hình thị trường, phiên bản mới nhất, ai đang giữ vị trí "
-    "gì — LUÔN là command (assign_team_task), không bao giờ là question, kể cả khi bạn "
-    "thấy mình biết câu trả lời: cái bạn nhớ có thể đã lỗi thời, chỉ người tra được "
-    "nguồn ngoài mới trả lời đúng. Ví dụ đều là command: \"Giá bán lẻ iPhone 17 Pro ở "
-    "VN?\", \"Tỷ giá USD hôm nay?\", \"Tin mới nhất về đối thủ X?\".\n"
+    "HIỂU BIẾT SẴN CÓ CỦA BẠN LÀ DỮ LIỆU CŨ. Hỏi về thứ BÊN NGOÀI thay đổi theo thời "
+    "gian — giá cả, tỷ giá, tin tức, tình hình thị trường, phiên bản mới nhất, ai đang "
+    "giữ vị trí gì ở công ty khác — LUÔN là command (assign_team_task), không bao giờ "
+    "là question, kể cả khi bạn thấy mình biết câu trả lời: cái bạn nhớ có thể đã lỗi "
+    "thời, chỉ người tra được nguồn ngoài mới trả lời đúng. Ví dụ đều là command: "
+    "\"Giá bán lẻ iPhone 17 Pro ở VN?\", \"Tỷ giá USD hôm nay?\", \"Tin mới nhất về "
+    "đối thủ X?\".\n"
+    "NGƯỢC LẠI, hỏi về CHÍNH CÔNG TY NÀY luôn là question: hệ thống đọc thẳng dữ liệu "
+    "nội bộ và trả lời ngay, không ai phải đi tra. Ví dụ đều là question: \"Công ty "
+    "mình có bao nhiêu người?\", \"Đội mình gồm những ai?\", \"Tháng này tiêu hết bao "
+    "nhiêu tiền?\", \"Đang có việc nào chạy?\". Ranh giới là ở chỗ dữ liệu nằm ĐÂU — "
+    "trong nhà thì trả lời, ngoài đường mới phải giao người đi tra.\n"
     "TIN NHẮN MỞ ĐẦU BẰNG \"sprint:\" HOẶC \"team:\" LUÔN LÀ command giao việc "
     "(assign_team_task), không bao giờ là question — đó là CEO chỉ định thẳng chế độ "
     "chạy, nên không còn gì để phân vân, kể cả khi phần việc còn lại trông nhỏ và bạn "
@@ -142,8 +148,41 @@ def _is_dead_end(parsed: dict, commands: dict[str, dict]) -> bool:
     )
 
 
+def _adopt_aliased_slots(parsed: dict, commands: dict[str, dict]) -> dict:
+    """Move a single free-text slot the model named itself onto the command's REAL slot.
+
+    Measured live on deepseek-v4-flash, 6 replays per phrasing: the delegation brief came
+    back under `description`, `task`, `text`, `request`, `task_description`, `query` and
+    `summary` — every one of them a name the model invented, none of them in the catalog
+    line that spells out `slots: brief`. The value was right every time; only the key was
+    wrong, and the command then ran with an EMPTY brief, so the CEO was asked to describe
+    the task they had just typed (a1/a7 live) or the mode prefix had nothing to be
+    restored onto (a6).
+
+    Deliberately narrow, because a wrong adoption would put the CEO's words in the wrong
+    field: it fires only when the command has exactly ONE missing slot to fill, the model
+    supplied exactly ONE unknown key, and that key's value is a non-empty string. A
+    command whose several slots are all mis-named still asks, as before.
+    """
+    command_id = str(parsed.get("command_id") or "")
+    spec = commands.get(command_id)
+    slots = parsed.get("slots")
+    if spec is None or not isinstance(slots, dict):
+        return parsed
+    known = set(spec["slots"].keys())
+    missing = [name for name in known if not str(slots.get(name) or "").strip()]
+    strays = [k for k, v in slots.items() if k not in known and isinstance(v, str) and v.strip()]
+    if len(missing) != 1 or len(strays) != 1:
+        return parsed
+    logger.info("ops intent: slot %r adopted as %r (model named it itself)",
+                strays[0], missing[0])
+    adopted = {k: v for k, v in slots.items() if k != strays[0]}
+    adopted[missing[0]] = slots[strays[0]].strip()
+    return {**parsed, "slots": adopted}
+
+
 def _normalize_intent_shape(parsed: dict, commands: dict[str, dict]) -> dict:
-    """Repair the two shape slips the classifier makes, before anything acts on them.
+    """Repair the shape slips the classifier makes, before anything acts on them.
 
     Measured live on `~deepseek/deepseek-v4-flash-latest`, 10 replays per phrasing: only
     4-5 of 10 produced the documented `{"intent":"command","command_id":"<catalog id>"}`.
@@ -166,14 +205,31 @@ def _normalize_intent_shape(parsed: dict, commands: dict[str, dict]) -> dict:
         return parsed
     intent = str(parsed.get("intent") or "")
     if intent in ("command", "question", "unsupported"):
-        return parsed
+        return _adopt_aliased_slots(parsed, commands) if intent == "command" else parsed
     if intent in commands:
         # The command id landed in the intent field. Trust it only over a command_id that
         # the catalog does not recognise, so a well-formed pair is never overwritten.
         if str(parsed.get("command_id") or "") not in commands:
             parsed["command_id"] = intent
         parsed["intent"] = "command"
+        return _adopt_aliased_slots(parsed, commands)
     return parsed
+
+
+def build_command_catalog(commands: dict[str, dict]) -> str:
+    """The command list the classifier reads — one line per command, slot names spelled
+    out for the commands that take them.
+
+    This line is the ONLY place the model can learn what a command's slots are called,
+    which is why it is a named function with its own test: the expression was once
+    written so the conditional swallowed the whole left-hand side, and the
+    "command with no slots" branch was never what it looked like.
+    """
+    return "\n".join(
+        (f"- {cid}: {spec['description']} | slots: " + ", ".join(spec["slots"].keys()))
+        if spec["slots"] else f"- {cid}: {spec['description']}"
+        for cid, spec in commands.items()
+    )
 
 
 def classify_ops_intent(
@@ -185,12 +241,7 @@ def classify_ops_intent(
     the commands this agent may serve, or it would route to an id the engine then
     refuses confusingly. None ⇒ full catalog (admin, pre-v61 call sites)."""
     commands = OPS_COMMANDS if commands is None else commands
-    catalog = "\n".join(
-        f"- {cid}: {spec['description']} | slots: "
-        + ", ".join(spec["slots"].keys()) if spec["slots"] else f"- {cid}: {spec['description']}"
-        for cid, spec in commands.items()
-    )
-    user = f"DANH SÁCH LỆNH:\n{catalog}\n\nTIN NHẮN:\n{message}"
+    user = f"DANH SÁCH LỆNH:\n{build_command_catalog(commands)}\n\nTIN NHẮN:\n{message}"
     cost: float | None = None
     for attempt in range(_MAX_CLASSIFY_ATTEMPTS):
         try:
@@ -385,8 +436,14 @@ def _restore_mode_prefix(message: str, slots: dict[str, str]) -> dict[str, str]:
     lời kể và bỏ tiền tố đi, khiến lệnh ép chế độ của CEO im lặng vô hiệu ở đúng bề
     mặt trò chuyện mà nó sinh ra để phục vụ.
 
-    Chỉ chép khi câu GỐC thật sự mở đầu bằng tiền tố và slot hiện chưa có — không suy
-    diễn thêm gì, nên một đề bình thường không bao giờ bị gắn chế độ ngoài ý CEO.
+    Chỉ chạm khi câu GỐC thật sự mở đầu bằng tiền tố — không suy diễn thêm gì, nên một
+    đề bình thường không bao giờ bị gắn chế độ ngoài ý CEO.
+
+    Tiền tố model tự viết mà KHÁC tiền tố CEO gõ thì đề đi sai chế độ, im lặng: đo thật
+    trên deepseek-v4-flash, "team: viết giúp anh bản mô tả phạm vi…" quay về dưới một
+    tiền tố `sprint:`, và bộ định tuyến chạy chế độ nhanh với lý do "CEO ép bằng tiền
+    tố" — đúng câu CEO không hề gõ. Tiền tố của CEO thắng: chép lại tiền tố đúng lên
+    phần đề model trả về.
     """
     from my_crew.agent.sprint_intake import strip_mode_prefix
 
@@ -394,9 +451,14 @@ def _restore_mode_prefix(message: str, slots: dict[str, str]) -> dict[str, str]:
     brief = slots.get("brief", "")
     if not forced or not brief:
         return slots
-    if strip_mode_prefix(brief)[0]:
+    written, clean = strip_mode_prefix(brief)
+    if not written:
+        return {**slots, "brief": f"{forced}: {brief}"}
+    if written.lower() == forced.lower():
         return slots
-    return {**slots, "brief": f"{forced}: {brief}"}
+    logger.info("ops intent: mode prefix %r overwritten with the CEO's own %r",
+                written, forced)
+    return {**slots, "brief": f"{forced}: {clean}"}
 
 
 _WORD_RE = re.compile(r"\w+", re.UNICODE)

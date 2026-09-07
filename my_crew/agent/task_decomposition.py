@@ -336,12 +336,20 @@ def parse_decomposed_task(raw_json: str) -> DecomposedTask:
     Raises `DecompositionError` on anything that is not valid JSON or does not match
     the schema — the caller (ops_catalog.assign_team_task) retries on this (bounded,
     before the CEO ever sees a preview)."""
-    from my_crew.llm.team_task_check_prompt import strip_json_fences
+    from my_crew.llm.team_task_check_prompt import repair_invalid_escapes, strip_json_fences
 
+    text = strip_json_fences(raw_json)
     try:
-        doc = json.loads(strip_json_fences(raw_json))
+        doc = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise DecompositionError(f"phân rã không phải JSON hợp lệ: {exc}") from None
+        # A `\_`-style escape (markdown habit inside a JSON string) is the model's
+        # answer with one stray character, not a malformed plan — repair before the
+        # retry loop pays a whole re-prompt for it. Still broken ⇒ the ORIGINAL error.
+        try:
+            doc = json.loads(repair_invalid_escapes(text))
+        except json.JSONDecodeError:
+            raise DecompositionError(f"phân rã không phải JSON hợp lệ: {exc}") from None
+        logger.info("decompose: repaired an invalid JSON escape in the model's answer")
     if not isinstance(doc, dict):
         raise DecompositionError("phân rã phải là một object JSON")
     try:
@@ -409,6 +417,30 @@ def repair_terminal_assignee(
         s.model_copy(update={"assigned_to": pic}) if s.step_id == terminal.step_id else s
         for s in task.steps
     )})
+
+
+def repair_missing_pic(task: DecomposedTask, staff_ids: set[str]) -> DecomposedTask:
+    """Fill an empty `pic_id` with the owner of the plan's sole terminal step.
+
+    The PIC rule is "the PIC owns the final step", so a plan with exactly one terminal
+    step already names its PIC — the model just left the field blank. Measured live on
+    deepseek-v4-flash: an internal-history brief came back as a valid single-step (or
+    single-terminal) plan with `pic_id: ""` on all four attempts, and the CEO saw
+    "không phân rã được kế hoạch hợp lệ" for a plan that was fine. Same posture as
+    `repair_terminal_assignee`: only the unambiguous case is repaired; several
+    terminals, or a terminal owned by someone outside the roster, still go back to
+    the model, and the pic_id gate downstream stays the only enforcement.
+    """
+    if task.pic_id:
+        return task
+    terminals = find_terminals(task.steps)
+    if len(terminals) != 1 or terminals[0].assigned_to not in staff_ids:
+        return task
+    logger.info(
+        "decompose: code-side repair — empty pic_id filled with the terminal step's "
+        "owner %s", terminals[0].assigned_to,
+    )
+    return task.model_copy(update={"pic_id": terminals[0].assigned_to})
 
 
 def validate_pic_terminal(steps: tuple[TeamStepPlan, ...], pic_id: str) -> None:
@@ -649,9 +681,18 @@ def research_gap(brief: str, task: DecomposedTask) -> str:
     so the fan-out bias never fired either.
     """
     from my_crew.agent.sprint_intake import _MATERIAL_HINTS  # tránh vòng import
+    from my_crew.runtime.sprint_runner import _capitalised_name_word, listed_entities
 
-    n = count_enumerated_entities(brief)
+    items = listed_entities(brief)
+    n = len(items)
     if n < 4:
+        return ""
+    # The entities must be NAMED things out in the world (Shopee, Lazada, iPhone 17…),
+    # not the phases of one internal job. Measured live: "tra lịch sử, đọc thứ tìm
+    # được, rồi tra tiếp … việc đã làm những gì, ai làm, kết quả ra sao, và điều gì còn
+    # dở dang" parsed as five lowercase "entities", and an internal-history brief that
+    # explicitly forbids web lookup was sent back four times demanding `needs_web`.
+    if not any(_capitalised_name_word(word) for item in items for word in item.split()):
         return ""
     text = " " + (brief or "").strip().lower() + " "
     if not any(h in text for h in _LOOKUP_HINTS):
