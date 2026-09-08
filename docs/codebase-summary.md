@@ -136,7 +136,8 @@
   load-modify-save (F7 — fix luôn bug clobber `team_task_concurrency`/cap sẵn có).
 - **Routes composer** `routes_office_assign.py`: /api/office/assign/{staff,preview,confirm,
   cancel} — thin wrapper trên CHÍNH hàm command (hash-bind/authz ở đó); protected mặc định;
-  brief cap 4000 chars.
+  brief cap 4000 chars. v94: preview trả thêm `manifest` (bước + cờ external/shell/web/
+  mail/review), confirm nhận `preauth_scope` (`""|once|always`) — xem mục v94–v96.
 - **FE màn office hợp nhất** (`views/office-unified/`): MỘT `useOfficeStream` nuôi cả
   OfficeCanvas (extract từ office-scene, ĐÃ XÓA file cũ) + ActivityFeed (tail 40, dùng
   chung `office-shared/office-message-line` với OfficeRoom) + AssignComposer (@ dropdown,
@@ -762,6 +763,71 @@ vào allowlist `_ROUTE_FIELDS`. 9 test `tests/test_insights_routes.py`.
 **Cổng.** BE 4830 passed / 1 skipped · ruff sạch · FE vitest 438 (63 file) · Playwright 47/47
 · `npx tsc -b` sạch · oxlint chỉ 3 warning nền sẵn có. Bundle `my_crew/server/static/app`
 dựng lại (entry `index` 483 kB, cổng ≤560).
+
+### v94–v96: Tính năng mượn openhuman gói A→D — duyệt trước, boundary, drawer, walkthrough (2026-09-08, xong)
+
+Plan `plans/260907-1946-openhuman-features-a-to-d/` (4 phase, ship 4 commit `6eac865`
+`99acf38` `5f0b106` `fd9c04d`). Mượn ý tưởng openhuman (GPL — không chép code).
+
+**A — workroom chat (BE + FE).**
+- `my_crew/server/assign_manifest.py::build_assign_manifest(task_id)`: đọc draft đã lưu
+  (đúng row `confirm_plan` sẽ bind) → `{steps: [{step_id, title, assigned_to, external_write,
+  needs_shell, needs_web, needs_mail, needs_review}], external_count}`; id lạ/rỗng → manifest
+  rỗng. `routes_office_assign.py` preview (và preview trong `routes_office_room_chat.py`)
+  trả thêm `manifest`; confirm nhận `preauth_scope` (`""|once|always`, ngoài ba giá trị → 400),
+  ghi qua `TeamTaskStore.set_preauth_scope` CHỈ sau khi confirm thành công, echo lại trong
+  response.
+- `runtime/team_task_store.py`: cột `team_tasks.preauth_scope` (ALTER migration, mặc định
+  `''`), hằng `PREAUTH_SCOPE_*`, field `TeamTask.preauth_scope` (không vào `plan_hash`).
+- `agent/coordinator_nodes/tick_actions.py`: gate Lớp B còn `pending` trên task có scope →
+  ticker duyệt nhân danh CEO (chạy SAU khối luật đã học nên DENY thắng; tôn trọng
+  `require_ceo_approval`), ghi `record_autopilot_decision(approve_step)`; scope `always` học
+  thêm action thật thành luật ALWAYS qua dep mới `approval_rule_learn` →
+  `team_tick_runner._approval_rule_learn` ghi vào `ApprovalRuleStore` của ĐÚNG agent bước đó
+  (`created_by=ceo:preauth`, `add_rule` idempotent).
+- FE: `features/shared/preauth-card.tsx` (card từ manifest, hai nút once/always),
+  `shared/composer-queue.ts` (hàng đợi follow-up, flush theo thứ tự khi reply về),
+  `chat/thread-todo-strip.tsx` (từ artifact index của phòng; bridge SSE invalidate theo
+  work-progress), `shared/failure-guidance.ts` + `failure-guidance-note.tsx` (failure mode →
+  "vì sao / làm gì tiếp", dùng ở task card, chi tiết việc, card câu trả lời dở).
+- Test: `tests/test_team_task_store.py` (cột + validate), `tests/test_autopilot.py` (nhánh
+  preauth trong tick), `tests/test_office_assign_routes.py` (manifest + scope contract),
+  `tests/fullflow_live/test_live_preauth.py` (preview model thật, confirm `always`, gate được
+  duyệt, luật chỉ học ở store của assignee); vitest card/queue/strip/guidance; e2e 55–59.
+
+**B — overview strip, error boundary, version banner.**
+- `runtime/dist_version.py::dist_version()` dùng chung server + mpm; `/health` trả
+  `{ok, version}` — **fix**: route từng đăng ký SAU catch-all SPA nên trả `index.html`, nay
+  đăng ký trong `create_app` trước fallback (`tests/test_workroom_chat_and_health.py`).
+- FE `features/work/control-plane-overview-strip.tsx` (4 ô + badge điều phối, query
+  `use-control-plane-queries.ts`, key `controlPlane.overview`, bridge SSE invalidate),
+  `app/app-error-boundary.tsx` (key theo route, card thử lại / tải lại),
+  `app/update-available-banner.tsx` (poll `/health` 60 s, chỉ gợi ý tải lại). e2e 60–61.
+
+**C — hoạt động nền, câu trả lời dở, nguồn trích.**
+- `routes_office_artifacts.py`: `GET .../steps/{seq}/artifact` thêm `status`, `error`
+  (`tests/test_office_artifacts_routes.py`).
+- FE `chat/background-activity-drawer.tsx` (gập `step_activity`, đếm dòng + subagent
+  `task`, hiện dòng mới nhất), `chat/interrupted-answer-card.tsx` (bản nháp dở + lỗi + guide
+  + thử lại; biến mất khi bước chạy lại), `shared/citation-chips.ts(x)` (chip theo host đọc
+  từ text; `step-artifact-view.tsx` + `message-renderer.tsx` dùng). e2e 62–64.
+
+**D — walkthrough/welcome, pane kéo, palette theo ngữ cảnh, snooze.**
+- `features/onboarding/walkthrough-state.ts` (4 bước, key `my-crew.walkthrough.done`, sự kiện
+  `my-crew:walkthrough-open`, class anchor), `app-walkthrough.tsx` (mount trong
+  `app-shell.tsx`; anchor `data-walkthrough` trên nav/composer/chuông/nút ⌨; replay từ
+  `shortcuts-help.tsx`), `page-welcome.tsx` (overview trống / bảng trống / roster trống; 3
+  brief mẫu seed composer tại chỗ qua `onPick` hoặc router state `assignSeed`; team →
+  `/team?hire=1`, `team-page.tsx` mở panel tuyển cả khi query tới lúc đang mount).
+- `chat/resizable-panes.ts(x)`: CSS var `--chat-list-w`/`--chat-pending-w`, lưu
+  `my-crew.chat.paneWidths`, handle `role=separator` (chuột + phím, bước 16 px), giới hạn
+  list 200–480 / pending 220–520.
+- `palette/contextual-commands.ts` (path → hàng "Ở đây"), `palette-items.ts`,
+  `use-palette-results.ts` tách từ `command-palette.tsx`.
+- `attention/snooze.ts` (`my-crew.attention.snoozed` = `{id: {fingerprint, until}}`, 1 giờ /
+  1 ngày, timer thức đúng hạn gần nhất), `use-attention-items.ts`, dòng "{n} mục tạm ẩn".
+- e2e mock (`web/e2e/support/mock-api.ts`) tự cắm cờ walkthrough-done trừ khi test bật
+  `walkthrough: true`; option `agents` để dựng roster rỗng. e2e 65–70.
 
 ## Deferred
 

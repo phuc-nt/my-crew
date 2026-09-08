@@ -7,7 +7,12 @@ Development history at finer grain lives in [docs/journals/](docs/journals/).
 
 The web app now surfaces what the backend already measures: a cost dashboard with a
 hero number, one attention bell for everything that needs the CEO, and a shortcuts
-sheet. Patterns borrowed from openhuman's UI; no code copied.
+sheet (v93). On top of that, four more rounds borrowed from openhuman's UI (patterns only,
+no code copied): pre-authorizing a plan's external actions at confirm time and keeping
+that answer as a policy (v94), a control-plane strip, route error boundary and
+new-version banner (v95a), background-activity drawer, interrupted-answer card and
+citation chips (v95b), and a first-visit walkthrough, per-hub welcome, resizable chat
+panes, contextual palette rows and attention snooze (v96).
 
 ### Added
 - `GET /api/insights/route-stats`, `/tool-stats?days=`, `/engine-costs?days=` — read-only
@@ -20,11 +25,51 @@ sheet. Patterns borrowed from openhuman's UI; no code copied.
   deep links, per-fingerprint dismissal that returns when the alert changes.
 - Shortcuts sheet (`?`), `g`+`c/o/w/t/s` hub jumps, ⌨ header chip.
 - UI primitives `ProgressBar` and `StatTile`.
+- **Pre-authorization at confirm.** The plan preview (`/api/office/assign/preview` and the
+  room-chat preview) carries a `manifest`: every drafted step with its
+  `external_write` / `needs_shell` / `needs_web` / `needs_mail` / `needs_review` flags plus
+  `external_count`. The composer renders it as a card next to the plan; "Duyệt tất cả" is
+  answered once per task or as a standing policy. Confirm accepts
+  `preauth_scope` (`""` | `once` | `always`), recorded on the task only after the confirm
+  succeeded. The ticker then approves still-pending Lớp B gates in the CEO's name, and with
+  `always` the real queued action is learned as an ALWAYS rule in the step agent's own
+  approvals store (`created_by: ceo:preauth`). A learned DENY rule and
+  `require_ceo_approval` still win. New column `team_tasks.preauth_scope`.
+- Composer follow-up queue: messages typed while a reply is in flight queue up and flush
+  in order once it lands. Thread todo strip built from the room artifact index (now
+  invalidated by work-progress events). Failed steps, blocked external actions and stalled
+  cards carry a "vì sao / làm gì tiếp" note.
+- `/work` opens with a control-plane strip (queue depth, running, stalled, pending
+  approvals per agent, coordinator up/down) read from `GET /api/control-plane/overview`
+  and refreshed by the SSE bridge. Every hub renders inside an error boundary keyed by
+  route: a crashed screen shows a retry/reload card instead of a blank app.
+- `/health` returns the installed package `version`; the shell polls it once a minute and
+  offers "tải lại" when a newer build was installed. `dist_version()` moved to
+  `my_crew.runtime` so the server and `mpm` share it.
+- Chat thread: `step_activity` lines fold behind one "Hoạt động nền" row counting live
+  lines and subagents; a failed or timed-out step renders a card with its partial draft,
+  the recorded error, the failure guide and a one-click retry; deliverables and step
+  artifacts get one outbound chip per cited host.
+- First-visit walkthrough (hubs → composer → bell → palette) anchored to the real
+  elements, remembered in `localStorage`, replayable from the ⌨ card. Empty overview /
+  board / roster show a welcome card with three example briefs that seed the composer
+  (team hub adds "Tuyển nhân sự đầu tiên" → `/team?hire=1`).
+- Chat hub panes are resizable by mouse or keyboard (widths persisted). Command palette
+  lists the current screen's actions first ("Ở đây"). Attention items can be snoozed for
+  1 hour or 1 day; a snoozed item wakes at expiry or when its content changes.
 
 ### Changed
 - `GET /api/team-tasks/{id}/route` also returns `shape`, `effort`, `failure_mode` and
   `dead_end`; task detail shows the routing decision in plain language and the office
   desk inspector links to the task and the agent's budget tab.
+- `POST /api/office/assign/confirm` response now echoes `preauth_scope`; a value outside
+  the three scopes is a 400.
+- `GET .../steps/{seq}/artifact` returns `status` and `error` so the interrupted-answer
+  card can say why the attempt stopped.
+
+### Fixed
+- `/health` was registered after the SPA catch-all and answered with `index.html`; it is
+  now registered inside `create_app` before the fallback.
 
 ## [0.18.0] — 2026-09-07
 

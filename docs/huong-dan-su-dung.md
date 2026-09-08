@@ -587,6 +587,38 @@ Trên bảng kanban (tab **Duyệt** hoặc xem chi tiết việc):
   Văn phòng / Công việc / Đội ngũ / Hệ thống; `⌘K` mở bảng lệnh. Nút ⌨ trên thanh đầu mở
   cùng bảng đó.
 
+## B.5i. Duyệt trước một lần, hàng đợi, làm quen nhanh (v94–v96)
+
+- **Duyệt tất cả ngay lúc xác nhận kế hoạch.** Khi xem trước kế hoạch, nếu có bước sẽ
+  gửi/ghi ra ngoài công ty (đăng bài, gửi mail, chạy lệnh, lên web…), dưới kế hoạch có thẻ
+  liệt kê các bước đó. Bạn có ba lựa chọn: xác nhận như cũ (mỗi lần đội định làm việc ra
+  ngoài sẽ hỏi lại), **Duyệt tất cả cho việc này** (đội tự qua các cổng của việc này), hoặc
+  **Duyệt tất cả, lần sau cũng vậy** — lần sau việc cùng loại của nhân sự đó không hỏi nữa.
+  Luật "luôn từ chối" bạn đã đặt và cờ "luôn cần CEO duyệt" của agent vẫn thắng.
+- **Gõ tiếp khi trợ lý đang trả lời.** Câu bạn gõ trong lúc chờ được xếp hàng và gửi
+  theo đúng thứ tự khi câu trước xong; không mất, không lẫn.
+- **Dải việc cần làm trong phòng** hiện ngay trên đầu luồng: bước nào xong, bước nào đang
+  chạy, bước nào kẹt. Bước hỏng, hành động ra ngoài bị chặn hay việc bị kẹt đều có dòng
+  "vì sao / làm gì tiếp".
+- **Hub Công việc** mở đầu bằng bốn con số: việc chờ, đang chạy, kẹt, chờ duyệt theo
+  từng nhân sự, kèm đèn điều phối viên đang chạy hay không.
+- **Một màn hình lỗi không làm sập cả app**: thanh đầu và điều hướng vẫn dùng được, giữa
+  màn có nút **Thử lại** / **Tải lại**. Khi bạn cài bản mới trong lúc tab còn mở, một dải
+  nhỏ báo "có bản mới" và mời tải lại — không tự tải.
+- **Hoạt động nền** trong phòng gập lại thành một dòng đếm (bấm để mở); câu trả lời bị
+  ngắt giữa chừng hiện thành một thẻ có bản nháp, lý do dừng và nút **Thử lại**; bài nộp
+  có kèm link thì hiện chip nguồn theo từng trang.
+- **Lần đầu vào** có hướng dẫn bốn bước (năm khu vực → ô giao việc → chuông → bảng lệnh),
+  mỗi bước khoanh đúng chỗ trên màn. Bỏ qua hay xem xong đều nhớ; muốn xem lại bấm ⌨ →
+  **Xem lại hướng dẫn làm quen**. Bảng việc, phòng tổng quan hay danh sách nhân sự còn
+  trống thì hiện ba yêu cầu mẫu, bấm là điền sẵn vào ô giao việc.
+- **Kéo rộng/hẹp cột** trong hub Trò chuyện bằng chuột hoặc phím mũi tên trên vạch giữa
+  các cột; app nhớ độ rộng.
+- **Bảng lệnh (⌘K)** liệt kê trước việc làm được ngay trên màn hình đang mở (nhãn
+  **Ở đây**), rồi mới đến điều hướng và lịch sử.
+- **Chuông Cần chú ý** có thêm **Nhắc lại sau 1 giờ / 1 ngày** cho mỗi mục; hết hạn hoặc
+  cảnh báo đổi nội dung thì mục tự quay lại. Dòng "n mục tạm ẩn" cho biết đang ẩn bao nhiêu.
+
 ## B.6. Tạo agent với tính năng in-sandbox (deep_team — v50)
 
 Khi tạo agent ở hub **Đội ngũ** hoặc wizard, nếu bạn chọn **runtime = "Deep Agent"** (chạy trong Docker sandbox), wizard hiện thêm **tùy chọn "Điều phối trợ lý con"** — bật lên cho phép agent giao việc con TRONG hộp cát (chia ngữ cảnh lớn cho ≤3 trợ lý nhỏ chuyên môn, không cần tạo agent thật).

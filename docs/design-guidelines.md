@@ -241,6 +241,64 @@ sheet, `g` then `c/o/w/t/s` jumps to a hub (1 s chord window), `⌘K`/`Ctrl+K` o
 palette. Chords ignore editable targets and any modifier; Escape closes. The ⌨ header chip
 opens the same sheet for mouse users.
 
+### 5.14 Pre-authorization, resilience, onboarding (v94–v96 — openhuman-inspired)
+
+Second round of openhuman patterns (still ideas only, GPL): pre-authorize once, keep the
+app standing when one screen dies, fold noise, and make the first visit self-explaining.
+
+**Pre-authorization card** (`web/src/features/shared/preauth-card.tsx`, in the assign
+composer next to the plan preview):
+- Rendered from the preview's `manifest` (`my_crew/server/assign_manifest.py`), which is
+  read from the persisted draft rows the confirm will bind — never from the preview text —
+  so the card and the run cannot disagree. No external step → no card.
+- Two answers: *Duyệt tất cả* for this task (`preauth_scope: once`) or as a standing
+  policy (`always`). The scope travels on the confirm call and is stored only after the
+  confirm succeeded; it never enters `plan_hash`.
+- Runtime honours it in the ticker after the learned-rule block: a DENY rule and
+  `require_ceo_approval` always win. `always` learns the real queued action as an ALWAYS
+  rule in the assignee's store, so the next task of the same kind never asks.
+
+**Composer queue + todo strip** (`shared/composer-queue.ts`, `chat/thread-todo-strip.tsx`):
+follow-ups typed while busy are queued and flushed in order; the strip is derived from the
+room artifact index, so it needs no new endpoint. **Failure guidance**
+(`shared/failure-guidance.ts`): one pure map from failure mode → "vì sao / làm gì tiếp",
+reused by the task card, task detail and the interrupted-answer card.
+
+**Resilience** (`app/app-error-boundary.tsx`, `app/update-available-banner.tsx`,
+`work/control-plane-overview-strip.tsx`):
+- The boundary is keyed by route: navigating away resets it, the header and nav stay
+  usable, and the card offers retry or reload.
+- The banner compares `/health.version` (polled once a minute) with the version the
+  bundle started with; it only ever offers "tải lại", never auto-reloads.
+- The strip is the four control-plane counters plus a coordinator badge, refreshed by the
+  SSE bridge — the same numbers `mpm crew overview` prints.
+
+**Folding noise in the thread** (`chat/background-activity-drawer.tsx`,
+`chat/interrupted-answer-card.tsx`, `shared/citation-chips.tsx`): activity lines collapse
+behind one row that shows the newest inline; a failed step becomes one card with draft,
+error, guide and retry, and leaves once the step runs again; citations are read out of
+the text itself (one chip per host, outbound, `rel="noopener"`).
+
+**Onboarding** (`web/src/features/onboarding/`):
+- `AppWalkthrough` is four steps anchored via `data-walkthrough` attributes on the real
+  elements (nav, composer, bell, ⌨ button) and a single outline class; it opens once
+  (`my-crew.walkthrough.done`), and the ⌨ sheet can replay it through a window event.
+- `PageWelcome` replaces the muted empty line on the overview, board and roster. Its three
+  example briefs seed the composer: in place on the chat hub, via router state elsewhere.
+- Keep both out of e2e by default: the Playwright mock plants the done flag unless a test
+  opts in with `walkthrough: true`.
+
+**Resizable panes** (`chat/resizable-panes.tsx`): grid columns are CSS variables set from
+persisted widths; the handles sit in the grid gap, are keyboard-operable (`role=separator`,
+arrow keys, `aria-valuenow`) and clamp to per-pane limits. Below 1100 px the pending pane
+handle disappears with the pane; below 900 px both do.
+
+**Contextual palette rows** (`palette/contextual-commands.ts`): a pure map from the current
+path to rows shown first with the hint *Ở đây*; nav, command and history rows follow.
+**Snooze** (`attention/snooze.ts`): stored apart from dismissals as `{id: {fingerprint,
+until}}`; the centre arms one timer for the next expiry and prunes entries whose alert
+changed or expired.
+
 ## 6. Code Organization — Feature-Based Modules (v88)
 
 **From `/views/` to `/features/`**: component hierarchy is hub-centric, not view-centric. Each hub gets a top-level folder:
@@ -254,7 +312,9 @@ web/src/features/
 ├── system/        # System hub: settings, connections, company, insights, audit
 ├── shared/        # Used by more than one hub: assign composer, artifact viewer,
 │                  #   transcript tab, coordinator health banner, office message line
-└── palette/       # Command palette (Cmd+K) — not a hub
+├── palette/       # Command palette (Cmd+K), shortcuts sheet, contextual rows — not a hub
+├── attention/     # Attention bell: item builder, dismiss + snooze state, centre panel
+└── onboarding/    # First-visit walkthrough + per-hub welcome card
 ```
 
 `web/src/views/` keeps only the pre-auth doors (Login, Setup) — they mount outside the
