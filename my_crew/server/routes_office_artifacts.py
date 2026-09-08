@@ -91,6 +91,13 @@ def get_step_artifact(task_id: str, seq: int) -> dict:
         "result_text": str(artifact.get("result_text") or ""),
         "attempt": str(artifact.get("attempt") or ""),
         "self_check_failed": bool(artifact.get("self_check_failed", False)),
+        # v95: the outcome the artifact records. A failed/paused step's fallback
+        # artifact (worker `_write_outcome`) carries `error` and, when the graph got
+        # far enough to draft, the partial `result_text` — the chat thread's
+        # "câu trả lời dở" card shows both and offers a retry. Absent fields fall
+        # back to the store row's status / an empty error so the shape is stable.
+        "status": str(artifact.get("status") or step.status),
+        "error": str(artifact.get("error") or "")[:500],
     }
 
 

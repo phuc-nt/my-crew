@@ -321,6 +321,10 @@ export interface StepArtifactPayload {
   result_text: string
   attempt: string
   self_check_failed: boolean
+  // v95: the artifact's recorded outcome ('done' | 'failed' | 'timeout' | …, falling
+  // back to the step row's status) and the failure text a dead step left behind.
+  status?: string
+  error?: string
 }
 
 // v82: one parsed transcript event (v80 recorder JSONL line) — `t` is the event kind

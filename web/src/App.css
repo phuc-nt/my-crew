@@ -1127,9 +1127,55 @@ input, textarea, select { font-size: var(--fs-body); }
 .chat-step-current { margin: 0; }
 .chat-step-count { margin: 0; font-size: var(--fs-sm); color: var(--color-muted); }
 
-.chat-activities { list-style: none; margin: var(--space-2) 0 0; padding: 0;
+/* v95: "Hoạt động nền" — live tool-call / subagent lines folded behind one row. */
+.background-activity { margin: var(--space-2) 0 0; border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); background: var(--color-surface-2, var(--color-surface)); }
+.background-activity-head { display: flex; align-items: center; gap: var(--space-2);
+  width: 100%; padding: 0.3rem var(--space-2); border: 0; background: transparent;
+  color: inherit; font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
+.background-activity-title { font-weight: 600; }
+.background-activity-count { min-width: 1.4em; padding: 0 0.4em; border-radius: 999px;
+  background: var(--color-accent-soft, var(--color-border)); text-align: center; }
+.background-activity-subagents { color: var(--color-accent); }
+.background-activity-latest { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap;
+  text-overflow: ellipsis; font-style: italic; }
+.background-activity-chevron { margin-left: auto; color: var(--color-muted); }
+.background-activity-list { list-style: none; margin: 0; padding: 0 var(--space-2) var(--space-2);
   display: flex; flex-direction: column; gap: 0.15rem; }
-.chat-activity { font-size: var(--fs-sm); color: var(--color-muted); font-style: italic; }
+.background-activity-item { display: flex; gap: var(--space-2); font-size: var(--fs-sm);
+  color: var(--color-muted); font-style: italic; }
+.background-activity-item.is-subagent { color: var(--color-accent); }
+.background-activity-agent { font-style: normal; font-weight: 600; }
+
+/* v95: a step that died mid-answer — the partial draft, the error, one retry button. */
+.interrupted-answers { display: flex; flex-direction: column; gap: var(--space-2);
+  margin: var(--space-2) 0 0; }
+.interrupted-answer { padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-danger); border-left-width: 4px;
+  border-radius: var(--radius-sm); background: var(--color-surface); }
+.interrupted-answer-head { display: flex; flex-wrap: wrap; gap: var(--space-2);
+  align-items: baseline; margin: 0 0 var(--space-1); }
+.interrupted-answer-label { font-size: var(--fs-sm); font-weight: 700;
+  color: var(--color-danger); text-transform: uppercase; letter-spacing: 0.02em; }
+.interrupted-answer-step { font-weight: 600; }
+.interrupted-answer-partial { margin: 0 0 var(--space-1); padding: var(--space-2);
+  max-height: 14rem; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  font-size: var(--fs-sm); background: var(--color-surface-2, var(--color-bg));
+  border-radius: var(--radius-sm); }
+.interrupted-answer-none { margin: 0 0 var(--space-1); font-size: var(--fs-sm); }
+.interrupted-answer-error { margin: 0 0 var(--space-1); font-size: var(--fs-sm);
+  color: var(--color-danger); word-break: break-word; }
+.interrupted-answer-actions { display: flex; flex-wrap: wrap; gap: var(--space-2);
+  align-items: center; margin-top: var(--space-2); }
+.interrupted-answer-failure { font-size: var(--fs-sm); color: var(--color-danger); }
+
+/* v95: the sources behind a text — one chip per host, read out of the text itself. */
+.citation-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 0.3rem;
+  margin: var(--space-1) 0 0; padding: 0; }
+.citation-chip { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px;
+  border: 1px solid var(--color-border); font-size: var(--fs-xs, var(--fs-sm));
+  color: var(--color-accent); text-decoration: none; background: var(--color-surface); }
+.citation-chip:hover { border-color: var(--color-accent); }
 
 /* The "waiting on you" column: approvals and agent questions, fleet-wide. */
 .chat-pending { min-width: 0; }

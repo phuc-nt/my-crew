@@ -147,6 +147,14 @@ describe('step_activity is ephemeral', () => {
     expect(t.activities[0]).toMatchObject({ tool: 'web_search', count: 3 })
   })
 
+  test('the activity line keeps the backend phase tag', () => {
+    // 'writing' lines carry no tool; the drawer words them differently from tool calls.
+    const t = reduceThread([
+      msg(1, 'step_activity', { task: 'T', step: 'B1', tool: '', count: 2, phase: 'writing' }),
+    ])
+    expect(t.activities[0]).toMatchObject({ phase: 'writing', tool: '' })
+  })
+
   test('any non-activity event for that step clears its activity line', () => {
     // The line means "happening right now"; once a real event lands the step moved on.
     const t = reduceThread([

@@ -206,3 +206,115 @@ test('58. bước lỗi trong luồng chat kèm ghi chú vì sao và làm gì ti
   await expect(guide).toContainText(DICT.vi['failureGuide.whyLabel'])
   await expect(guide).toContainText(DICT.vi['failureGuide.step_failed.next'])
 })
+
+// Live tool-call telemetry folds behind one "Hoạt động nền" row; a call to the `task`
+// delegation tool is counted as a subagent, and expanding lists every line.
+test('62. ngăn "Hoạt động nền" gom các dòng đang chạy, đếm nhân sự phụ, mở ra thấy từng dòng', async ({ page }) => {
+  const events = makeRoomEvents(2, ROOM)
+  events.push(
+    {
+      seq: 3, ts: '2026-07-31T09:01:00Z', author: 'content', source_room_id: ROOM,
+      kind: 'step_activity',
+      body: { agent: 'content', task: 't-abc', step: 'viết báo cáo', tool: 'web_search', count: 3, phase: 'calling-tool' },
+    },
+    {
+      seq: 4, ts: '2026-07-31T09:01:05Z', author: 'tro-ly-pm', source_room_id: ROOM,
+      kind: 'step_activity',
+      body: { agent: 'tro-ly-pm', task: 't-abc', step: 'tổng hợp', tool: 'task', count: 1, phase: 'calling-tool' },
+    },
+  )
+  await mockOfficeApi(page, { roomEvents: { [ROOM]: events } })
+  await page.goto(`/chat/${ROOM}`)
+
+  const drawer = page.locator('[data-testid="background-activity"]')
+  await expect(drawer).toBeVisible()
+  await expect(drawer.locator('[data-testid="background-activity-count"]')).toHaveText('2')
+  await expect(drawer.locator('[data-testid="background-activity-subagents"]')).toHaveText(
+    DICT.vi['backgroundActivity.subagents'].replace('{n}', '1'),
+  )
+  // Collapsed: the newest line inline, no list yet.
+  await expect(drawer).toContainText('tổng hợp')
+  await expect(drawer.locator('.background-activity-item')).toHaveCount(0)
+
+  await drawer.getByRole('button').click()
+  const items = drawer.locator('.background-activity-item')
+  await expect(items).toHaveCount(2)
+  await expect(items.nth(0)).toContainText('web_search')
+  await expect(items.nth(1)).toHaveClass(/is-subagent/)
+  await expect(items.nth(1)).toContainText(
+    DICT.vi['backgroundActivity.subagentLine'].replace('{step}', 'tổng hợp').replace('{count}', '1'),
+  )
+})
+
+// A step that died mid-answer shows what it had drafted, its sources, why it stopped, and
+// one button that dispatches the retry; the card leaves once the step is running again.
+test('63. câu trả lời dở: nháp + nguồn + lỗi + nút làm tiếp, thẻ biến mất khi bước chạy lại', async ({ page }) => {
+  const stalled = {
+    task_id: 't-abc', title: 'Soạn báo cáo tuần cho sếp', pic_id: 'tro-ly-pm', status: 'stalled',
+    steps: [
+      { step_id: 's1', title: 'thu thập số liệu', assigned_to: 'ke-toan', status: 'done', seq: 3, step_type: 'research' },
+      { step_id: 's2', title: 'viết báo cáo', assigned_to: 'tro-ly-pm', status: 'failed', seq: 4, step_type: 'content' },
+    ],
+  }
+  await mockOfficeApi(page, {
+    roomEvents: { [ROOM]: makeRoomEvents(2, ROOM) },
+    artifacts: { tasks: [stalled] },
+    stepArtifact: {
+      task_id: 't-abc', step_title: 'viết báo cáo', attempt: 'a1', self_check_failed: false,
+      status: 'failed', error: 'LLM timeout after 120s',
+      result_text: '## Nháp\n- Doanh thu tăng 12% (https://vnexpress.net/kinh-doanh/a)\n- Chi phí theo https://cafef.vn/b',
+    },
+    artifactsAfterAction: {
+      tasks: [{ ...stalled, status: 'in_progress', steps: [stalled.steps[0], { ...stalled.steps[1], status: 'running' }] }],
+    },
+  })
+  await page.goto(`/chat/${ROOM}`)
+
+  const card = page.locator('[data-testid="interrupted-answer"]')
+  await expect(card).toHaveCount(1)
+  await expect(card).toContainText(DICT.vi['interrupted.label'])
+  await expect(card.locator('.interrupted-answer-partial')).toContainText('Doanh thu tăng 12%')
+  await expect(card.locator('.citation-chip')).toHaveCount(2)
+  await expect(card.locator('.interrupted-answer-error')).toContainText('LLM timeout after 120s')
+  await expect(card.locator('.failure-guide')).toContainText(DICT.vi['failureGuide.step_failed.next'])
+  // The card sits above the todo strip, which still lists the dead step.
+  await expect(page.locator('[data-testid="thread-todo-strip"] .todo-step.is-failed')).toHaveCount(1)
+
+  const retry = page.waitForRequest((r) =>
+    r.method() === 'POST' && r.url().endsWith('/api/team-tasks/t-abc/steps/s2/retry'))
+  await card.getByRole('button', { name: DICT.vi['interrupted.retry'] }).click()
+  await retry
+  await expect(card).toHaveCount(0)
+  await expect(page.locator('[data-testid="thread-todo-strip"] .todo-step.is-running')).toContainText('viết báo cáo')
+})
+
+// A delivered step's text names its sources inline; the drawer turns them into chips.
+test('64. chip nguồn tham khảo dưới kết quả bước trong ngăn kết quả', async ({ page }) => {
+  await mockOfficeApi(page, {
+    roomEvents: { [ROOM]: makeRoomEvents(2, ROOM) },
+    artifacts: {
+      tasks: [{
+        task_id: 't-abc', title: 'Soạn báo cáo tuần cho sếp', pic_id: 'tro-ly-pm', status: 'done',
+        steps: [
+          { step_id: 's1', title: 'thu thập số liệu', assigned_to: 'ke-toan', status: 'done', seq: 3, step_type: 'research' },
+        ],
+      }],
+    },
+    stepArtifact: {
+      task_id: 't-abc', step_title: 'thu thập số liệu', attempt: 'a1', self_check_failed: false,
+      status: 'done', error: '',
+      result_text: 'Số liệu lấy từ https://www.gso.gov.vn/du-lieu và https://vnexpress.net/a; đối chiếu https://gso.gov.vn/khac.',
+    },
+  })
+  await page.goto(`/chat/${ROOM}`)
+  await page.getByRole('button', { name: DICT.vi['artifacts.open'] }).click()
+  await page.locator('.artifact-step').click()
+  await expect(page.locator('.artifact-text')).toContainText('Số liệu lấy từ')
+
+  const chips = page.locator('.artifact-detail .citation-chips a')
+  await expect(chips).toHaveCount(2)
+  await expect(chips.nth(0)).toHaveText('gso.gov.vn')
+  await expect(chips.nth(0)).toHaveAttribute('href', 'https://www.gso.gov.vn/du-lieu')
+  await expect(chips.nth(1)).toHaveText('vnexpress.net')
+  await expect(chips.nth(1)).toHaveAttribute('rel', 'noopener noreferrer')
+})

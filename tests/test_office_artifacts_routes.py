@@ -61,6 +61,43 @@ def test_step_artifact_full_read(client, tmp_path):
     assert body["self_check_failed"] is False
 
 
+def test_step_artifact_carries_the_outcome_status_and_error(client, tmp_path):
+    """A failed step's fallback artifact (status + error, maybe a partial draft) reaches
+    the viewer as-is; a delivered step reads `done` with an empty error."""
+    from my_crew.agent.team_task_artifact import write_step_artifact
+    from my_crew.runtime.team_task_paths import team_tasks_db_path, team_tasks_root
+
+    seqs = _seed(tmp_path)
+    store = TeamTaskStore(team_tasks_db_path())
+    store._conn.execute("UPDATE team_steps SET status='failed' WHERE step_id='s2'")
+    store._conn.commit()
+    store.close()
+    write_step_artifact(team_tasks_root(), "t1", seqs["s2"], {
+        "status": "failed", "step_title": "Tổng hợp",
+        "error": "LLM timeout after 120s", "result_text": "## Nháp\n- mới có mục 1",
+    })
+
+    done = client.get(f"/api/office/tasks/t1/steps/{seqs['s1']}/artifact").json()
+    assert done["status"] == "done" and done["error"] == ""
+
+    failed = client.get(f"/api/office/tasks/t1/steps/{seqs['s2']}/artifact").json()
+    assert failed["status"] == "failed"
+    assert failed["error"] == "LLM timeout after 120s"
+    assert failed["result_text"].startswith("## Nháp")
+    assert failed["self_check_failed"] is False
+
+
+def test_step_artifact_status_falls_back_to_the_store_row(client, tmp_path):
+    """An artifact written without `status` (older writer) reports the row's status."""
+    from my_crew.agent.team_task_artifact import write_step_artifact
+    from my_crew.runtime.team_task_paths import team_tasks_root
+
+    seqs = _seed(tmp_path, with_artifact=False)
+    write_step_artifact(team_tasks_root(), "t1", seqs["s1"], {"result_text": "x"})
+    body = client.get(f"/api/office/tasks/t1/steps/{seqs['s1']}/artifact").json()
+    assert body["status"] == "done" and body["error"] == ""
+
+
 def test_404s_are_clean(client, tmp_path):
     seqs = _seed(tmp_path, with_artifact=False)
     assert client.get("/api/office/tasks/khong-co/steps/1/artifact").status_code == 404

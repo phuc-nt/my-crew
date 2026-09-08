@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { useStepArtifact, useStepTranscript } from '../../../api/queries/use-artifact-queries'
 import { useLanguage } from '../../../i18n/language-context'
+import { CitationChips } from '../../shared/citation-chips.tsx'
 import type { SelectedStep } from './artifact-drawer'
 import { summarize, totalCost } from './transcript-presentation'
 
@@ -38,7 +39,12 @@ export function StepArtifactView({ step }: { step: SelectedStep }) {
 
       {artifact.isLoading ? <p className="pending-empty">{t('common.loading')}</p> : null}
       {artifact.isError ? <p className="pending-empty">{t('artifacts.noOutput')}</p> : null}
-      {artifact.data ? <pre className="artifact-text">{artifact.data.result_text}</pre> : null}
+      {artifact.data ? (
+        <>
+          <pre className="artifact-text">{artifact.data.result_text}</pre>
+          <CitationChips text={artifact.data.result_text} />
+        </>
+      ) : null}
 
       {showTranscript ? (
         <div className="artifact-transcript">

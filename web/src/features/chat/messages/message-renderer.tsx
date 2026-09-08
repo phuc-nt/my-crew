@@ -10,6 +10,7 @@ import { failureCaseForRow } from '../../shared/failure-guidance'
 import { FailureGuidanceNote } from '../../shared/failure-guidance-note'
 import { kindLabel, messageLine } from '../../shared/office-message-line'
 import { markdownComponents } from '../../shared/artifact-viewer'
+import { CitationChips } from '../../shared/citation-chips.tsx'
 import type { ThreadItem } from '../chat-state'
 import { isClamped, isDeliverable, milestoneText } from './milestone-presentation'
 import { StepBlockCard } from './step-block-card'
@@ -82,6 +83,7 @@ export function MessageRow({ item }: { item: ThreadItem }) {
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
               {textOf(item, t)}
             </ReactMarkdown>
+            <CitationChips text={textOf(item, t)} />
           </div>
         ) : (
           <p className={`chat-row-text${

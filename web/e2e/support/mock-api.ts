@@ -435,8 +435,14 @@ export async function mockOfficeApi(
           ? opts.artifactsAfterAction
           : opts.artifacts ?? { tasks: [] },
       )
-    if (/^\/api\/office\/tasks\/[^/]+\/steps\/\d+\/artifact$/.test(pathname) && opts.stepArtifact)
-      return json(opts.stepArtifact)
+    if (/^\/api\/office\/tasks\/[^/]+\/steps\/\d+\/artifact$/.test(pathname)) {
+      if (opts.stepArtifact) return json(opts.stepArtifact)
+      return route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'bước này chưa có kết quả' }),
+      })
+    }
     if (/^\/api\/office\/tasks\/[^/]+\/steps\/\d+\/transcript$/.test(pathname)) {
       if (opts.stepTranscript) return json(opts.stepTranscript)
       return route.fulfill({

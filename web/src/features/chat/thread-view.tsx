@@ -4,7 +4,9 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { useLanguage } from '../../i18n/language-context'
 import { useOfficeStream } from '../../hooks/use-office-stream'
+import { BackgroundActivityDrawer } from './background-activity-drawer'
 import { OVERVIEW_ROOM_ID, reduceThread } from './chat-state'
+import { InterruptedAnswers } from './interrupted-answer-card'
 import { MessageRow } from './messages/message-renderer'
 import { ThreadTodoStrip } from './thread-todo-strip'
 
@@ -80,19 +82,10 @@ export function ThreadView({ roomId, title, onRead }: Props) {
         )}
       </ul>
 
-      {thread.activities.length > 0 ? (
-        <ul className="chat-activities" aria-label={t('chat.activityLabel')}>
-          {thread.activities.map((a) => (
-            <li key={`${a.task ?? ''} ${a.step ?? ''}`} className="chat-activity">
-              {t('chat.activityLine', {
-                step: a.step ?? '',
-                tool: a.tool ?? '',
-                count: a.count ?? 0,
-              })}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {/* v95: live tool-call / subagent lines, folded behind one "Hoạt động nền" row. */}
+      <BackgroundActivityDrawer activities={thread.activities} />
+      {/* v95: a step that died mid-answer — its partial draft, the error, one retry. */}
+      <InterruptedAnswers roomId={roomId} />
       {/* v94: the task plan pinned above the composer — where the work stands, live. */}
       <ThreadTodoStrip roomId={roomId} />
       {/* Absolutely positioned against .chat-thread: it covers the message log while the
