@@ -44,8 +44,12 @@ export function invalidationKeysFor(kind: OfficeEventKind): QueryKey[] {
     // v94: the room artifact index carries each task's step statuses — the chat thread's
     // todo strip renders from it, so it must move with the same events the board does.
     keys.push(queryKeys.tasks.board(), queryKeys.outputs.list(), queryKeys.artifacts.all)
+    // v95: the overview strip's queue counters move with the same events.
+    keys.push(queryKeys.system.controlPlaneOverview())
   }
-  if (kind === 'external_action') keys.push(queryKeys.approvals.pending())
+  if (kind === 'external_action') {
+    keys.push(queryKeys.approvals.pending(), queryKeys.system.controlPlaneOverview())
+  }
   if (kind === 'consult') keys.push(queryKeys.clarify.pending())
   return keys
 }

@@ -10,6 +10,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import type {
+  ControlPlaneOverviewPayload,
   CaptureRow,
   ConnectionCard,
   CoordinatorHealthPayload,
@@ -56,6 +57,10 @@ export interface OfficeApiMockOptions {
   connections?: ConnectionCard[]
   /** Attempt rows behind the system hub's Audit tab (default: none). */
   captures?: CaptureRow[]
+  /** v95: the 4-block control-plane summary behind the work hub's overview strip. */
+  controlPlaneOverview?: ControlPlaneOverviewPayload
+  /** v95: successive `/health` versions, one per poll; the last one repeats forever. */
+  healthVersions?: string[]
   /** Staff templates behind the team hub's hire panel (default: one office role). */
   staffTemplates?: StaffTemplate[]
   /** Profiles on disk that fell out of the registry — the recovery list (default: none). */
@@ -179,6 +184,15 @@ export async function mockOfficeApi(
     ...(opts.company ?? {}),
   }
 
+  // `/health` sits outside `/api` (public liveness probe); the update banner polls it.
+  const healthVersions = [...(opts.healthVersions ?? ['0.18.0'])]
+  await page.route((url) => url.pathname === '/health', async (route) => {
+    const version = healthVersions.length > 1 ? healthVersions.shift() : healthVersions[0]
+    return route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, version }),
+    })
+  })
+
   // Predicate, not a glob: '**/api/**' would also swallow vite module URLs like
   // /src/api/client.ts and abort the app's own source files.
   await page.route((url) => url.pathname.startsWith('/api/'), async (route) => {
@@ -286,6 +300,14 @@ export async function mockOfficeApi(
     if (pathname === '/api/connections')
       return json({ cards: opts.connections ?? [], needs_restart: false })
     if (pathname === '/api/health/integrations') return json({ checks: [], checked_at: 0 })
+    if (pathname === '/api/control-plane/overview')
+      return json(opts.controlPlaneOverview ?? {
+        v: 1,
+        registry: { agents: [] },
+        health: { coordinator_ok: true, integrations: [] },
+        queue: { depth: 0, running: 0, stalled: 0 },
+        approvals: { pending_total: 0, pending_by_agent: {} },
+      })
     if (pathname === '/api/team/alerts') return json({ alerts: opts.teamAlerts ?? [] })
     if (pathname === '/api/office/assign/staff') return json(assignStaffFixture)
     if (pathname === '/api/office/workrooms')

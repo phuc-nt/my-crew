@@ -1719,3 +1719,20 @@ input, textarea, select { font-size: var(--fs-body); }
 .failure-guide-why b, .failure-guide-next b { margin-right: 4px; }
 .chat-row-guide { margin-top: 6px; }
 .task-card-guide { margin: var(--space-1) 0; }
+
+/* v95: control-plane overview strip on the work hub */
+.control-plane-strip { margin-bottom: var(--space-3); }
+.control-plane-strip-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.control-plane-strip-head h3 { margin: 0; }
+.control-plane-strip .stat-grid { margin: var(--space-2) 0 0; }
+.stat-tile-warn { border-color: var(--color-warn); }
+
+/* v95: route error boundary */
+.app-error-boundary { max-width: 40rem; margin: var(--space-6) auto; padding: var(--space-4); border: 1px solid var(--color-danger); border-radius: var(--radius); background: var(--color-danger-bg); }
+.app-error-boundary h2 { margin-top: 0; }
+.app-error-boundary-detail { white-space: pre-wrap; font-size: var(--fs-sm); color: var(--color-muted); max-height: 8rem; overflow: auto; }
+.app-error-boundary-actions { display: flex; gap: var(--space-2); }
+
+/* v95: "new version installed" banner */
+.update-banner { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--color-accent-bg, var(--color-warn-bg)); border-bottom: 1px solid var(--color-border); font-size: var(--fs-sm); }
+.update-banner span { flex: 1; }

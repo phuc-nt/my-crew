@@ -371,3 +371,30 @@ test('59. thẻ kẹt và trang chi tiết đều kèm ghi chú vì sao + làm g
   const panel = page.locator('.task-detail-stalled-panel')
   await expect(panel.locator('.failure-guide')).toContainText(DICT.vi['failureGuide.step_failed.next'])
 })
+
+test('60. dải tổng quan điều hành trên /work đọc từ /api/control-plane/overview', async ({ page }) => {
+  await mockOfficeApi(page, {
+    boardLanes: LANES,
+    controlPlaneOverview: {
+      v: 1,
+      registry: { agents: [] },
+      health: { coordinator_ok: false, integrations: [] },
+      queue: { depth: 5, running: 2, stalled: 1 },
+      approvals: { pending_total: 3, pending_by_agent: { 'ke-toan': 3 } },
+    },
+  })
+  await page.goto('/work')
+  const strip = page.getByTestId('control-plane-strip')
+  await expect(strip).toBeVisible()
+  const values = strip.locator('.stat-tile-value')
+  await expect(values).toHaveText(['5', '2', '1', '3'])
+  await expect(strip.locator('.stat-tile-warn')).toHaveCount(1)
+  await expect(strip.locator('.stat-tile-footer')).toHaveText('ke-toan ×3')
+  await expect(strip.locator('.control-plane-coordinator')).toHaveText(
+    DICT.vi['controlPlane.coordinatorDown'],
+  )
+  // The strip sits above the blocking approvals queue, which stays where it was.
+  const stripBox = await strip.boundingBox()
+  const queueBox = await page.locator('.work-approvals').boundingBox()
+  expect(stripBox && queueBox && stripBox.y < queueBox.y).toBe(true)
+})

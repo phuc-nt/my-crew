@@ -11,6 +11,8 @@ import { DICT } from '../i18n/dictionary'
 import type { Language } from '../i18n/dictionary'
 import { fetchCached, invalidateCached } from '../lib/api-cache'
 import type {
+  ControlPlaneOverviewPayload,
+  HealthPayload,
   AssignPreviewPayload,
   AssignStaffPayload,
   PreauthScope,
@@ -336,6 +338,11 @@ export const api = {
     post<{ text: string }>(`/api/office/rooms/${roomId}/chat/confirm-adjust`, {
       task_id: taskId, amendment_id: amendmentId,
     }),
+  // v95: liveness + installed version (public route, polled by the update banner).
+  getHealth: () => request<HealthPayload>('/health'),
+  // v95: the 4-block control-plane summary behind the work hub's overview strip.
+  getControlPlaneOverview: () =>
+    request<ControlPlaneOverviewPayload>('/api/control-plane/overview'),
   getCoordinatorHealth: () =>
     fetchCached('coordinator-health',
       () => request<CoordinatorHealthPayload>('/api/health/coordinator')),

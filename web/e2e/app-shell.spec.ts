@@ -146,3 +146,24 @@ test('16. phím tắt: ? mở bảng, g w nhảy hub, gõ trong ô nhập không
   await expect(card).toBeVisible()
   await page.keyboard.press('Escape')
 })
+
+test('61. banner "bản mới đã cài" hiện khi /health đổi version giữa hai lần poll, "Để sau" ẩn đi', async ({ page }) => {
+  await page.clock.install()
+  await mockOfficeApi(page, { healthVersions: ['0.18.0', '0.19.0'] })
+  await page.goto('/chat')
+  await expect(page.locator('.app-nav-primary')).toBeVisible()
+  await expect(page.getByTestId('update-banner')).toHaveCount(0)
+
+  // The banner polls once a minute; jump past one interval instead of waiting it out.
+  await page.clock.fastForward(61_000)
+  const banner = page.getByTestId('update-banner')
+  await expect(banner).toBeVisible()
+  await expect(banner).toContainText(DICT.vi['updateBanner.text'].replace('{version}', '0.19.0'))
+  await expect(banner.getByRole('button', { name: DICT.vi['updateBanner.reload'] })).toBeVisible()
+
+  await banner.getByRole('button', { name: DICT.vi['updateBanner.dismiss'] }).click()
+  await expect(page.getByTestId('update-banner')).toHaveCount(0)
+  // A further poll of the same version does not bring it back.
+  await page.clock.fastForward(61_000)
+  await expect(page.getByTestId('update-banner')).toHaveCount(0)
+})

@@ -1083,3 +1083,28 @@ export interface ScheduleItem {
 export interface SchedulePayload {
   items: ScheduleItem[]
 }
+
+// v95: `/health` — public liveness probe; `version` is the installed distribution so a
+// running tab can notice a new install and offer a reload.
+export interface HealthPayload {
+  ok: boolean
+  version?: string
+}
+
+// v95: `GET /api/control-plane/overview` — the 4-block fleet summary the work hub's
+// overview strip reads. Every block fail-degrades to its empty shape server-side.
+export interface ControlPlaneOverviewPayload {
+  v: number
+  registry: {
+    agents: {
+      agent_id: string
+      enabled: boolean
+      name: string
+      domain: string
+      last_run: string | null
+    }[]
+  }
+  health: { coordinator_ok: boolean; integrations: { id: string; label: string; ok: boolean }[] }
+  queue: { depth: number; running: number; stalled: number }
+  approvals: { pending_total: number; pending_by_agent: Record<string, number> }
+}

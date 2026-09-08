@@ -10,6 +10,7 @@ import { PageHeader } from '../../components/ui/page-header'
 import type { UiKey } from '../../i18n/dictionary'
 import { useLanguage } from '../../i18n/language-context'
 import { CompanyActivity } from './company-activity'
+import { ControlPlaneOverviewStrip } from './control-plane-overview-strip'
 import { BoardView } from './board/board-view'
 import { OutputsView } from './outputs-view'
 import { ScheduleView } from './schedule-view'
@@ -31,6 +32,7 @@ export function WorkPage() {
   return (
     <section className="work-page" data-testid="work-page">
       <PageHeader title={t('work.title')} />
+      <ControlPlaneOverviewStrip />
 
       {/* The queue sits above the tabs, not inside one: it is the only part of this page
           that is BLOCKING, so it must be visible whichever angle the CEO came here for. */}

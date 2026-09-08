@@ -188,6 +188,31 @@ def test_chat_new_task_llm_tier_forces_manual_confirm(client, monkeypatch):
 
 # ---- health (M2) ---------------------------------------------------------------
 
+def test_health_is_json_with_the_installed_version_not_the_spa_index(client, monkeypatch):
+    """`/health` must answer JSON ahead of the SPA catch-all (it used to be registered
+    after it and returned index.html with a 200), and carry the distribution version the
+    web banner compares across polls."""
+    monkeypatch.setattr("my_crew.runtime.dist_version.dist_version", lambda: "9.9.9")
+    r = client.get("/health")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/json")
+    assert r.json() == {"ok": True, "version": "9.9.9"}
+
+
+def test_dist_version_falls_back_when_the_package_is_not_installed(monkeypatch):
+    from importlib.metadata import PackageNotFoundError
+
+    import my_crew.runtime.dist_version as mod
+
+    def _missing(_name):
+        raise PackageNotFoundError("my-crew")
+
+    monkeypatch.setattr(mod, "version", _missing)
+    assert mod.dist_version() == mod.UNINSTALLED
+    monkeypatch.setattr(mod, "version", lambda _name: "1.2.3")
+    assert mod.dist_version() == "1.2.3"
+
+
 def test_coordinator_health_states(client, monkeypatch, tmp_path):
     from types import SimpleNamespace
 

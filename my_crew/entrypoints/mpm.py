@@ -27,15 +27,8 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from importlib.metadata import PackageNotFoundError, version
 
-
-def _dist_version() -> str:
-    """Installed distribution version; a checkout without an install has no metadata."""
-    try:
-        return version("my-crew")
-    except PackageNotFoundError:
-        return "0.0.0+uninstalled"
+from my_crew.runtime.dist_version import dist_version as _dist_version
 
 
 def _flag_value(args: list[str], flag: str) -> str | None:

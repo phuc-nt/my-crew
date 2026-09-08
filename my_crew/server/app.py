@@ -162,8 +162,22 @@ def create_app() -> FastAPI:
     # browser-router deep-links resolve. Registered LAST so /api/* + /static keep precedence.
     _spa_dir = Path(__file__).parent / "static" / "app"
     app.mount("/assets", StaticFiles(directory=str(_spa_dir / "assets")), name="spa-assets")
+    # Before the catch-all: a `/health` registered after it (as the old module-level
+    # decorator was) matched `/{full_path:path}` first and answered with index.html.
+    app.get("/health")(health)
     _register_spa_catchall(app, _spa_dir)
     return app
+
+
+def health() -> dict:
+    """Liveness probe — public (no auth), so install.sh / launchd can check the service.
+
+    `version` is the installed distribution: the SPA polls it and offers a reload once
+    the string changes under a running tab (a new install without a restart of the
+    browser session)."""
+    from my_crew.runtime.dist_version import dist_version
+
+    return {"ok": True, "version": dist_version()}
 
 
 def _register_spa_catchall(app: FastAPI, spa_dir: Path) -> None:
@@ -189,12 +203,6 @@ def _register_spa_catchall(app: FastAPI, spa_dir: Path) -> None:
 
 
 app = create_app()
-
-
-@app.get("/health")
-def health() -> dict:
-    """Liveness probe — public (no auth), so install.sh / launchd can check the service."""
-    return {"ok": True}
 
 
 def main() -> None:

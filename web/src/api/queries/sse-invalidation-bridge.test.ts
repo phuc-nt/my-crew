@@ -24,6 +24,9 @@ test('a ceo message or telemetry never refetches the artifact index', () => {
 
 test('an external action refreshes the approvals queue', () => {
   expect(invalidationKeysFor('external_action')).toContainEqual(queryKeys.approvals.pending())
+  expect(invalidationKeysFor('external_action')).toContainEqual(
+    queryKeys.system.controlPlaneOverview(),
+  )
 })
 
 test('a consult refreshes the clarify queue', () => {
@@ -63,4 +66,11 @@ test('the kind table covers exactly the backend VALID_KINDS set', () => {
     'step_activity',
     'step_status',
   ])
+})
+
+it('work-progress events also refresh the control-plane overview strip', () => {
+  for (const kind of ['assignment', 'milestone', 'review', 'step_status', 'handoff'] as const) {
+    expect(invalidationKeysFor(kind)).toContainEqual(queryKeys.system.controlPlaneOverview())
+  }
+  expect(invalidationKeysFor('ceo')).not.toContainEqual(queryKeys.system.controlPlaneOverview())
 })

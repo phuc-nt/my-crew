@@ -6,7 +6,9 @@
 //
 // The approvals badge reads the fleet index (one request) instead of fanning out per
 // agent, so adding a second surface that shows the queue costs nothing.
-import { NavLink, Outlet } from 'react-router'
+import { NavLink, Outlet, useLocation } from 'react-router'
+import { RouteErrorBoundary } from './app-error-boundary'
+import { UpdateAvailableBanner } from './update-available-banner'
 import { api } from '../api/client'
 import { ChromeOverflowMenu } from './chrome-overflow-menu'
 import { usePendingApprovals } from '../api/queries/use-approvals-queries'
@@ -40,6 +42,7 @@ export function AppShell() {
   const { isHigh, setMode } = useUiMode()
   const { lang, setLang, t } = useLanguage()
   const approvalCount = approvals?.count ?? 0
+  const { pathname } = useLocation()
 
   return (
     <div className="app-shell">
@@ -87,8 +90,12 @@ export function AppShell() {
           </NavLink>
         ))}
       </nav>
+      <UpdateAvailableBanner />
       <main className="app-main">
-        <Outlet />
+        {/* Keyed by pathname: a crash in one hub is left behind by navigating away. */}
+        <RouteErrorBoundary key={pathname}>
+          <Outlet />
+        </RouteErrorBoundary>
       </main>
       {/* Shell-level, not per-hub: Cmd+K has to reach the same three sources from
           wherever the CEO happens to be. Renders null until opened. */}
