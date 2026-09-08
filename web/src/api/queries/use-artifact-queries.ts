@@ -1,9 +1,9 @@
 // Artifact slice — what a step actually produced, plus the recorder's raw log.
 //
-// Read-only and deliberately NOT wired into the SSE bridge: a finished step's artifact
-// never changes, and the room index is opened on demand rather than kept warm. The one
-// live edge (a step finishing while the drawer is open) is covered by the room query
-// refetching when the drawer reopens.
+// Read-only. A finished step's artifact never changes, so the per-step queries are
+// immutable; the ROOM index is different since v94 — the chat thread's todo strip
+// renders each task's step statuses from it, so the SSE bridge invalidates
+// `artifacts.all` on every work-progress kind and the strip moves live.
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../client'
 import { queryKeys } from './query-keys'

@@ -41,7 +41,9 @@ export function invalidationKeysFor(kind: OfficeEventKind): QueryKey[] {
   // badge subtracts against — so the workroom list is stale after every single kind.
   const keys: QueryKey[] = [queryKeys.office.workrooms()]
   if (WORK_PROGRESS_KINDS.has(kind)) {
-    keys.push(queryKeys.tasks.board(), queryKeys.outputs.list())
+    // v94: the room artifact index carries each task's step statuses — the chat thread's
+    // todo strip renders from it, so it must move with the same events the board does.
+    keys.push(queryKeys.tasks.board(), queryKeys.outputs.list(), queryKeys.artifacts.all)
   }
   if (kind === 'external_action') keys.push(queryKeys.approvals.pending())
   if (kind === 'consult') keys.push(queryKeys.clarify.pending())

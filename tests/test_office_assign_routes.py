@@ -92,7 +92,9 @@ def test_preview_maps_slots_and_auto_confirmed_flag(monkeypatch, client):
     # route_mode "" when the gateway did not route (composer shows no badge then)
     assert r.json() == {"preview_text": "KẾ HOẠCH...", "task_id": "t-1", "plan_hash": "h-1",
                         "pic_id": "content", "auto_confirmed": True, "route_mode": "",
-                        "pic_dry_run": True}
+                        "pic_dry_run": True,
+                        # No persisted draft under the fake preview -> empty card.
+                        "manifest": {"steps": [], "external_count": 0}}
 
 
 def test_preview_surfaces_route_mode_for_composer_badge(monkeypatch, client):
@@ -176,3 +178,99 @@ def test_assign_routes_are_not_public():
     from my_crew.server.auth import _PUBLIC_PREFIXES
 
     assert not any(p.startswith("/api/office") for p in _PUBLIC_PREFIXES)
+
+
+# --- pre-authorization card + scope ----------------------------------------------------
+
+
+def _draft_in_store(task_id="t-m"):
+    """A real drafted plan in the fixture's store — the manifest reads THESE rows."""
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    steps = [
+        {"step_id": "s1", "title": "soạn nội dung", "assigned_to": "content", "deps": []},
+        {"step_id": "s2", "title": "gửi email khách", "assigned_to": "content",
+         "deps": ["s1"], "external_write": True, "needs_mail": True},
+    ]
+    store = TeamTaskStore(team_tasks_db_path())
+    try:
+        store.create_task(task_id=task_id, title="demo", original_request="x",
+                          assigned_by="ceo")
+        store.set_draft_plan(task_id, steps, "h-m")
+    finally:
+        store.close()
+
+
+def _scope_in_store(task_id="t-m"):
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    store = TeamTaskStore(team_tasks_db_path())
+    try:
+        return store.get(task_id).preauth_scope
+    finally:
+        store.close()
+
+
+def test_preview_manifest_lists_draft_steps_with_capability_flags(monkeypatch, client):
+    _draft_in_store()
+
+    def _fake_preview(slots):
+        slots["task_id"] = "t-m"
+        slots["plan_hash"] = "h-m"
+        slots["pic_id"] = "content"
+        return "KẾ HOẠCH..."
+
+    monkeypatch.setattr(assign_mod, "preview_assign_team_task", _fake_preview)
+    r = client.post("/api/office/assign/preview", json={"brief": "@content gửi email"})
+    assert r.status_code == 200
+    manifest = r.json()["manifest"]
+    assert manifest["external_count"] == 1
+    assert manifest["steps"] == [
+        {"step_id": "s1", "title": "soạn nội dung", "assigned_to": "content",
+         "external_write": False, "needs_shell": False, "needs_web": False,
+         "needs_mail": False, "needs_review": False},
+        {"step_id": "s2", "title": "gửi email khách", "assigned_to": "content",
+         "external_write": True, "needs_shell": False, "needs_web": False,
+         "needs_mail": True, "needs_review": False},
+    ]
+
+
+def test_confirm_records_preauth_scope_only_after_a_successful_confirm(monkeypatch, client):
+    _draft_in_store()
+    monkeypatch.setattr(assign_mod, "run_assign_team_task", lambda slots: "Đã giao.")
+    r = client.post("/api/office/assign/confirm",
+                    json={"task_id": "t-m", "plan_hash": "h", "preauth_scope": "always"})
+    assert r.status_code == 200
+    assert r.json() == {"text": "Đã giao.", "preauth_scope": "always"}
+    assert _scope_in_store() == "always"
+
+
+def test_confirm_stale_hash_never_records_a_scope(monkeypatch, client):
+    _draft_in_store()
+
+    def _fake_run(slots):
+        raise ValueError("kế hoạch đã thay đổi")
+
+    monkeypatch.setattr(assign_mod, "run_assign_team_task", _fake_run)
+    r = client.post("/api/office/assign/confirm",
+                    json={"task_id": "t-m", "plan_hash": "h", "preauth_scope": "once"})
+    assert r.status_code == 409
+    assert _scope_in_store() == ""
+
+
+def test_confirm_rejects_unknown_preauth_scope(monkeypatch, client):
+    called = []
+    monkeypatch.setattr(assign_mod, "run_assign_team_task", lambda s: called.append(s) or "x")
+    r = client.post("/api/office/assign/confirm",
+                    json={"task_id": "t", "plan_hash": "h", "preauth_scope": "forever"})
+    assert r.status_code == 400
+    assert called == []
+
+
+def test_confirm_without_scope_keeps_the_old_contract(monkeypatch, client):
+    monkeypatch.setattr(assign_mod, "run_assign_team_task", lambda s: "Đã giao.")
+    r = client.post("/api/office/assign/confirm", json={"task_id": "t", "plan_hash": "h"})
+    assert r.status_code == 200
+    assert r.json() == {"text": "Đã giao.", "preauth_scope": ""}

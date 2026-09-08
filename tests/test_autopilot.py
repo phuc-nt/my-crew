@@ -405,3 +405,124 @@ def test_a_stalled_task_still_awaiting_delivery_is_swept_normally(tmp_path, monk
         assert store.get("t1").status == "open"
     finally:
         store.close()
+
+
+# --- CEO pre-authorization at plan confirm ("duyệt tất cả") --------------------------
+
+
+def _preauth_fixture(tmp_path, scope, *, require_ceo_approval=False):
+    store = _awaiting_approval_fixture(tmp_path, require_ceo_approval=require_ceo_approval)
+    store.set_preauth_scope("t1", scope)
+    return store
+
+
+def _preauth_deps(store, *, rule=None, autopilot=False):
+    """Rule deps with autopilot OFF by default — pre-authorization must stand on its own."""
+    learned: list[tuple[dict, str, str]] = []
+    deps, approved, rejected = _rule_deps(
+        store, rule=rule,
+        approval_rule_learn=lambda action, agent, by: learned.append((action, agent, by)),
+        autopilot_enabled=lambda: autopilot,
+    )
+    return deps, approved, rejected, learned
+
+
+def test_preauth_once_approves_pending_gate_without_learning(tmp_path):
+    store = _preauth_fixture(tmp_path, "once")
+    try:
+        deps, approved, _rejected, learned = _preauth_deps(store)
+        result = run_one_tick(deps)
+        assert approved == [77]
+        assert learned == []
+        assert result.action == "spawned"
+        assert store.get_step("t1", "s1").status == "running"
+    finally:
+        store.close()
+
+
+def test_preauth_always_approves_and_learns_rule_from_the_real_action(tmp_path):
+    """"Lần sau cũng vậy": the queued action (not the plan) becomes a standing ALWAYS
+    rule for the step's own agent, stamped as learned from the CEO's pre-authorization."""
+    store = _preauth_fixture(tmp_path, "always")
+    try:
+        deps, approved, _rejected, learned = _preauth_deps(store)
+        run_one_tick(deps)
+        assert approved == [77]
+        assert learned == [({"type": "email_send", "to": "x@y.com"}, "agent-a", "ceo:preauth")]
+    finally:
+        store.close()
+
+
+def test_preauth_never_overrides_a_learned_deny_rule(tmp_path):
+    store = _preauth_fixture(tmp_path, "always")
+    try:
+        deps, approved, rejected, learned = _preauth_deps(store, rule=("deny", 9))
+        result = run_one_tick(deps)
+        assert rejected == [77] and approved == [] and learned == []
+        assert result.action == "failed"
+    finally:
+        store.close()
+
+
+def test_preauth_yields_to_per_task_ceo_opt_out(tmp_path):
+    """`require_ceo_approval` ("vụ này để anh duyệt") beats a pre-authorization the same
+    way it beats autopilot — the gate stays pending."""
+    store = _preauth_fixture(tmp_path, "once", require_ceo_approval=True)
+    try:
+        deps, approved, _rejected, learned = _preauth_deps(store)
+        result = run_one_tick(deps)
+        assert approved == [] and learned == []
+        assert result.action == "none"
+        assert store.get_step("t1", "s1").status == "awaiting_approval"
+    finally:
+        store.close()
+
+
+def test_no_preauth_leaves_pending_gate_alone(tmp_path):
+    store = _awaiting_approval_fixture(tmp_path)
+    try:
+        deps, approved, _rejected, learned = _preauth_deps(store)
+        assert run_one_tick(deps).action == "none"
+        assert approved == [] and learned == []
+    finally:
+        store.close()
+
+
+def test_preauth_always_skips_learning_when_action_is_unresolvable(tmp_path):
+    """No queued action payload ⇒ nothing to derive a rule key from: approve, do not learn."""
+    store = _preauth_fixture(tmp_path, "always")
+    try:
+        deps, approved, _rejected, learned = _preauth_deps(store)
+        deps.approval_action = lambda aid, agent: None
+        run_one_tick(deps)
+        assert approved == [77] and learned == []
+    finally:
+        store.close()
+
+
+def test_runner_learns_rule_into_the_agents_own_rule_store(tmp_path, monkeypatch):
+    """The wired implementation writes an ALWAYS rule that `match` then finds — and only
+    in the named agent's store."""
+    from my_crew.actions.approval_rule_store import SCOPE_ALWAYS, ApprovalRuleStore
+    from my_crew.runtime.team_tick_runner import _approval_rule_learn
+
+    monkeypatch.setattr(
+        "my_crew.runtime.agent_paths.agent_data_dir", lambda agent_id: tmp_path / agent_id
+    )
+    (tmp_path / "agent-a").mkdir()
+    (tmp_path / "agent-b").mkdir()
+    action = {"type": "email_send", "to": "x@y.com"}
+    _approval_rule_learn(action, "agent-a", "ceo:preauth")
+    _approval_rule_learn(action, "agent-a", "ceo:preauth")  # idempotent
+
+    store_a = ApprovalRuleStore(tmp_path / "agent-a" / "approvals.db")
+    store_b = ApprovalRuleStore(tmp_path / "agent-b" / "approvals.db")
+    try:
+        rule = store_a.match(action)
+        assert rule is not None and rule.scope == SCOPE_ALWAYS
+        assert rule.created_by == "ceo:preauth"
+        assert len(store_a.list_rules()) == 1
+        assert store_b.match(action) is None
+    finally:
+        store_a.close()
+        store_b.close()

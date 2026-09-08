@@ -12,6 +12,8 @@ import { Badge } from '../../../components/ui/badge'
 import { useLanguage } from '../../../i18n/language-context'
 import { formatCost } from '../../../labels'
 import type { RoomArtifactTask } from '../../../types'
+import { failureCaseForStall } from '../../shared/failure-guidance'
+import { FailureGuidanceNote } from '../../shared/failure-guidance-note'
 import { StalledTaskActions } from '../stalled-task-actions'
 import { routeLabel } from './route-labels'
 import { StepProgress } from './step-progress'
@@ -71,6 +73,7 @@ function TaskFunnel({ taskId }: { taskId: string }) {
           <dt>{t('taskDetail.failureMode')}</dt>
           <dd>
             <Badge tone="danger" data-testid="route-failure">{routeLabel(t, 'failure', r.failure_mode)}</Badge>
+            <FailureGuidanceNote caseId={r.failure_mode} />
           </dd>
         </div>
       )}
@@ -142,6 +145,9 @@ function TaskSection(
                 ? t('teamKanban.stalledAt', { step: stalledStep.title })
                 : t('stalledActions.reviewExhausted')}
             </p>
+          )}
+          {task.status === 'stalled' && (
+            <FailureGuidanceNote caseId={failureCaseForStall(Boolean(stalledStep))} />
           )}
           <StalledTaskActions
             taskId={task.task_id}

@@ -136,3 +136,73 @@ test('15. Cmd+K mở bảng lệnh, gõ ra lịch sử, chọn lệnh thì mồi
     .toHaveValue('Xem trạng thái cả đội')
   await expect(page.locator('.ops-turn')).toHaveCount(0)
 })
+
+// The task plan pinned under the thread: rendered from the room's artifact index, with a
+// done/total per task, so progress is readable without leaving the conversation.
+test('56. dải việc-đang-làm hiện dưới luồng chat với tiến độ từng bước', async ({ page }) => {
+  await mockOfficeApi(page, {
+    roomEvents: { [ROOM]: makeRoomEvents(2, ROOM) },
+    artifacts: {
+      tasks: [{
+        task_id: 't-abc', title: 'Soạn báo cáo tuần cho sếp', pic_id: 'tro-ly-pm', status: 'in_progress',
+        steps: [
+          { step_id: 's1', title: 'thu thập số liệu', assigned_to: 'ke-toan', status: 'done', seq: 3, step_type: 'research' },
+          { step_id: 's2', title: 'viết báo cáo', assigned_to: 'tro-ly-pm', status: 'running', seq: 4, step_type: 'content' },
+          { step_id: 's3', title: 'gửi sếp', assigned_to: 'tro-ly-pm', status: 'open', seq: 0, step_type: 'delivery' },
+        ],
+      }],
+    },
+  })
+  await page.goto(`/chat/${ROOM}`)
+
+  const strip = page.locator('[data-testid="thread-todo-strip"]')
+  await expect(strip).toBeVisible()
+  await expect(strip.locator('[data-testid="todo-progress"]')).toHaveText('1/3 bước')
+  await expect(strip.locator('.todo-step')).toHaveCount(3)
+  await expect(strip.locator('.todo-step.is-running')).toContainText('viết báo cáo')
+  // The strip sits between the log and the composer — above the input, below the thread.
+  const stripBox = await strip.boundingBox()
+  const inputBox = await page.getByPlaceholder(DICT.vi['assignComposer.placeholderRoom']).boundingBox()
+  expect(stripBox!.y + stripBox!.height).toBeLessThanOrEqual(inputBox!.y + 1)
+})
+
+// Typing while the previous message is still in flight parks the text and sends it on
+// its own once the reply lands — no lost keystrokes, no double submit.
+test('57. gõ tiếp khi đang chờ trả lời: tin xếp hàng rồi tự gửi sau', async ({ page }) => {
+  const mock = await mockOfficeApi(page, {
+    roomEvents: { [ROOM]: makeRoomEvents(2, ROOM) },
+    roomChat: { intent: 'question', reply: 'Đang ở bước 2.' },
+    roomChatDelayMs: 800,
+  })
+  await page.goto(`/chat/${ROOM}`)
+  const box = page.getByPlaceholder(DICT.vi['assignComposer.placeholderRoom'])
+  await box.fill('tiến độ sao rồi?')
+  await box.press('Enter')
+  await box.fill('gửi tôi bản nháp nhé')
+  await box.press('Enter')
+
+  const queue = page.locator('[data-testid="composer-queue"], .office-composer-queue')
+  await expect(queue).toContainText('gửi tôi bản nháp nhé')
+  await expect.poll(() => mock.roomChatWrites.map((w) => w.message)).toEqual([
+    'tiến độ sao rồi?',
+    'gửi tôi bản nháp nhé',
+  ])
+  await expect(queue).toHaveCount(0)
+})
+
+// A red row carries its own "why + what next" so the CEO is never left with a bare error.
+test('58. bước lỗi trong luồng chat kèm ghi chú vì sao và làm gì tiếp', async ({ page }) => {
+  const events = makeRoomEvents(2, ROOM)
+  events.push({
+    seq: 3, ts: '2026-07-31T09:01:00Z', author: 'coordinator', source_room_id: ROOM,
+    kind: 'step_status',
+    body: { status: 'failed', step_title: 'gửi email khách', task_id: 't-abc', step_id: 's2' },
+  })
+  await mockOfficeApi(page, { roomEvents: { [ROOM]: events } })
+  await page.goto(`/chat/${ROOM}`)
+
+  const guide = page.locator('.chat-thread-log .failure-guide')
+  await expect(guide).toHaveCount(1)
+  await expect(guide).toContainText(DICT.vi['failureGuide.whyLabel'])
+  await expect(guide).toContainText(DICT.vi['failureGuide.step_failed.next'])
+})

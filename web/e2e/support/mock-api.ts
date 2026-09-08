@@ -109,6 +109,10 @@ export interface OfficeApiMockOptions {
   assignPreviewAfterSafetyWrite?: Record<string, unknown>
   /** Overrides merged into the default company payload the settings form reads. */
   company?: Record<string, unknown>
+  /** Reply for POST /api/office/rooms/{id}/chat (the in-room composer). A delay lets a
+   *  spec type a follow-up while the first round-trip is still in flight. */
+  roomChat?: Record<string, unknown>
+  roomChatDelayMs?: number
 }
 
 export interface OfficeApiMock {
@@ -122,6 +126,11 @@ export interface OfficeApiMock {
   assignCalls: string[]
   /** Bodies of every POST /api/company, in call order. */
   companyWrites: Record<string, unknown>[]
+  /** Bodies of every POST /api/office/assign/confirm — the pre-authorization scope the
+   *  CEO chose travels here, so a spec asserts the wire value, not only the radio. */
+  confirmWrites: Record<string, unknown>[]
+  /** Bodies of every in-room chat POST, in call order (queued follow-ups land here). */
+  roomChatWrites: Record<string, unknown>[]
   /** Every `/api` call that reached no handler. `expectNoUnmockedRoutes` asserts it is
    *  empty; a non-empty list means the app asked for data the fixture never served. */
   unmocked: string[]
@@ -151,6 +160,8 @@ export async function mockOfficeApi(
   const agentWrites: AgentWrite[] = []
   const unmocked: string[] = []
   const assignCalls: string[] = []
+  const confirmWrites: Record<string, unknown>[] = []
+  const roomChatWrites: Record<string, unknown>[] = []
   const companyWrites: Record<string, unknown>[] = []
   let safetyWritten = false
   let profileSettings: Record<string, unknown> = { ...(opts.agentProfileSettings ?? {}) }
@@ -422,7 +433,14 @@ export async function mockOfficeApi(
     }
     if (pathname === '/api/office/assign/confirm') {
       assignCalls.push(pathname)
+      confirmWrites.push(route.request().postDataJSON() as Record<string, unknown>)
       return json({ text: 'Đã giao việc.' })
+    }
+    if (/^\/api\/office\/rooms\/[^/]+\/chat$/.test(pathname) && opts.roomChat) {
+      assignCalls.push(pathname)
+      roomChatWrites.push(route.request().postDataJSON() as Record<string, unknown>)
+      if (opts.roomChatDelayMs) await new Promise((r) => setTimeout(r, opts.roomChatDelayMs))
+      return json(opts.roomChat)
     }
     if (pathname === '/api/office/assign/cancel') {
       assignCalls.push(pathname)
@@ -466,6 +484,8 @@ export async function mockOfficeApi(
     agentWrites,
     assignCalls,
     companyWrites,
+    confirmWrites,
+    roomChatWrites,
     unmocked,
   }
 }

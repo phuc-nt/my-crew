@@ -6,6 +6,7 @@ import { useLanguage } from '../../i18n/language-context'
 import { useOfficeStream } from '../../hooks/use-office-stream'
 import { OVERVIEW_ROOM_ID, reduceThread } from './chat-state'
 import { MessageRow } from './messages/message-renderer'
+import { ThreadTodoStrip } from './thread-todo-strip'
 
 // Read-on-demand surface: the drawer, its query slice and the transcript summariser
 // only load when the CEO opens it. Unlike the 3D office chunk this needs no watchdog or
@@ -92,6 +93,8 @@ export function ThreadView({ roomId, title, onRead }: Props) {
           ))}
         </ul>
       ) : null}
+      {/* v94: the task plan pinned above the composer — where the work stands, live. */}
+      <ThreadTodoStrip roomId={roomId} />
       {/* Absolutely positioned against .chat-thread: it covers the message log while the
           composer below stays reachable, so the CEO can still reply while reading output. */}
       {artifactsOpen ? (

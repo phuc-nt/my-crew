@@ -6,6 +6,8 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useLanguage } from '../../../i18n/language-context'
 import type { OfficeMessage } from '../../../types'
+import { failureCaseForRow } from '../../shared/failure-guidance'
+import { FailureGuidanceNote } from '../../shared/failure-guidance-note'
 import { kindLabel, messageLine } from '../../shared/office-message-line'
 import { markdownComponents } from '../../shared/artifact-viewer'
 import type { ThreadItem } from '../chat-state'
@@ -92,6 +94,11 @@ export function MessageRow({ item }: { item: ThreadItem }) {
         {(item.repeatCount ?? 1) > 1 && (
           <span className="chat-row-repeat">{t('chat.repeatCount', { n: item.repeatCount ?? 1 })}</span>
         )}
+        {/* v94: a red row says what went wrong AND what to do next, right under it. */}
+        <FailureGuidanceNote
+          caseId={failureCaseForRow(item.kind, { ...item.body, status: item.status ?? item.body.status })}
+          className="chat-row-guide"
+        />
         <time className="chat-row-time" dateTime={item.ts}>{timeOf(item.ts)}</time>
       </div>
     </li>

@@ -198,3 +198,41 @@ test.describe('mobile', () => {
     expect(floor!.y).toBeLessThan(feed!.y)
   })
 })
+
+// Pre-authorization at plan-confirm: the manifest lists what each step may do, the CEO
+// picks "approve all and keep as a rule", and THAT value is what confirm sends.
+test('55. thẻ tiền duyệt liệt kê bước chạm ngoài, chọn "ghi thành luật" thì confirm gửi always', async ({ page }) => {
+  const mock = await openOffice(page, '/office', {
+    assignPreview: {
+      preview_text: 'KẾ HOẠCH: 2 bước',
+      task_id: 't-pre', plan_hash: 'h-pre', pic_id: 'tro-ly-pm',
+      auto_confirmed: false, route_mode: 'team',
+      manifest: {
+        external_count: 1,
+        steps: [
+          { step_id: 's1', title: 'soạn nội dung', assigned_to: 'content',
+            external_write: false, needs_shell: false, needs_web: false, needs_mail: false, needs_review: true },
+          { step_id: 's2', title: 'gửi email khách', assigned_to: 'tro-ly-pm',
+            external_write: true, needs_shell: false, needs_web: false, needs_mail: true, needs_review: false },
+        ],
+      },
+    },
+  })
+  await page.locator('[data-testid="office-quick-assign"]').click()
+  await page.getByPlaceholder(DICT.vi['assignComposer.placeholderNew']).fill('soạn rồi gửi mail cho khách')
+  await page.getByRole('button', { name: DICT.vi['assignComposer.assign'], exact: true }).click()
+
+  const card = page.locator('[data-testid="preauth-card"]')
+  await expect(card).toBeVisible()
+  await expect(card.locator('.preauth-step')).toHaveCount(2)
+  await expect(card.locator('.preauth-step.is-external')).toContainText('gửi email khách')
+  await expect(card.locator('.preauth-flag.is-needs_mail')).toHaveText(DICT.vi['preauth.flag.needs_mail'])
+  await expect(card.locator('legend')).toHaveText(DICT.vi['preauth.externalCount'].replace('{n}', '1'))
+
+  await card.getByLabel(DICT.vi['preauth.scope.always']).check()
+  await page.getByRole('button', { name: DICT.vi['assignComposer.confirmAssign'] }).click()
+
+  await expect.poll(() => mock.confirmWrites).toEqual([
+    { task_id: 't-pre', plan_hash: 'h-pre', preauth_scope: 'always' },
+  ])
+})

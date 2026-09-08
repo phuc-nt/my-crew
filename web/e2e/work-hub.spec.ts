@@ -358,3 +358,16 @@ test('24. giao lại seed brief sang composer đúng một lần', async ({ page
   await expect(page).toHaveURL(/\/chat$/)
   await expect(page.locator('.office-composer input[type="text"]')).toHaveValue('')
 })
+
+// A stalled card and the task detail both say why the task stopped and what unsticks it.
+test('59. thẻ kẹt và trang chi tiết đều kèm ghi chú vì sao + làm gì tiếp', async ({ page }) => {
+  await mockOfficeApi(page, { boardLanes: STALLED_LANES, artifacts: STALLED_ROOM_ARTIFACTS })
+  await page.goto('/work')
+  const card = page.locator('.task-card').first()
+  await expect(card.locator('.failure-guide')).toContainText(DICT.vi['failureGuide.step_failed.why'])
+  await expect(card.locator('.failure-guide')).toContainText(DICT.vi['failureGuide.step_failed.next'])
+
+  await page.goto('/work/task/room-gamma')
+  const panel = page.locator('.task-detail-stalled-panel')
+  await expect(panel.locator('.failure-guide')).toContainText(DICT.vi['failureGuide.step_failed.next'])
+})

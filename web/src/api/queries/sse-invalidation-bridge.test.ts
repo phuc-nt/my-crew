@@ -12,7 +12,14 @@ test('work-progress kinds refresh the board and the outputs list', () => {
     const keys = invalidationKeysFor(kind)
     expect(keys).toContainEqual(queryKeys.tasks.board())
     expect(keys).toContainEqual(queryKeys.outputs.list())
+    // The todo strip under a thread reads the room artifact index's step statuses.
+    expect(keys).toContainEqual(queryKeys.artifacts.all)
   }
+})
+
+test('a ceo message or telemetry never refetches the artifact index', () => {
+  expect(invalidationKeysFor('ceo')).not.toContainEqual(queryKeys.artifacts.all)
+  expect(invalidationKeysFor('step_activity')).not.toContainEqual(queryKeys.artifacts.all)
 })
 
 test('an external action refreshes the approvals queue', () => {

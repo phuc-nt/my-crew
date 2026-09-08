@@ -182,6 +182,8 @@ def test_chat_new_task_llm_tier_forces_manual_confirm(client, monkeypatch):
     # does, so the "diễn tập" badge renders for a workroom-initiated assign too. No PIC
     # resolved here -> the conservative True default.
     assert r.json()["pic_dry_run"] is True
+    # Same pre-authorization card as the office-screen preview (no draft here -> empty).
+    assert r.json()["manifest"] == {"steps": [], "external_count": 0}
 
 
 # ---- health (M2) ---------------------------------------------------------------

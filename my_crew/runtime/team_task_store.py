@@ -69,6 +69,11 @@ _TASK_STATUSES = ("planning", "open", "running", "done", "cancelled", "stalled")
 #: (what the ticker may act on) are DELIBERATELY separate lists so a future
 #: visibility need for `planning` tasks can never silently reopen the dispatch gate.
 _DISPATCHABLE_TASK_STATUSES = ("open", "running")
+# CEO pre-authorization scopes a task can carry (see `TeamTask.preauth_scope`).
+PREAUTH_SCOPE_NONE = ""
+PREAUTH_SCOPE_ONCE = "once"
+PREAUTH_SCOPE_ALWAYS = "always"
+PREAUTH_SCOPES = (PREAUTH_SCOPE_NONE, PREAUTH_SCOPE_ONCE, PREAUTH_SCOPE_ALWAYS)
 _OPEN_TASK_STATUSES = ("planning", "open", "running")
 
 
@@ -96,6 +101,13 @@ class TeamTask:
     # every manual gate (plan confirm, Lớp B approval, stall decisions) stays with the
     # CEO for it even while the global autopilot flag is on.
     require_ceo_approval: bool = False
+    # Standing CEO pre-authorization for this task's external actions, given at plan
+    # confirm: "" (none — every Lớp B gate waits for a decision), "once" (the ticker
+    # approves this task's pending gates itself), "always" (same, and each approved
+    # action is also learned as a standing ALWAYS rule for the step's agent so the next
+    # task of the same kind never asks). Never enters plan_hash; a learned DENY rule and
+    # `require_ceo_approval` both override it.
+    preauth_scope: str = ""
     # v63 autopilot: stall auto-resolutions already spent on this task (capped in
     # `autopilot_sweep` — auto-recovery must converge, never loop).
     autopilot_attempts: int = 0
@@ -186,6 +198,8 @@ class TeamTaskStore:
             # decision next to the outcome columns (wall time, cost, rework) that say
             # whether it was the right one.
             "ALTER TABLE team_tasks ADD COLUMN route_json TEXT",
+            # CEO pre-authorization scope given at plan confirm ("" | "once" | "always").
+            "ALTER TABLE team_tasks ADD COLUMN preauth_scope TEXT NOT NULL DEFAULT ''",
         ):
             try:
                 self._conn.execute(ddl)
@@ -301,6 +315,7 @@ class TeamTaskStore:
             escalated_at=data["escalated_at"], pic_id=str(data.get("pic_id") or ""),
             room_id=str(data.get("room_id") or ""),
             require_ceo_approval=bool(int(data.get("require_ceo_approval") or 0)),
+            preauth_scope=str(data.get("preauth_scope") or ""),
             autopilot_attempts=int(data.get("autopilot_attempts") or 0),
             reopen_count=int(data.get("reopen_count") or 0),
             delivery_status=str(data.get("delivery_status") or "not_applicable"),
@@ -446,6 +461,17 @@ class TeamTaskStore:
         self._conn.execute(
             "UPDATE team_tasks SET require_ceo_approval = ? WHERE id = ?",
             (1 if value else 0, task_id),
+        )
+        self._conn.commit()
+
+    def set_preauth_scope(self, task_id: str, scope: str) -> None:
+        """Record the CEO's pre-authorization for this task's external actions (given at
+        plan confirm). Only the three known scopes are storable; anything else is a
+        programming error, not a value to persist."""
+        if scope not in PREAUTH_SCOPES:
+            raise ValueError(f"preauth_scope must be one of {PREAUTH_SCOPES}, got {scope!r}")
+        self._conn.execute(
+            "UPDATE team_tasks SET preauth_scope = ? WHERE id = ?", (scope, task_id),
         )
         self._conn.commit()
 

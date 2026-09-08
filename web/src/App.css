@@ -1670,3 +1670,52 @@ input, textarea, select { font-size: var(--fs-body); }
   max-width: 32rem; margin-bottom: var(--space-3); font-weight: 600; }
 .company-identity label input { font-weight: 400; padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border-strong); border-radius: var(--radius); }
+
+/* Pre-authorization card inside the assign preview (what the steps may do + scope). */
+.preauth-card { margin-top: var(--space-2); padding: var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); }
+.preauth-title { font-weight: 600; margin-bottom: var(--space-1); }
+.preauth-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.preauth-step { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1); font-size: 0.9rem; }
+.preauth-step.is-external .preauth-step-title { font-weight: 600; }
+.preauth-step-who { color: var(--color-muted); }
+.preauth-flag { font-size: 0.72rem; padding: 0 6px; border-radius: 999px; background: var(--color-surface-2); border: 1px solid var(--color-border); }
+.preauth-flag.is-external_write, .preauth-flag.is-needs_mail { border-color: var(--color-warn, #d97706); color: var(--color-warn, #d97706); }
+.preauth-scope { margin: var(--space-2) 0 0; padding: 0; border: 0; display: grid; gap: 4px; }
+.preauth-scope legend { font-weight: 600; margin-bottom: 4px; padding: 0; }
+.preauth-choice { display: grid; grid-template-columns: auto 1fr; column-gap: var(--space-1); align-items: baseline; padding: 4px 6px; border-radius: var(--radius-sm); border: 1px solid transparent; cursor: pointer; }
+.preauth-choice.is-on { border-color: var(--color-accent); background: var(--color-surface-2); }
+.preauth-choice-hint { grid-column: 2; font-size: 0.8rem; color: var(--color-muted); }
+.preauth-none, .preauth-no-gates { font-size: 0.85rem; color: var(--color-muted); }
+
+/* Follow-ups parked while the composer is busy. */
+.office-composer-queue { list-style: none; margin: var(--space-1) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+.office-composer-queue-label { font-size: 0.8rem; }
+.office-composer-queued { display: inline-flex; gap: 6px; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--color-surface-2); border: 1px dashed var(--color-border); font-size: 0.85rem; max-width: 100%; }
+.office-composer-queued span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28ch; }
+.office-composer-queued button { border: 0; background: none; cursor: pointer; color: var(--color-muted); padding: 0; }
+
+/* Task plan pinned under the chat thread. */
+.thread-todo-strip { margin: var(--space-2) 0 0; padding: var(--space-2); border-top: 1px solid var(--color-border); background: var(--color-surface-2); }
+.thread-todo-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-muted); margin-bottom: 4px; }
+.todo-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
+.todo-task-head { display: grid; grid-template-columns: 1fr auto; column-gap: var(--space-2); row-gap: 4px; width: 100%; text-align: left; border: 0; background: none; padding: 0; cursor: pointer; font: inherit; color: inherit; }
+.todo-task-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.todo-task-progress { font-size: 0.8rem; color: var(--color-muted); }
+.todo-task-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--color-border); overflow: hidden; }
+.todo-task-bar-fill { height: 100%; background: var(--color-accent); transition: width 200ms ease; }
+.todo-task.is-done .todo-task-bar-fill { background: var(--color-ok, #16a34a); }
+.todo-task.is-stalled .todo-task-bar-fill, .todo-task.is-failed .todo-task-bar-fill { background: var(--color-danger, #dc2626); }
+.todo-steps { list-style: none; margin: 4px 0 0; padding: 0 0 0 var(--space-1); display: grid; gap: 2px; }
+.todo-step { display: flex; gap: 6px; align-items: baseline; font-size: 0.85rem; }
+.todo-step-mark { width: 1.2em; text-align: center; color: var(--color-muted); }
+.todo-step.is-done .todo-step-mark { color: var(--color-ok, #16a34a); }
+.todo-step.is-running .todo-step-mark, .todo-step.is-in_progress .todo-step-mark { color: var(--color-accent); }
+.todo-step.is-failed .todo-step-mark, .todo-step.is-error .todo-step-mark, .todo-step.is-timeout .todo-step-mark { color: var(--color-danger, #dc2626); }
+.todo-step.is-done .todo-step-title { color: var(--color-muted); text-decoration: line-through; }
+.todo-step-who { color: var(--color-muted); font-size: 0.78rem; }
+
+/* "Why + what next" note under a failure. */
+.failure-guide { margin-top: var(--space-1); padding: 6px 8px; border-left: 3px solid var(--color-danger, #dc2626); background: var(--color-surface-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: 0.85rem; display: grid; gap: 2px; }
+.failure-guide-why b, .failure-guide-next b { margin-right: 4px; }
+.chat-row-guide { margin-top: 6px; }
+.task-card-guide { margin: var(--space-1) 0; }

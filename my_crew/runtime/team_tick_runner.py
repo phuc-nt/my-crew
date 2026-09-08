@@ -126,6 +126,7 @@ def _run_team_tick_locked(loaded: Any, settings: Any, *, now: datetime | None) -
             approval_action=_approval_action,
             approval_rule_match=_approval_rule_match,
             approval_rule_record_use=_approval_rule_record_use,
+            approval_rule_learn=_approval_rule_learn,
             autopilot_enabled=_autopilot_enabled,
             clarify_status=_clarify_status,
             roster_ok=_roster_ok,
@@ -606,6 +607,22 @@ def _approval_rule_record_use(rule_id: int, agent_id: str) -> None:
     store = ApprovalRuleStore(agent_data_dir(agent_id) / "approvals.db")
     try:
         store.record_use(rule_id)
+    finally:
+        store.close()
+
+
+def _approval_rule_learn(action: dict, agent_id: str, created_by: str) -> None:
+    """Persist a standing ALWAYS rule for `action` in ONE agent's ApprovalRuleStore — the
+    "duyệt tất cả, lần sau cũng vậy" half of a pre-authorized task. `add_rule` is
+    idempotent per key, so re-learning the same action kind is a no-op."""
+    from my_crew.actions.approval_rule_store import SCOPE_ALWAYS, ApprovalRuleStore
+    from my_crew.runtime.agent_paths import agent_data_dir
+
+    if not agent_id or not action:
+        return
+    store = ApprovalRuleStore(agent_data_dir(agent_id) / "approvals.db")
+    try:
+        store.add_rule(action, scope=SCOPE_ALWAYS, created_by=created_by)
     finally:
         store.close()
 

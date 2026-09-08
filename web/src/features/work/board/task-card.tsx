@@ -11,6 +11,8 @@ import { api } from '../../../api/client'
 import { queryKeys } from '../../../api/queries/query-keys'
 import { useLanguage } from '../../../i18n/language-context'
 import type { TeamBoardCard } from '../../../types'
+import { failureCaseForStall } from '../../shared/failure-guidance'
+import { FailureGuidanceNote } from '../../shared/failure-guidance-note'
 import { StalledTaskActions } from '../stalled-task-actions'
 
 export function TaskCard({ card, lane }: { card: TeamBoardCard; lane?: string }) {
@@ -104,6 +106,10 @@ export function TaskCard({ card, lane }: { card: TeamBoardCard; lane?: string })
               {t('teamKanban.stalledAt', { step: card.stalled_step })}
             </p>
           )}
+          <FailureGuidanceNote
+            caseId={failureCaseForStall(Boolean(card.stalled_step))}
+            className="task-card-guide"
+          />
           <StalledTaskActions taskId={card.task_id} />
         </>
       )}

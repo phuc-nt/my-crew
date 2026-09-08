@@ -284,6 +284,8 @@ export interface RoomChatPayload {
   auto_confirmed?: boolean
   // v82: routing-funnel outcome ('sprint' | 'team') for the composer's mode badge.
   route_mode?: string
+  /** v94: pre-authorization card for a `new_task` intent (same shape as the office preview). */
+  manifest?: AssignManifest
 }
 
 // Step types whose "done" carries a handoff artifact file — mirror of the server's
@@ -344,12 +346,39 @@ export interface CoordinatorHealthPayload {
   hint: string
 }
 
+// v94: one drafted step's capability flags — what the step MAY do once it runs. The
+// composer's pre-authorization card lists these BEFORE confirm, so the CEO decides once
+// ("duyệt tất cả") instead of being paged per gate mid-run. Mirrors the server's
+// `assign_manifest._STEP_FLAGS`; a flag absent here still renders (false).
+export interface AssignManifestStep {
+  step_id: string
+  title: string
+  assigned_to: string
+  external_write: boolean
+  needs_shell: boolean
+  needs_web: boolean
+  needs_mail: boolean
+  needs_review: boolean
+}
+
+export interface AssignManifest {
+  steps: AssignManifestStep[]
+  /** How many steps carry `external_write` — the ones the Action Gateway will gate. */
+  external_count: number
+}
+
+/** '' = ask per gate (default) · 'once' = approve every gate of THIS task · 'always' =
+ *  approve and learn an ApprovalRule for the same action next time. */
+export type PreauthScope = '' | 'once' | 'always'
+
 export interface AssignPreviewPayload {
   preview_text: string
   task_id: string
   plan_hash: string
   pic_id: string
   auto_confirmed: boolean
+  /** v94: the pre-authorization card. Optional — a pre-v94 server omits it. */
+  manifest?: AssignManifest
   // v82: routing-funnel outcome ('sprint' | 'team'). Optional — a pre-v82 server
   // omits it and the composer simply renders no mode badge.
   route_mode?: string

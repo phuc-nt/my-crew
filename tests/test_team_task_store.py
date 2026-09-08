@@ -1310,3 +1310,25 @@ def test_a_store_created_before_the_final_deliverable_column_still_opens(tmp_pat
         "từ trước sẽ stall vì mismatch"
     )
     store.close()
+
+
+def test_preauth_scope_defaults_empty_and_round_trips(tmp_path):
+    store = _store(tmp_path)
+    _plan(store, task_id="t1")
+    assert store.get("t1").preauth_scope == ""
+    store.set_preauth_scope("t1", "always")
+    assert store.get("t1").preauth_scope == "always"
+    store.set_preauth_scope("t1", "")
+    assert store.get("t1").preauth_scope == ""
+    store.close()
+
+
+def test_preauth_scope_rejects_unknown_values(tmp_path):
+    import pytest
+
+    store = _store(tmp_path)
+    _plan(store, task_id="t1")
+    with pytest.raises(ValueError):
+        store.set_preauth_scope("t1", "forever")
+    assert store.get("t1").preauth_scope == ""
+    store.close()

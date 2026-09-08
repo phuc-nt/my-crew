@@ -279,6 +279,32 @@ def poll_awaiting_approval_step(
                 )
                 decision = "approved"
 
+    # CEO pre-authorization given at plan confirm ("duyệt tất cả"): a still-pending gate
+    # on a task carrying `preauth_scope` is approved by the ticker in the CEO's name. It
+    # runs AFTER the learned-rule block so a standing DENY still wins, and it honours
+    # `require_ceo_approval` like every other automatic approval. With scope "always" the
+    # real queued action is also learned as a standing ALWAYS rule for the step's agent,
+    # so the next task of the same kind never asks — the policy half of the button.
+    preauth_scope = str(getattr(task, "preauth_scope", "") or "")
+    if (
+        decision == "pending" and step.approval_id and preauth_scope
+        and not getattr(task, "require_ceo_approval", False)
+        and deps.approval_approve(step.approval_id, step.assigned_to)
+    ):
+        from my_crew.agent.ops_autopilot import record_autopilot_decision
+
+        learned = ""
+        if preauth_scope == "always":
+            action = deps.approval_action(step.approval_id, step.assigned_to)
+            if action:
+                deps.approval_rule_learn(action, step.assigned_to, "ceo:preauth")
+                learned = " Đã ghi thành luật luôn duyệt cho lần sau."
+        record_autopilot_decision(
+            decision="approve_step", task_id=task.id, task_title=task.title,
+            detail=f"Duyệt bước '{step.title}' theo lệnh duyệt trước của CEO.{learned}",
+        )
+        decision = "approved"
+
     # v63 autopilot: a PENDING Lớp B gate on a non-opted-out task gets approved by the
     # secretary's standing delegation (CEO decision 2026-08-04). The approve goes
     # through the SAME store transition `mpm approve` uses (`transition_if_pending`),

@@ -47,4 +47,29 @@ describe('MessageRow', () => {
     // The asterisks survive precisely because this branch does not parse markdown.
     expect(container.textContent).toContain('**kẹt**')
   })
+
+  it('puts a why + what-next note under a failed step, and none under a started one', () => {
+    const { container } = row({
+      ...base, kind: 'step_status', status: 'failed', stepTitle: 'gửi mail',
+      body: { status: 'failed', step_title: 'gửi mail' },
+    })
+    const guide = container.querySelector('.chat-row-guide')
+    expect(guide).not.toBeNull()
+    expect(guide?.textContent).toContain('Vì sao:')
+    expect(guide?.textContent).toContain('Làm gì tiếp:')
+
+    const ok = row({
+      ...base, seq: 2, kind: 'step_status', status: 'started', stepTitle: 'gửi mail',
+      body: { status: 'started', step_title: 'gửi mail' },
+    })
+    expect(ok.container.querySelector('.chat-row-guide')).toBeNull()
+  })
+
+  it('explains a denied gateway action', () => {
+    const { container } = row({
+      ...base, kind: 'external_action',
+      body: { actor: 'assistant', tool: 'gmail', action_type: 'send', outcome: 'deny' },
+    })
+    expect(container.querySelector('.chat-row-guide')?.textContent).toContain('bị chặn')
+  })
 })

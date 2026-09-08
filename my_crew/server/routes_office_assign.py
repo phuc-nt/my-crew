@@ -90,6 +90,8 @@ def post_preview(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     pic_id = slots.get("pic_id", "")
+    from my_crew.server.assign_manifest import build_assign_manifest
+
     return {
         "preview_text": preview_text,
         "task_id": slots.get("task_id", ""),
@@ -102,6 +104,8 @@ def post_preview(
         # uses) — so the CEO sees a "diễn tập" badge BEFORE confirming, not after the
         # run silently produces no real send.
         "pic_dry_run": _pic_dry_run(pic_id),
+        # What the plan may do outside the company — the pre-authorization card.
+        "manifest": build_assign_manifest(slots.get("task_id", "")),
     }
 
 
@@ -124,16 +128,40 @@ def _pic_dry_run(pic_id: str) -> bool:
 @router.post("/confirm")
 def post_confirm(
     task_id: str = Body(..., embed=True), plan_hash: str = Body(..., embed=True),
+    preauth_scope: str = Body("", embed=True),
 ) -> dict:
     """Confirm the EXACT previewed plan (TOCTOU-proof — `confirm_plan` re-verifies the
-    hash; a stale/mutated draft reports cleanly instead of dispatching)."""
-    from my_crew.agent.ops_assign_team_task import run_assign_team_task
+    hash; a stale/mutated draft reports cleanly instead of dispatching).
 
+    `preauth_scope` is the CEO's standing answer for this task's external-action gates:
+    "" (decide each one), "once" (the ticker approves them for this task), "always"
+    (same, and each approved action is learned as a standing rule for the agent). It is
+    recorded only after the confirm succeeded — a stale draft never carries a policy."""
+    from my_crew.agent.ops_assign_team_task import run_assign_team_task
+    from my_crew.runtime.team_task_store import PREAUTH_SCOPES
+
+    if preauth_scope not in PREAUTH_SCOPES:
+        raise HTTPException(
+            status_code=400, detail=f"preauth_scope phải là một trong {PREAUTH_SCOPES}",
+        )
     try:
         text = run_assign_team_task({"task_id": task_id, "plan_hash": plan_hash})
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from None
-    return {"text": text}
+    if preauth_scope:
+        _record_preauth_scope(task_id, preauth_scope)
+    return {"text": text, "preauth_scope": preauth_scope}
+
+
+def _record_preauth_scope(task_id: str, scope: str) -> None:
+    from my_crew.runtime.team_task_paths import team_tasks_db_path
+    from my_crew.runtime.team_task_store import TeamTaskStore
+
+    store = TeamTaskStore(team_tasks_db_path())
+    try:
+        store.set_preauth_scope(task_id, scope)
+    finally:
+        store.close()
 
 
 @router.post("/cancel")

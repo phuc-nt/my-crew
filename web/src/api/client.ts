@@ -13,6 +13,7 @@ import { fetchCached, invalidateCached } from '../lib/api-cache'
 import type {
   AssignPreviewPayload,
   AssignStaffPayload,
+  PreauthScope,
   CaptureDetail,
   CapturesPayload,
   CoordinatorHealthPayload,
@@ -371,8 +372,12 @@ export const api = {
     request<StepArtifactPayload>(`/api/office/tasks/${taskId}/steps/${seq}/artifact`),
   getStepTranscript: (taskId: string, seq: number) =>
     request<StepTranscriptPayload>(`/api/office/tasks/${taskId}/steps/${seq}/transcript`),
-  assignConfirm: (taskId: string, planHash: string) =>
-    post<{ text: string }>('/api/office/assign/confirm', { task_id: taskId, plan_hash: planHash }),
+  // v94: `preauthScope` rides along so the coordinator can approve this task's gates
+  // ('once') or learn a standing rule from them ('always'); '' keeps the per-gate ask.
+  assignConfirm: (taskId: string, planHash: string, preauthScope: PreauthScope = '') =>
+    post<{ text: string; preauth_scope?: string }>('/api/office/assign/confirm', {
+      task_id: taskId, plan_hash: planHash, preauth_scope: preauthScope,
+    }),
   assignCancel: (taskId: string) =>
     post<{ ok: boolean }>('/api/office/assign/cancel', { task_id: taskId }),
   getStaffTemplates: () => request<StaffTemplatesPayload>('/api/staff-templates'),

@@ -148,6 +148,7 @@ def post_room_chat(room_id: str, message: str = Body(..., embed=True)) -> dict:
             raise HTTPException(status_code=400, detail=str(exc)) from None
         # Same "diễn tập" (dry-run) badge signal the office-screen /preview returns, so a
         # workroom-initiated assign shows it too rather than silently under-reporting.
+        from my_crew.server.assign_manifest import build_assign_manifest
         from my_crew.server.routes_office_assign import _pic_dry_run
 
         return {"intent": "new_task", "preview_text": preview_text,
@@ -155,7 +156,9 @@ def post_room_chat(room_id: str, message: str = Body(..., embed=True)) -> dict:
                 "pic_id": slots.get("pic_id", ""),
                 "pic_dry_run": _pic_dry_run(slots.get("pic_id", "")),
                 "auto_confirmed": bool(slots.get("auto_confirmed")),
-                "route_mode": slots.get("route_mode", "")}
+                "route_mode": slots.get("route_mode", ""),
+                # Same pre-authorization card as the office-screen preview.
+                "manifest": build_assign_manifest(slots.get("task_id", ""))}
 
     if intent == "adjust":
         tasks = _open_tasks_in_room(room_id)

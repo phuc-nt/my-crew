@@ -5,13 +5,15 @@
 //
 // `filterStaffForMention` is exported for unit tests (jsdom can't exercise the whole
 // composer against a live stream, but the mention matching is the logic that matters).
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api/client'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { DICT } from '../../i18n/dictionary'
 import { useLanguage } from '../../i18n/language-context'
-import type { AssignPreviewPayload, RoomChatPayload } from '../../types'
+import type { AssignPreviewPayload, PreauthScope, RoomChatPayload } from '../../types'
+import { canFlush, enqueue, shouldQueue } from './composer-queue'
+import { PreauthCard, scopeChoiceNeeded } from './preauth-card'
 
 export interface StaffOption {
   id: string
@@ -84,6 +86,11 @@ export function AssignComposer({ activeRoom = null, onTaskCreated, initialBrief 
   // v88 P5-B: the brief text as submitted, kept so "Sửa yêu cầu" can restore it to the
   // draft when the CEO wants to tweak the request instead of accepting the plan.
   const [lastBrief, setLastBrief] = useState('')
+  // v94: the CEO's approval posture for the previewed task — reset on every new preview
+  // so a choice made for one plan never silently carries over to the next.
+  const [preauthScope, setPreauthScope] = useState<PreauthScope>('')
+  // v94: follow-ups typed while a round-trip is in flight; flushed one at a time.
+  const [queued, setQueued] = useState<readonly string[]>([])
   const fetchedStaff = useRef(false)
 
   // Roster fetched once on first focus — cheap, and the list only changes when the
@@ -102,17 +109,25 @@ export function AssignComposer({ activeRoom = null, onTaskCreated, initialBrief 
     setBrief(`@${id} `)
   }
 
-  const submit = () => {
+  const submitText = (raw: string) => {
+    const text = raw.trim()
+    if (!text) return
     // A live preview must be confirmed or cancelled first — resubmitting over it
     // would orphan the previewed draft row (review m5).
     if (phase.kind === 'preview' || phase.kind === 'adjust-preview') return
-    if (!brief.trim() || phase.kind === 'previewing' || phase.kind === 'confirming') return
-    setLastBrief(brief.trim())
+    // v94: busy → park the text and clear the draft; the flush effect sends it later.
+    if (shouldQueue(phase.kind)) {
+      setQueued((q) => enqueue(q, text))
+      setBrief('')
+      return
+    }
+    setLastBrief(text)
+    setPreauthScope('')
     setPhase({ kind: 'previewing' })
     if (activeRoom) {
       // v16 chat-in-room: backend routes the message to question/adjust/new_task.
       api
-        .roomChat(activeRoom, brief.trim())
+        .roomChat(activeRoom, text)
         .then((data) => {
           if (data.intent === 'question') {
             setPhase({ kind: 'reply', text: data.reply ?? '' })
@@ -128,6 +143,7 @@ export function AssignComposer({ activeRoom = null, onTaskCreated, initialBrief 
               preview_text: data.preview_text ?? '', task_id: data.task_id ?? '',
               plan_hash: data.plan_hash ?? '', pic_id: data.pic_id ?? '',
               auto_confirmed: false, route_mode: data.route_mode ?? '',
+              manifest: data.manifest,
             } })
           }
         })
@@ -137,7 +153,7 @@ export function AssignComposer({ activeRoom = null, onTaskCreated, initialBrief 
       return
     }
     api
-      .assignPreview(brief.trim())
+      .assignPreview(text)
       .then((data) => {
         if (data.auto_confirmed) {
           setPhase({ kind: 'done', text: data.preview_text, auto: true })
@@ -151,6 +167,19 @@ export function AssignComposer({ activeRoom = null, onTaskCreated, initialBrief 
         setPhase({ kind: 'error', message: e instanceof Error ? e.message : t('assignComposer.assignFailed') }),
       )
   }
+
+  const submit = () => submitText(brief)
+
+  // v94: the composer is free again → send the oldest queued follow-up. Not while a
+  // preview waits for the CEO, and not after an error (see composer-queue.ts).
+  useEffect(() => {
+    if (!canFlush(phase.kind, queued)) return
+    const [next, ...rest] = queued
+    setQueued(rest)
+    submitText(next)
+    // submitText closes over the current phase; the deps that matter are the two below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase.kind, queued])
 
   const confirmAdjust = (data: RoomChatPayload) => {
     if (phase.kind !== 'adjust-preview' || !activeRoom) return
@@ -167,7 +196,12 @@ export function AssignComposer({ activeRoom = null, onTaskCreated, initialBrief 
     if (phase.kind !== 'preview') return // double-click guard (review m6)
     setPhase({ kind: 'confirming' })
     api
-      .assignConfirm(data.task_id, data.plan_hash)
+      .assignConfirm(
+        data.task_id, data.plan_hash,
+        // A scope is only meaningful when some step will hit a gate; otherwise the
+        // server would record an intent that can never apply.
+        scopeChoiceNeeded(data.manifest) ? preauthScope : '',
+      )
       .then((r) => {
         setPhase({ kind: 'done', text: r.text, auto: false })
         setBrief('')
@@ -227,6 +261,23 @@ export function AssignComposer({ activeRoom = null, onTaskCreated, initialBrief 
               : t('assignComposer.assign')}
         </Button>
       </div>
+      {queued.length > 0 && (
+        <ul className="office-composer-queue" aria-label={t('assignComposer.queuedLabel')}>
+          <li className="office-composer-queue-label muted">{t('assignComposer.queuedLabel')}</li>
+          {queued.map((q, i) => (
+            <li key={`${i}-${q}`} className="office-composer-queued">
+              <span>{q}</span>
+              <button
+                type="button"
+                aria-label={t('assignComposer.queuedRemove')}
+                onClick={() => setQueued((cur) => cur.filter((_, j) => j !== i))}
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       {mentions.length > 0 && (
         <ul className="office-composer-mentions" role="listbox">
           {/* v53: styled by container element selector (.office-composer-mentions button) — unify in a later pass */}
@@ -257,6 +308,12 @@ export function AssignComposer({ activeRoom = null, onTaskCreated, initialBrief 
             </Badge>
           )}
           <pre>{phase.data.preview_text}</pre>
+          {/* v94: what the steps may do + the CEO's approval posture, decided up front. */}
+          <PreauthCard
+            manifest={phase.data.manifest}
+            scope={preauthScope}
+            onScopeChange={setPreauthScope}
+          />
           {webSearchHintNeeded(phase.data.pic_id, staff, webSearchReady) && (
             <p className="office-composer-hint">{t('assignComposer.webSearchNoKey')}</p>
           )}

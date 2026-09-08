@@ -243,6 +243,14 @@ class CoordinatorDeps:
     approval_rule_record_use: Callable[[int, str], None] = (
         lambda _rule_id, _agent_id: None
     )
+    # approval_rule_learn(action, agent_id, created_by): persist a standing ALWAYS rule
+    # for `action` in that agent's ApprovalRuleStore. Called only after a pre-authorized
+    # gate (task.preauth_scope == "always") was actually approved by the ticker — the
+    # rule is learned from the real queued action, never guessed from the plan. Default
+    # no-op keeps non-wired callers byte-identical.
+    approval_rule_learn: Callable[[dict, str, str], None] = (
+        lambda _action, _agent_id, _created_by: None
+    )
     # v68 reflection: reflect(task, outcome, detail) -> None. Called once a task reaches a
     # terminal state (done or stalled) to distil a lesson about DELEGATING into the
     # coordinator's own memory. Hygiene, never the tick's fate — the real implementation
