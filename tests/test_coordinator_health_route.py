@@ -70,15 +70,16 @@ def test_container_platform_hint(monkeypatch, tmp_path):
     assert "docker" in body["hint"].lower() or "podman" in body["hint"].lower()
 
 
-def test_public_health_endpoint_source_still_returns_ok_only():
-    """The public /health liveness probe (app.py, registered on the MODULE-level `app`
-    after create_app() returns — not reachable via a fresh create_app() TestClient) must
-    stay {"ok": True}: this phase adds NO hint field there. Verified by reading the
-    handler's return value directly rather than over HTTP, since the module-level route
-    isn't present on a fresh app instance."""
-    import inspect
-
-    from my_crew.server import app as app_module
-
-    src = inspect.getsource(app_module.health)
-    assert 'return {"ok": True}' in src
+def test_public_health_endpoint_carries_no_coordinator_hint(monkeypatch):
+    """The public /health liveness probe must not leak the coordinator diagnosis: it
+    answers liveness + installed version only, never `reason`/`hint`/`alive`. Checked
+    over HTTP now that the route is registered inside create_app() (ahead of the SPA
+    catch-all) instead of on the module-level app."""
+    monkeypatch.setattr(
+        "my_crew.runtime.company.load_company",
+        lambda: Mock(coordinator_id=None),
+    )
+    body = _client().get("/health").json()
+    assert body["ok"] is True
+    assert isinstance(body["version"], str) and body["version"]
+    assert set(body) == {"ok", "version"}
