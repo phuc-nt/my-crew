@@ -1,6 +1,7 @@
 // The bell in the shell header: one place that answers "is anything waiting on me?"
 // without visiting every hub. Rows deep-link to the surface that resolves them; a
-// dismissed row stays hidden until its substance changes.
+// dismissed row stays hidden until its substance changes, a snoozed one until its
+// clock runs out.
 //
 // Rendered outside `.app-header-actions` on purpose — that group collapses behind ⋯ on
 // a phone, and the bell is the one control that must stay visible there.
@@ -8,11 +9,12 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Button } from '../../components/ui/button'
 import { useLanguage } from '../../i18n/language-context'
+import { SNOOZE_DAY_MS, SNOOZE_HOUR_MS } from './snooze'
 import { useAttentionItems } from './use-attention-items'
 
 export function AttentionCenter() {
   const { t } = useLanguage()
-  const { items, badge, hidden, dismiss, dismissAll } = useAttentionItems()
+  const { items, badge, hidden, snoozed, dismiss, dismissAll, snooze } = useAttentionItems()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -33,8 +35,13 @@ export function AttentionCenter() {
     }
   }, [open])
 
+  const snoozeOptions = [
+    { ms: SNOOZE_HOUR_MS, span: t('attention.snoozeHour') },
+    { ms: SNOOZE_DAY_MS, span: t('attention.snoozeDay') },
+  ]
+
   return (
-    <div className="attention" ref={ref}>
+    <div className="attention" ref={ref} data-walkthrough="bell">
       <button
         type="button"
         className="attention-bell"
@@ -79,19 +86,38 @@ export function AttentionCenter() {
                     <span className="attention-item-title">{item.title}</span>
                     {item.detail && <span className="attention-item-detail">{item.detail}</span>}
                   </Link>
-                  <button
-                    type="button"
-                    className="attention-dismiss"
-                    aria-label={t('attention.dismiss')}
-                    onClick={() => dismiss(item)}
-                  >
-                    ✕
-                  </button>
+                  <span className="attention-item-actions">
+                    {snoozeOptions.map((opt) => (
+                      <button
+                        key={opt.ms}
+                        type="button"
+                        className="attention-snooze"
+                        aria-label={t('attention.snoozeFor', { span: opt.span })}
+                        title={t('attention.snoozeFor', { span: opt.span })}
+                        onClick={() => snooze(item, opt.ms)}
+                      >
+                        {opt.span}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="attention-dismiss"
+                      aria-label={t('attention.dismiss')}
+                      onClick={() => dismiss(item)}
+                    >
+                      ✕
+                    </button>
+                  </span>
                 </li>
               ))}
             </ul>
           )}
           {hidden > 0 && <p className="attention-hidden">{t('attention.hiddenN', { n: hidden })}</p>}
+          {snoozed > 0 && (
+            <p className="attention-hidden" data-testid="attention-snoozed">
+              {t('attention.snoozedN', { n: snoozed })}
+            </p>
+          )}
         </div>
       ) : null}
     </div>

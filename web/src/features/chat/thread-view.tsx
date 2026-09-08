@@ -1,7 +1,7 @@
 // Center pane: one room's conversation. Subscribes to that room's SSE stream and folds
 // it through the pure reducer — this component owns scrolling and the read cursor, and
 // nothing else. Every display rule lives in chat-state.ts.
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLanguage } from '../../i18n/language-context'
 import { useOfficeStream } from '../../hooks/use-office-stream'
 import { BackgroundActivityDrawer } from './background-activity-drawer'
@@ -27,9 +27,11 @@ interface Props {
   title: string
   /** Called with the room's highest seq once rendered, so the badge can clear. */
   onRead: (roomId: string, seq: number) => void
+  /** v96: what an empty thread shows instead of the plain line (the overview's welcome). */
+  emptyContent?: ReactNode
 }
 
-export function ThreadView({ roomId, title, onRead }: Props) {
+export function ThreadView({ roomId, title, onRead, emptyContent }: Props) {
   const { t } = useLanguage()
   const coldTail = roomId === OVERVIEW_ROOM_ID ? OVERVIEW_COLD_TAIL : undefined
   const { messages, connected, errored } = useOfficeStream(roomId, coldTail)
@@ -76,7 +78,7 @@ export function ThreadView({ roomId, title, onRead }: Props) {
 
       <ul className="chat-thread-log" ref={listRef}>
         {thread.items.length === 0 ? (
-          <li className="chat-thread-empty">{t('chat.threadEmpty')}</li>
+          <li className="chat-thread-empty">{emptyContent ?? t('chat.threadEmpty')}</li>
         ) : (
           thread.items.map((item) => <MessageRow key={item.seq} item={item} />)
         )}

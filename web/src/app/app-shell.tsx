@@ -15,6 +15,7 @@ import { usePendingApprovals } from '../api/queries/use-approvals-queries'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { Button } from '../components/ui/button'
 import { AttentionCenter } from '../features/attention/attention-center'
+import { AppWalkthrough } from '../features/onboarding/app-walkthrough'
 import { CommandPalette } from '../features/palette/command-palette'
 import { SHORTCUTS_OPEN_EVENT, ShortcutsHelp } from '../features/palette/shortcuts-help'
 import type { UiKey } from '../i18n/dictionary'
@@ -68,6 +69,7 @@ export function AppShell() {
             variant="chip"
             title={t('shortcuts.button')}
             aria-label={t('shortcuts.button')}
+            data-walkthrough="shortcuts"
             onClick={() => window.dispatchEvent(new Event(SHORTCUTS_OPEN_EVENT))}
           >
             ⌨
@@ -80,7 +82,7 @@ export function AppShell() {
         <AttentionCenter />
         <ChromeOverflowMenu onLogout={() => void logout()} />
       </header>
-      <nav className="app-nav app-nav-primary">
+      <nav className="app-nav app-nav-primary" data-walkthrough="hubs">
         {HUBS.map((hub) => (
           <NavLink key={hub.to} to={hub.to}>
             {t(hub.labelKey)}
@@ -101,6 +103,8 @@ export function AppShell() {
           wherever the CEO happens to be. Renders null until opened. */}
       <CommandPalette />
       <ShortcutsHelp />
+      {/* v96: first-visit tour; renders null once seen. */}
+      <AppWalkthrough />
     </div>
   )
 }

@@ -5,7 +5,7 @@
 // single invalidation point.
 import { useMemo, useState } from 'react'
 import { useTaskBoard } from '../../../api/queries/use-work-queries'
-import { EmptyState } from '../../../components/ui/empty-state'
+import { PageWelcome } from '../../onboarding/page-welcome'
 import type { UiKey } from '../../../i18n/dictionary'
 import { useLanguage } from '../../../i18n/language-context'
 import type { TeamBoardLane } from '../../../types'
@@ -78,7 +78,7 @@ export function BoardView() {
       </div>
 
       {total === 0 ? (
-        <EmptyState>{t('board.empty')}</EmptyState>
+        <PageWelcome hub="work" />
       ) : (
         <div className="board-lanes">
           {shown.map((lane) => {

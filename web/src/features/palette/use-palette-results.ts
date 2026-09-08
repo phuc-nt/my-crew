@@ -1,15 +1,17 @@
-// The palette's three result sources, merged.
+// The palette's four result sources, merged.
 //
 // Navigation and commands are matched locally and appear instantly; history is a
 // debounced network call, so the list grows under the cursor rather than blocking on it.
 // That split is why the sources are merged here and not fetched together: an offline or
 // slow search must never delay the palette's ability to navigate.
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router'
 import { api } from '../../api/client'
 import { useWorkrooms } from '../../api/queries/use-office-queries'
 import type { UiKey } from '../../i18n/dictionary'
 import { useLanguage } from '../../i18n/language-context'
 import type { HistorySearchHit, OpsChatCommand } from '../../types'
+import { contextualCommands } from './contextual-commands'
 import { commandItems, fuzzyMatches, historyItems, type PaletteItem } from './palette-items'
 
 /** Below this the history call is not worth making — FTS5 on one character returns
@@ -33,6 +35,7 @@ export interface PaletteResults {
 
 export function usePaletteResults(query: string): PaletteResults {
   const { t } = useLanguage()
+  const { pathname } = useLocation()
   const [commands, setCommands] = useState<OpsChatCommand[]>([])
   const [hits, setHits] = useState<HistorySearchHit[]>([])
   const [searching, setSearching] = useState(false)
@@ -82,8 +85,13 @@ export function usePaletteResults(query: string): PaletteResults {
       label: t(n.key),
       to: n.to,
     }))
-    return [...nav, ...commandItems(commands, query), ...historyItems(hits, liveRooms)]
-  }, [query, commands, hits, liveRooms, t])
+    return [
+      ...contextualCommands(pathname, query, t),
+      ...nav,
+      ...commandItems(commands, query),
+      ...historyItems(hits, liveRooms),
+    ]
+  }, [pathname, query, commands, hits, liveRooms, t])
 
   return { items, searching }
 }

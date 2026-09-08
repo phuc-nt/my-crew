@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useLanguage } from '../../i18n/language-context'
 import type { UiKey } from '../../i18n/dictionary'
+import { WALKTHROUGH_OPEN_EVENT } from '../onboarding/walkthrough-state'
 
 export const SHORTCUTS_OPEN_EVENT = 'my-crew:shortcuts-help'
 
@@ -112,6 +113,16 @@ export function ShortcutsHelp() {
           </tbody>
         </table>
         <p className="muted">{t('shortcuts.hint')}</p>
+        <button
+          type="button"
+          className="shortcuts-walkthrough"
+          onClick={() => {
+            setOpen(false)
+            window.dispatchEvent(new Event(WALKTHROUGH_OPEN_EVENT))
+          }}
+        >
+          {t('walkthrough.reopen')}
+        </button>
       </div>
     </div>
   )

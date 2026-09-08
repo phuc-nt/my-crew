@@ -71,14 +71,18 @@ interface AssignComposerProps {
   onTaskCreated?: (taskId: string) => void
   // v88 P5-A: pre-fills the draft on mount — the task-detail page's "Giao lại việc
   // này" seeds the old task's brief + PIC mention here via router navigation state.
-  // Read once (mount only): a live prop change should not stomp on what the CEO is
-  // already typing.
+  // Read on mount and again whenever a NEW non-empty seed arrives (v96: the welcome
+  // card's example briefs). The router seed is cleared right after arrival, and that
+  // clearing never stomps on a draft: only a truthy seed is applied.
   initialBrief?: string
 }
 
 export function AssignComposer({ activeRoom = null, onTaskCreated, initialBrief }: AssignComposerProps) {
   const { t } = useLanguage()
   const [brief, setBrief] = useState(initialBrief ?? '')
+  useEffect(() => {
+    if (initialBrief) setBrief(initialBrief)
+  }, [initialBrief])
   const [staff, setStaff] = useState<StaffOption[]>([])
   // undefined until the roster payload lands — the hint only fires on an explicit false.
   const [webSearchReady, setWebSearchReady] = useState<boolean | undefined>(undefined)
@@ -232,7 +236,7 @@ export function AssignComposer({ activeRoom = null, onTaskCreated, initialBrief 
     // v55 layout B: `office-composer-bar` styles this as the screen's primary command bar
     // (it sits under the header now, not at the page bottom). The label names the action so
     // the bar reads as "giao việc", not a generic search field.
-    <div className="office-composer office-composer-bar">
+    <div className="office-composer office-composer-bar" data-walkthrough="composer">
       <span className="office-composer-label">
         {activeRoom ? t('assignComposer.labelRoom') : t('assignComposer.labelNew')}
       </span>

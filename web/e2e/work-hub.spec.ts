@@ -398,3 +398,15 @@ test('60. dải tổng quan điều hành trên /work đọc từ /api/control-p
   const queueBox = await page.locator('.work-approvals').boundingBox()
   expect(stripBox && queueBox && stripBox.y < queueBox.y).toBe(true)
 })
+
+// v96: an empty board is a welcome card whose example briefs seed the chat composer.
+test('69. bảng việc trống hiện thẻ chào; chọn yêu cầu mẫu thì sang /chat với ô soạn đã điền', async ({ page }) => {
+  await mockOfficeApi(page)
+  await page.goto('/work')
+  const welcome = page.getByTestId('page-welcome')
+  await expect(welcome).toHaveAttribute('data-hub', 'work')
+  await expect(welcome).toContainText(DICT.vi['welcome.work.title'])
+  await welcome.getByRole('button', { name: DICT.vi['welcome.brief.posts'] }).click()
+  await expect(page).toHaveURL(/\/chat$/)
+  await expect(page.locator('.office-composer input[type="text"]')).toHaveValue(DICT.vi['welcome.brief.posts'])
+})

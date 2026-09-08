@@ -10,6 +10,7 @@
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import type {
+  AgentSummary,
   ControlPlaneOverviewPayload,
   CaptureRow,
   ConnectionCard,
@@ -61,6 +62,11 @@ export interface OfficeApiMockOptions {
   controlPlaneOverview?: ControlPlaneOverviewPayload
   /** v95: successive `/health` versions, one per poll; the last one repeats forever. */
   healthVersions?: string[]
+  /** v96: leave the first-visit walkthrough enabled. Off by default so every other spec
+   *  sees the app as a returning user (the flag is planted in localStorage before load). */
+  walkthrough?: boolean
+  /** v96: the roster behind `/api/agents` (default: the office fixture). */
+  agents?: AgentSummary[]
   /** Staff templates behind the team hub's hire panel (default: one office role). */
   staffTemplates?: StaffTemplate[]
   /** Profiles on disk that fell out of the registry — the recovery list (default: none). */
@@ -156,6 +162,15 @@ export async function mockOfficeApi(
   page: Page,
   opts: OfficeApiMockOptions = {},
 ): Promise<OfficeApiMock> {
+  if (!opts.walkthrough) {
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem('my-crew.walkthrough.done', '1')
+      } catch {
+        // No storage → the app itself never shows the walkthrough either.
+      }
+    })
+  }
   const streams = new Map<string, OfficeMessage[]>(Object.entries(opts.roomEvents ?? {}))
   if (!streams.has('office')) streams.set('office', makeOverviewEvents())
   // Flipped by any retry/accept/drop/cancel POST; read by the room-artifacts route.
@@ -212,7 +227,7 @@ export async function mockOfficeApi(
       }
       return json(company)
     }
-    if (pathname === '/api/agents') return json(agentsFixture)
+    if (pathname === '/api/agents') return json(opts.agents ?? agentsFixture)
     // v91 agent-config surfaces. `/band` in particular was the one route the fixture
     // never mocked, which showed up as an "[mock-api] UNMOCKED" line on every agent page.
     if (pathname === '/api/agents/model-catalog')

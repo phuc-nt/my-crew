@@ -9,9 +9,9 @@ import {
   useSetAgentEnabled,
   useTemplateStatus,
 } from '../../api/queries/use-team-queries'
-import { EmptyState } from '../../components/ui/empty-state'
 import { useLanguage } from '../../i18n/language-context'
 import type { AgentSummary, TemplateUpgradePreview } from '../../types'
+import { PageWelcome } from '../onboarding/page-welcome'
 import { RosterRow } from './roster-row'
 import { DeleteAgentDialog, TemplateUpgradeDialog } from './team-dialogs'
 
@@ -107,7 +107,7 @@ export function RosterTable({
 
   if (isLoading) return <p>{t('common.loading')}</p>
   if (isError) return <p className="error">{t('team.loadAgentsFailed')}</p>
-  if (!agents || agents.length === 0) return <EmptyState>{t('team.empty')}</EmptyState>
+  if (!agents || agents.length === 0) return <PageWelcome hub="team" />
 
   return (
     <>

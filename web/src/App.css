@@ -232,6 +232,11 @@ input, textarea, select { font-size: var(--fs-body); }
 .attention-dismiss:hover { color: var(--color-text); }
 .attention-empty, .attention-hidden { margin: 0; color: var(--color-muted); font-size: var(--fs-sm); }
 .attention-hidden { margin-top: var(--space-2); }
+/* v96: snooze (1h / 1d) sits next to dismiss; small, muted, only louder on hover. */
+.attention-item-actions { display: flex; gap: 0.15rem; align-items: center; flex: none; }
+.attention-snooze { background: none; border: 1px solid transparent; cursor: pointer; color: var(--color-muted);
+  font-size: var(--fs-xs); padding: 0 0.3rem; border-radius: var(--radius-sm); }
+.attention-snooze:hover { color: var(--color-text); border-color: var(--color-border); }
 
 /* Shortcuts help card (`?`). */
 .shortcuts-backdrop { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center;
@@ -245,6 +250,29 @@ input, textarea, select { font-size: var(--fs-body); }
 .shortcuts-table kbd { display: inline-block; padding: 0.1rem 0.4rem; font-family: inherit; font-size: var(--fs-xs);
   background: var(--color-surface-2); border: 1px solid var(--color-border-strong); border-bottom-width: 2px; border-radius: 4px; }
 .shortcuts-modal .muted { margin: var(--space-3) 0 0; }
+.shortcuts-walkthrough { margin-top: var(--space-3); background: none; border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill); padding: 0.25rem 0.7rem; font-size: var(--fs-sm); cursor: pointer; color: var(--color-text); }
+.shortcuts-walkthrough:hover { background: var(--color-surface-2); }
+
+/* v96: first-visit walkthrough — a corner card under the shortcuts backdrop, plus the
+   outline it paints on the element each step talks about. */
+.walkthrough { position: fixed; right: var(--space-4); bottom: var(--space-4); z-index: 65; width: min(22rem, calc(100vw - 2 * var(--space-4)));
+  padding: var(--space-4); background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius); box-shadow: var(--shadow-md, var(--shadow-sm)); }
+.walkthrough-progress { margin: 0 0 var(--space-1); font-size: var(--fs-xs); }
+.walkthrough-heading { margin: 0 0 var(--space-2); font-size: var(--fs-md, 1rem); }
+.walkthrough-body { margin: 0 0 var(--space-3); font-size: var(--fs-sm); line-height: 1.45; }
+.walkthrough-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+.is-walkthrough-anchor { outline: 2px solid var(--color-accent); outline-offset: 3px; border-radius: var(--radius-sm); }
+
+/* v96: per-hub welcome card — the empty state that says what fills the page. */
+.page-welcome { max-width: 36rem; padding: var(--space-4); border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius); background: var(--color-surface); }
+.page-welcome-title { margin: 0 0 var(--space-2); }
+.page-welcome-body { margin: 0 0 var(--space-3); color: var(--color-muted); font-size: var(--fs-sm); }
+.page-welcome-briefs { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.page-welcome-brief { text-align: left; white-space: normal; }
+.chat-thread-empty .page-welcome { margin: var(--space-2) 0; }
 
 /* Theme switcher — segmented control (v10 M24). */
 .theme-toggle { display: inline-flex; border: 1px solid var(--color-border-strong); border-radius: var(--radius-pill); overflow: hidden; }
@@ -1061,8 +1089,16 @@ input, textarea, select { font-size: var(--fs-body); }
    Three panes on desktop (list · thread+composer · what is waiting on the CEO). Same
    full-height posture as the office cockpit: the page never scrolls, each zone scrolls
    internally, so the composer is always on screen. */
-.chat-hub { display: grid; grid-template-columns: 280px minmax(0, 1fr) 300px;
+.chat-hub { display: grid; position: relative;
+  grid-template-columns: var(--chat-list-w, 280px) minmax(0, 1fr) var(--chat-pending-w, 300px);
   gap: var(--space-3); align-items: start; }
+/* v96: drag handles sit over the grid gaps; the column widths are the two custom
+   properties above, persisted by the chat page. Keyboard: arrows move 16px. */
+.chat-resizer { position: absolute; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 5; touch-action: none;
+  border-radius: 4px; background: transparent; }
+.chat-resizer:hover, .chat-resizer:focus-visible, .chat-resizer.is-dragging { background: var(--color-accent); opacity: 0.35; outline: none; }
+.chat-resizer-list { left: calc(var(--chat-list-w, 280px) + (var(--space-3) - 8px) / 2); }
+.chat-resizer-pending { right: calc(var(--chat-pending-w, 300px) + (var(--space-3) - 8px) / 2); }
 .chat-conversations { min-width: 0; }
 .chat-conversation-list { list-style: none; margin: 0; padding: 0;
   display: flex; flex-direction: column; gap: var(--space-1); }
@@ -1306,12 +1342,14 @@ input, textarea, select { font-size: var(--fs-body); }
 /* Below 1100px the pending column would squeeze the thread; it moves under it and the
    whole hub becomes one column at 900. */
 @media (max-width: 1100px) {
-  .chat-hub { grid-template-columns: 280px minmax(0, 1fr); }
+  .chat-hub { grid-template-columns: var(--chat-list-w, 280px) minmax(0, 1fr); }
   .chat-pending { grid-column: 1 / -1; }
+  .chat-resizer-pending { display: none; }
 }
 
 @media (max-width: 900px) {
   .chat-hub { grid-template-columns: minmax(0, 1fr); }
+  .chat-resizer { display: none; }
   .chat-conversation-list { flex-direction: row; overflow-x: auto; }
 }
 
@@ -1595,6 +1633,8 @@ input, textarea, select { font-size: var(--fs-body); }
   font-size: var(--fs-sm);
   color: var(--color-muted);
 }
+/* v96: "here" rows — what this page can do — lead the list and carry an accent hint. */
+.palette-item.is-context .palette-item-hint { color: var(--color-accent); font-weight: 600; }
 
 /* Quick-assign dialog on the office deck. A backdrop rather than the inspector's corner
    card: giao việc is a modal act — it wants the whole screen's attention and returns the

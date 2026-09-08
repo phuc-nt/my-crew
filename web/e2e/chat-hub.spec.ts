@@ -318,3 +318,76 @@ test('64. chip nguồn tham khảo dưới kết quả bước trong ngăn kết
   await expect(chips.nth(1)).toHaveText('vnexpress.net')
   await expect(chips.nth(1)).toHaveAttribute('rel', 'noopener noreferrer')
 })
+
+// v96: the list column is draggable. Measured, because the width is a CSS custom
+// property the page sets from localStorage — the number is the only proof it works.
+test('67. kéo tay cầm đổi cỡ cột danh sách hội thoại, cỡ giữ qua reload', async ({ page }) => {
+  await mockOfficeApi(page)
+  await page.goto('/chat')
+  const list = page.locator('.chat-conversations')
+  await expect(list).toBeVisible()
+  const before = (await list.boundingBox())!.width
+  expect(Math.round(before)).toBe(280)
+
+  const handle = page.getByTestId('chat-resizer-list')
+  const box = (await handle.boundingBox())!
+  const x = box.x + box.width / 2
+  const y = box.y + Math.min(box.height / 2, 200)
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x + 60, y, { steps: 4 })
+  await page.mouse.move(x + 100, y, { steps: 4 })
+  await page.mouse.up()
+  await expect.poll(async () => Math.round((await list.boundingBox())!.width)).toBe(380)
+  await expect(handle).toHaveAttribute('aria-valuenow', '380')
+
+  await page.reload()
+  await expect(list).toBeVisible()
+  await expect.poll(async () => Math.round((await list.boundingBox())!.width)).toBe(380)
+
+  // Keyboard: one arrow step is 16px, and the handle clamps at its maximum.
+  await handle.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(handle).toHaveAttribute('aria-valuenow', '396')
+})
+
+// v96: the palette leads with what this page can do. On /work that is its four tabs.
+test('68. bảng lệnh mở đầu bằng lệnh của trang đang đứng; chọn tab thì URL đổi', async ({ page }) => {
+  await mockOfficeApi(page)
+  await page.goto('/work')
+  await expect(page.locator('.app-nav-primary')).toBeVisible()
+  await page.keyboard.press('Meta+k')
+  const palette = page.getByRole('dialog', { name: DICT.vi['palette.title'] })
+  await expect(palette).toBeVisible()
+  const rows = palette.locator('.palette-item')
+  // Context rows come first, then the five hubs.
+  await expect(rows.first()).toHaveClass(/is-context/)
+  await expect(rows.first()).toContainText(DICT.vi['palette.here'])
+  await expect(palette.locator('.palette-item.is-context')).toHaveCount(5)
+  await expect(palette.locator('.palette-item.is-nav')).toHaveCount(5)
+
+  await page.locator('.palette-input').fill(DICT.vi['workHub.tabOutputs'])
+  await palette.locator('.palette-item.is-context').first().click()
+  await expect(page).toHaveURL(/\/work\?tab=outputs$/)
+  await expect(palette).toHaveCount(0)
+
+  // On a task room the palette also offers the task's detail page.
+  await page.goto(`/chat/${ROOM}`)
+  await expect(page.locator('.chat-thread')).toBeVisible()
+  await page.keyboard.press('Meta+k')
+  await expect(palette.locator('.palette-item.is-context', { hasText: DICT.vi['palette.ctx.taskDetail'] })).toHaveCount(1)
+  await palette.locator('.palette-item.is-context', { hasText: DICT.vi['palette.ctx.taskDetail'] }).click()
+  await expect(page).toHaveURL(new RegExp(`/work/task/${ROOM}$`))
+})
+
+// v96: the overview's empty thread is the chat welcome; its example brief fills the
+// composer in place (no navigation).
+test('69. tổng quan trống hiện thẻ chào, chọn yêu cầu mẫu thì điền thẳng ô soạn', async ({ page }) => {
+  await mockOfficeApi(page, { roomEvents: { office: [] } })
+  await page.goto('/chat')
+  const welcome = page.getByTestId('page-welcome')
+  await expect(welcome).toHaveAttribute('data-hub', 'chat')
+  await welcome.getByRole('button', { name: DICT.vi['welcome.brief.report'] }).click()
+  await expect(page).toHaveURL(/\/chat$/)
+  await expect(page.locator('.office-composer input[type="text"]')).toHaveValue(DICT.vi['welcome.brief.report'])
+})

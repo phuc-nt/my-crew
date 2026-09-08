@@ -153,3 +153,16 @@ test('26. đổi mức tin cậy và bật diễn tập ghi đúng payload rồi
   // The agent page is where the fixture gap lived; assert it now serves everything.
   await expectNoUnmockedRoutes(mock)
 })
+
+// v96: an empty roster is a welcome card, and `?hire=1` lands with the hire panel open.
+test('70. roster trống hiện thẻ chào; nút tuyển mở thẳng bảng tuyển qua ?hire=1', async ({ page }) => {
+  await mockOfficeApi(page, { agents: [] })
+  await page.goto('/team')
+  const welcome = page.getByTestId('page-welcome')
+  await expect(welcome).toHaveAttribute('data-hub', 'team')
+  await expect(page.getByTestId('team-hire')).toHaveCount(0)
+  await welcome.getByRole('button', { name: DICT.vi['welcome.team.hire'] }).click()
+  await expect(page).toHaveURL(/\/team\?hire=1$/)
+  await expect(page.getByTestId('team-hire')).toBeVisible()
+  await expect(page.locator('.staff-template-grid')).toBeVisible()
+})

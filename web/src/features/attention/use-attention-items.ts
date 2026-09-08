@@ -2,7 +2,7 @@
 // already subscribes to (approvals, clarify, board, budget, alerts, template status,
 // coordinator health), so mounting this in the shell adds no new polling: the SSE
 // bridge and the existing staleTimes keep the list current.
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePendingApprovals } from '../../api/queries/use-approvals-queries'
 import { usePendingClarify } from '../../api/queries/use-clarify-queries'
 import { useCoordinatorHealth, useFleetBudget } from '../../api/queries/use-system-queries'
@@ -17,16 +17,28 @@ import {
   type AttentionItem,
   type DismissedMap,
 } from './attention-items'
+import {
+  isSnoozed,
+  nextSnoozeExpiry,
+  readSnoozed,
+  withSnooze,
+  writeSnoozed,
+  type SnoozedMap,
+} from './snooze'
 
 export interface AttentionState {
-  /** Visible (not dismissed) items, most severe first. */
+  /** Visible (neither dismissed nor snoozed) items, most severe first. */
   items: AttentionItem[]
   /** Bell badge: errors + warnings. Info rows never count. */
   badge: number
   /** How many current items are hidden by a dismissal. */
   hidden: number
+  /** How many current items are hidden by a running snooze. */
+  snoozed: number
   dismiss: (item: AttentionItem) => void
   dismissAll: () => void
+  /** v96: hide the row until `durationMs` from now; it comes back on its own. */
+  snooze: (item: AttentionItem, durationMs: number) => void
 }
 
 export function useAttentionItems(): AttentionState {
@@ -39,6 +51,17 @@ export function useAttentionItems(): AttentionState {
   const { data: alerts } = useTeamAlerts()
   const { data: templates } = useTemplateStatus()
   const [dismissed, setDismissed] = useState<DismissedMap>(readDismissed)
+  const [snoozedMap, setSnoozedMap] = useState<SnoozedMap>(() => readSnoozed())
+  // The clock the snooze filter reads. Bumped by a timer armed for the earliest
+  // deadline, so a snoozed row reappears without a reload and without polling.
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const next = nextSnoozeExpiry(snoozedMap, now)
+    if (next === null) return
+    const timer = setTimeout(() => setNow(Date.now()), Math.max(0, next - now) + 50)
+    return () => clearTimeout(timer)
+  }, [snoozedMap, now])
 
   const all = useMemo(
     () =>
@@ -57,7 +80,17 @@ export function useAttentionItems(): AttentionState {
     [approvals, clarify, board, budget, coordinator, alerts, templates, t],
   )
 
-  const items = useMemo(() => all.filter((i) => !isDismissed(i, dismissed)), [all, dismissed])
+  const { items, hidden, snoozed } = useMemo(() => {
+    const visible: AttentionItem[] = []
+    let hiddenCount = 0
+    let snoozedCount = 0
+    for (const item of all) {
+      if (isDismissed(item, dismissed)) hiddenCount += 1
+      else if (isSnoozed(item, snoozedMap, now)) snoozedCount += 1
+      else visible.push(item)
+    }
+    return { items: visible, hidden: hiddenCount, snoozed: snoozedCount }
+  }, [all, dismissed, snoozedMap, now])
 
   const persist = useCallback((next: DismissedMap) => {
     setDismissed(next)
@@ -77,11 +110,24 @@ export function useAttentionItems(): AttentionState {
     persist(next)
   }, [all, persist])
 
+  const snooze = useCallback(
+    (item: AttentionItem, durationMs: number) => {
+      const at = Date.now()
+      const next = withSnooze(snoozedMap, item, durationMs, at)
+      setSnoozedMap(next)
+      setNow(at)
+      writeSnoozed(next)
+    },
+    [snoozedMap],
+  )
+
   return {
     items,
     badge: items.filter((i) => i.severity !== 'info').length,
-    hidden: all.length - items.length,
+    hidden,
+    snoozed,
     dismiss,
     dismissAll,
+    snooze,
   }
 }

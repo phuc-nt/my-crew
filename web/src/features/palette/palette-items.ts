@@ -4,6 +4,7 @@
 // rule, so the rules live here where they are testable against real strings rather than
 // buried in the component's render.
 //
+//   - context     — v96: what belongs to the hub the CEO is standing in, listed first
 //   - navigation  — a fixed list, matched locally, always available offline
 //   - command     — the ops catalog (30 entries, fetched once); picking one seeds the
 //                   assistant conversation rather than executing anything, because an
@@ -12,7 +13,7 @@
 //                   happened server-side so these are never re-filtered here
 import type { HistorySearchHit, OpsChatCommand } from '../../types'
 
-export type PaletteKind = 'nav' | 'command' | 'history'
+export type PaletteKind = 'context' | 'nav' | 'command' | 'history'
 
 export interface PaletteItem {
   kind: PaletteKind

@@ -167,3 +167,77 @@ test('61. banner "bản mới đã cài" hiện khi /health đổi version giữ
   await page.clock.fastForward(61_000)
   await expect(page.getByTestId('update-banner')).toHaveCount(0)
 })
+
+// v96: the first-visit walkthrough. Real browser because the "seen" flag lives in
+// localStorage and the highlight lands on elements the shell renders — a reload is the
+// only honest probe that the tour stays away once finished.
+test('65. walkthrough lần đầu: 4 bước, xong thì nhớ qua reload, mở lại được từ thẻ phím tắt', async ({ page }) => {
+  await mockOfficeApi(page, { walkthrough: true })
+  await page.goto('/chat')
+  const card = page.getByTestId('walkthrough')
+  await expect(card).toBeVisible()
+  await expect(card).toHaveAttribute('data-step', 'hubs')
+  await expect(card).toContainText(DICT.vi['walkthrough.stepOf'].replace('{n}', '1').replace('{total}', '4'))
+  await expect(page.locator('.app-nav-primary')).toHaveClass(/is-walkthrough-anchor/)
+
+  await card.getByRole('button', { name: DICT.vi['walkthrough.next'] }).click()
+  await expect(card).toHaveAttribute('data-step', 'composer')
+  await expect(page.locator('.office-composer')).toHaveClass(/is-walkthrough-anchor/)
+  await expect(page.locator('.app-nav-primary')).not.toHaveClass(/is-walkthrough-anchor/)
+  await card.getByRole('button', { name: DICT.vi['walkthrough.next'] }).click()
+  await expect(card).toHaveAttribute('data-step', 'bell')
+  await card.getByRole('button', { name: DICT.vi['walkthrough.next'] }).click()
+  await expect(card).toHaveAttribute('data-step', 'palette')
+  await expect(card.getByRole('button', { name: DICT.vi['walkthrough.next'] })).toHaveCount(0)
+  await card.getByRole('button', { name: DICT.vi['walkthrough.done'] }).click()
+  await expect(card).toHaveCount(0)
+
+  await page.reload()
+  await expect(page.locator('.app-nav-primary')).toBeVisible()
+  await expect(page.getByTestId('walkthrough')).toHaveCount(0)
+
+  // Replay lives in the shortcuts card; it closes that card and restarts at step one.
+  await page.getByRole('button', { name: DICT.vi['shortcuts.button'] }).click()
+  await page.getByRole('button', { name: DICT.vi['walkthrough.reopen'] }).click()
+  await expect(page.getByTestId('shortcuts-help')).toHaveCount(0)
+  await expect(page.getByTestId('walkthrough')).toHaveAttribute('data-step', 'hubs')
+  await page.getByRole('button', { name: DICT.vi['walkthrough.skip'] }).click()
+  await expect(page.getByTestId('walkthrough')).toHaveCount(0)
+})
+
+// v96: snooze is a dismissal with a deadline. The deadline is real wall-clock time, so
+// the "comes back" half rewrites the stored deadline into the past and reloads.
+test('66. tạm ẩn 1 giờ: mất khỏi badge, giữ qua reload, hết hạn thì hiện lại', async ({ page }) => {
+  await mockOfficeApi(page, {
+    teamAlerts: [
+      { kind: 'failing', agent_id: 'hr', message: 'lỗi 3 lần', severity: 'high' },
+      { kind: 'deny_spike', agent_id: 'content', message: 'từ chối 4 lần', severity: 'warn' },
+    ],
+  })
+  await page.goto('/chat')
+  await expect(page.getByTestId('attention-badge')).toHaveText('2')
+  await page.getByRole('button', { name: DICT.vi['attention.bellLabel'].replace('{n}', '2') }).click()
+  const panel = page.getByTestId('attention-panel')
+  const hourLabel = DICT.vi['attention.snoozeFor'].replace('{span}', DICT.vi['attention.snoozeHour'])
+  await panel.locator('.attention-item').nth(0).getByRole('button', { name: hourLabel }).click()
+  await expect(page.getByTestId('attention-badge')).toHaveText('1')
+  await expect(page.getByTestId('attention-snoozed')).toHaveText(
+    DICT.vi['attention.snoozedN'].replace('{n}', '1'),
+  )
+  // Snoozed is not dismissed: the dismissed line stays absent.
+  await expect(panel.getByText(DICT.vi['attention.hiddenN'].replace('{n}', '1'))).toHaveCount(0)
+
+  await page.reload()
+  await expect(page.getByTestId('attention-badge')).toHaveText('1')
+
+  // Expire the deadline: the row is back and the store is pruned.
+  await page.evaluate(() => {
+    const raw = localStorage.getItem('my-crew.attention.snoozed') ?? '{}'
+    const map = JSON.parse(raw) as Record<string, { fingerprint: string; until: number }>
+    for (const entry of Object.values(map)) entry.until = Date.now() - 1000
+    localStorage.setItem('my-crew.attention.snoozed', JSON.stringify(map))
+  })
+  await page.reload()
+  await expect(page.getByTestId('attention-badge')).toHaveText('2')
+  await expect(page.getByTestId('attention-snoozed')).toHaveCount(0)
+})

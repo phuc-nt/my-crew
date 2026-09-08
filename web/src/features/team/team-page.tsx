@@ -2,8 +2,8 @@
 // exists, pause/resume/run/remove them, and add new ones. Creating is an inline panel
 // rather than a separate route, which is what makes "template → agent" fit in three
 // clicks (open panel → Tạo ngay → xác nhận) instead of a multi-page wizard.
-import { Suspense, lazy, useState } from 'react'
-import { Link } from 'react-router'
+import { Suspense, lazy, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router'
 import { useCompany, useTeamAlerts } from '../../api/queries/use-team-queries'
 import { IntegrationHealthPanel } from '../../components/IntegrationHealthPanel'
 import { Button } from '../../components/ui/button'
@@ -20,7 +20,14 @@ export function TeamPage() {
   const { t } = useLanguage()
   const { data: company } = useCompany()
   const { data: alertsPayload } = useTeamAlerts()
-  const [createOpen, setCreateOpen] = useState(false)
+  // v96: `?hire=1` (palette "here" row, welcome card) opens the panel — on first paint
+  // and again when the query arrives while this page is already mounted.
+  const [params] = useSearchParams()
+  const hireRequested = params.get('hire') === '1'
+  const [createOpen, setCreateOpen] = useState(hireRequested)
+  useEffect(() => {
+    if (hireRequested) setCreateOpen(true)
+  }, [hireRequested])
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
 

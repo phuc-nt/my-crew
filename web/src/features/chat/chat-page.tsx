@@ -8,11 +8,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
 import { useWorkrooms } from '../../api/queries/use-office-queries'
 import { useLanguage } from '../../i18n/language-context'
+import { PageWelcome } from '../onboarding/page-welcome'
 import { AssignComposer } from '../shared/assign-composer'
 import { OVERVIEW_ROOM_ID } from './chat-state'
 import { ConversationList } from './conversation-list'
 import { AssistantThread } from './assistant/assistant-thread'
 import { PendingPane } from './pending/pending-pane'
+import { PaneResizer, usePaneWidths } from './resizable-panes.tsx'
 import {
   ASSISTANT_CONVERSATION_ID,
   buildConversations,
@@ -40,6 +42,11 @@ export function ChatPage() {
     if (assignSeed) navigate(location.pathname, { replace: true, state: null })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on arrival
   }, [])
+  // v96: the welcome card's example brief seeds the composer in place — same prop as
+  // the router seed, so the composer has one way to receive a draft.
+  const [pickedSeed, setPickedSeed] = useState<string | undefined>(undefined)
+  // v96: draggable side columns; the widths ride on the grid as custom properties.
+  const panes = usePaneWidths()
   // Lazily read once: localStorage is synchronous and this is the pane's first paint.
   const [cursors, setCursors] = useState<ReadCursors>(() => loadReadCursors())
 
@@ -74,13 +81,14 @@ export function ChatPage() {
   const showsThread = roomId != null
 
   return (
-    <div className={`chat-hub${showsThread ? ' shows-thread' : ' shows-list'}`}>
+    <div className={`chat-hub${showsThread ? ' shows-thread' : ' shows-list'}`} style={panes.style}>
       <ConversationList
         conversations={conversations}
         activeId={activeId}
         onSelect={onSelect}
         loading={isLoading}
       />
+      <PaneResizer pane="list" width={panes.widths.list} onResize={panes.setWidth} />
 
       <div className="chat-main">
         <button
@@ -93,16 +101,26 @@ export function ChatPage() {
         {isAssistant ? (
           <AssistantThread title={title} />
         ) : (
-          <ThreadView roomId={activeId} title={title} onRead={onRead} />
+          <ThreadView
+            roomId={activeId}
+            title={title}
+            onRead={onRead}
+            emptyContent={
+              activeId === OVERVIEW_ROOM_ID ? (
+                <PageWelcome hub="chat" onPick={setPickedSeed} />
+              ) : undefined
+            }
+          />
         )}
 
         {!isAssistant ? (
           <AssignComposer
             activeRoom={activeId === OVERVIEW_ROOM_ID ? null : activeId}
-            initialBrief={activeId === OVERVIEW_ROOM_ID ? assignSeed : undefined}
+            initialBrief={activeId === OVERVIEW_ROOM_ID ? (pickedSeed ?? assignSeed) : undefined}
           />
         ) : null}
       </div>
+      <PaneResizer pane="pending" width={panes.widths.pending} onResize={panes.setWidth} />
 
       {/* Fleet-wide, not room-scoped: what blocks an agent needs the CEO's attention
           whichever conversation happens to be open. */}
