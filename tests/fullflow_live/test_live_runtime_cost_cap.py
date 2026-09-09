@@ -32,6 +32,7 @@ from __future__ import annotations
 import pytest
 
 from tests.fullflow_live.topology import (
+    SETTLE_TIMEOUT_S,
     boot,
     seed_home,
     step_texts,
@@ -144,7 +145,7 @@ def _run(fleet, journey_budget):
     task_id = body.get("task_id")
     assert task_id, f"delegate returned no task_id: {body!r}"
 
-    status = wait_until_settled(fleet, task_id, timeout_s=900)
+    status = wait_until_settled(fleet, task_id, timeout_s=SETTLE_TIMEOUT_S)
     journey_budget.note_cost(
         (status.get("cost") or {}).get("total_cost_usd") or 0.0, status
     )

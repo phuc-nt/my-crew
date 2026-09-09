@@ -25,6 +25,7 @@ import time
 import pytest
 
 from tests.fullflow_live.topology import (
+    DELEGATE_TIMEOUT_S,
     boot,
     is_settled,
     poll_until,
@@ -46,7 +47,8 @@ def test_j5_work_survives_a_hard_kill_and_the_next_fleet_finishes_it(home, live_
     task_id = None
     try:
         code, body = first.post(
-            "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True}, timeout=180
+            "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True},
+            timeout=DELEGATE_TIMEOUT_S,
         )
         assert code == 200, f"delegate failed {code}: {body!r}"
         task_id = body.get("task_id")

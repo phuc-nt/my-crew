@@ -45,7 +45,13 @@ import pytest
 import yaml
 
 from tests.fullflow.cast import ADMIN_ID, COORDINATOR_ID, WORKERS
-from tests.fullflow_live.topology import boot, poll_until, seed_home, task_status
+from tests.fullflow_live.topology import (
+    DELEGATE_TIMEOUT_S,
+    boot,
+    poll_until,
+    seed_home,
+    task_status,
+)
 
 #: Multi-step on purpose. The revocation has to land while work is still PENDING, so the
 #: brief must be big enough that not everything dispatches on the first tick.
@@ -188,7 +194,7 @@ def fleet(tmp_path, live_api_key):
 
 def test_x4_a_revoked_assignee_is_refused_at_dispatch_not_spawned(fleet, journey_budget):
     code, body = fleet.post(
-        "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True}, timeout=180
+        "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True}, timeout=DELEGATE_TIMEOUT_S
     )
     assert code == 200, f"delegate failed {code}: {body!r}"
     task_id = body.get("task_id")
@@ -289,7 +295,7 @@ def test_x4b_an_unrevoked_fleet_dispatches_the_same_work(fleet, journey_budget):
     what the fleet ultimately produces is the journeys' subject, not this one's.
     """
     code, body = fleet.post(
-        "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True}, timeout=180
+        "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True}, timeout=DELEGATE_TIMEOUT_S
     )
     assert code == 200, f"delegate failed {code}: {body!r}"
     task_id = body["task_id"]

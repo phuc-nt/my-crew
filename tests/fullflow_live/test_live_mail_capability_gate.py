@@ -43,7 +43,13 @@ import sqlite3
 import pytest
 
 from tests.fullflow.cast import WORKERS
-from tests.fullflow_live.topology import boot, seed_home, wait_until_settled
+from tests.fullflow_live.topology import (
+    DELEGATE_TIMEOUT_S,
+    SETTLE_TIMEOUT_S,
+    boot,
+    seed_home,
+    wait_until_settled,
+)
 
 #: The agent granted mailbox access in the M2 fleet. `secretary` on purpose: it is the
 #: agent the CEO really granted mail to in v92, so the case mirrors the live fleet.
@@ -113,7 +119,7 @@ def _delegate(fleet, journey_budget):
     preview call performs the same decompose, so the wall time simply moves.
     """
     code, body = fleet.post(
-        "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True}, timeout=900
+        "/api/control-plane/delegate", {"brief": BRIEF, "confirm": True}, timeout=DELEGATE_TIMEOUT_S
     )
     assert code == 200, f"delegate failed {code}: {body!r}"
     task_id = body.get("task_id")
@@ -121,7 +127,7 @@ def _delegate(fleet, journey_budget):
 
     # 900s to settle: a measured run reached `done` on 3 of 4 steps with the last still
     # `running` when a 420s window expired — the fleet was working, the budget was short.
-    status = wait_until_settled(fleet, task_id, timeout_s=900)
+    status = wait_until_settled(fleet, task_id, timeout_s=SETTLE_TIMEOUT_S)
     journey_budget.note_cost(
         (status.get("cost") or {}).get("total_cost_usd") or 0.0, status
     )

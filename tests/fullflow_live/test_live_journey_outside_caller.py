@@ -17,6 +17,8 @@ import json
 import pytest
 
 from tests.fullflow_live.topology import (
+    DELEGATE_TIMEOUT_S,
+    SETTLE_TIMEOUT_S,
     audit_path,
     boot,
     is_settled,
@@ -47,7 +49,9 @@ def fleet(tmp_path, live_api_key):
 
 @pytest.mark.live_slow
 def test_j1_outside_caller_drives_a_brief_to_a_settled_state(fleet, journey_budget):
-    code, preview = fleet.post("/api/control-plane/delegate", {"brief": BRIEF}, timeout=180)
+    code, preview = fleet.post(
+        "/api/control-plane/delegate", {"brief": BRIEF}, timeout=DELEGATE_TIMEOUT_S
+    )
     assert code == 200, f"preview failed {code}: {preview!r}"
 
     task_id = preview.get("task_id")
@@ -60,7 +64,7 @@ def test_j1_outside_caller_drives_a_brief_to_a_settled_state(fleet, journey_budg
         code, confirmed = fleet.post(
             "/api/control-plane/delegate",
             {"task_id": task_id, "plan_hash": plan_hash, "confirm": True},
-            timeout=180,
+            timeout=DELEGATE_TIMEOUT_S,
         )
         assert code == 200, f"confirm with the previewed hash failed {code}: {confirmed!r}"
         assert confirmed.get("confirmed") is True, f"confirm did not take: {confirmed!r}"
@@ -75,7 +79,7 @@ def test_j1_outside_caller_drives_a_brief_to_a_settled_state(fleet, journey_budg
             seen.append(state)
         return status if is_settled(status) else None
 
-    final = poll_until(observe, timeout_s=300, interval_s=3,
+    final = poll_until(observe, timeout_s=SETTLE_TIMEOUT_S, interval_s=3,
                        what=f"task {task_id} to settle")
 
     ranks = [_RANK.get(s, -1) for s in seen if s in _RANK]
@@ -121,7 +125,9 @@ def test_j1b_a_stale_plan_hash_is_refused(fleet, journey_budget):
     """The hash-bind is the whole point of two-step confirm: a plan the caller never
     saw must not be confirmable. Cheap to assert, and it is the failure that would
     let a racing caller commit work the CEO never previewed."""
-    code, preview = fleet.post("/api/control-plane/delegate", {"brief": BRIEF}, timeout=180)
+    code, preview = fleet.post(
+        "/api/control-plane/delegate", {"brief": BRIEF}, timeout=DELEGATE_TIMEOUT_S
+    )
     assert code == 200, f"preview failed {code}: {preview!r}"
     task_id = preview.get("task_id")
 

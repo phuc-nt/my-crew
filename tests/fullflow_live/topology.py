@@ -42,6 +42,19 @@ BOOT_TIMEOUT_S = 45.0
 #: make every journey wait a minute per step; 2s keeps the real loop, just faster.
 TEST_TICK_INTERVAL_S = "2"
 
+#: How long the synchronous delegate POST may take. 180s held for months — one decompose
+#: on the live model answers in well under a minute — and then failed repeatedly with the
+#: fleet still inside its FIRST decompose attempt: OpenRouter keeps the socket busy with
+#: keep-alive whitespace while the upstream stalls, so nothing times out server-side
+#: either. The client abandons an attempt at a 240s wall-clock deadline and retries, which
+#: is the product's own recovery; a 180s wait here ends the case before that recovery can
+#: run, failing on the clock rather than on the behaviour the case asserts.
+DELEGATE_TIMEOUT_S = 900
+
+#: How long a task may take to settle. Same reason as above: a journey that has not
+#: finished yet is not a journey that behaved wrongly.
+SETTLE_TIMEOUT_S = 900.0
+
 
 def _free_port() -> int:
     """A port the OS just confirmed is free. Racy in principle, fine in practice: the

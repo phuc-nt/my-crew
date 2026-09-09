@@ -14,7 +14,7 @@ import secrets
 
 import pytest
 
-from tests.fullflow_live.topology import boot, poll_until
+from tests.fullflow_live.topology import DELEGATE_TIMEOUT_S, SETTLE_TIMEOUT_S, boot, poll_until
 
 #: Task-level states from which an UNATTENDED fleet will not move on its own.
 #:
@@ -102,7 +102,7 @@ def test_t2_work_delegated_over_real_http_runs_and_settles(fleet, journey_budget
     status, body = fleet.post(
         "/api/control-plane/delegate",
         {"brief": "Viết một đoạn 3 câu giới thiệu công ty cho trang chủ.", "confirm": True},
-        timeout=180,
+        timeout=DELEGATE_TIMEOUT_S,
     )
     assert status == 200, f"delegate returned {status}: {body!r}"
     task_id = body.get("task_id")
@@ -122,7 +122,7 @@ def test_t2_work_delegated_over_real_http_runs_and_settles(fleet, journey_budget
         return None
 
     final = poll_until(
-        settled, timeout_s=300, interval_s=3,
+        settled, timeout_s=SETTLE_TIMEOUT_S, interval_s=3,
         what=f"task {task_id} to settle (finished, or parked awaiting the CEO)",
     )
 

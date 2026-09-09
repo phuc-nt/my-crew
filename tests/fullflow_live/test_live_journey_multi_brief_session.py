@@ -26,7 +26,14 @@ import sqlite3
 
 import pytest
 
-from tests.fullflow_live.topology import boot, is_settled, poll_until, task_status
+from tests.fullflow_live.topology import (
+    DELEGATE_TIMEOUT_S,
+    SETTLE_TIMEOUT_S,
+    boot,
+    is_settled,
+    poll_until,
+    task_status,
+)
 
 #: (label, brief). Chosen to cover BOTH prediction sources — `heuristic` (the router
 #: guesses) and `prefix` (the CEO forces a lane) — because a bridge that only holds for
@@ -67,7 +74,7 @@ def test_j4_the_offline_router_predicts_what_the_live_fleet_actually_stores(flee
         predicted_mode, predicted_source, _reason, predicted_signals = decide(brief)
 
         code, body = fleet.post(
-            "/api/control-plane/delegate", {"brief": brief}, timeout=180
+            "/api/control-plane/delegate", {"brief": brief}, timeout=DELEGATE_TIMEOUT_S
         )
         assert code == 200, f"[{label}] preview failed {code}: {body!r}"
         task_id = body.get("task_id")
@@ -131,7 +138,8 @@ def test_j4b_concurrent_tasks_do_not_cross_contaminate_their_artifacts(fleet):
     task_ids: dict[str, str] = {}
     for mark, brief in marks.items():
         code, body = fleet.post(
-            "/api/control-plane/delegate", {"brief": brief, "confirm": True}, timeout=180
+            "/api/control-plane/delegate", {"brief": brief, "confirm": True},
+            timeout=DELEGATE_TIMEOUT_S,
         )
         assert code == 200, f"[{mark}] delegate failed {code}: {body!r}"
         assert body.get("task_id"), f"[{mark}] no task_id: {body!r}"
@@ -147,7 +155,7 @@ def test_j4b_concurrent_tasks_do_not_cross_contaminate_their_artifacts(fleet):
             lambda tid=task_id: (lambda s: s if is_settled(s) else None)(
                 task_status(fleet, tid)
             ),
-            timeout_s=300, interval_s=3, what=f"[{mark}] task {task_id} to settle",
+            timeout_s=SETTLE_TIMEOUT_S, interval_s=3, what=f"[{mark}] task {task_id} to settle",
         )
 
     # Read every file under each task's own directory and check the OTHER task's

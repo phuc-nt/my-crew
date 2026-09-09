@@ -28,7 +28,13 @@ import sys
 
 import pytest
 
-from tests.fullflow_live.topology import boot, is_settled, poll_until, task_status
+from tests.fullflow_live.topology import (
+    SETTLE_TIMEOUT_S,
+    boot,
+    is_settled,
+    poll_until,
+    task_status,
+)
 
 MANAGER_ID = "secretary"  # a real worker in the seeded roster
 SOURCE_TAG = "customer_assistant"
@@ -132,7 +138,7 @@ def test_j2_an_escalation_runs_in_a_real_fleet_and_keeps_its_source(fleet, journ
 
     final = poll_until(
         lambda: (lambda st: st if is_settled(st) else None)(task_status(fleet, task_id)),
-        timeout_s=300, interval_s=3,
+        timeout_s=SETTLE_TIMEOUT_S, interval_s=3,
         what=f"escalation task {task_id} to settle in the live fleet",
     )
 

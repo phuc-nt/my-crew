@@ -44,7 +44,14 @@ import sqlite3
 import pytest
 
 from my_crew.agent.task_decomposition import MAX_STEPS
-from tests.fullflow_live.topology import boot, poll_until, seed_home, task_status
+from tests.fullflow_live.topology import (
+    DELEGATE_TIMEOUT_S,
+    SETTLE_TIMEOUT_S,
+    boot,
+    poll_until,
+    seed_home,
+    task_status,
+)
 
 #: Low enough that real spend exceeds it, high enough to be a genuine ceiling rather
 #: than a degenerate zero.
@@ -170,16 +177,6 @@ def capped_fleet(tmp_path, live_api_key):
         server.stop()
 
 
-#: How long the synchronous delegate POST may take. 180s held for months — one decompose
-#: on the live model answers in well under a minute — and then failed twice on 2026-09-02
-#: with the fleet still inside its FIRST decompose attempt: OpenRouter kept the socket busy
-#: with keep-alive whitespace while the upstream stalled, so nothing timed out server-side
-#: either. The client now abandons an attempt at a 240s wall-clock deadline and retries,
-#: which is the product's own recovery; a 180s wait here ended the case before that
-#: recovery could run. 900s is what the rest of the live suite already allows a delegate.
-DELEGATE_TIMEOUT_S = 900
-
-
 def test_x2_breaching_the_cost_cap_stalls_the_task_and_halts_its_steps(capped_fleet,
                                                                        journey_budget):
     code, body = capped_fleet.post(
@@ -196,7 +193,7 @@ def test_x2_breaching_the_cost_cap_stalls_the_task_and_halts_its_steps(capped_fl
         lambda: (lambda s: s if (s.get("state") or {}).get("status") == "stalled" else None)(
             task_status(capped_fleet, task_id)
         ),
-        timeout_s=300, interval_s=3,
+        timeout_s=SETTLE_TIMEOUT_S, interval_s=3,
         what=f"task {task_id} to stall on the cost cap",
     )
 

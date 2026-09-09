@@ -30,6 +30,7 @@ from tests.fullflow_live.conftest import (
     requires_search,
 )
 from tests.fullflow_live.topology import (
+    SETTLE_TIMEOUT_S,
     boot,
     seed_home,
     step_texts,
@@ -116,7 +117,7 @@ def office_journey(tmp_path_factory, live_api_key_module):
         assert task_id, f"delegate returned no task_id: {body!r}"
 
         # The sprint step alone measured ~4 min; the review row it always mints runs after.
-        final = wait_until_settled(server, task_id, timeout_s=900)
+        final = wait_until_settled(server, task_id, timeout_s=SETTLE_TIMEOUT_S)
         yield OfficeJourney(home=home, task_id=task_id, final=final,
                             created=created, skipped=skipped)
     finally:
