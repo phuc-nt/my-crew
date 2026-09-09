@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 #: Config fields a template may drive + upgrade. `domain` is deliberately NOT here — a
 #: domain change would re-validate reports/bindings and is not a safe auto-apply; it stays
 #: a create-time-only choice.
-_CONFIG_FIELDS = ("reports", "schedule", "web_search", "recommended_runtime")
+_CONFIG_FIELDS = ("reports", "schedule", "web_search", "recommended_runtime", "skills")
 
 
 def config_snapshot(template: dict) -> dict:
@@ -43,6 +43,9 @@ def config_snapshot(template: dict) -> dict:
         "schedule": dict(template.get("schedule") or {}),
         "web_search": bool(template.get("web_search")),
         "recommended_runtime": str(template.get("recommended_runtime") or "native"),
+        # v97: pack skill names. Pre-v97 baselines lack the key, so `preview_upgrade`
+        # reads it as None ≠ [] and files the field under `keep` — never auto-applied.
+        "skills": [str(k) for k in (template.get("skills") or [])],
     }
 
 
@@ -55,6 +58,8 @@ def _agent_live_value(doc: dict, field: str):
         return dict(doc.get("schedule") or {})
     if field == "web_search":
         return bool(doc.get(field))
+    if field == "skills":
+        return [str(k) for k in (doc.get("skills") or [])]
     if field == "recommended_runtime":
         rt = doc.get("agent_runtime")
         if isinstance(rt, dict):

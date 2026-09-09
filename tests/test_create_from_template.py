@@ -122,6 +122,51 @@ def test_unknown_or_traversal_role_id_rejected(tmp_world):
         template_create.create_from_template("../default")
 
 
+
+def test_create_from_template_writes_declared_pack_skills(tmp_world):
+    """v97: the template's `skills` list lands as the profile's skill pool — the thing
+    `load_skill_pool` reads — so a pm-coordinator's daily graph can actually select
+    flag-risk / prioritize-blockers instead of running with an empty pool."""
+    _, profiles, _ = tmp_world
+    template_create.create_from_template("pm-coordinator")
+    doc = _profile_doc(profiles, "pm-coordinator")
+    assert doc["skills"] == [
+        "parse-github-labels", "flag-risk", "prioritize-blockers",
+        "estimate-effort", "fetch-jira-epics",
+    ]
+    assert doc["template_config_applied"]["skills"] == doc["skills"]
+    # and the loader sees the same pool
+    from my_crew.profile.loader import load_profile
+    from my_crew.runtime.agent_paths import agent_data_dir
+
+    loaded = load_profile("pm-coordinator", data_dir=agent_data_dir("pm-coordinator"))
+    assert set(loaded.skills) == set(doc["skills"])
+
+
+def test_create_from_template_without_skills_writes_no_pool(tmp_world):
+    _, profiles, _ = tmp_world
+    template_create.create_from_template("content")
+    assert "skills" not in _profile_doc(profiles, "content")
+
+
+def test_create_agent_rejects_unknown_or_malformed_skill_names(tmp_world):
+    """An unknown name would be dropped with only a warning at runtime — the silent no-op
+    a template must not be able to create. Reject at create instead."""
+    base = {"name": "X", "domain": "pm", "reports": [], "schedule": {}, "bindings": {}}
+    with pytest.raises(agent_create.ValidationError, match="không có trong pack"):
+        agent_create.create_agent({**base, "id": "a1", "skills": ["flag-risk", "khong-co"]})
+    with pytest.raises(agent_create.ValidationError, match="danh sách tên skill"):
+        agent_create.create_agent({**base, "id": "a2", "skills": "flag-risk"})
+    with pytest.raises(agent_create.ValidationError, match="danh sách tên skill"):
+        agent_create.create_agent({**base, "id": "a3", "skills": ["", "flag-risk"]})
+    # a skill of ANOTHER pack is unknown to this domain
+    with pytest.raises(agent_create.ValidationError, match="không có trong pack"):
+        agent_create.create_agent({**base, "id": "a4", "skills": ["read-meta-ads-insights"]})
+    # nothing was written for any of them
+    _, profiles, _ = tmp_world
+    assert not any((profiles / a).exists() for a in ("a1", "a2", "a3", "a4"))
+
+
 # --- crew ---
 
 

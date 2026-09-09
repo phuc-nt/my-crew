@@ -92,7 +92,11 @@ def test_staff_templates_lists_sample_pm_template(client):
     assert pm["role"]
     assert pm["reports"] == ["daily", "weekly"]
     assert pm["bindings_hint"] == ["jira", "slack"]
-    assert "skills" not in pm
+    # v97 contract v2: the pack skills a coordinator's graphs select from ride along.
+    assert pm["skills"] == [
+        "parse-github-labels", "flag-risk", "prioritize-blockers",
+        "estimate-effort", "fetch-jira-epics",
+    ]
     assert "Điều phối dự án" in pm["persona"]  # persona prefill present
     assert pm["web_search"] is False  # opt-in flag defaults off for non-research roles
 
@@ -143,3 +147,24 @@ def test_company_and_templates_require_auth_when_enabled(auth_env, tmp_company):
     assert c.get("/api/company").status_code == 401
     assert c.post("/api/company", json={"name": "Acme"}).status_code == 401
     assert c.get("/api/staff-templates").status_code == 401
+
+
+def test_staff_templates_every_declared_pack_skill_exists_in_its_pack(client):
+    """A template naming a skill its domain pack does not ship would make every one-click
+    create of that role fail — catch the typo here, at the shipped-file level."""
+    from my_crew.skills.skill_loader import load_skills
+
+    templates = client.get("/api/staff-templates").json()["templates"]
+    for t in templates:
+        known = {sk.name for sk in load_skills(domain=t["domain"])}
+        unknown = [name for name in t["skills"] if name not in known]
+        assert not unknown, (
+            f"{t['role_id']}: skill lạ {unknown} (pack {t['domain']} có {sorted(known)})"
+        )
+    by_id = {t["role_id"]: t for t in templates}
+    assert by_id["ads"]["skills"] == ["read-meta-ads-insights"]
+    assert by_id["accountant"]["skills"] == ["read-accounting-ledger"]
+    # Office roles carry TEMPLATE-dir skills (live-loaded), not pack ones.
+    for role_id in ("researcher", "analyst", "content", "qa"):
+        assert by_id[role_id]["has_skills"] is True, role_id
+        assert by_id[role_id]["skills"] == []

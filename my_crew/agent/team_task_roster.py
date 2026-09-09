@@ -99,7 +99,10 @@ def planning_roster() -> list[tuple[str, str]]:
     for agent_id, domain in staff:
         hint = capability_hint(caps.get(agent_id))
         out.append((agent_id, f"{domain} — {hint}" if hint else domain))
-    return out
+    # The role line from SOUL.md rides along too: a crew of one-word `office` domains is
+    # indistinguishable to the planner without it (researcher vs content vs qa), and the
+    # step that needs a source lookup must land on the one that IS the researcher.
+    return roster_with_role_hints(out)
 
 
 def capability_map(agent_ids) -> dict[str, Capability | None]:
@@ -247,6 +250,21 @@ def validate_mail_steps(steps, *, capable_ids: set[str] | None = None) -> None:
 _ROLE_HINT_CHARS = 80
 
 
+def role_hint_from_soul(soul: str) -> str:
+    """The one line of a SOUL.md that says what the role DOES, squashed + truncated.
+
+    A hand-written heading (`# Kế toán`) is the role itself, so it is kept. But every
+    shipped template opens with the bare `# SOUL` heading (a file label, not a role),
+    and taking it verbatim made every template agent's hint the word "SOUL" — so a
+    heading whose text is just that label is skipped in favour of the next line."""
+    lines = [ln.strip() for ln in soul.splitlines() if ln.strip()]
+    for ln in lines:
+        text = ln.lstrip("# ").strip()
+        if text and text.upper() != "SOUL":
+            return text[:_ROLE_HINT_CHARS]
+    return ""
+
+
 def roster_with_role_hints(roster: list[tuple[str, str]]) -> list[tuple[str, str]]:
     """v14 consult targeting: enrich each `(agent_id, domain)` roster entry into
     `(agent_id, "domain — <first SOUL.md line>")` so the consult-propose LLM picks a
@@ -268,8 +286,7 @@ def roster_with_role_hints(roster: list[tuple[str, str]]) -> list[tuple[str, str
         hint = ""
         try:
             soul = load_profile(agent_id, data_dir=agent_data_dir(agent_id)).soul
-            first_line = next((ln.strip() for ln in soul.splitlines() if ln.strip()), "")
-            hint = first_line.lstrip("# ").strip()[:_ROLE_HINT_CHARS]
+            hint = role_hint_from_soul(soul)
         except Exception:  # noqa: BLE001 — hint is advisory; a bad profile keeps plain domain
             hint = ""
         enriched.append((agent_id, f"{domain} — {hint}" if hint else domain))

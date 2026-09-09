@@ -32,6 +32,37 @@ def test_hint_is_soul_first_line_markdown_heading_stripped(monkeypatch):
     ]
 
 
+def test_hint_skips_the_bare_soul_heading_every_template_opens_with(monkeypatch):
+    """Every shipped template SOUL.md opens with `# SOUL`; the hint must be the role
+    sentence under it, never the literal word SOUL — otherwise the consult and planning
+    rosters describe every template agent identically."""
+    _wire_souls(monkeypatch, {
+        "researcher": "# SOUL\n\nBạn là một nhân sự ảo đóng vai: Nghiên cứu.\n\n## Mục tiêu\n- x",
+        "chi-heading": "# Kế toán\n\n## Mục tiêu",
+    })
+    out = roster_mod.roster_with_role_hints([("researcher", "office"), ("chi-heading", "acc")])
+    assert out == [
+        ("researcher", "office — Bạn là một nhân sự ảo đóng vai: Nghiên cứu."),
+        ("chi-heading", "acc — Kế toán"),  # headings only ⇒ first heading text still helps
+    ]
+    assert roster_mod.role_hint_from_soul("") == ""
+
+
+def test_planning_roster_carries_capability_and_role_hint(monkeypatch):
+    """The decompose/amend/intake prompts render `planning_roster()`; two `office` agents
+    are only tellable apart by the role line, so it must ride along with the tool hint."""
+    monkeypatch.setattr(roster_mod, "assignable_staff", lambda: [("researcher", "office")])
+    monkeypatch.setattr(
+        roster_mod, "capability_map",
+        lambda ids: {"researcher": roster_mod.Capability(tier="native", web=True)},
+    )
+    _wire_souls(monkeypatch, {"researcher": "# SOUL\n\nBạn đóng vai: Nghiên cứu."})
+    assert roster_mod.planning_roster() == [
+        ("researcher", "office — không có công cụ — chỉ viết/suy luận trên dữ liệu được đưa; "
+                       "tra được web — Bạn đóng vai: Nghiên cứu."),
+    ]
+
+
 def test_unreadable_or_empty_soul_keeps_plain_domain_and_length(monkeypatch):
     _wire_souls(monkeypatch, {"co-soul": "Vai trò A", "soul-rong": ""})
     roster = [("co-soul", "pm"), ("soul-rong", "dev"), ("khong-doc-duoc", "ops")]

@@ -196,6 +196,12 @@ def _load_one_template(role_dir) -> dict | None:
         "schedule": {str(k): str(v) for k, v in (doc.get("schedule") or {}).items()}
         if isinstance(doc.get("schedule"), dict) else {},
         "has_skills": (role_dir / "skills").is_dir(),
+        # v97 contract v2: names of DOMAIN-PACK skills the role should carry. The
+        # created profile records them as its `skills` pool (create_agent validates each
+        # name against the pack), so a pm-coordinator actually gets the pm skills its
+        # daily/weekly graphs select from. Template-dir skills (has_skills) stay live.
+        "skills": [str(k) for k in (doc.get("skills") or [])]
+        if isinstance(doc.get("skills"), list) else [],
         # v36 P3: config version — an agent records the version it was created with so a
         # later template bump surfaces an upgrade badge. Absent ⇒ 1 (the baseline).
         "version": int(doc.get("version") or 1),

@@ -160,6 +160,25 @@ def _build_profile_doc(spec: dict, profiles_dir) -> tuple[str, dict, str | None]
     # so a spec can't smuggle arbitrary values into profile.yaml through this key.
     if spec.get("web_search"):
         doc["web_search"] = True
+    # v97: optional pack-skill pool. Every name must be a skill the agent's own domain
+    # pack ships — `load_skill_pool` drops unknown names with only a warning at runtime,
+    # which is exactly the silent no-op a template must not be able to create.
+    skills_raw = spec.get("skills")
+    if skills_raw:
+        if not isinstance(skills_raw, list) or not all(
+            isinstance(name, str) and name.strip() for name in skills_raw
+        ):
+            raise ValidationError("skills phải là danh sách tên skill (chuỗi không rỗng)")
+        from my_crew.skills.skill_loader import load_skills
+
+        known_skills = {sk.name for sk in load_skills(domain=domain)}
+        unknown = [name for name in skills_raw if name not in known_skills]
+        if unknown:
+            raise ValidationError(
+                f"skill {unknown} không có trong pack {domain!r} "
+                f"(có: {sorted(known_skills)})"
+            )
+        doc["skills"] = [str(name) for name in skills_raw]
     # v30: optional trust mode. Only the two literal policies pass through; absent ⇒ the
     # profile inherits the global default (TRUST_MODE env / builder default "autonomous").
     trust_mode = str(spec.get("trust_mode") or "").strip().lower()

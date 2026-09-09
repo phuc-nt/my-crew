@@ -15,6 +15,10 @@ reports:
   - cashflow-weekly
 bindings_hint: []
 
+# v97: the accounting-pack skill the cashflow graph selects from (empty pool ⇒ never fired).
+skills:
+  - read-accounting-ledger
+
 # v20.5: runtime backend gợi ý (wizard prefill; user override được).
 recommended_runtime: native
 
@@ -23,5 +27,6 @@ recommended_runtime: native
 # ACCOUNTING_SHEET_ID (hoặc ACCOUNTING_LEDGER_CSV_PATH) vào .env.
 
 # v36 P2: config version — bump when template CONFIG (reports/schedule/tools) changes
-# so agents of this role show an upgrade badge. Skills load live (no bump needed).
-version: 1
+# so agents of this role show an upgrade badge. Template-dir skills load live (no bump
+# needed); the pack-skill LIST is config, so adding to it bumps.
+version: 2

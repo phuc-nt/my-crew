@@ -163,3 +163,30 @@ def test_missing_baseline_keeps_everything(tmp_world):
     plan = template_upgrade.preview_upgrade("vai-thu")
     assert plan["apply"] == {}  # no baseline ⇒ can't prove un-customized ⇒ keep all
     assert "web_search" in plan["keep"]
+
+
+def test_upgrade_adds_skills_when_agent_never_had_a_pool(tmp_world):
+    """v97: a template that gains `skills` upgrades an untouched agent's pool. The baseline
+    recorded `[]` at create and the agent still holds `[]`, so the new list applies."""
+    profiles, _, role = tmp_world
+    template_create.create_from_template("vai-thu")
+    assert _read(profiles, "vai-thu")["template_config_applied"]["skills"] == []
+    _bump_template(role, version=2, domain="pm", skills=["flag-risk"])
+    plan = template_upgrade.preview_upgrade("vai-thu")
+    assert plan["apply"] == {"skills": ["flag-risk"]}
+    template_upgrade.apply_upgrade("vai-thu")
+    assert _read(profiles, "vai-thu")["skills"] == ["flag-risk"]
+
+
+def test_upgrade_keeps_skills_when_baseline_predates_the_field(tmp_world):
+    """An agent created before `skills` joined the snapshot has no baseline for it, so
+    the upgrade cannot prove the pool is untouched — it must report, never overwrite."""
+    profiles, _, role = tmp_world
+    template_create.create_from_template("vai-thu")
+    doc = _read(profiles, "vai-thu")
+    doc["template_config_applied"].pop("skills")
+    (profiles / "vai-thu" / "profile.yaml").write_text(
+        yaml.safe_dump(doc, allow_unicode=True), encoding="utf-8")
+    _bump_template(role, version=2, domain="pm", skills=["flag-risk"])
+    plan = template_upgrade.preview_upgrade("vai-thu")
+    assert "skills" in plan["keep"] and plan["apply"] == {}

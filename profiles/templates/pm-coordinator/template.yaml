@@ -1,8 +1,9 @@
-# Staff template v1 — prefill source ONLY for the CreateAgent wizard.
+# Staff template — prefill source for the CreateAgent wizard AND the one-click create.
 #
-# Contract v1 = {role, domain, reports, bindings_hint}. Deliberately NO `skills` field:
-# there is no channel from the wizard's buildSpec()/agent_create into a skills list yet
-# (that would be a phantom knob nobody reads) — adding it here would silently do nothing.
+# Contract v1 = {role, domain, reports, bindings_hint}. Contract v2 (v97) adds `skills`:
+# names of the DOMAIN PACK's skills this role carries. create_agent validates every name
+# against the pack and writes them as the profile's `skills` pool, which is what
+# `load_skill_pool` reads — an unknown name is a create error, never a silent no-op.
 #
 # Creating an agent from a template still goes through the SAME `create_agent` path as a
 # hand-filled wizard; this file only prefills the wizard's state (IdentityStep/ReportsStep
@@ -17,6 +18,15 @@ bindings_hint:
   - jira
   - slack
 
+# v97: the pm-pack skills a coordinator's daily/weekly/resource/okr graphs select from.
+# Without this list the created agent had an EMPTY skill pool and none of them ever fired.
+skills:
+  - parse-github-labels
+  - flag-risk
+  - prioritize-blockers
+  - estimate-effort
+  - fetch-jira-epics
+
 # v20.5: runtime backend gợi ý (wizard prefill; user override được).
 recommended_runtime: native
 
@@ -26,5 +36,6 @@ schedule:
   weekly: "0 17 * * 5"
 
 # v36 P2: config version — bump when template CONFIG (reports/schedule/tools) changes
-# so agents of this role show an upgrade badge. Skills load live (no bump needed).
-version: 1
+# so agents of this role show an upgrade badge. Template-dir skills load live (no bump
+# needed); the pack-skill LIST is config, so adding to it bumps.
+version: 2
