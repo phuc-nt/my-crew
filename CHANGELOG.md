@@ -12,9 +12,24 @@ no code copied): pre-authorizing a plan's external actions at confirm time and k
 that answer as a policy (v94), a control-plane strip, route error boundary and
 new-version banner (v95a), background-activity drawer, interrupted-answer card and
 citation chips (v95b), and a first-visit walkthrough, per-hub welcome, resizable chat
-panes, contextual palette rows and attention snooze (v96).
+panes, contextual palette rows and attention snooze (v96). Staff templates now carry
+the skills of their role, every tool-calling tier sees those skills, and the live suite
+hires the shipped office crew through the API and works it through a web-plus-review
+brief (v97).
 
 ### Added
+- Staff templates carry the skills of their role (`skills:` in `template.yaml`, template
+  contract v2): `GET /api/staff-templates` returns the list, creating from a template
+  records it on the profile (a name the pack does not ship is rejected), and template
+  upgrade compares it. pm-coordinator ships its five pm skills, ads and accountant their
+  pack skill; analyst, content and qa get template skills of their own (stated
+  assumptions, audience-and-structure, explicit verdict).
+- Template cards show a "kỹ năng" chip listing the role's pack skills.
+- Live suite: the shipped office crew is hired through `POST /api/crew/create`, enabled,
+  and driven through a brief that needs the web and a review — the researcher owns the
+  web step and really searches, the qa hire holds the review, and the researcher's
+  template skill is recorded as used. The personal-assistant briefing greets the real
+  time of day, names the weekday and invents no clock time.
 - `GET /api/insights/route-stats`, `/tool-stats?days=`, `/engine-costs?days=` — read-only
   aggregates behind auth (sprint/team funnel, tool denials, spend per engine). Empty
   stores answer 200 with zeros; `days` is clamped to 90, `0` means all history.
@@ -70,6 +85,25 @@ panes, contextual palette rows and attention snooze (v96).
 ### Fixed
 - `/health` was registered after the SPA catch-all and answered with `index.html`; it is
   now registered inside `create_app` before the fallback.
+- The tool-calling tiers (thin, react, deep) never saw an agent's skills or company docs,
+  so a role pinned to a tool tier ran skill-less and the curator counted its skills as
+  unused. All three tiers now receive them; the deep tier gets skills through the
+  sanitizer and still withholds company docs.
+- Roster role hints took the bare `# SOUL` heading as the role, so every template agent
+  read as "SOUL" to the planner; the first real line of SOUL.md is used instead.
+- The ads and accounting pack skill files had no frontmatter and were skipped by the
+  skill loader.
+- A skill selector answer with no content (a reasoning model that spent its whole
+  completion thinking) left the step with no skills at all. When the selector picks
+  nothing, the skills whose `applies_to` names the kind now stand in; the selection
+  prompt speaks of a kind of work rather than a PM report.
+- The weekly ads note said "THIẾU" and then quoted a date, which an owner reads as a
+  measured figure. When no insight rows were read the narrate prompt now withholds the
+  report date and forbids every digit; with rows it still passes the date and the totals.
+- The live suite waited 180s on a delegate POST and 300s for a task to settle while the
+  fleet was still inside its first attempt, so it failed on the clock rather than on
+  behaviour. Both waits are now shared constants in the live topology (900s), the value
+  parts of the suite had already adopted locally for the same measured reason.
 
 ## [0.18.0] — 2026-09-07
 

@@ -160,7 +160,7 @@ Vào **Đội** → bấm **"+ Tạo nhân sự ảo"**. Có 2 đường:
 
 ### B.2a. Tạo từ template — tạo ngay (v32, ≤2 click)
 
-Trang wizard hiện **bộ template nhân sự có sẵn** (6 vai trò: Trưởng phòng, Nghiên cứu, Nội dung, Phân tích, Kiểm định, PM-Coordinator). Mỗi template mang **tool gắn sẵn** (web search, lịch báo cáo mặc định, skills). Chọn card template → bấm **"Tạo ngay"** → xác nhận → nhân sự **được tạo NGAY** (chỉ 2 click, không qua form):
+Trang wizard hiện **bộ template nhân sự có sẵn** (9 vai trò: Trưởng phòng, Nghiên cứu, Nội dung, Phân tích, Kiểm định, PM-Coordinator, Quảng cáo, Kế toán, Trợ lý cá nhân). Mỗi template mang **tool gắn sẵn** (web search, lịch báo cáo mặc định, skills). Chọn card template → bấm **"Tạo ngay"** → xác nhận → nhân sự **được tạo NGAY** (chỉ 2 click, không qua form):
 
 - Nhân sự mới sẽ **TẮT** theo mặc định. Điền token `.env` cho vai trò (nếu cần) rồi bấm **bật** ở hub **Đội ngũ**.
 - **Tuyển ≠ bổ nhiệm.** Tuyển template điều phối viên KHÔNG tự đặt nó làm trưởng phòng:
@@ -175,6 +175,14 @@ Trang wizard hiện **bộ template nhân sự có sẵn** (6 vai trò: Trưởn
 - **(v36) Skill của template nạp TRỰC TIẾP lúc chạy**, không copy một lần lúc tạo — sửa skill trong
   file template thì **mọi nhân sự cùng vai nhận ngay**, không cần xoá-tạo lại. (Nhân sự tạo từ
   trước v36 vẫn dùng skill đã copy lúc tạo, không tự đổi theo template.)
+- **(v97) Skill theo vai, và mọi tầng chạy đều thấy skill.** Thẻ template hiện chip
+  **"kỹ năng: …"** — skill của domain pack mà vai này mang (PM-Coordinator: 5 skill pm;
+  Quảng cáo / Kế toán: skill đọc chỉ số ads / sổ quỹ). Tạo từ template ghi danh sách đó vào
+  `skills` của profile; nâng cấp template so cả `skills` (agent tạo trước v97 không có
+  baseline nên mục này nằm ở "giữ nguyên", không tự ghi). Nghiên cứu / Nội dung / Phân tích /
+  Kiểm định có skill template riêng (trích nguồn có link, viết theo đối tượng, nêu giả định,
+  phán quyết rõ) nạp trực tiếp như v36. Trước v97 chỉ tầng native thấy skill — nhân sự
+  chạy tầng tool (thin/react/deep) làm việc không có skill; nay cả ba tầng đều nhận.
 
 ### B.2b. Tạo cả đội — tạo crew (v32, ≤3 click; v71 hỗ trợ chọn crew)
 

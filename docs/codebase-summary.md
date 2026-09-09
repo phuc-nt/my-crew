@@ -829,6 +829,62 @@ Plan `plans/260907-1946-openhuman-features-a-to-d/` (4 phase, ship 4 commit `6ea
 - e2e mock (`web/e2e/support/mock-api.ts`) tự cắm cờ walkthrough-done trừ khi test bật
   `walkthrough: true`; option `agents` để dựng roster rỗng. e2e 65–70.
 
+### v97: Template nhân sự — skill/tool đúng vai + live theo vai (2026-09-08, xong)
+
+Plan `plans/260908-1913-template-roles-skills-live-coverage/` (3 phase). Audit trước khi
+sửa: template vai chỉ mang tool (web search, lịch báo cáo), skill của domain pack không có
+kênh template→profile; analyst/content/qa không có skill template; roster consult/planning
+lấy heading `# SOUL` làm câu vai; ba tầng tool-loop (thin/react/deep) không nhìn thấy skill.
+- **Kênh `skills` contract v2** (`profiles/templates/*/template.yaml`, danh sách tên skill
+  trong pack): `routes_company._load_one_template` trả `skills`, `template_create.
+  _spec_from_template` chuyển vào spec, `agent_create` xác thực từng tên với
+  `load_skills(domain=...)` (tên lạ → `ValidationError`) rồi ghi `doc["skills"]`;
+  `template_upgrade._CONFIG_FIELDS` thêm `skills` (baseline cũ không có key → `keep`,
+  không tự ghi). pm-coordinator (5 skill pm) / ads / accountant lên version 2. Skill pack
+  ads/accounting thiếu frontmatter nên loader bỏ qua → thêm `name/description/applies_to`.
+  Test: `test_staff_templates`, `test_create_from_template`,
+  `test_template_config_version_pin`.
+- Skill template mới `profiles/templates/{analyst,content,qa}/skills/*.md`
+  (`applies_to: [team-step]`): analyze-with-stated-assumptions /
+  write-for-audience-and-structure / review-with-explicit-verdict — nạp trực tiếp qua
+  `template_role` như researcher (v36).
+- `team_task_roster.role_hint_from_soul`: bỏ heading chỉ là nhãn `SOUL`, lấy dòng vai
+  thật; `planning_roster` cũng mang câu vai (`test_team_task_roster_role_hints`).
+- **Tầng tool-loop thấy skill + company docs**:
+  `runtime_backends/team_step_prompt_extras.py` (`team_step_skills_text`,
+  `team_step_prompt_extras`) dùng chung cho `thin_tool_loop` / `react_loop` /
+  `deep_agent_loop`; chọn skill qua `select_skill_text` nên `skill_usage.json` ghi nhận khi
+  `ProfileContext.agent_id` có (team_step_runner đặt). Deep tier: skills đi qua sanitizer
+  (`SanitizedBundle.skills`), company docs vẫn giữ lại (quyết định cũ, không đổi).
+  `tests/test_team_step_prompt_extras.py` ghim cả helper lẫn ba call site.
+- Web: thẻ template hiện chip "kỹ năng: …" từ `template.skills`
+  (`features/team/create/template-chips.ts` dùng chung với wizard picker, bỏ bản sao
+  `toolChips`; `StaffTemplate.skills`; i18n `staffTemplatePicker.chipPackSkills`). e2e 71.
+- Live theo vai `tests/fullflow_live/test_live_template_roles.py`: R1 crew office qua
+  `POST /api/crew/create?crew_id=office` → `PATCH /api/agents/{id}/enabled` → brief cần web
+  + review → bước `needs_web` (đọc từ store) về `researcher`, transcript có sự kiện
+  `prefetch` với query thật, artifact có URL, hàng review về `qa`; R2 (cùng journey)
+  `.data/agents/researcher/skill_usage.json` ghi `research-with-cited-sources`; R3 personal
+  briefing dry-run in-process: `telegram=dry_run`, chào đúng buổi, có thứ, không bịa giờ
+  HH:MM, không lộ placeholder. Harness: `ServeProcess.patch`; delegate timeout 900 s (cùng
+  mức ca cost-cap) vì sprint intake có thể chạy quá 3 phút trên upstream chậm.
+- Đo live lần 2: bộ chọn skill (`skill_selector`) nhận câu trả lời rỗng từ model
+  reasoning → bước chạy không có skill, không ghi `skill_usage.json`. Sửa: khi selector
+  trả rỗng, dùng các skill có `applies_to` khai đúng kind (selector vẫn là thẩm quyền
+  khi có trả lời); prompt chọn nói "loại công việc" thay vì "báo cáo PM". Brief live
+  bỏ đếm chính xác ("đúng 2 nguồn" làm self-check đẩy bước sang `needs_decision`)
+  và không nhờ QA trong brief (sprint luôn mang `needs_review`); artifact web nối qua
+  `outcome_ref` vì tên file là `step-<n>.json`, không phải step_id.
+- Vòng live đầy đủ (66 passed / 6 failed, 3h03) lộ hai lỗi thật ngoài phạm vi vòng:
+  (1) `ads-weekly` khi không đọc được số liệu vẫn đưa ngày báo cáo vào prompt narrate nên
+  model nhắc lại "(09/09)" trong bản THIẾU — nay prompt giấu hẳn ngày và cấm mọi chữ số
+  khi `available=False`, còn khi có dữ liệu vẫn truyền ngày + tổng
+  (`tests/test_ads_pack.py` ghim cả hai nhánh bằng LLM ghi âm);
+  (2) ba ca đỏ vì đồng hồ phía client chứ không vì hành vi — `DELEGATE_TIMEOUT_S = 900` và
+  `SETTLE_TIMEOUT_S = 900.0` chuyển vào `tests/fullflow_live/topology.py` dùng chung.
+  Còn lại: một ca upstream đứng thật (`multi_brief_session`, đã ở 900 s) và một ca
+  fast-lane trả về danh sách lệnh — chạy lại đều xanh, không nới assert.
+
 ## Deferred
 
 - **Live-key integration E2E:** Linear/SMTP/LangSmith with real credentials (skipped M3/M5; scheduled separately).
