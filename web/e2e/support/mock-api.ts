@@ -395,6 +395,7 @@ export async function mockOfficeApi(
             // A scheduled role, so the gallery's schedule chip is exercised too.
             schedule: { daily: '08:00' },
             has_skills: false,
+            skills: [],
           },
         ],
       })

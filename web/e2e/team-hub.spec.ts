@@ -166,3 +166,47 @@ test('70. roster trống hiện thẻ chào; nút tuyển mở thẳng bảng tu
   await expect(page.getByTestId('team-hire')).toBeVisible()
   await expect(page.locator('.staff-template-grid')).toBeVisible()
 })
+
+// v97: a template that attaches pack skills says which ones on its card — the role-fit
+// question ("does the PM template come with PM skills?") is answered before Tạo ngay.
+test('71. thẻ mẫu nhân sự liệt kê tên kỹ năng gói kèm theo', async ({ page }) => {
+  await mockOfficeApi(page, {
+    staffTemplates: [
+      {
+        role_id: 'pm-coordinator',
+        role: 'Điều phối dự án',
+        domain: 'pm',
+        reports: ['daily', 'weekly'],
+        bindings_hint: ['jira', 'slack'],
+        persona: '',
+        web_search: false,
+        recommended_runtime: 'native',
+        schedule: { daily: '0 8 * * *', weekly: '0 17 * * 5' },
+        has_skills: false,
+        skills: ['flag-risk', 'prioritize-blockers'],
+      },
+      {
+        role_id: 'qa',
+        role: 'Kiểm định',
+        domain: 'office',
+        reports: [],
+        bindings_hint: [],
+        persona: '',
+        web_search: false,
+        recommended_runtime: 'native',
+        schedule: {},
+        has_skills: true,
+        skills: [],
+      },
+    ],
+  })
+  await page.goto('/team?hire=1')
+  const grid = page.locator('.staff-template-grid')
+  await expect(grid).toBeVisible()
+  const pmCard = grid.locator('.staff-template-card', { hasText: 'Điều phối dự án' })
+  await expect(pmCard.locator('.chip', { hasText: 'kỹ năng: flag-risk, prioritize-blockers' })).toBeVisible()
+  // The office role brings template-dir skills only: the generic chip, no name list.
+  const qaCard = grid.locator('.staff-template-card', { hasText: 'Kiểm định' })
+  await expect(qaCard.locator('.chip', { hasText: DICT.vi['staffTemplatePicker.chipSkills'] })).toBeVisible()
+  await expect(qaCard.locator('.chip', { hasText: 'kỹ năng:' })).toHaveCount(0)
+})

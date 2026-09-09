@@ -15,6 +15,10 @@ export function templateChips(template: StaffTemplate, t: Translate): string[] {
   const chips: string[] = []
   if (template.web_search) chips.push(t('staffTemplatePicker.chipWebSearch'))
   if (template.has_skills) chips.push(t('staffTemplatePicker.chipSkills'))
+  // v97: pack skills ride by NAME — a PM card that says which five skills it brings
+  // answers the role-fit question a bare 'custom skills' chip never could.
+  if (template.skills.length > 0)
+    chips.push(t('staffTemplatePicker.chipPackSkills', { names: template.skills.join(', ') }))
   if (template.reports.length > 0)
     chips.push(t('staffTemplatePicker.chipReports', { kinds: template.reports.join(', ') }))
   // A template can arrive pre-scheduled, which means the agent starts running on its own

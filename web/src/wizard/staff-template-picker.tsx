@@ -9,26 +9,9 @@ import { Link } from 'react-router'
 import { ApiError, api } from '../api/client'
 import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
-import type { UiKey } from '../i18n/dictionary'
+import { templateChips } from '../features/team/create/template-chips'
 import { useLanguage } from '../i18n/language-context'
 import type { CrewCreateResult, CrewOption, CrewPreview, Pack, StaffTemplate } from '../types'
-
-const RUNTIME_LABEL_KEY: Record<string, UiKey> = {
-  native: 'staffTemplatePicker.runtimeNative',
-  create_agent: 'staffTemplatePicker.runtimeCreateAgent',
-  deep_agent: 'staffTemplatePicker.runtimeDeepAgent',
-}
-
-/** Chips describing the template's pre-attached tools — the "tool gắn sẵn" contract. */
-function toolChips(template: StaffTemplate, t: (key: UiKey, params?: Record<string, string | number>) => string): string[] {
-  const chips: string[] = []
-  if (template.web_search) chips.push(t('staffTemplatePicker.chipWebSearch'))
-  if (template.has_skills) chips.push(t('staffTemplatePicker.chipSkills'))
-  if (template.reports.length > 0) chips.push(t('staffTemplatePicker.chipReports', { kinds: template.reports.join(', ') }))
-  const runtimeKey = RUNTIME_LABEL_KEY[template.recommended_runtime]
-  chips.push(runtimeKey ? t(runtimeKey) : template.recommended_runtime)
-  return chips
-}
 
 export function StaffTemplatePicker({
   onApply,
@@ -233,7 +216,7 @@ export function StaffTemplatePicker({
               <strong>{template.role}</strong>
               <div className="muted">{t('staffTemplatePicker.domainLabel', { domain: template.domain })}</div>
               <div className="template-chips">
-                {toolChips(template, t).map((c) => (
+                {templateChips(template, t).map((c) => (
                   <span key={c} className="chip">
                     {c}
                   </span>

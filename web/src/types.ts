@@ -471,6 +471,9 @@ export interface StaffTemplate {
   // v32 one-click contract: pre-attached tools + default schedule + bundled skills
   schedule: Record<string, string>
   has_skills: boolean
+  // v97: pack skills the template attaches by name (contract v2 `skills:`);
+  // `has_skills` is about the template-dir skills, this is the pack list.
+  skills: string[]
 }
 
 // v32: one-click create + crew bootstrap payloads

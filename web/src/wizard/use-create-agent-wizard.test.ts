@@ -69,6 +69,7 @@ const PM_TEMPLATE = {
   recommended_runtime: 'native',
   schedule: {},
   has_skills: false,
+  skills: [],
 }
 
 test('applyTemplate carries the web_search opt-in into buildSpec', () => {

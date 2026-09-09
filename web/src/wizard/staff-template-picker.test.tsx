@@ -21,6 +21,7 @@ const PM_TEMPLATE = {
   recommended_runtime: 'native',
   schedule: {},
   has_skills: false,
+  skills: [],
 }
 
 const CREW = {
