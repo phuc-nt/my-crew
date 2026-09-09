@@ -245,6 +245,9 @@ class ServeProcess:
     def post(self, path: str, payload: Any = None, **kw) -> tuple[int, Any]:
         return self.request("POST", path, payload, **kw)
 
+    def patch(self, path: str, payload: Any = None, **kw) -> tuple[int, Any]:
+        return self.request("PATCH", path, payload, **kw)
+
     # -- lifecycle -------------------------------------------------------------------
 
     def log(self) -> str:
