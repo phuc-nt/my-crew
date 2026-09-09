@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
 import urllib.error
 
 import pytest
@@ -370,6 +371,61 @@ def test_ads_weekly_graph_degraded_source_renders_thieu(tmp_path):
     )
     result = graph.invoke({})
     assert "THIẾU" in result["report_text"]
+
+
+class _RecordingLlm:
+    """Captures the messages the narrate node sends, and answers with fixed prose."""
+
+    captured: list[list[dict]] = []
+
+    def __init__(self, *_a, **_kw):
+        pass
+
+    def complete(self, messages, **_kw):
+        _RecordingLlm.captured.append(messages)
+
+        class _R:
+            content = "Da em ghi nhan."
+
+        return _R()
+
+
+def _narrate_messages(monkeypatch, tmp_path, rows):
+    """Run the graph with a recording client and return the user message it sent."""
+    # The pack module only exists once the registry has loaded it, so load first, patch
+    # second — otherwise the import below resolves a module that is not there yet.
+    pack = PackRegistry().load("ads")
+    import domain_pack_ads.graphs as ads_graphs
+
+    _RecordingLlm.captured = []
+    monkeypatch.setattr(ads_graphs, "LlmClient", _RecordingLlm)
+    settings = build_settings_from_dict({"data_dir": tmp_path, "dry_run": True})
+    graph = pack.report_kinds["ads-weekly"](
+        None, config=_config(True), settings=settings, tools=_FakeAdsTools(rows),
+    )
+    graph.invoke({})
+    assert _RecordingLlm.captured, "narrate node never called the model"
+    return next(m["content"] for m in _RecordingLlm.captured[0] if m["role"] == "user")
+
+
+def test_narrate_withholds_the_date_when_no_data_was_read(monkeypatch, tmp_path):
+    # A model shown a date writes it back, and a period with nothing measured must carry
+    # no digit at all: withholding the date is what keeps the note free of figures.
+    user = _narrate_messages(monkeypatch, tmp_path, None)
+    assert "available=False" in user
+    assert "Ngày báo cáo" not in user, f"the date reached the model anyway: {user!r}"
+    assert not re.search(r"\d{2}/\d{2}", user), f"a date slipped into the prompt: {user!r}"
+    assert "không viết bất kỳ chữ số nào" in user
+
+
+def test_narrate_still_passes_the_date_and_figures_when_data_was_read(monkeypatch, tmp_path):
+    from domain_pack_ads.tools import InsightRow
+
+    user = _narrate_messages(
+        monkeypatch, tmp_path, [InsightRow("1", "Sale", "2026-08-24", 100.0, 2000, 0.02)]
+    )
+    assert "Ngày báo cáo:" in user
+    assert "total_spend=100.0" in user and "total_reach=2000" in user
 
 
 def test_ads_weekly_graph_without_telegram_skips_loudly(tmp_path):

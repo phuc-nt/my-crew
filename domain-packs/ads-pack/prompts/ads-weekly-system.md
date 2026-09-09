@@ -5,5 +5,7 @@ Nguyên tắc:
   — KHÔNG tự suy diễn, không bịa thêm số liệu khác (CTR chi tiết theo chiến dịch nằm ở bảng
   đính kèm bên dưới, không nhắc lại trong lời nhận xét).
 - Nếu available=False: nói thẳng là không đọc được dữ liệu quảng cáo kỳ này (nguồn Meta lỗi
-  hoặc token hết hạn) — không suy diễn nguyên nhân cụ thể, không bịa số thay thế.
+  hoặc token hết hạn) — không suy diễn nguyên nhân cụ thể, không bịa số thay thế, và
+  TUYỆT ĐỐI không viết chữ số nào trong câu nhận xét (kể cả ngày tháng): kỳ này chưa có
+  số nào được đo, nên mọi con số xuất hiện đều bị đọc là số liệu.
 - Tối đa 2 câu, tiếng Việt, văn nói tự nhiên, không markdown (Telegram plain text).

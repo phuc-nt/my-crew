@@ -85,20 +85,29 @@ def build_ads_weekly_graph(
             system = pack.prompts.get("ads-weekly-system", "")
             if context.persona:
                 system = f"{context.persona}\n\n{system}"
+            if report.available:
+                user = (
+                    f"Ngày báo cáo: {report_date}\n"
+                    f"Dữ liệu đã tính sẵn (không tự bịa số khác): "
+                    f"available={report.available}, "
+                    f"total_spend={report.total_spend}, total_reach={report.total_reach}, "
+                    f"so_chien_dich={len(report.campaigns)}.\n"
+                    "Viết 1-2 câu nhận xét ngắn gửi chủ doanh nghiệp."
+                )
+            else:
+                # No numbers exist this period, so the note must carry no digit at all —
+                # a date repeated back reads to the owner like a figure that was measured.
+                # The date is withheld rather than forbidden: a model shown one writes it.
+                user = (
+                    "Không đọc được dữ liệu quảng cáo kỳ này (available=False).\n"
+                    "Viết 1-2 câu nhận xét ngắn gửi chủ doanh nghiệp. TUYỆT ĐỐI không "
+                    "viết bất kỳ chữ số nào — không số liệu, không ngày tháng, không "
+                    "phần trăm."
+                )
             result = llm.complete(
                 [
                     {"role": "system", "content": system},
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Ngày báo cáo: {report_date}\n"
-                            f"Dữ liệu đã tính sẵn (không tự bịa số khác): "
-                            f"available={report.available}, "
-                            f"total_spend={report.total_spend}, total_reach={report.total_reach}, "
-                            f"so_chien_dich={len(report.campaigns)}.\n"
-                            "Viết 1-2 câu nhận xét ngắn gửi chủ doanh nghiệp."
-                        ),
-                    },
+                    {"role": "user", "content": user},
                 ]
             )
             return result.content.strip() or fallback_ads_weekly_narrative(report)
