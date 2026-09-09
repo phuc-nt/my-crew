@@ -268,6 +268,40 @@ def test_deep_team_flag_omitted_from_started_event_when_false(
     assert captured_phase_calls[0]["deep_team"] is False
 
 
+def test_run_graph_names_the_agent_on_the_context_so_skill_usage_is_recorded(
+    monkeypatch, tmp_path, settings_factory,
+):
+    """`select_skill_text` records which skills a step used ONLY when the context carries
+    `agent_id`. The report path (worker.py) always set it; team steps never did, so an
+    agent that only ever ran team steps looked to the curator like it had never used a
+    single skill — and its template skills were on the archive path."""
+    from my_crew.runtime import team_step_runner
+
+    monkeypatch.setattr("my_crew.runtime.team_task_paths.DATA_DIR", tmp_path)
+    captured_build_kwargs: dict = {}
+    monkeypatch.setattr(
+        "my_crew.runtime_backends.protocol.resolve_step_runtime",
+        lambda loaded, step, **_kw: _FakeNonNativeRuntime(captured_build_kwargs),
+    )
+    monkeypatch.setattr(team_step_runner, "_append_step_phase_event", lambda *_a, **_kw: None)
+
+    loaded = SimpleNamespace(
+        soul="", project="", memory="", config=SimpleNamespace(), agent_runtime=None,
+        gws_context=False, deep_team=False, deep_team_max_calls=None,
+        company_docs=(), web_search=False, team_step_egress=None, skills=(),
+        profile_id="agent-a", domain="pm", template_role=None,
+    )
+    step = SimpleNamespace(
+        title="viết báo cáo", acceptance="", seq=1, deps=(), assigned_to="agent-a",
+        parent_step_id=None, system_inserted=False, step_type="work",
+    )
+    team_step_runner._run_graph(
+        loaded, settings_factory(), task_id="task-1", step=step, attempt_id="att-1",
+    )
+
+    assert captured_build_kwargs["context"].agent_id == "agent-a"
+
+
 def test_resolve_search_hook_writes_audit_row_with_redacted_query(tmp_path, monkeypatch):
     from my_crew.runtime import team_task_paths
 

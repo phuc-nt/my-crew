@@ -66,9 +66,25 @@ def test_select_no_selector_is_blank():
     assert select_skill_text(ctx, "internal", kind="daily") == ""
 
 
-def test_select_none_chosen_is_blank():
+def test_select_none_chosen_and_none_declared_is_blank():
+    # Nothing in the pool declares "okr", so an empty pick stays empty.
     ctx = _ctx(_POOL, lambda pool, kind: [])
-    assert select_skill_text(ctx, "internal", kind="daily") == ""
+    assert select_skill_text(ctx, "internal", kind="okr") == ""
+
+
+def test_select_none_chosen_falls_back_to_skills_declared_for_the_kind():
+    # An empty pick (a reasoning model returning no content, or a failed call) must not
+    # strip a step of the skills written for it: `applies_to` naming the kind stands in.
+    ctx = _ctx(_POOL, lambda pool, kind: [])
+    out = select_skill_text(ctx, "internal", kind="daily")
+    assert "BODY-FLAG" in out and "BODY-EST" not in out  # only _S1 declares "daily"
+
+
+def test_select_a_real_pick_is_not_widened_by_applies_to():
+    # The selector answered — its answer stands even though _S1 also declares "weekly".
+    ctx = _ctx(_POOL, lambda pool, kind: ["estimate-effort"])
+    out = select_skill_text(ctx, "internal", kind="weekly")
+    assert "BODY-EST" in out and "BODY-FLAG" not in out
 
 
 # --- make_llm_selector: parses names, tolerates failure ---

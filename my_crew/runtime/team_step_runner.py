@@ -514,6 +514,12 @@ def _run_graph(
             capability=build_capability_block(loaded, None),
             skills=skills, skill_selector=selector,
             company_docs=load_company_docs(getattr(loaded, "company_docs", ())),
+            # v97: the selector records which skills a step used ONLY when the context
+            # names the agent (`select_skill_text` → `record_usage`). The report path
+            # (worker.py) has set this since v38; team steps never did, so the curator
+            # saw every template skill as "never used" for an agent that only ever ran
+            # team steps — and would have archived it after the grace period.
+            agent_id=getattr(loaded, "profile_id", None) or None,
         )
     else:
         context = EMPTY

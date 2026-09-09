@@ -59,6 +59,9 @@ class SanitizedBundle:
     memory: str
     capability: str
     handoff: str
+    # v97: the agent's selected skill bodies. Operator-authored instruction files, but on
+    # a network-capable sandbox they are sanitized like persona — a skill can name people.
+    skills: str = ""
 
 
 def make_llm_sanitizer(client: LlmClient) -> Sanitizer:
@@ -98,7 +101,8 @@ _SECTION_RE = re.compile(r"^===KENH:([a-z]+)===$", re.MULTILINE)
 
 
 def sanitize_bundle(
-    sanitize: Sanitizer, *, persona: str, project: str, memory: str, capability: str, handoff: str
+    sanitize: Sanitizer, *, persona: str, project: str, memory: str, capability: str,
+    handoff: str, skills: str = "",
 ) -> tuple[SanitizedBundle, bool]:
     """Sanitize the internal channels in ONE pass; conservative ok semantics unchanged.
 
@@ -112,7 +116,7 @@ def sanitize_bundle(
     """
     fields = {
         "persona": persona or "", "project": project or "", "memory": memory or "",
-        "capability": capability or "", "handoff": handoff or "",
+        "capability": capability or "", "handoff": handoff or "", "skills": skills or "",
     }
     non_empty = {k: v for k, v in fields.items() if v.strip()}
     empty_bundle = SanitizedBundle(persona="", project="", memory="", capability="", handoff="")
@@ -153,6 +157,7 @@ def sanitize_bundle(
         SanitizedBundle(
             persona=cleaned["persona"], project=cleaned["project"], memory=cleaned["memory"],
             capability=cleaned["capability"], handoff=cleaned["handoff"],
+            skills=cleaned["skills"],
         ),
         True,
     )

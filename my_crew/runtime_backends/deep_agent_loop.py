@@ -147,6 +147,7 @@ def run_deep_agent_work(
     )
     from my_crew.runtime_backends.sandbox_backend import build_sandbox_backend
     from my_crew.runtime_backends.sandbox_teardown import teardown_sandbox
+    from my_crew.runtime_backends.team_step_prompt_extras import team_step_skills_text
 
     net_opt_in = bool((sandbox_cfg or {}).get("network"))
     raw = {
@@ -155,6 +156,9 @@ def run_deep_agent_work(
         "memory": getattr(context, "memory", "") or "",
         "capability": getattr(context, "capability", "") or "",
         "handoff": handoff or "",
+        # v97: skills join the bundle so they are sanitized with everything else when the
+        # network is on. company_docs stay withheld on this tier (see below).
+        "skills": team_step_skills_text(context),
     }
     if net_opt_in:
         # Sanitize the internal input channels (context fields + handoff) BEFORE deciding
@@ -177,10 +181,14 @@ def run_deep_agent_work(
     # backend to run on otherwise — deepagents' execute returns an error, but we refuse earlier.
     backend = build_sandbox_backend(run_cfg)
 
+    # v97: skills reach this tier too (sanitized above when the network is on). company_docs
+    # are deliberately NOT passed: a network-capable sandbox is the one place internal docs
+    # could egress, and the earlier decision to withhold them here stands.
     msgs = build_team_step_messages(
         step_title=title, handoff_context=bundle.handoff,
         persona=bundle.persona, project=bundle.project,
         memory=bundle.memory, capability=bundle.capability,
+        skills=bundle.skills,
     )
     system = next((m["content"] for m in msgs if m["role"] == "system"), "")
     # Step-budget contract (deep_agent only): research tasks that fetch many sources can

@@ -38,6 +38,7 @@ def _install_fakes(monkeypatch, capture: dict):
     class _Bundle:
         persona = project = memory = capability = ""
         handoff = "handoff"
+        skills = ""
 
     import my_crew.runtime_backends.deep_agent_sanitizer as san
 

@@ -23,10 +23,12 @@ logger = logging.getLogger(__name__)
 # (candidate skills, kind_context) -> chosen skill NAMES.
 SkillSelector = Callable[[list["Skill"], str], list[str]]
 
+# v97: worded for any kind of work, not just PM reports — a team step ("team-step") asks
+# the same question with a research/writing/review skill pool.
 _SYSTEM = (
-    "Bạn chọn các kỹ năng PM phù hợp để soạn một báo cáo. Dưới đây là danh sách kỹ năng "
-    "(tên + mô tả). Trả về CHỈ tên các kỹ năng phù hợp với loại báo cáo được hỏi, mỗi tên "
-    "một dòng. Không giải thích. Nếu không có cái nào phù hợp, trả về dòng trống."
+    "Bạn chọn các kỹ năng phù hợp cho một loại công việc. Dưới đây là danh sách kỹ năng "
+    "(tên + mô tả). Trả về CHỈ tên các kỹ năng phù hợp với loại công việc được hỏi, mỗi "
+    "tên một dòng. Không giải thích. Nếu không có cái nào phù hợp, trả về dòng trống."
 )
 
 
@@ -42,7 +44,7 @@ def make_llm_selector(client: LlmClient) -> SkillSelector:
                 [
                     {"role": "system", "content": _SYSTEM},
                     {"role": "user",
-                     "content": f"Loại báo cáo: {kind_context}\nKỹ năng:\n{listing}"},
+                     "content": f"Loại công việc: {kind_context}\nKỹ năng:\n{listing}"},
                 ],
                 role="plan",
             )
@@ -61,10 +63,21 @@ def select_skill_text(context: ProfileContext, audience: str, *, kind: str) -> s
     selector's returned names are FILTERED to the candidate pool, so a hallucinated name
     is dropped. When the context carries an `agent_id`, the chosen names are recorded for
     the skill curator (v38 #2) — best-effort telemetry that never affects the text.
+
+    v97: when the selector picks NOTHING, the skills whose `applies_to` names this kind
+    are used instead. The selector stays authoritative whenever it answers; the fallback
+    only covers the empty answer — measured live: a reasoning model spent its whole
+    completion on reasoning and returned no content, so a researcher ran its web step
+    without the one skill its role template ships for exactly that step.
     """
     if audience != "internal" or not context.skills or context.skill_selector is None:
         return ""
     chosen_names = set(context.skill_selector(list(context.skills), kind))
+    if not chosen_names:
+        chosen_names = {s.name for s in context.skills if kind in (s.applies_to or ())}
+        if chosen_names:
+            logger.info("skill selector picked nothing for %r; using the %d declared for it",
+                        kind, len(chosen_names))
     chosen = [s for s in context.skills if s.name in chosen_names]
     agent_id = getattr(context, "agent_id", None)
     if agent_id and chosen:

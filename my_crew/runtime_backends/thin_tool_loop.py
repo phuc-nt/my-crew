@@ -66,6 +66,7 @@ def run_thin_loop(
     before. See `loop_cost_guard` for why enforcement lives in this loop alone.
     """
     from my_crew.llm.team_task_prompt import build_team_step_messages
+    from my_crew.runtime_backends.team_step_prompt_extras import team_step_prompt_extras
 
     if llm is None:
         from my_crew.llm.client import LlmClient
@@ -76,10 +77,13 @@ def run_thin_loop(
     by_name: dict[str, ToolSpec] = {s.name: s for s in specs}
     wire_tools = [s.as_openai_tool() for s in specs]
 
+    # v97: skills + company docs ride along exactly as on the native tier — before this,
+    # an agent whose steps always landed here never saw its skill pool.
     base = build_team_step_messages(
         step_title=title, handoff_context=handoff,
         persona=getattr(context, "persona", ""), project=getattr(context, "project", ""),
         memory=getattr(context, "memory", ""), capability=getattr(context, "capability", ""),
+        **team_step_prompt_extras(context),
     )
     system = next((m["content"] for m in base if m["role"] == "system"), "")
     system += _loop_contract(specs)

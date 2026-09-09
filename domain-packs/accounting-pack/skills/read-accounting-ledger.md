@@ -1,3 +1,8 @@
+---
+name: read-accounting-ledger
+description: Đọc sổ quỹ/dòng tiền tuần qua bằng report kind cashflow-weekly; số thiếu ghi THIẾU, không suy đoán.
+applies_to: [team-step]
+---
 # Đọc sổ quỹ và báo cáo dòng tiền
 
 Khi được hỏi về tình hình thu chi/dòng tiền trong tuần gần nhất, chạy report kind

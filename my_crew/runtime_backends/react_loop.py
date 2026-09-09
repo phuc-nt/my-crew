@@ -81,6 +81,7 @@ def run_react_work(
     from my_crew.config.settings import OPENROUTER_BASE_URL
     from my_crew.llm.team_task_prompt import build_team_step_messages
     from my_crew.runtime_backends.community_loop_core import invoke_capped, record_loop_result
+    from my_crew.runtime_backends.team_step_prompt_extras import team_step_prompt_extras
 
     # Reuse the native system+user prompt so persona/skills/company-docs/red-lines are identical;
     # we only change HOW the model produces text (loop vs one-shot), not WHAT it is told.
@@ -88,6 +89,7 @@ def run_react_work(
         step_title=title, handoff_context=handoff,
         persona=getattr(context, "persona", ""), project=getattr(context, "project", ""),
         memory=getattr(context, "memory", ""), capability=getattr(context, "capability", ""),
+        **team_step_prompt_extras(context),  # v97: the "skills" half of that promise
     )
     system = next((m["content"] for m in msgs if m["role"] == "system"), "")
     # v45: give this tier an in-STATE file scratch (no Docker, no host, no shell) so a no-shell
