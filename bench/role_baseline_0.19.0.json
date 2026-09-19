@@ -1,0 +1,722 @@
+{
+  "format_version": 1,
+  "model": "~deepseek/deepseek-v4-flash-latest",
+  "k": 3,
+  "roles": {
+    "content": {
+      "n": 6,
+      "ok": 6,
+      "rate": 1.0,
+      "wilson_low": 0.61,
+      "wilson_high": 1.0,
+      "mean_latency_s": 7.4231,
+      "mean_cost_usd": 0.0001,
+      "verdict": "good",
+      "fails": {},
+      "providers": {
+        "Inceptron": 1,
+        "Baidu": 4,
+        "Wafer": 1
+      },
+      "fails_by_provider": {},
+      "probes": [
+        {
+          "name": "step/sales_trend",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 9.9847,
+          "mean_cost_usd": 0.0002,
+          "details": [
+            "ok: 1157 chars @Inceptron",
+            "ok: 1147 chars @Baidu",
+            "ok: 1048 chars @Wafer"
+          ]
+        },
+        {
+          "name": "step/price_increase_email",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 4.8616,
+          "mean_cost_usd": 0.0001,
+          "details": [
+            "ok: 1619 chars @Baidu",
+            "ok: 1586 chars @Baidu",
+            "ok: 1684 chars @Baidu"
+          ]
+        }
+      ]
+    },
+    "review": {
+      "n": 51,
+      "ok": 51,
+      "rate": 1.0,
+      "wilson_low": 0.93,
+      "wilson_high": 1.0,
+      "mean_latency_s": 43.3899,
+      "mean_cost_usd": 0.0006,
+      "verdict": "good",
+      "fails": {},
+      "providers": {
+        "Sail Research": 16,
+        "DigitalOcean": 5,
+        "StreamLake": 10,
+        "Wafer": 2,
+        "Morph": 1,
+        "Relace": 4,
+        "DeepInfra": 2,
+        "Makora": 2,
+        "Baidu": 5,
+        "BaseTen": 3,
+        "Inceptron": 1
+      },
+      "fails_by_provider": {},
+      "probes": [
+        {
+          "name": "self_check/clean/sales_trend",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 41.034,
+          "mean_cost_usd": 0.0005,
+          "details": [
+            "ok: passed clean @Sail Research",
+            "ok: passed clean @Sail Research",
+            "ok: passed clean @Sail Research"
+          ]
+        },
+        {
+          "name": "self_check/clean/office_choice",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 39.832,
+          "mean_cost_usd": 0.0006,
+          "details": [
+            "ok: passed clean @DigitalOcean",
+            "ok: passed clean @DigitalOcean",
+            "ok: passed clean @DigitalOcean"
+          ]
+        },
+        {
+          "name": "self_check/clean/event_plan",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 18.0512,
+          "mean_cost_usd": 0.0003,
+          "details": [
+            "ok: passed clean @Sail Research",
+            "ok: passed clean @Sail Research",
+            "ok: passed clean @Sail Research"
+          ]
+        },
+        {
+          "name": "self_check/clean/price_increase_email",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 13.2391,
+          "mean_cost_usd": 0.0001,
+          "details": [
+            "ok: passed clean @StreamLake",
+            "ok: passed clean @StreamLake",
+            "ok: passed clean @StreamLake"
+          ]
+        },
+        {
+          "name": "self_check/seeded/sales_trend",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 25.4621,
+          "mean_cost_usd": 0.0005,
+          "details": [
+            "ok: caught=3/3 b_total_wrong,c_called_flat,budget_to_declining @StreamLake",
+            "ok: caught=3/3 b_total_wrong,c_called_flat,budget_to_declining @Wafer",
+            "ok: caught=2/3 b_total_wrong,budget_to_declining @StreamLake"
+          ]
+        },
+        {
+          "name": "self_check/seeded/office_choice",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 175.6273,
+          "mean_cost_usd": 0.001,
+          "details": [
+            "ok: caught=3/3 a_free_month_ignored,c_distance_wrong,a_called_closest @StreamLake",
+            "ok: caught=3/3 a_free_month_ignored,c_distance_wrong,a_called_closest @Morph",
+            "ok: caught=3/3 a_free_month_ignored,c_distance_wrong,a_called_closest @Relace"
+          ]
+        },
+        {
+          "name": "self_check/seeded/event_plan",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 32.5779,
+          "mean_cost_usd": 0.0005,
+          "details": [
+            "ok: caught=3/3 budget_sums_to_95,week5_missing,only_three_assigned @DeepInfra",
+            "ok: caught=3/3 budget_sums_to_95,week5_missing,only_three_assigned @DigitalOcean",
+            "ok: caught=3/3 budget_sums_to_95,week5_missing,only_three_assigned @DigitalOcean"
+          ]
+        },
+        {
+          "name": "self_check/seeded/price_increase_email",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 13.773,
+          "mean_cost_usd": 0.0004,
+          "details": [
+            "ok: caught=3/3 only_two_weaknesses,rate_changed_to_20,timing_changed_to_quarter @Makora",
+            "ok: caught=3/3 only_two_weaknesses,rate_changed_to_20,timing_changed_to_quarter @Baidu",
+            "ok: caught=3/3 only_two_weaknesses,rate_changed_to_20,timing_changed_to_quarter @Sail Research"
+          ]
+        },
+        {
+          "name": "review/clean/sales_trend",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 12.3859,
+          "mean_cost_usd": 0.0003,
+          "details": [
+            "ok: passed clean @Baidu",
+            "ok: passed clean @Relace",
+            "ok: passed clean @Sail Research"
+          ]
+        },
+        {
+          "name": "review/clean/office_choice",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 68.4118,
+          "mean_cost_usd": 0.001,
+          "details": [
+            "ok: passed clean @Relace",
+            "ok: passed clean @StreamLake",
+            "ok: passed clean @BaseTen"
+          ]
+        },
+        {
+          "name": "review/clean/event_plan",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 7.2078,
+          "mean_cost_usd": 0.0003,
+          "details": [
+            "ok: passed clean @StreamLake",
+            "ok: passed clean @Makora",
+            "ok: passed clean @Baidu"
+          ]
+        },
+        {
+          "name": "review/clean/price_increase_email",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 20.9944,
+          "mean_cost_usd": 0.0007,
+          "details": [
+            "ok: passed clean @Wafer",
+            "ok: passed clean @BaseTen",
+            "ok: passed clean @StreamLake"
+          ]
+        },
+        {
+          "name": "review/seeded/sales_trend",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 42.1604,
+          "mean_cost_usd": 0.0004,
+          "details": [
+            "ok: caught=3/3 b_total_wrong,c_called_flat,budget_to_declining @Inceptron",
+            "ok: caught=3/3 b_total_wrong,c_called_flat,budget_to_declining @Baidu",
+            "ok: caught=3/3 b_total_wrong,c_called_flat,budget_to_declining @Baidu"
+          ]
+        },
+        {
+          "name": "review/seeded/office_choice",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 149.5297,
+          "mean_cost_usd": 0.0022,
+          "details": [
+            "ok: caught=3/3 a_free_month_ignored,c_distance_wrong,a_called_closest @StreamLake",
+            "ok: caught=3/3 a_free_month_ignored,c_distance_wrong,a_called_closest @Sail Research",
+            "ok: caught=3/3 a_free_month_ignored,c_distance_wrong,a_called_closest @Sail Research"
+          ]
+        },
+        {
+          "name": "review/seeded/event_plan",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 10.1453,
+          "mean_cost_usd": 0.0004,
+          "details": [
+            "ok: caught=3/3 budget_sums_to_95,week5_missing,only_three_assigned @DeepInfra",
+            "ok: caught=3/3 budget_sums_to_95,week5_missing,only_three_assigned @BaseTen",
+            "ok: caught=3/3 budget_sums_to_95,week5_missing,only_three_assigned @Relace"
+          ]
+        },
+        {
+          "name": "review/seeded/price_increase_email",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 53.4372,
+          "mean_cost_usd": 0.001,
+          "details": [
+            "ok: caught=3/3 only_two_weaknesses,rate_changed_to_20,timing_changed_to_quarter @Sail Research",
+            "ok: caught=3/3 only_two_weaknesses,rate_changed_to_20,timing_changed_to_quarter @Sail Research",
+            "ok: caught=3/3 only_two_weaknesses,rate_changed_to_20,timing_changed_to_quarter @Sail Research"
+          ]
+        },
+        {
+          "name": "stuck_judge/no-web-tool",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 13.7595,
+          "mean_cost_usd": 0.0003,
+          "details": [
+            "ok: reassign to=researcher @Sail Research",
+            "ok: reassign to=researcher @Sail Research",
+            "ok: reassign to=researcher @Sail Research"
+          ]
+        }
+      ],
+      "h4": {
+        "keep": true,
+        "reasons": [],
+        "false_fails": 0,
+        "clean_graded": 24,
+        "false_fail_rate": 0.0,
+        "false_fail_wilson_low": 0.0,
+        "false_fail_wilson_high": 0.138,
+        "caught": 71,
+        "seeded": 72,
+        "catch_rate": 0.986,
+        "catch_wilson_low": 0.925,
+        "catch_wilson_high": 0.998
+      }
+    },
+    "aggregate": {
+      "n": 6,
+      "ok": 6,
+      "rate": 1.0,
+      "wilson_low": 0.61,
+      "wilson_high": 1.0,
+      "mean_latency_s": 25.0784,
+      "mean_cost_usd": 0.0003,
+      "verdict": "good",
+      "fails": {},
+      "providers": {
+        "Relace": 3,
+        "Baidu": 1,
+        "Sail Research": 1,
+        "StreamLake": 1
+      },
+      "fails_by_provider": {},
+      "probes": [
+        {
+          "name": "summary/missing-step",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 23.9501,
+          "mean_cost_usd": 0.0001,
+          "details": [
+            "ok: 420 chars @Relace",
+            "ok: 564 chars @Relace",
+            "ok: 589 chars @Relace"
+          ]
+        },
+        {
+          "name": "summary/unresolved-review",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 26.2067,
+          "mean_cost_usd": 0.0005,
+          "details": [
+            "ok: 1001 chars @Baidu",
+            "ok: 1350 chars @Sail Research",
+            "ok: 901 chars @StreamLake"
+          ]
+        }
+      ]
+    },
+    "plan": {
+      "n": 36,
+      "ok": 36,
+      "rate": 1.0,
+      "wilson_low": 0.904,
+      "wilson_high": 1.0,
+      "mean_latency_s": 81.1794,
+      "mean_cost_usd": 0.0005,
+      "verdict": "good",
+      "fails": {},
+      "providers": {
+        "Morph": 10,
+        "StreamLake": 3,
+        "Baidu": 1,
+        "Relace": 3,
+        "Sail Research": 12,
+        "DigitalOcean": 1,
+        "Inceptron": 1
+      },
+      "fails_by_provider": {},
+      "probes": [
+        {
+          "name": "intent/outage-verbatim",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 29.6105,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=assign_team_task expected=assign_team_task @Morph",
+            "ok: got=assign_team_task expected=assign_team_task @Morph",
+            "ok: got=assign_team_task expected=assign_team_task @Morph"
+          ]
+        },
+        {
+          "name": "intent/khao-sat-cong-cu",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 48.8814,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=assign_team_task expected=assign_team_task @StreamLake",
+            "ok: got=assign_team_task expected=assign_team_task @Morph",
+            "ok: got=assign_team_task expected=assign_team_task @Morph"
+          ]
+        },
+        {
+          "name": "intent/ngan-menh-lenh",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 41.2845,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=assign_team_task expected=assign_team_task @Morph",
+            "ok: got=assign_team_task expected=assign_team_task @Morph",
+            "ok: got=assign_team_task expected=assign_team_task @Morph"
+          ]
+        },
+        {
+          "name": "intent/hoi-nhung-la-viec",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 564.6532,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=assign_team_task expected=assign_team_task @Morph",
+            "ok: got=assign_team_task expected=assign_team_task @Morph,Baidu",
+            "ok: got=assign_team_task expected=assign_team_task @Relace"
+          ]
+        },
+        {
+          "name": "intent/gia-thi-truong",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 6.842,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=assign_team_task expected=assign_team_task @Sail Research",
+            "ok: got=assign_team_task expected=assign_team_task @Sail Research",
+            "ok: got=assign_team_task expected=assign_team_task @Sail Research"
+          ]
+        },
+        {
+          "name": "intent/chuyen-vat",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 2.7963,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=question expected=not assign_team_task @Sail Research",
+            "ok: got=question expected=not assign_team_task @Sail Research",
+            "ok: got=question expected=not assign_team_task @Sail Research"
+          ]
+        },
+        {
+          "name": "intent/liet-ke-viec-nhom",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 6.0132,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=list_team_tasks expected=list_team_tasks @Sail Research",
+            "ok: got=list_team_tasks expected=list_team_tasks @Sail Research",
+            "ok: got=list_team_tasks expected=list_team_tasks @Sail Research"
+          ]
+        },
+        {
+          "name": "intent/thong-ke-dinh-tuyen",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 4.999,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: got=route_stats expected=route_stats @Sail Research",
+            "ok: got=route_stats expected=route_stats @Sail Research",
+            "ok: got=route_stats expected=route_stats @Sail Research"
+          ]
+        },
+        {
+          "name": "decompose/ba-phan",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 175.5923,
+          "mean_cost_usd": 0.0012,
+          "details": [
+            "ok: steps=3 to=researcher,analyst,writer @StreamLake",
+            "ok: steps=3 to=researcher,analyst,writer @DigitalOcean",
+            "ok: steps=3 to=researcher,analyst,writer @Relace"
+          ]
+        },
+        {
+          "name": "decompose/mot-viec",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 77.9528,
+          "mean_cost_usd": 0.0005,
+          "details": [
+            "ok: steps=1 to=writer @StreamLake",
+            "ok: steps=1 to=writer @Relace",
+            "ok: steps=1 to=writer @Inceptron"
+          ]
+        },
+        {
+          "name": "intake/streaming_services",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 6.3598,
+          "mean_cost_usd": 0.0002,
+          "details": [
+            "ok: to=analyst web=True",
+            "ok: to=analyst web=True",
+            "ok: to=analyst web=True"
+          ]
+        },
+        {
+          "name": "intake/note_taking",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 9.1683,
+          "mean_cost_usd": 0.0003,
+          "details": [
+            "ok: to=analyst web=True",
+            "ok: to=writer web=True",
+            "ok: to=analyst web=True"
+          ]
+        }
+      ]
+    },
+    "util": {
+      "n": 18,
+      "ok": 18,
+      "rate": 1.0,
+      "wilson_low": 0.824,
+      "wilson_high": 1.0,
+      "mean_latency_s": 17.4557,
+      "mean_cost_usd": 0.0001,
+      "verdict": "good",
+      "fails": {},
+      "providers": {
+        "Inceptron": 1,
+        "Relace": 8,
+        "StreamLake": 4,
+        "Sail Research": 1,
+        "DeepInfra": 1,
+        "CoreWeave": 1,
+        "Reka": 1,
+        "Alibaba": 1
+      },
+      "fails_by_provider": {},
+      "probes": [
+        {
+          "name": "memory/weekly-report",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 78.7602,
+          "mean_cost_usd": 0.0004,
+          "details": [
+            "ok: 3 facts @Inceptron",
+            "ok: 3 facts @Relace",
+            "ok: 3 facts @StreamLake"
+          ]
+        },
+        {
+          "name": "slot/verbatim",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 8.4505,
+          "mean_cost_usd": 0.0001,
+          "details": [
+            "ok: value='SCRUM' new_intent=False @Sail Research",
+            "ok: value='SCRUM' new_intent=False @DeepInfra",
+            "ok: value='SCRUM' new_intent=False @StreamLake"
+          ]
+        },
+        {
+          "name": "slot/code-hint",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 3.0459,
+          "mean_cost_usd": 0.0,
+          "details": [
+            "ok: value='pm' new_intent=False @Relace",
+            "ok: value='pm' new_intent=False @Relace",
+            "ok: value='pm' new_intent=False @Relace"
+          ]
+        },
+        {
+          "name": "slot/new-intent",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 2.2399,
+          "mean_cost_usd": 0.0001,
+          "details": [
+            "ok: value='' new_intent=True @Relace",
+            "ok: value='' new_intent=True @CoreWeave",
+            "ok: value='' new_intent=True @Relace"
+          ]
+        },
+        {
+          "name": "reflection/vague-acceptance",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 9.3932,
+          "mean_cost_usd": 0.0001,
+          "details": [
+            "ok: Tiêu chí nghiệm thu phải liệt cột đầy: nguồn, ngày truy cập, phiên bản — 'đầy đủ @Relace",
+            "ok: Khi giao việc lập bảng giá, cần nêu rõ tiêu chí nghiệm thu gồm các cột cụ thể (t @StreamLake",
+            "ok: Cần mô tả rõ tiêu chí nghiệm thu: bảng giá phải có cột nguồn, ngày truy cập, phi @Reka"
+          ]
+        },
+        {
+          "name": "reflection/tool-503",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 2.8447,
+          "mean_cost_usd": 0.0001,
+          "details": [
+            "ok: KHONG_CO_GI @StreamLake",
+            "ok: KHONG_CO_GI @Relace",
+            "ok: KHONG_CO_GI @Alibaba"
+          ]
+        }
+      ]
+    },
+    "advisor": {
+      "n": 6,
+      "ok": 6,
+      "rate": 1.0,
+      "wilson_low": 0.61,
+      "wilson_high": 1.0,
+      "mean_latency_s": 4.1449,
+      "mean_cost_usd": null,
+      "verdict": "good",
+      "fails": {},
+      "providers": {
+        "SiliconFlow": 1,
+        "Reka": 1,
+        "Together": 1,
+        "Relace": 1,
+        "Morph": 1,
+        "StreamLake": 1
+      },
+      "fails_by_provider": {},
+      "probes": [
+        {
+          "name": "sweep/clean-work",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 1.5249,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: silent @SiliconFlow",
+            "ok: silent @Reka",
+            "ok: silent @Together"
+          ]
+        },
+        {
+          "name": "sweep/repeated-403",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 6.7649,
+          "mean_cost_usd": null,
+          "details": [
+            "ok: quarantined a corrupted note @Relace",
+            "ok: concern: Lặp lại truy cập cùng URL 8 lần đều trả 403 — không phải mạng chập chờn mà là bị @Morph",
+            "ok: concern: Đã thử lại URL vinfastauto.com/evo200 8 lần, tất cả đều trả 403 Forbidden — đây  @StreamLake"
+          ]
+        }
+      ]
+    },
+    "sprint_low": {
+      "n": 3,
+      "ok": 3,
+      "rate": 1.0,
+      "wilson_low": 0.438,
+      "wilson_high": 1.0,
+      "mean_latency_s": 6.9911,
+      "mean_cost_usd": 0.0002,
+      "verdict": "good",
+      "fails": {},
+      "providers": {
+        "StreamLake": 1,
+        "DeepInfra": 1,
+        "Reka": 1
+      },
+      "fails_by_provider": {},
+      "probes": [
+        {
+          "name": "step/sales_trend",
+          "n": 3,
+          "ok": 3,
+          "fails": {},
+          "mean_latency_s": 6.9911,
+          "mean_cost_usd": 0.0002,
+          "details": [
+            "ok: 1184 chars @StreamLake",
+            "ok: 1269 chars @DeepInfra",
+            "ok: 994 chars @Reka"
+          ]
+        }
+      ]
+    }
+  },
+  "revision": "71706d7"
+}

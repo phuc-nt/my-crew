@@ -83,6 +83,13 @@ brief (v97).
   card can say why the attempt stopped.
 
 ### Fixed
+- The `roles` benchmark scored the advisor as having missed a problem whenever the sweep's
+  own guard swallowed the note — a note that drifts out of Vietnamese, or runs past the
+  length cap, is quarantined so a corrupted instruction never reaches a working agent.
+  Measured over 8 replays, all 3 empty verdicts were the guard firing on a note that had
+  correctly named the problem, which pulled the role to 0.67 weak. The probe now passes
+  when the model named a concern the guard then threw away, and still fails when it named
+  none.
 - `/health` was registered after the SPA catch-all and answered with `index.html`; it is
   now registered inside `create_app` before the fallback.
 - The tool-calling tiers (thin, react, deep) never saw an agent's skills or company docs,
