@@ -3,7 +3,7 @@
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: semver.
 Development history at finer grain lives in [docs/journals/](docs/journals/).
 
-## [Unreleased]
+## [0.19.0] — 2026-09-19
 
 The web app now surfaces what the backend already measures: a cost dashboard with a
 hero number, one attention bell for everything that needs the CEO, and a shortcuts

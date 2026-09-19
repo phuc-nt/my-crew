@@ -260,10 +260,13 @@ they skip cleanly on top of that.
 
 ```bash
 uv run pytest tests/fullflow_live -q -m "live and not live_slow"   # quick subset
-uv run pytest tests/fullflow_live -q -m live                       # full suite (~12 min)
+uv run pytest tests/fullflow_live -q -m live                       # full suite (~3h)
 ```
 
 The quick subset is the pre-release gate; the full suite is worth one run per release.
+Budget the full suite as an afternoon, not a coffee break: the 0.19.0 run took 3h03
+over 72 cases. It is dominated by wall-clock waiting on the real model, so a faster
+machine does not shorten it — start it before you need the answer.
 Cases assert on the stored route record rather than on model prose, which is what keeps
 them stable across model nondeterminism. No case writes externally or runs a real shell:
 the guarded-brief cases assert the routing decision and the DAG shape, then stop without
