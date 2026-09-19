@@ -277,12 +277,8 @@ def _default_client(settings: Any) -> Any:
     return LlmClient(settings)
 
 
-def _parse_verdict(raw: str) -> tuple[str, str] | None:
-    """Parse the model's JSON verdict. Anything unexpected is quarantined as silence.
-
-    Quarantine rather than salvage: advisor output reaches a working agent's context,
-    so text that did not arrive in the agreed shape has not earned that trip.
-    """
+def _coerce_json(raw: str) -> dict | None:
+    """The verdict object inside a reply that may be fenced or padded with prose."""
     text = raw.strip()
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*\n?|\n?```$", "", text).strip()
@@ -293,7 +289,17 @@ def _parse_verdict(raw: str) -> tuple[str, str] | None:
         data = json.loads(text[start:end + 1])
     except (ValueError, TypeError):
         return None
-    if not isinstance(data, dict):
+    return data if isinstance(data, dict) else None
+
+
+def _parse_verdict(raw: str) -> tuple[str, str] | None:
+    """Parse the model's JSON verdict. Anything unexpected is quarantined as silence.
+
+    Quarantine rather than salvage: advisor output reaches a working agent's context,
+    so text that did not arrive in the agreed shape has not earned that trip.
+    """
+    data = _coerce_json(raw)
+    if data is None:
         return None
     severity = str(data.get("severity", "")).strip().lower()
     if severity not in _SEVERITIES or severity == "silent":

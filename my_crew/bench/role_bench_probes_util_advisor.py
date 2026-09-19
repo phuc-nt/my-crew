@@ -132,12 +132,43 @@ _LOOPING_DELTA = (
 ) * 2
 
 
+def _quarantined(raw: str) -> bool:
+    """Did the model name a concern that the sweep's own guards then threw away?
+
+    Only true when the reply parses and carries a note: a reply that is empty, is not
+    JSON, or names no concern is the advisor genuinely missing the loop.
+    """
+    from my_crew.llm.vietnamese_text import foreign_letters
+    from my_crew.runtime.advisor_sweep import _SEVERITIES, MAX_NOTE_CHARS, _coerce_json
+
+    data = _coerce_json(raw)
+    if data is None:
+        return False
+    severity = str(data.get("severity", "")).strip().lower()
+    if severity not in _SEVERITIES or severity == "silent":
+        return False
+    note = str(data.get("note", "")).strip()
+    return bool(note) and (len(note) > MAX_NOTE_CHARS or bool(foreign_letters(note)))
+
+
 def _advisor_probe(name: str, delta: str, expect_note: bool) -> Probe:
     def run(client: Any) -> ProbeOutcome:
-        from my_crew.runtime.advisor_sweep import _ask_advisor
+        from my_crew.runtime import advisor_sweep
 
-        verdict = _ask_advisor(delta, _STEP, None, client)
+        raw: list[str] = []
+        parse = advisor_sweep._parse_verdict
+        try:
+            advisor_sweep._parse_verdict = lambda text: (raw.append(text), parse(text))[1]
+            verdict = advisor_sweep._ask_advisor(delta, _STEP, None, client)
+        finally:
+            advisor_sweep._parse_verdict = parse
         if expect_note and verdict is None:
+            # A quarantined note is the guard doing its job, not the advisor missing the
+            # loop: the model drifted out of Vietnamese or ran a character away, and a
+            # corrupted instruction must never reach the working agent. Scoring it as
+            # `wrong` would grade the model's language drift as an advisor defect.
+            if raw and _quarantined(raw[0]):
+                return ProbeOutcome.passed("quarantined a corrupted note")
             return ProbeOutcome.failed("wrong", "silent on a 4x repeated 403 loop")
         if not expect_note and verdict is not None:
             return ProbeOutcome.failed("wrong", f"spoke on clean work: {verdict[0]} "

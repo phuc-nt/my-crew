@@ -334,3 +334,40 @@ def test_a_probe_that_never_calls_the_model_has_no_provider_suffix():
     content = report["roles"]["content"]
     assert content["providers"] == {}
     assert content["probes"][0]["details"] == ["ok"]
+
+
+# --- vai advisor: im lặng thật khác với note bị cách ly ---------------------------------
+
+
+def _advisor_403_probe():
+    from my_crew.bench.role_bench_probes_util_advisor import advisor_probes
+
+    return next(p for p in advisor_probes() if p.name == "sweep/repeated-403")
+
+
+def test_a_note_quarantined_for_language_drift_does_not_score_against_the_advisor():
+    """Model trôi khỏi tiếng Việt giữa câu: rào chắn nuốt note là đúng việc của nó.
+
+    Advisor ĐÃ nhìn ra vòng lặp 403; chấm nó là `wrong` sẽ đọc lỗi ngôn ngữ của model
+    thành lỗi của vai advisor, và khiến điểm vai tụt vì một thứ nó làm đúng.
+    """
+    drifted = ('{"severity": "concern", "note": "URL đã 403 lặp 9 lần și de fiecare dată '
+               'aceeași eroare — schimbă sursa."}')
+    outcome = _advisor_403_probe().run(_Scripted({"advisor": drifted}))
+    assert outcome.ok and "quarantined" in outcome.detail
+
+
+def test_an_overlong_note_is_also_read_as_a_quarantine_not_a_miss():
+    from my_crew.runtime.advisor_sweep import MAX_NOTE_CHARS
+
+    runaway = json.dumps({"severity": "concern", "note": "lặ" * (MAX_NOTE_CHARS + 1)},
+                         ensure_ascii=False)
+    outcome = _advisor_403_probe().run(_Scripted({"advisor": runaway}))
+    assert outcome.ok and "quarantined" in outcome.detail
+
+
+def test_a_genuinely_silent_advisor_still_fails_the_403_probe():
+    # Rào chắn không được trở thành chỗ trốn: không nêu mối lo nào thì vẫn là trượt.
+    for reply in ('{"severity": "silent", "note": ""}', "không phải JSON", ""):
+        outcome = _advisor_403_probe().run(_Scripted({"advisor": reply}))
+        assert not outcome.ok and outcome.kind == "wrong", reply
